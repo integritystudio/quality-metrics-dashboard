@@ -6,7 +6,7 @@
  * slicing, truncation and name matching are checked against the KV entries a
  * reader receives.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   addRecentSession,
   computeOrgEntries,
@@ -161,6 +161,59 @@ describe('computeOrgEntries metric detail weeks', () => {
     ]);
 
     expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.sampleCount).toBe(1);
+  });
+});
+
+describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRITES)', () => {
+  /** Later on the same UTC day as NOW, so every window reads the same rows. */
+  const LATER = new Date('2026-10-08T05:08:00.000Z');
+  // Scores under the relevance warning, so the operator view carries alerting metrics.
+  const rows = [0.1, 0.2, 0.3].map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
+  let first: OrgComputation;
+  let second: OrgComputation;
+
+  beforeAll(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    first = await computeOrgEntries(fakeBackend(rows), NOW, false);
+    vi.setSystemTime(LATER);
+    second = await computeOrgEntries(fakeBackend(rows), LATER, false);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function dashboardEntries(result: OrgComputation) {
+    return result.allEntries.filter(e => e.key.startsWith('dashboard:'));
+  }
+
+  it('hashes every dashboard key the same on a second run over the same data', () => {
+    const before = new Map(dashboardEntries(first).map(e => [e.key, e.hashBasis]));
+    const after = dashboardEntries(second);
+
+    expect(after.length).toBeGreaterThan(0);
+    for (const e of after) {
+      expect(e.hashBasis, e.key).toBeDefined();
+      expect(e.hashBasis, e.key).toBe(before.get(e.key));
+    }
+  });
+
+  it('still stores the run time in the auditor view', () => {
+    const auditor = entryValue<{ timestamp: string }>(second, 'dashboard:7d:auditor');
+
+    expect(auditor?.timestamp).toBe(LATER.toISOString());
+  });
+
+  it('changes the hash when the data changes', async () => {
+    const changed = await computeOrgEntries(
+      fakeBackend([...rows, evaluation('new', '2026-10-07T13:00:00.000Z', { scoreValue: 0.9 })]),
+      LATER,
+      false,
+    );
+    const hashOf = (r: OrgComputation) => r.allEntries.find(e => e.key === 'dashboard:7d')?.hashBasis;
+
+    expect(hashOf(changed)).not.toBe(hashOf(second));
   });
 });
 

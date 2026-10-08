@@ -42,7 +42,7 @@ the whole of day `now − 7d`, not part of it (METRIC-WEEK-OVERLAP).
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | METRIC-WEEK-OVERLAP | Metric detail's current and previous week share a day, so the trend baseline is muted | P3 | ✅ Done 2026-10-07 |
-| SYNC-DASHBOARD-TIMESTAMP-WRITES | A per-run timestamp makes 24 `dashboard:*` keys "changed" on every sync | P3 | Source: sync dry-run comparison, 2026-10-07 |
+| SYNC-DASHBOARD-TIMESTAMP-WRITES | A per-run timestamp makes 24 `dashboard:*` keys "changed" on every sync | P3 | ✅ Done 2026-10-07 |
 | KV-VALUE-NOT-JSON-UNGUARDED | Nothing checks that a KV value is JSON before it goes into the envelope | P4 | Source: review of `5174c29`, 2026-10-07 |
 
 **METRIC-WEEK-OVERLAP.** The `metric:<name>` detail compares the last week with the one before it (`currentWeek` /
@@ -81,6 +81,14 @@ asserts the current week alone, and a new test pins the previous week's last mil
 
 Acceptance: a no-op sync (no new evaluations) leaves every `dashboard:*` key unchanged, and the auditor view still
 carries a timestamp.
+
+*Done, 2026-10-07.* The first fix option would not have worked: the sync's `now` is the run's own clock, and every
+metric's `period` (`{ start, end }` from `now`) changes per run too. `KVEntry` takes an optional `hashBasis` that
+change detection hashes instead of `value`. `dashboardEntry()` sets it to the view with every `timestamp` and `period`
+field dropped, at any depth, because the operator view's `alertingMetrics` carries `period` as well. Stored values keep
+both fields, so they show the time of the last data change rather than of the last run, as `meta:syncCoverage`'s
+`timestamp` already does. The first sync after this rewrites the `dashboard:*` keys once, because their stored hashes
+were taken over the whole value. Tests are in `sync-org-entries.test.ts`.
 
 **KV-VALUE-NOT-JSON-UNGUARDED.** `kvBulkPut` builds the version envelope by splicing the stored value in as text
 (`scripts/sync-to-kv.ts:377`). Before `5174c29` it called `JSON.parse` on the value first, which was the only check that

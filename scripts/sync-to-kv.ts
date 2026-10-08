@@ -218,7 +218,8 @@ export function stripOrgPrefix(key: string): string {
   return key.replace(ORG_KEY_PREFIX_RE, '');
 }
 
-export type KVEntry = { key: string; value: string; expirationTtl?: number };
+/** `hashBasis`, when set, is what change detection hashes instead of `value`. */
+export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
 
 /**
  * Serialize a KV entry value. Backend spans and evaluations carry `bigint`
@@ -382,8 +383,27 @@ function hashValue(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, HASH_PREFIX_CHARS);
 }
 
+function entryHash(entry: KVEntry): string {
+  return hashValue(entry.hashBasis ?? entry.value);
+}
+
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
-  return entries.filter(e => state.get(e.key)?.hash !== hashValue(e.value));
+  return entries.filter(e => state.get(e.key)?.hash !== entryHash(e));
+}
+
+/** Fields of a dashboard summary or role view that come from the run's clock, at any depth. */
+const DASHBOARD_CLOCK_FIELDS: ReadonlySet<string> = new Set(['timestamp', 'period']);
+
+/**
+ * A dashboard summary or role view as a KV entry. The summary's `timestamp` and each
+ * metric's `period` (copied into the auditor and operator views) come from the run's
+ * clock, so the change hash leaves them out and a sync over unchanged data rewrites no
+ * `dashboard:*` key (SYNC-DASHBOARD-TIMESTAMP-WRITES). The stored value keeps them.
+ */
+export function dashboardEntry(key: string, view: object): KVEntry {
+  const hashBasis = JSON.stringify(view, (field, v: unknown) =>
+    DASHBOARD_CLOCK_FIELDS.has(field) ? undefined : typeof v === 'bigint' ? v.toString() : v);
+  return { key, value: toKVValue(view), hashBasis };
 }
 
 export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
@@ -1061,11 +1081,11 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
 
     // `dates` is already `{ start, end }` ISO — a `TimeRange`.
     const dashboard = computeDashboardSummary(grouped, { period: dates });
-    entries.push({ key: `dashboard:${period}`, value: toKVValue(dashboard) });
+    entries.push(dashboardEntry(`dashboard:${period}`, dashboard));
 
     for (const role of ROLES) {
       const view = computeRoleView(dashboard, role);
-      entries.push({ key: `dashboard:${period}:${role}`, value: toKVValue(view) });
+      entries.push(dashboardEntry(`dashboard:${period}:${role}`, view));
     }
 
     const metricTimeSeries = new Map<string, number[]>();
@@ -1521,7 +1541,7 @@ async function main(): Promise<void> {
     if (staleMeta.length > 0) {
       const writtenMeta = await kvBulkPut(staleMeta);
       for (const e of staleMeta) {
-        if (writtenMeta.has(e.key)) prevState.set(e.key, { hash: hashValue(e.value) });
+        if (writtenMeta.has(e.key)) prevState.set(e.key, { hash: entryHash(e) });
       }
       if (!dryRun) saveSyncState(prevState);
     }
@@ -1556,7 +1576,7 @@ async function main(): Promise<void> {
 
   const newState = new Map(prevState);
   for (const e of toWrite) {
-    if (writtenKeys.has(e.key)) newState.set(e.key, { hash: hashValue(e.value) });
+    if (writtenKeys.has(e.key)) newState.set(e.key, { hash: entryHash(e) });
   }
   const computedKeys = new Set(allEntries.map(e => e.key));
   for (const e of metaEntries) computedKeys.add(e.key);
