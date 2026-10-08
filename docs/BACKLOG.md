@@ -132,7 +132,7 @@ No open items.
 | SYNC-REDUNDANT-QUERIES | sync-to-kv re-queries data it already holds | P3 | ✅ Done 2026-10-07 — `5174c29` |
 | SYNC-KV-REST-API | Write KV through the Cloudflare API instead of spawning `npx wrangler` | P3 | ✅ Done 2026-10-07 — commit `3873812` |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
-| SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | Source: session 2026-10-06 scripts audit |
+| SYNC-ORG-ENTRIES-SPLIT | `computeOrgEntries` is ~480 lines with repeated query and wrangler scaffolding | P4 | ✅ Done 2026-10-07 |
 | JUDGE-BACKFILL-FLAG | Decide whether to keep judge-evaluations `--backfill` (review) | P4 | ✅ Done 2026-10-07 — kept and documented |
 | BACKFILL-COHORT-COUNTS-AS-EVIDENCE | `--backfill`'s synthetic scores count as evidence downstream | P3 | ✅ Done 2026-10-07 — `isEvidenceCohort` excludes `backfill` |
 | DEPLOY-SECRETS-DEV-WORKER | `deploy-secrets.sh` skips `quality-metrics-api-dev` (review) | P4 | ✅ Done 2026-10-07 |
@@ -212,6 +212,14 @@ session loop at `:1275`). Updated 2026-10-07 after `5174c29`, which read evaluat
   scaffolding (`runWranglerBulk()`). SYNC-KV-REST-API would remove that scaffolding rather than share it.
 - **Tests.** `sync-org-entries.test.ts` drives the whole function through its KV output, so it should survive the split
   unchanged.
+
+*Done, 2026-10-07.* `computeOrgEntries` is now 61 lines that call `readOrgEvaluations` (the one read, with its
+`between`/`inWindow` slices), `computePeriodEntries`, `computeMetricDetailEntries`, `computeEvaluationRowEntries`,
+`computeTrendEntries`, `computeDegradationEntries` and `computeSessionAndAgentEntries`. That last one folds each
+session into `accumulateAgent()` and builds the `agent:` keys with `buildAgentEntries`. All three hand-built
+nanosecond windows use `msToNs()`. The wrangler bullet was already moot, because SYNC-KV-REST-API (`3873812`) removed
+that scaffolding. `sync-org-entries.test.ts` passed unchanged. A one-off comparison of the old and new function on a
+600-evaluation, 200-span fixture with sessions and agents gave identical entries and counters.
 
 **JUDGE-BACKFILL-FLAG.** `judge-evaluations --backfill` (`runBackfill`, plus `discoverSessionsFromTraces`) writes
 seeded, synthetic `trace-backfill` scores — the kind of output `populate` refuses to produce without an explicit
