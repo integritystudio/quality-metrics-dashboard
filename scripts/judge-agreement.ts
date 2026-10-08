@@ -24,12 +24,11 @@
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { MODEL_PRICING, TOKENS_PER_CHAR, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import { MODEL_PRICING, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
   _discoverTranscripts,
   extractTurns,
-  fitContextForJudge,
   type Turn,
   type TranscriptInfo,
 } from './judge-turns.js';
@@ -68,6 +67,7 @@ import {
 import {
   addCallUsage,
   createCallUsageTotals,
+  estimateTurnTokens,
   listCostUsd,
   tokenUsageCostUsd,
   type CallUsageReport,
@@ -182,12 +182,6 @@ const { writeMarker, refuse } = runGuard;
 // ---------------------------------------------------------------------------
 // Sampling and estimate
 // ---------------------------------------------------------------------------
-
-/** Tokens the judge sees for one turn, by the pipeline's own chars-per-token heuristic. */
-export function estimateTurnTokens(turn: Turn): number {
-  const contextChars = fitContextForJudge(turn.toolResults).reduce((sum, item) => sum + item.length, 0);
-  return Math.ceil((turn.userText.length + turn.assistantText.length + contextChars) * TOKENS_PER_CHAR);
-}
 
 async function sampleTurns(transcripts: readonly TranscriptInfo[], limit: number): Promise<SampleSummary> {
   const turns: Turn[] = [];

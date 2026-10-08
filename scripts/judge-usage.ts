@@ -119,6 +119,12 @@ export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntr
   return tokenUsageCostUsd(toJudgeTokenUsage(totals), pricing);
 }
 
+/** Tokens the judge sees for one turn (tool context fitted as the judge fits it), by chars-per-token. */
+export function estimateTurnTokens(turn: Turn): number {
+  const contextChars = fitContextForJudge(turn.toolResults).reduce((sum, item) => sum + item.length, 0);
+  return Math.ceil((turn.userText.length + turn.assistantText.length + contextChars) * TOKENS_PER_CHAR);
+}
+
 /** List cost of an estimate's tokens, at the batch rate when `batch`. */
 function estimateCostUsd(inputTokens: number, outputTokens: number, batch: boolean): number {
   const listUsd = listCostUsd(inputTokens, outputTokens, judgePricing());
@@ -183,9 +189,7 @@ export function estimateConsolidatedRun(turns: readonly Turn[], batch: boolean):
   let inputTokens = 0;
   let outputTokens = 0;
   for (const t of turns) {
-    const contentChars = t.userText.length + t.assistantText.length
-      + fitContextForJudge(t.toolResults).reduce((s, r) => s + r.length, 0);
-    inputTokens += Math.ceil(contentChars * TOKENS_PER_CHAR);
+    inputTokens += estimateTurnTokens(t);
     const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? CONSOLIDATED_TOOL_CRITERIA : 0);
     outputTokens += criteria * EST_OUTPUT_TOKENS_PER_EVAL;
   }
