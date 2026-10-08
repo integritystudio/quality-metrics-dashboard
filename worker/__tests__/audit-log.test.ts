@@ -54,7 +54,7 @@ function withAdminAuth(
         new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: 200 }),
       );
     }
-    if (url.includes('/rest/v1/user_roles') && url.includes('roles(name,permissions)')) {
+    if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
       return Promise.resolve(
         new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: 200 }),
       );

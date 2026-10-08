@@ -1,7 +1,8 @@
 /**
  * Query-string validation on the data routes: each bad field answers 400 with its own error
  * string (the frontend shows it), defaults pick the KV key, a repeated key reads its first
- * value, and an empty ?role= means no role.
+ * value, and an empty ?role= means no role. Also: a handler that throws still answers in the
+ * JSON error shape.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -93,5 +94,16 @@ describe('accepted queries', () => {
     expect(res.status).toBe(OK);
     expect(await res.json()).toEqual({ rows: [{ score: 3, label: 'pass' }], total: 2, limit: 1, offset: 1, hasMore: false });
     expect(kvKeysRead()).toEqual(['metric:evaluations:m:30d']);
+  });
+});
+
+describe('unhandled errors', () => {
+  it('answer a JSON 500, not Hono\'s plain-text default', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockKV.get.mockRejectedValue(new Error('KV unavailable'));
+    const res = await get('/api/pipeline');
+    consoleError.mockRestore();
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Internal server error' });
   });
 });

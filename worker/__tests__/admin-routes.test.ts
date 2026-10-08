@@ -68,7 +68,7 @@ function withAdminAuth(
       return Promise.resolve(new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: 200 }));
     }
     // Auth roles: has roles(name,permissions)
-    if (url.includes('/rest/v1/user_roles') && url.includes('roles(name,permissions)')) {
+    if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
       return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: 200 }));
     }
     return routeHandler(url, init);
@@ -200,14 +200,12 @@ describe('GET /api/admin/roles', () => {
     expect(data).toHaveLength(1);
   });
 
-  it('returns a JSON 500 when the Supabase fetch rejects', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  it('returns its own 500 when Supabase is unreachable', async () => {
     fetchMock.mockImplementation(withAdminAuth(() => Promise.reject(new TypeError('Network connection lost.'))));
 
     const res = await app.request('/api/admin/roles', { headers: adminHeaders() }, makeEnv());
-    consoleError.mockRestore();
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: 'Internal server error' });
+    expect(await res.json()).toEqual({ error: 'Failed to fetch roles' });
   });
 });
 

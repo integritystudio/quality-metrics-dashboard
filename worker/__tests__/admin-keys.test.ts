@@ -87,7 +87,7 @@ function withOrgAdminAuth(
         { status: 200 },
       ));
     }
-    if (url.includes('/rest/v1/user_roles') && url.includes('roles(name,permissions)')) {
+    if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
       return Promise.resolve(new Response(
         JSON.stringify([{ roles: { name: 'org-admin', permissions: ORG_ADMIN_PERMISSIONS } }]),
         { status: 200 },

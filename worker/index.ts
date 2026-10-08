@@ -4,6 +4,7 @@ import { createMiddleware } from 'hono/factory';
 import { validator } from 'hono/validator';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
+import { PostgrestClient } from '@supabase/postgrest-js';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema, ApiKeySchema } from '../src/lib/validation/auth-schemas.js';
@@ -11,6 +12,7 @@ import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPe
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { supabasePost } from '../src/lib/supabase-rest.js';
+import { SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -438,14 +440,15 @@ app.use('/api/*', async (c, next) => {
   }
 
   // Fetch public.users row by auth0_id — required; users with no app record are rejected
-  const userRes = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,default_organization_id&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
-    { headers: serviceRoleHeaders(c.env), signal },
-  ).catch(() => null);
-  if (!userRes?.ok) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-  const rawUsers: unknown = await userRes.json().catch(() => null);
-  if (!Array.isArray(rawUsers) || !rawUsers[0]) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
-  const userResult = PublicUserSchema.safeParse(rawUsers[0]);
+  const supabase = db(c.env);
+  const userRes = await supabase.from('users')
+    .select('id,email,default_organization_id')
+    .eq('auth0_id', auth0Id)
+    .limit(1)
+    .abortSignal(signal);
+  const [rawUser] = safeArray(userRes.data);
+  if (userRes.error || !rawUser) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  const userResult = PublicUserSchema.safeParse(rawUser);
   if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
   const appUserId = userResult.data.id;
   const email = userResult.data.email;
@@ -454,24 +457,23 @@ app.use('/api/*', async (c, next) => {
 
   // Roles and (under org scoping) memberships fetch in PARALLEL — Risk 19:
   // the added membership round-trip must not serialize into the auth budget.
-  const rolesPromise = fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/user_roles?select=roles(name,permissions)&user_id=eq.${encodeURIComponent(appUserId)}`,
-    { headers: serviceRoleHeaders(c.env), signal },
-  ).catch(() => null);
+  const rolesPromise = supabase.from('user_roles')
+    .select('roles(name,permissions)')
+    .eq('user_id', appUserId)
+    .abortSignal(signal);
   const membershipsPromise = orgScopingEnabled
-    ? fetch(
-        `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role,organization_id,organizations(id,slug,name)&user_id=eq.${encodeURIComponent(appUserId)}`,
-        { headers: serviceRoleHeaders(c.env), signal },
-      ).catch(() => null)
-    : Promise.resolve(null);
+    ? supabase.from('organization_memberships')
+        .select('role,organization_id,organizations(id,slug,name)')
+        .eq('user_id', appUserId)
+        .abortSignal(signal)
+    : null;
   const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
 
-  if (!rolesRes?.ok) {
-    console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes?.status ?? 'network error');
+  if (rolesRes.error) {
+    console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes.status || 'network error');
     return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
   }
-  const rawRows: unknown = await rolesRes.json().catch(() => []);
-  const rows = safeArray(rawRows);
+  const rows = safeArray(rolesRes.data);
   const roles: string[] = [];
   const permissionSet = new Set<DashboardPermission>();
   for (const row of rows) {
@@ -484,7 +486,7 @@ app.use('/api/*', async (c, next) => {
   }
 
   if (orgScopingEnabled) {
-    const memberships = parseMemberships(membershipsRes ? await membershipsRes.json().catch(() => []) : []);
+    const memberships = parseMemberships(membershipsRes?.data);
     const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
 
     // Resolve activeOrgId: X-Org-Id (membership-validated, or staff) →
@@ -609,6 +611,21 @@ function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
   return getKv<T>(c.env.DASHBOARD, orgId, key, c.env);
 }
 
+const SUPABASE_REST_TIMEOUT_MS = 10_000;
+
+/**
+ * Service-role PostgREST client. Callers map every failure to their own response, so the
+ * library's GET retry (1s/2s/4s backoff) would only delay it and is off. Built per call:
+ * construction is cheap and captures `fetch`, which the tests stub per case.
+ */
+function db(env: SupabaseEnv): PostgrestClient {
+  return new PostgrestClient(`${env.SUPABASE_URL}${SUPABASE_REST_PATH}`, {
+    headers: serviceRoleHeaders(env),
+    retry: false,
+    timeout: SUPABASE_REST_TIMEOUT_MS,
+  });
+}
+
 // Both apikey and Authorization use the service role key — the anon key is for browser clients only.
 function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
   return {
@@ -657,15 +674,10 @@ app.post('/api/org/switch', async (c) => {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   }
   if (session.appUserId) {
-    const res = await fetch(
-      `${c.env.SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(session.appUserId)}`,
-      {
-        method: 'PATCH',
-        headers: { ...(serviceRoleHeaders(c.env) as Record<string, string>), 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ default_organization_id: orgId }),
-      },
-    ).catch(() => null);
-    if (!res?.ok) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+    const { error } = await db(c.env).from('users')
+      .update({ default_organization_id: orgId })
+      .eq('id', session.appUserId);
+    if (error) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
   }
 
   // Recompute the org-dependent session fields for the response; the next
@@ -959,15 +971,13 @@ app.get('/api/admin/members', async (c) => {
   const scope = orgAdminScope(c);
   if (!scope) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=user_id,role,users(id,email)&organization_id=eq.${encodeURIComponent(scope.orgId)}`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() => null);
-  if (!res?.ok) return c.json({ error: 'Failed to fetch members' }, Http.InternalServerError);
+  const { data, error } = await db(c.env).from('organization_memberships')
+    .select('user_id,role,users(id,email)')
+    .eq('organization_id', scope.orgId);
+  if (error) return c.json({ error: 'Failed to fetch members' }, Http.InternalServerError);
 
-  const rawJson: unknown = await res.json().catch(() => null);
   const members = [];
-  for (const row of safeArray(rawJson)) {
+  for (const row of safeArray(data)) {
     const parsed = AdminMemberRowSchema.safeParse(row);
     if (!parsed.success) continue;
     members.push({
@@ -993,12 +1003,13 @@ app.post('/api/admin/members/:userId/role', async (c) => {
 
   // Read the target's current role first — both granting owner and demoting an
   // existing owner are owner-only operations.
-  const currentRes = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role&organization_id=eq.${encodeURIComponent(scope.orgId)}&user_id=eq.${encodeURIComponent(userId)}&limit=1`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() => null);
-  if (!currentRes?.ok) return c.json({ error: 'Failed to fetch member' }, Http.InternalServerError);
-  const currentRows = safeArray<{ role?: string }>(await currentRes.json().catch(() => []));
+  const current = await db(c.env).from('organization_memberships')
+    .select('role')
+    .eq('organization_id', scope.orgId)
+    .eq('user_id', userId)
+    .limit(1);
+  if (current.error) return c.json({ error: 'Failed to fetch member' }, Http.InternalServerError);
+  const currentRows = safeArray<{ role?: string }>(current.data);
   if (!currentRows[0]) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
   const currentRole = currentRows[0].role;
 
@@ -1006,15 +1017,11 @@ app.post('/api/admin/members/:userId/role', async (c) => {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   }
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?organization_id=eq.${encodeURIComponent(scope.orgId)}&user_id=eq.${encodeURIComponent(userId)}`,
-    {
-      method: 'PATCH',
-      headers: { ...(serviceRoleHeaders(c.env) as Record<string, string>), 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ role: newRole }),
-    },
-  ).catch(() => null);
-  if (!res?.ok) return c.json({ error: 'Failed to update member role' }, Http.InternalServerError);
+  const { error } = await db(c.env).from('organization_memberships')
+    .update({ role: newRole })
+    .eq('organization_id', scope.orgId)
+    .eq('user_id', userId);
+  if (error) return c.json({ error: 'Failed to update member role' }, Http.InternalServerError);
   logAuditEvent(scope.session.appUserId, 'member.role_change', userId, undefined, c.env, c.executionCtx.waitUntil.bind(c.executionCtx), scope.orgId);
   return c.body(null, Http.NoContent);
 });
@@ -1025,22 +1032,23 @@ app.delete('/api/admin/members/:userId', async (c) => {
   const userId = c.req.param('userId');
   if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
 
-  const currentRes = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?select=role&organization_id=eq.${encodeURIComponent(scope.orgId)}&user_id=eq.${encodeURIComponent(userId)}&limit=1`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() => null);
-  if (!currentRes?.ok) return c.json({ error: 'Failed to fetch member' }, Http.InternalServerError);
-  const currentRows = safeArray<{ role?: string }>(await currentRes.json().catch(() => []));
+  const current = await db(c.env).from('organization_memberships')
+    .select('role')
+    .eq('organization_id', scope.orgId)
+    .eq('user_id', userId)
+    .limit(1);
+  if (current.error) return c.json({ error: 'Failed to fetch member' }, Http.InternalServerError);
+  const currentRows = safeArray<{ role?: string }>(current.data);
   if (!currentRows[0]) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
   if (currentRows[0].role === 'owner' && !canTouchOwnerRole(scope.session)) {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
   }
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/organization_memberships?organization_id=eq.${encodeURIComponent(scope.orgId)}&user_id=eq.${encodeURIComponent(userId)}`,
-    { method: 'DELETE', headers: serviceRoleHeaders(c.env) },
-  ).catch(() => null);
-  if (!res?.ok) return c.json({ error: 'Failed to remove member' }, Http.InternalServerError);
+  const { error } = await db(c.env).from('organization_memberships')
+    .delete()
+    .eq('organization_id', scope.orgId)
+    .eq('user_id', userId);
+  if (error) return c.json({ error: 'Failed to remove member' }, Http.InternalServerError);
   logAuditEvent(scope.session.appUserId, 'member.remove', userId, undefined, c.env, c.executionCtx.waitUntil.bind(c.executionCtx), scope.orgId);
   return c.body(null, Http.NoContent);
 });
@@ -1066,18 +1074,16 @@ function canUseGlobalAdmin(c: AppContext): boolean {
 app.get('/api/admin/users', async (c) => {
   if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
-  const headers = serviceRoleHeaders(c.env);
+  const supabase = db(c.env);
   const [usersRes, roleRowsRes] = await Promise.all([
-    fetch(`${c.env.SUPABASE_URL}/rest/v1/users?select=id,email,created_at&order=created_at.desc`, { headers }),
-    fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles?select=user_id,role_id,roles(id,name)`, { headers }),
+    supabase.from('users').select('id,email,created_at').order('created_at', { ascending: false }),
+    supabase.from('user_roles').select('user_id,role_id,roles(id,name)'),
   ]);
 
-  if (!usersRes.ok) return c.json({ error: 'Failed to fetch users' }, Http.InternalServerError);
-  if (!roleRowsRes.ok) return c.json({ error: 'Failed to fetch role assignments' }, Http.InternalServerError);
-  const rawUsersJson: unknown = await usersRes.json().catch(() => null);
-  const rawUsers = safeArray(rawUsersJson);
-  const rawRoleRowsJson: unknown = await roleRowsRes.json().catch(() => []);
-  const rawRoleRows = safeArray(rawRoleRowsJson);
+  if (usersRes.error) return c.json({ error: 'Failed to fetch users' }, Http.InternalServerError);
+  if (roleRowsRes.error) return c.json({ error: 'Failed to fetch role assignments' }, Http.InternalServerError);
+  const rawUsers = safeArray(usersRes.data);
+  const rawRoleRows = safeArray(roleRowsRes.data);
 
   const rolesByUser = new Map<string, { id: string; name: string }[]>();
   for (const row of rawRoleRows) {
@@ -1106,14 +1112,12 @@ app.get('/api/admin/users', async (c) => {
 app.get('/api/admin/roles', async (c) => {
   if (!canUseGlobalAdmin(c)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/roles?select=id,name,permissions&order=name.asc`,
-    { headers: serviceRoleHeaders(c.env) },
-  );
-  if (!res.ok) return c.json({ error: 'Failed to fetch roles' }, Http.InternalServerError);
+  const { data, error } = await db(c.env).from('roles')
+    .select('id,name,permissions')
+    .order('name', { ascending: true });
+  if (error) return c.json({ error: 'Failed to fetch roles' }, Http.InternalServerError);
 
-  const rawJson: unknown = await res.json().catch(() => null);
-  const rows = safeArray(rawJson);
+  const rows = safeArray(data);
   const roles = rows.flatMap((row) => {
     const parsed = AdminRoleSchema.safeParse(row);
     return parsed.success ? [parsed.data] : [];
@@ -1131,12 +1135,9 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
   const result = AssignRoleRequestSchema.safeParse(body);
   if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
 
-  const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/user_roles`, {
-    method: 'POST',
-    headers: { ...(serviceRoleHeaders(c.env) as Record<string, string>), 'Prefer': 'return=minimal' },
-    body: JSON.stringify({ user_id: userId, role_id: result.data.role_id }),
-  });
-  if (!res.ok) return c.json({ error: 'Failed to assign role' }, Http.InternalServerError);
+  const { error } = await db(c.env).from('user_roles')
+    .insert({ user_id: userId, role_id: result.data.role_id });
+  if (error) return c.json({ error: 'Failed to assign role' }, Http.InternalServerError);
   logAuditEvent(c.get('session').appUserId, 'role.assign', userId, result.data.role_id, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
@@ -1149,11 +1150,11 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
   if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
   if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, Http.BadRequest);
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${encodeURIComponent(userId)}&role_id=eq.${encodeURIComponent(roleId)}`,
-    { method: 'DELETE', headers: serviceRoleHeaders(c.env) },
-  );
-  if (!res.ok) return c.json({ error: 'Failed to revoke role' }, Http.InternalServerError);
+  const { error } = await db(c.env).from('user_roles')
+    .delete()
+    .eq('user_id', userId)
+    .eq('role_id', roleId);
+  if (error) return c.json({ error: 'Failed to revoke role' }, Http.InternalServerError);
   logAuditEvent(c.get('session').appUserId, 'role.revoke', userId, roleId, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
@@ -1174,6 +1175,15 @@ app.delete('/api/admin/users/:userId/roles/:roleId', async (c) => {
 // ---------------------------------------------------------------------------
 
 const ERR_KEY_NOT_FOUND_IN_ORG = 'Key not found in active org';
+
+/** The caller's active keys in their active org — the only keys these routes may touch. */
+function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns: string) {
+  return db(env).from('api_keys')
+    .select(columns)
+    .eq('user_id', userId)
+    .eq('organization_id', orgId)
+    .eq('status', 'active');
+}
 const ERR_ROTATION_FAILED = 'Key rotation failed';
 
 app.get('/api/admin/keys', async (c) => {
@@ -1182,14 +1192,11 @@ app.get('/api/admin/keys', async (c) => {
   const appUserId = scope.session.appUserId;
   if (!appUserId) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/api_keys?select=id,prefix,name,tier,status,created_at,last_used_at&user_id=eq.${encodeURIComponent(appUserId)}&organization_id=eq.${encodeURIComponent(scope.orgId)}&status=eq.active&order=created_at.desc`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() => null);
-  if (!res?.ok) return c.json({ error: 'Failed to fetch keys' }, Http.InternalServerError);
+  const { data, error } = await activeOrgKeys(c.env, appUserId, scope.orgId, 'id,prefix,name,tier,status,created_at,last_used_at')
+    .order('created_at', { ascending: false });
+  if (error) return c.json({ error: 'Failed to fetch keys' }, Http.InternalServerError);
 
-  const rawJson: unknown = await res.json().catch(() => null);
-  const keys = safeArray(rawJson).flatMap((row) => {
+  const keys = safeArray(data).flatMap((row) => {
     const parsed = ApiKeySchema.safeParse(row);
     return parsed.success ? [parsed.data] : [];
   });
@@ -1206,13 +1213,11 @@ app.post('/api/admin/keys/:keyId/rotate', async (c) => {
   if (!UUID_PATTERN.test(keyId)) return c.json({ error: 'Invalid keyId' }, Http.BadRequest);
 
   // Verify the key belongs to the caller and to their active org before forwarding.
-  const verifyRes = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/api_keys?select=id&id=eq.${encodeURIComponent(keyId)}&user_id=eq.${encodeURIComponent(appUserId)}&organization_id=eq.${encodeURIComponent(scope.orgId)}&status=eq.active&limit=1`,
-    { headers: serviceRoleHeaders(c.env) },
-  ).catch(() => null);
-  if (!verifyRes?.ok) return c.json({ error: ERR_ROTATION_FAILED }, Http.InternalServerError);
-  const rows = safeArray(await verifyRes.json().catch(() => []));
-  if (!rows.length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, Http.Forbidden);
+  const verify = await activeOrgKeys(c.env, appUserId, scope.orgId, 'id')
+    .eq('id', keyId)
+    .limit(1);
+  if (verify.error) return c.json({ error: ERR_ROTATION_FAILED }, Http.InternalServerError);
+  if (!safeArray(verify.data).length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, Http.Forbidden);
 
   // Call the function as a service, naming the user this worker verified. The
   // function rechecks that the key is this user's and still active.
