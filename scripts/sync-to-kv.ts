@@ -87,7 +87,7 @@ import {
   KV_SCHEMA_VERSION,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
-import { ascending, mean, quantileSorted, rollup } from 'd3-array';
+import { ascending, extent, group, max, mean, min, minIndex, quantileSorted, rollup } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 
@@ -485,17 +485,10 @@ export function prioritizeTraces(
   for (const [traceId] of traceGroups) {
     const evals = evalsByTrace.get(traceId) ?? [];
 
-    const scores = evals
-      .map(e => e.scoreValue)
-      .filter(isValidScore);
-    const worstScore = scores.length > 0
-      ? scores.reduce((min, v) => v < min ? v : min, Infinity)
-      : UNEVALUATED_TRACE_SCORE;
+    const worstScore = min(evals.map(e => e.scoreValue).filter(isValidScore)) ?? UNEVALUATED_TRACE_SCORE;
 
     const timestamps = evals.map(e => Number(e.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT)).filter(Number.isFinite);
-    const latestTimestamp = timestamps.length > 0
-      ? timestamps.reduce((max, v) => v > max ? v : max, 0)
-      : 0;
+    const latestTimestamp = max(timestamps) ?? 0;
 
     const isReferencedByWorst = referencedTraceIds.has(traceId);
 
@@ -540,6 +533,11 @@ function isValidScore(v: number | null | undefined): v is number {
   return v != null && Number.isFinite(v);
 }
 
+/** Narrows to rows with a non-empty `traceId`, so `group` keys them by `string`. */
+function hasTraceId<T extends { traceId?: string }>(row: T): row is T & { traceId: string } {
+  return Boolean(row.traceId);
+}
+
 function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
   let group = map.get(key);
   if (!group) map.set(key, group = []);
@@ -560,14 +558,8 @@ function computeDataSources(spans: SessionSpan[], evaluations: EvaluationResult[
 }
 
 function computeTimespan(evaluations: EvaluationResult[]) {
-  let tsMin = Infinity;
-  let tsMax = -Infinity;
-  for (const ev of evaluations) {
-    const t = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
-    if (t < tsMin) tsMin = t;
-    if (t > tsMax) tsMax = t;
-  }
-  return tsMin < Infinity ? {
+  const [tsMin, tsMax] = extent(evaluations, ev => Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT));
+  return tsMin !== undefined ? {
     start: new Date(tsMin).toISOString(),
     end: new Date(tsMax).toISOString(),
     durationHours: +((tsMax - tsMin) / TIME_MS.HOUR).toFixed(1),
@@ -983,13 +975,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   );
 
   for (const { period, evals, dates } of periodQueryResults) {
-    const filtered = filterCanary(evals);
-
-    const grouped = new Map<string, typeof filtered>();
-    for (const ev of filtered) {
-      const name = ev.evaluationName;
-      pushToGroup(grouped, name, ev);
-    }
+    const grouped = group(filterCanary(evals), ev => ev.evaluationName);
     groupedByPeriod.set(period, grouped);
 
     // `dates` is already `{ start, end }` ISO — a `TimeRange`.
@@ -1258,11 +1244,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       `[sync-to-kv] Evaluation query returned ${QUERY_LIMIT} results — session evaluations may be incomplete; all sessions marked partial`,
     );
   }
-  const evalsByTrace = new Map<string, EvaluationResult[]>();
-  for (const ev of allEvals) {
-    if (!ev.traceId) continue;
-    pushToGroup(evalsByTrace, ev.traceId, ev);
-  }
+  const evalsByTrace: Map<string, EvaluationResult[]> = group(allEvals.filter(hasTraceId), ev => ev.traceId);
   const traceIds = [...evalsByTrace.keys()];
 
   const allSpans = await backend.queryTraces({
@@ -1273,11 +1255,7 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
   if (allSpans.length === SPAN_QUERY_LIMIT) {
     console.warn(`[sync-to-kv] Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
   }
-  const spansByTrace = new Map<string, typeof allSpans>();
-  for (const span of allSpans) {
-    if (!span.traceId) continue;
-    pushToGroup(spansByTrace, span.traceId, span);
-  }
+  const spansByTrace: Map<string, TraceSpan[]> = group(allSpans.filter(hasTraceId), span => span.traceId);
 
   const traceEntries = buildTraceEntries(traceIds, evalsByTrace, spansByTrace);
 
@@ -1361,13 +1339,10 @@ async function computeOrgEntries(backend: CloudBackend, now: Date, isHome: boole
       if (acc.sessions.length < MAX_AGENT_SESSIONS) {
         acc.sessions.push(entry);
       } else if (sessionDate) {
-        // Evict oldest to keep the most recent sessions in the buffer
-        let oldestIdx = 0;
-        for (let i = 1; i < acc.sessions.length; i++) {
-          const d = acc.sessions[i]?.date;
-          const oldest = acc.sessions[oldestIdx]?.date;
-          if (!oldest || (d && d < oldest)) oldestIdx = i;
-        }
+        // Evict oldest to keep the most recent sessions in the buffer; when no
+        // buffered session has a date, the last slot is replaced.
+        const datedIdx = minIndex(acc.sessions, s => s.date);
+        const oldestIdx = datedIdx >= 0 ? datedIdx : acc.sessions.length - 1;
         const oldestDate = acc.sessions[oldestIdx]?.date;
         if (!oldestDate || sessionDate > oldestDate) {
           acc.sessions[oldestIdx] = entry;
