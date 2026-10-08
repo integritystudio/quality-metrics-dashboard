@@ -33,7 +33,51 @@ Acceptance: each bullet above has a test that fails if the behaviour changes.
 
 ### Behaviour
 
-No open items.
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| METRIC-WEEK-OVERLAP | Metric detail's current and previous week share a day, so the trend baseline is muted | P3 | Source: review of `5174c29`, 2026-10-07 |
+| SYNC-DASHBOARD-TIMESTAMP-WRITES | A per-run timestamp makes 24 `dashboard:*` keys "changed" on every sync | P3 | Source: sync dry-run comparison, 2026-10-07 |
+| KV-VALUE-NOT-JSON-UNGUARDED | Nothing checks that a KV value is JSON before it goes into the envelope | P4 | Source: review of `5174c29`, 2026-10-07 |
+
+**METRIC-WEEK-OVERLAP.** The `metric:<name>` detail compares the last week with the one before it (`currentWeek` /
+`previousWeek`, `scripts/sync-to-kv.ts:1051-1052`). The server rounds both bounds of a window to whole UTC days
+(`queriedDateWindow`), and `evalsBetween` reproduces that rounding:
+- current = `[dayStart(now − 7d), nextMidnight(now))`; previous = `[dayStart(now − 14d), nextMidnight(now − 7d))`.
+- Both span 8 calendar days, and both contain the whole of day `now − 7d`. Example: with `now = 2026-10-08T01:08Z`, both
+  windows include all of Oct 1.
+- That day's evaluations feed both the card's current values and its `previousValues` baseline, which pulls the
+  week-over-week change toward zero.
+- **Pre-existing.** The separate server reads `5174c29` replaced had the same overlap, which is why the dry-run output
+  matched byte for byte.
+
+**Fix.** Give `evalsBetween` an exclusive end at a day start, and end the previous week at `dayStart(now − 7d)`. Decide
+whether the current week should also drop to 7 whole days. The `metric:*` values will shift, so note the change where
+the trend is read.
+
+Acceptance: no evaluation counts in both windows, and a test pins the boundary day to exactly one of them.
+
+**SYNC-DASHBOARD-TIMESTAMP-WRITES.** `computeDashboardSummary` stamps `timestamp: new Date().toISOString()`
+(`../../src/lib/quality/quality-metrics.ts:948`, parent repo), and the auditor role view copies it
+(`../../src/lib/quality/quality-views.ts:253`). `filterChanged` (`scripts/sync-to-kv.ts:359`) hashes the whole value, so
+`dashboard:<period>` and `dashboard:<period>:auditor` (`:1001`, `:1005`) differ on every run even when no data changed.
+- 2 keys × 3 periods × (each org + the legacy bare keys) = 24 writes per run with the current 3 orgs. They are
+  high-priority keys, so they come out of the 450-write budget ahead of traces.
+- Measured: two dry-runs on the same data, 40 s apart, differed on exactly these 24 keys (plus span-driven keys).
+- **Fix options.** Pass the sync's `now` into `computeDashboardSummary` so the stamp is the data window's end, not the
+  wall clock. Or leave the stamp out of the change hash, as `meta:syncCoverage` already does for `lastChecked`.
+
+Acceptance: a no-op sync (no new evaluations) leaves every `dashboard:*` key unchanged, and the auditor view still
+carries a timestamp.
+
+**KV-VALUE-NOT-JSON-UNGUARDED.** `kvBulkPut` builds the version envelope by splicing the stored value in as text
+(`scripts/sync-to-kv.ts:377`). Before `5174c29` it called `JSON.parse` on the value first, which was the only check that
+the value was JSON. `toKVValue` (`:207`) is typed to return `string`, but `JSON.stringify(undefined)` returns
+`undefined`, so `toKVValue(undefined)` would write `{"v":1,"data":undefined}` to KV without an error. No current caller
+passes `undefined`.
+
+**Fix.** In `toKVValue`, throw when `JSON.stringify` returns a non-string.
+
+Acceptance: `toKVValue(undefined)` throws, and a test covers it.
 
 ### Workflow page
 
