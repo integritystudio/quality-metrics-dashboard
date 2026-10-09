@@ -29,7 +29,7 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-hallucination-eval.ts --yes
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
@@ -64,23 +64,25 @@ import {
   type QualityTurn,
   type ReferenceSummary,
 } from './judge-quality-eval.js';
-import { parseCli, runIfMain } from './cli-args.js';
+import { runIfMain } from './cli-args.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
-  JSON_INDENT,
   NO_BATCH_DELAY_MS,
   TABLE_NAME_WIDTH,
-  YES_FLAG,
-  YES_REQUIRED_ERROR,
+  admitOneShot,
   createRunGuard,
   formatDiff,
   formatUsd,
   createPerCriterionProvider,
-  oneShotArgError,
+  parseOneShotArgs,
   tableRow,
   scoresByName,
   spendCapReason,
+  turnProgress,
+  writeResults,
+  type OneShotArgs,
+  type TurnErrors,
 } from './one-shot-eval.js';
 import {
   addCallUsage,
@@ -123,12 +125,7 @@ const TIE = 'tie';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ParsedArgs {
-  yes: boolean;
-  referencePath: string;
-  /** Set when the invocation must be refused; the message says why. */
-  error?: string;
-}
+export type ParsedArgs = OneShotArgs & { referencePath: string };
 
 export type HallucinationTurn = Pick<QualityTurn, 'sessionId' | 'timestamp' | 'hasTools' | 'expected' | 'reference'>
   & Record<Configuration, Record<string, number>>;
@@ -145,21 +142,14 @@ export interface ComplementCount {
 // ---------------------------------------------------------------------------
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  const parsed: ParsedArgs = { yes: false, referencePath: PRIOR_REFERENCE_PATH };
-  try {
-    const cli = parseCli(argv, { values: [REFERENCE_FLAG], switches: [YES_FLAG] }, { allowUnknown: false });
-    parsed.yes = cli.has(YES_FLAG);
-    parsed.referencePath = cli.value(REFERENCE_FLAG) ?? PRIOR_REFERENCE_PATH;
-  } catch (err) {
-    return { ...parsed, error: oneShotArgError(err) };
-  }
-  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
-  return parsed;
+  return parseOneShotArgs(argv, { values: [REFERENCE_FLAG] }, { referencePath: PRIOR_REFERENCE_PATH }, cli => ({
+    referencePath: cli.value(REFERENCE_FLAG) ?? PRIOR_REFERENCE_PATH,
+  }));
 }
 
 const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[hallucination]', noun: 'eval' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
-const { refuse, resolveApiKey, begin } = runGuard;
+const { refuse, begin } = runGuard;
 
 export function readPriorReference(path: string): QualityTurn[] {
   const parsed = JSON.parse(readFileSync(path, 'utf8')) as { turns?: { reference?: unknown }[] };
@@ -276,13 +266,8 @@ function printTable(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  if (args.error) return refuse(args.error);
-
-  const credential = resolveApiKey();
+  const credential = admitOneShot(runGuard, args);
   if (!credential) return;
-
-  const reason = refusalReason(DOCS_DIR);
-  if (reason) return refuse(reason);
 
   const haikuPricing = judgePricing();
   const referencePricing = judgePricing(REFERENCE_MODEL);
@@ -324,10 +309,10 @@ async function main(): Promise<void> {
   const spentUsd = (): number => CONFIGURATIONS.reduce((sum, c) => sum + tokenUsageCostUsd(totals[c], haikuPricing), 0)
     + tokenUsageCostUsd(totals.reference, referencePricing);
   const canSpend = (): boolean => spentUsd() < MAX_MEASURED_SPEND_USD;
-  const turnErrors: { sessionId: string; timestamp: string; errors: string[] }[] = [];
+  const turnErrors: TurnErrors[] = [];
   resetFailureTracking();
 
-  let completed = 0;
+  const progress = turnProgress('[hallucination]', prior.length);
   const scored = await processBatch(prior, REFERENCE_CONCURRENCY, NO_BATCH_DELAY_MS, async (priorTurn): Promise<HallucinationTurn> => {
     const turn = byKey.get(turnKey(priorTurn))!;
     const errors: string[] = [];
@@ -359,8 +344,7 @@ async function main(): Promise<void> {
       }
     }
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
-    completed++;
-    console.log(`[hallucination] ${completed}/${prior.length} turns done (${formatUsd(spentUsd())} so far)`);
+    progress(` (${formatUsd(spentUsd())} so far)`);
     return outcome;
   });
 
@@ -397,8 +381,7 @@ async function main(): Promise<void> {
     turns: scored,
   };
 
-  const outPath = resultsFilePath(DOCS_DIR, startedAt);
-  writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
+  const outPath = writeResults(runGuard, startedAt, results);
   printTable(summaries, closest, complements);
   console.log(`\n[hallucination] spent ${formatUsd(spentUsd())}; results written: ${outPath}`);
 }

@@ -62,22 +62,25 @@ import {
   type CriterionAgreement,
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
-import { parseCli, runIfMain } from './cli-args.js';
+import { runIfMain } from './cli-args.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
   JSON_INDENT,
   NO_BATCH_DELAY_MS,
-  YES_FLAG,
-  YES_REQUIRED_ERROR,
+  admitOneShot,
   createRunGuard,
   formatDiff,
   formatUsd,
   formatRate,
-  oneShotArgError,
   padCell,
+  parseOneShotArgs,
   tableRow,
   spendCapReason,
+  turnProgress,
+  writeResults,
+  type OneShotArgs,
+  type TurnErrors,
 } from './one-shot-eval.js';
 import {
   addCallUsage,
@@ -131,12 +134,7 @@ const CLOSER_CELL_WIDTH = TABLE_CELL_WIDTH + 2;
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ParsedArgs {
-  yes: boolean;
-  agreementPath?: string;
-  /** Set when the invocation must be refused; the message says why. */
-  error?: string;
-}
+export type ParsedArgs = OneShotArgs & { agreementPath?: string };
 
 /** One turn of a judge-agreement results file. */
 export interface AgreementTurn {
@@ -177,22 +175,15 @@ export interface ReferenceSummary {
 // ---------------------------------------------------------------------------
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  const parsed: ParsedArgs = { yes: false };
-  try {
-    const cli = parseCli(argv, { values: [AGREEMENT_FLAG], switches: [YES_FLAG] }, { allowUnknown: false });
-    parsed.yes = cli.has(YES_FLAG);
+  return parseOneShotArgs<{ agreementPath?: string }>(argv, { values: [AGREEMENT_FLAG] }, {}, cli => {
     const agreementPath = cli.value(AGREEMENT_FLAG);
-    if (agreementPath !== undefined) parsed.agreementPath = agreementPath;
-  } catch (err) {
-    return { ...parsed, error: oneShotArgError(err) };
-  }
-  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
-  return parsed;
+    return agreementPath === undefined ? {} : { agreementPath };
+  });
 }
 
 const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[quality]', noun: 'eval' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
-const { refuse, resolveApiKey, begin } = runGuard;
+const { refuse, begin } = runGuard;
 
 /** The newest judge-agreement results file, unless one was named. */
 export function resolveAgreementPath(docsDir: string, explicit?: string): string | undefined {
@@ -462,13 +453,8 @@ function printTable(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  if (args.error) return refuse(args.error);
-
-  const credential = resolveApiKey();
+  const credential = admitOneShot(runGuard, args);
   if (!credential) return;
-
-  const reason = refusalReason(DOCS_DIR);
-  if (reason) return refuse(reason);
 
   const pricing = judgePricing(REFERENCE_MODEL);
 
@@ -500,15 +486,14 @@ async function main(): Promise<void> {
   const provider = await createReferenceProvider(credential.apiKey, usage => addCallUsage(totals, usage));
   const canSpend = (): boolean => tokenUsageCostUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
   const stepsCache: EvaluationStepsCache = new Map();
-  const turnErrors: { sessionId: string; timestamp: string; errors: string[] }[] = [];
+  const turnErrors: TurnErrors[] = [];
 
-  let completed = 0;
+  const progress = turnProgress('[quality]', matched.length);
   const scored = await processBatch(matched, REFERENCE_CONCURRENCY, NO_BATCH_DELAY_MS, async (turn): Promise<QualityTurn> => {
     const errors: string[] = [];
     const reference = await scoreTurnWithReference(provider, byKey.get(turnKey(turn))!, stepsCache, canSpend, errors);
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
-    completed++;
-    console.log(`[quality] ${completed}/${matched.length} turns done (${formatUsd(tokenUsageCostUsd(totals, pricing))} so far)`);
+    progress(` (${formatUsd(tokenUsageCostUsd(totals, pricing))} so far)`);
     return { ...turn, reference };
   });
 
@@ -538,8 +523,7 @@ async function main(): Promise<void> {
     turns: scored,
   };
 
-  const outPath = resultsFilePath(DOCS_DIR, startedAt);
-  writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
+  const outPath = writeResults(runGuard, startedAt, results);
   printTable(perCriterion, consolidated, verdict, referenceUsage);
   console.log(`\n[quality] results written: ${outPath}`);
 }

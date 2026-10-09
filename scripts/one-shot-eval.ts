@@ -9,7 +9,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import { toDateOnly } from '../src/api/api-constants.js';
-import { CliArgError } from './cli-args.js';
+import { CliArgError, parseCli, type CliArgs, type CliSpec } from './cli-args.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
 import type { EvalRecord } from './eval-record.js';
 import { createAnthropicProvider } from './judge-evaluations.js';
@@ -39,6 +39,36 @@ const NO_FORCE_HINT = '(there is no --force; remove the marker and results file 
 export function oneShotArgError(err: unknown): string {
   if (!(err instanceof CliArgError)) throw err;
   return err.kind === 'unknown' ? `${err.message} ${NO_FORCE_HINT}` : err.message;
+}
+
+/** What every one-shot eval's command line carries. */
+export interface OneShotArgs {
+  yes: boolean;
+  /** Set when the invocation must be refused; the message says why. */
+  error?: string;
+}
+
+/**
+ * Parse a one-shot eval's command line: `--yes` plus `spec`, with unknown
+ * arguments refused. `read` returns the script's own flags, and may throw
+ * `CliArgError` for a value it rejects. A refused line comes back as
+ * `defaults` with `error` set.
+ */
+export function parseOneShotArgs<T extends object>(
+  argv: readonly string[],
+  spec: CliSpec,
+  defaults: T,
+  read: (cli: CliArgs) => T,
+): T & OneShotArgs {
+  let parsed: T & OneShotArgs = { ...defaults, yes: false };
+  try {
+    const cli = parseCli(argv, { values: spec.values, switches: [...(spec.switches ?? []), YES_FLAG] }, { allowUnknown: false });
+    parsed = { ...read(cli), yes: cli.has(YES_FLAG) };
+  } catch (err) {
+    return { ...parsed, error: oneShotArgError(err) };
+  }
+  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
+  return parsed;
 }
 
 export interface RunGuardConfig {
@@ -120,6 +150,49 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
       return startedAt;
     },
   };
+}
+
+/**
+ * The checks every one-shot eval runs before spending: refuse a bad command
+ * line, resolve the judge key, refuse a second start. The key, or `undefined`
+ * once a refusal has been logged.
+ */
+export function admitOneShot(guard: RunGuard, args: OneShotArgs): JudgeApiKey | undefined {
+  if (args.error) {
+    guard.refuse(args.error);
+    return undefined;
+  }
+  const credential = guard.resolveApiKey();
+  if (!credential) return undefined;
+  const reason = guard.refusalReason(DOCS_DIR);
+  if (reason) {
+    guard.refuse(reason);
+    return undefined;
+  }
+  return credential;
+}
+
+/** Write `results` to the run's dated results file under `DOCS_DIR`; returns its path. */
+export function writeResults(guard: RunGuard, startedAt: Date, results: object): string {
+  const outPath = guard.resultsFilePath(DOCS_DIR, startedAt);
+  writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
+  return outPath;
+}
+
+/** A `<prefix> n/total turns done<detail>` line per call. */
+export function turnProgress(logPrefix: string, total: number): (detail?: string) => void {
+  let completed = 0;
+  return (detail = '') => {
+    completed++;
+    console.log(`${logPrefix} ${completed}/${total} turns done${detail}`);
+  };
+}
+
+/** One turn's failures, as the results files record them. */
+export interface TurnErrors {
+  sessionId: string;
+  timestamp: string;
+  errors: string[];
 }
 
 /** A dollar amount at USD_DECIMALS places, e.g. `$1.8123`. */

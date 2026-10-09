@@ -21,7 +21,6 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-agreement.ts --limit 30 --yes
  */
 
-import { writeFileSync } from 'fs';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
@@ -43,24 +42,25 @@ import {
   toFivePointScale,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
-import { parseCli, positiveIntArg, runIfMain } from './cli-args.js';
+import { CliArgError, positiveIntArg, runIfMain } from './cli-args.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
-  JSON_INDENT,
   NO_BATCH_DELAY_MS,
   USD_DECIMALS,
-  YES_FLAG,
-  YES_REQUIRED_ERROR,
+  admitOneShot,
   createPerCriterionProvider,
   createRunGuard,
   formatDiff,
   formatUsd,
   formatRate,
-  oneShotArgError,
+  parseOneShotArgs,
   scoresByName,
   spendCapReason,
   tableRow,
+  turnProgress,
+  writeResults,
+  type OneShotArgs,
 } from './one-shot-eval.js';
 import {
   addCallUsage,
@@ -104,12 +104,7 @@ const OVERALL_ROW = 'overall';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ParsedArgs {
-  yes: boolean;
-  limit: number;
-  /** Set when the invocation must be refused; the message says why. */
-  error?: string;
-}
+export type ParsedArgs = OneShotArgs & { limit: number };
 
 /** Normalized (0–1) scores by evaluation name, one entry per configuration. */
 export interface TurnScores {
@@ -162,17 +157,11 @@ export interface SpendEstimate {
 // ---------------------------------------------------------------------------
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  const parsed: ParsedArgs = { yes: false, limit: DEFAULT_LIMIT };
-  try {
-    const cli = parseCli(argv, { values: [LIMIT_FLAG], switches: [YES_FLAG] }, { allowUnknown: false });
-    parsed.yes = cli.has(YES_FLAG);
-    parsed.limit = positiveIntArg(LIMIT_FLAG, cli.value(LIMIT_FLAG)) ?? DEFAULT_LIMIT;
-  } catch (err) {
-    return { ...parsed, error: oneShotArgError(err) };
-  }
-  if (parsed.limit > MAX_LIMIT) return { ...parsed, error: `${LIMIT_FLAG} ${parsed.limit} exceeds the hard maximum of ${MAX_LIMIT}` };
-  if (!parsed.yes) return { ...parsed, error: YES_REQUIRED_ERROR };
-  return parsed;
+  return parseOneShotArgs(argv, { values: [LIMIT_FLAG] }, { limit: DEFAULT_LIMIT }, cli => {
+    const limit = positiveIntArg(LIMIT_FLAG, cli.value(LIMIT_FLAG)) ?? DEFAULT_LIMIT;
+    if (limit > MAX_LIMIT) throw new CliArgError(`${LIMIT_FLAG} ${limit} exceeds the hard maximum of ${MAX_LIMIT}`);
+    return { limit };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +170,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
 const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[agreement]', noun: 'check' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
-const { refuse, resolveApiKey, begin } = runGuard;
+const { refuse, begin } = runGuard;
 
 
 // ---------------------------------------------------------------------------
@@ -362,13 +351,8 @@ function printTable(summary: AgreementSummary, configurations: Record<Configurat
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  if (args.error) return refuse(args.error);
-
-  const credential = resolveApiKey();
+  const credential = admitOneShot(runGuard, args);
   if (!credential) return;
-
-  const reason = refusalReason(DOCS_DIR);
-  if (reason) return refuse(reason);
 
   const pricing = judgePricing();
 
@@ -405,7 +389,7 @@ async function main(): Promise<void> {
   const stepsCache: EvaluationStepsCache = new Map();
   resetFailureTracking();
 
-  let completed = 0;
+  const progress = turnProgress('[agreement]', sample.turns.length);
   const outcomes = await processBatch(sample.turns, AGREEMENT_CONCURRENCY, NO_BATCH_DELAY_MS, async (turn): Promise<TurnOutcome> => {
     const outcome: TurnOutcome = {
       sessionId: turn.sessionId,
@@ -421,8 +405,7 @@ async function main(): Promise<void> {
     } catch (err) {
       outcome.error = describeUnknown(err);
     }
-    completed++;
-    console.log(`[agreement] ${completed}/${sample.turns.length} turns done`);
+    progress();
     return outcome;
   });
 
@@ -461,8 +444,7 @@ async function main(): Promise<void> {
     turns: outcomes.map(({ error: _error, ...rest }) => rest),
   };
 
-  const outPath = resultsFilePath(DOCS_DIR, startedAt);
-  writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
+  const outPath = writeResults(runGuard, startedAt, results);
   printTable(summary, configurations, outcomes.length);
   console.log(`\n[agreement] results written: ${outPath}`);
 }
