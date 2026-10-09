@@ -14,7 +14,7 @@ export function HealthBanner({ status, message, children }: HealthBannerProps) {
         <StatusBadge status={status} />
         {message}
       </div>
-      {children && <div className="d-flex gap-6">{children}</div>}
+      {children ? <div className="d-flex gap-6">{children}</div> : null}
     </div>
   );
 }

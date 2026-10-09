@@ -2,7 +2,7 @@ import React from 'react';
 import { scoreColor, agentColor } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { SCORE_CHIP_PRECISION, SCORE_LABEL_PRECISION } from '../lib/constants.js';
 
 const LANE_HEIGHT = 64;
 const LANE_PADDING_TOP = 12;
@@ -63,7 +63,7 @@ interface TurnBlockProps {
 
 function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
   const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${(turn.taskProgress * 100).toFixed(0)}%${turn.hasError ? ', error' : ''}`;
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${Math.round(turn.taskProgress * 100)}%${turn.hasError ? ', error' : ''}`;
   return (
     <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
       <rect
@@ -290,7 +290,7 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
                 fontFamily="var(--font-mono)"
                 fontWeight={600}
               >
-                {h.score.toFixed(1)}
+                {h.score.toFixed(SCORE_LABEL_PRECISION)}
               </text>
             </g>
           );

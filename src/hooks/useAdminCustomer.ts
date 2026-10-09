@@ -67,6 +67,7 @@ function useGatewayQuery<T>(
   options: GatewayQueryOptions<T> = {},
 ): UseQueryResult<T, GatewayError> {
   const { getAccessToken } = useAuth();
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- callers derive `path` and `accept` from the key they pass
   return useQuery<T, GatewayError>({
     // The key names the reader as well as the org, so the Usage page's quota poll and the
     // Quota page's plain read never share an entry: they accept different answers.

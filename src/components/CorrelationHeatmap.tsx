@@ -37,7 +37,7 @@ function shortName(metric: string): string {
  */
 function contrastText(pearsonR: number): string {
   const bg = colorScale(pearsonR);
-  const m = bg.match(/(\d+)/g);
+  const m = bg.match(/\d+/g);
   if (!m || m.length < 3) return CONTRAST_DARK;
   const [r = 0, g = 0, b = 0] = m.map(Number);
   // sRGB relative luminance (WCAG 2.1)
@@ -73,7 +73,7 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
 
   return (
     <div
-      role="table"
+      role="grid"
       aria-label="Metric correlation matrix"
       className="gap-half w-full heatmap-grid"
       style={{
@@ -116,15 +116,18 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
                 ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
                 : `${rowMetric} vs ${colMetric}: no data`;
 
+            const clickable = !isDiag && onCellClick !== undefined;
             return (
               <div
                 key={`${rowMetric}-${colMetric}`}
-                role="cell"
+                role="gridcell"
                 aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
                 data-toxic={isToxic ? 'true' : undefined}
                 title={tooltip}
-                onClick={!isDiag && onCellClick ? () => onCellClick(rowMetric, colMetric) : undefined}
-                className={`mono-xs font-medium flex-center justify-center heatmap-cell${!isDiag && onCellClick ? ' cursor-pointer' : ''}`}
+                tabIndex={clickable ? 0 : undefined}
+                onClick={clickable ? () => onCellClick(rowMetric, colMetric) : undefined}
+                onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCellClick(rowMetric, colMetric); } } : undefined}
+                className={`mono-xs font-medium flex-center justify-center heatmap-cell${clickable ? ' cursor-pointer' : ''}`}
                 style={{
                   '--heatmap-cell-bg': bg,
                   '--heatmap-cell-fg': isDiag ? 'var(--text-secondary)' : contrastText(value),

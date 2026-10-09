@@ -35,14 +35,13 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
   return (
     <div ref={containerRef} className="d-flex w-full split-pane">
       <div className="split-pane-panel" style={{ '--split-width': `${splitPct}%` } as CSSProperties}>{left}</div>
-      <div
-        className="shrink-0 split-pane-divider" role="separator"
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- a separator with aria-valuenow is ARIA's focusable window splitter, which jsx-a11y does not model */}
+      <div className="shrink-0 split-pane-divider" role="separator" tabIndex={0}
         aria-orientation="vertical"
         aria-valuenow={Math.round(splitPct)}
         aria-valuemin={minPct}
         aria-valuemax={maxPct}
         aria-label="Resize panes"
-        tabIndex={0}
         onMouseDown={onMouseDown}
         onKeyDown={(e) => {
           if (e.key === 'ArrowLeft') { e.preventDefault(); setSplitPct(p => Math.max(minPct, p - 2)); }

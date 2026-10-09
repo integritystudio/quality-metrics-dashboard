@@ -1,6 +1,6 @@
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
 import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
+import { SKELETON_HEIGHT_MD, USD_DISPLAY_PRECISION } from '../lib/constants.js';
 import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
 
@@ -37,7 +37,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 <div className="text-secondary text-xs uppercase">Fallback Rate</div>
               </div>
               <div className="text-center">
-                <div className="mono-xl font-semibold">${data.costSavings.toFixed(4)}</div>
+                <div className="mono-xl font-semibold">${data.costSavings.toFixed(USD_DISPLAY_PRECISION)}</div>
                 <div className="text-secondary text-xs uppercase">Cost Savings</div>
               </div>
               <div className="text-center">
@@ -142,11 +142,11 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
               </h3>
               <div className="flex-wrap gap-8">
                 <div className="text-center">
-                  <div className="mono-xl font-semibold">{data.routingLatency.p50.toFixed(0)}ms</div>
+                  <div className="mono-xl font-semibold">{Math.round(data.routingLatency.p50)}ms</div>
                   <div className="text-secondary text-xs uppercase">p50</div>
                 </div>
                 <div className="text-center">
-                  <div className="mono-xl font-semibold">{data.routingLatency.p99.toFixed(0)}ms</div>
+                  <div className="mono-xl font-semibold">{Math.round(data.routingLatency.p99)}ms</div>
                   <div className="text-secondary text-xs uppercase">p99</div>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { min, max } from 'd3-array';
 
 interface SparklineProps {
   /** Array of score values (nulls allowed for gaps) */
@@ -17,9 +18,9 @@ function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-sec
   const values = data.filter((v): v is number => v !== null && Number.isFinite(v));
   if (values.length < 2) return null;
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
+  const minValue = min(values) ?? 0;
+  const maxValue = max(values) ?? 0;
+  const range = maxValue - minValue || 1;
   const pad = 2;
   const xDenom = data.length > 1 ? data.length - 1 : 1;
 
@@ -27,7 +28,7 @@ function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-sec
     .map((v, i) => {
       if (v === null || !Number.isFinite(v)) return null;
       const x = pad + (i / xDenom) * (width - pad * 2);
-      const y = pad + (1 - (v - min) / range) * (height - pad * 2);
+      const y = pad + (1 - (v - minValue) / range) * (height - pad * 2);
       return `${x},${y}`;
     })
     .filter((p): p is string => p !== null)

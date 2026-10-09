@@ -2,6 +2,10 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import react from 'eslint-plugin-react';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import regexp from 'eslint-plugin-regexp';
+import tanstackQuery from '@tanstack/eslint-plugin-query';
+import eslintReact from '@eslint-react/eslint-plugin';
 
 const noUnusedVarsRule = ['error', {
   argsIgnorePattern: '^_',
@@ -29,6 +33,7 @@ const typeSafetyRules = {
   '@typescript-eslint/no-invalid-void-type': 'error',
   '@typescript-eslint/no-shadow': 'error',
   '@typescript-eslint/no-dynamic-delete': 'error',
+  '@typescript-eslint/no-deprecated': 'warn',
   '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
   'radix': 'error',
@@ -42,6 +47,20 @@ const typeSafetyRules = {
     { name: 'isNaN', message: 'Global isNaN coerces its argument; use Number.isNaN.' },
     { name: 'isFinite', message: 'Global isFinite coerces its argument; use Number.isFinite.' },
     { name: 'event', message: 'Use the handler parameter, not window.event.' },
+  ],
+  'no-restricted-syntax': ['error',
+    {
+      selector: "CallExpression[callee.property.name='toFixed'][arguments.0.value=type(number)]",
+      message: 'Pass a named precision constant to toFixed, not a numeric literal.',
+    },
+    {
+      selector: "JSXAttribute[name.name='style'] ObjectExpression > Property:matches([key.type='Identifier'], [key.type='Literal'][key.value!=/^--/])",
+      message: 'No inline styles: use a CSS class. Only CSS custom properties (--name) may be set through style.',
+    },
+    {
+      selector: "CallExpression[callee.object.name='Math'][callee.property.name=/^(min|max)$/] > SpreadElement.arguments",
+      message: 'Math.min/Math.max with a spread argument overflows the stack on large arrays; use d3-array min/max/extent.',
+    },
   ],
 };
 
@@ -79,6 +98,39 @@ export default tseslint.config(
       'react/jsx-no-constructed-context-values': 'error',
       'react/no-object-type-as-default-prop': 'error',
     },
+  },
+  // Regex safety (polynomial backtracking, unused captures, confusable ranges) everywhere.
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    plugins: regexp.configs['flat/recommended'].plugins,
+    rules: regexp.configs['flat/recommended'].rules,
+  },
+  // TanStack Query hook hygiene (the preset is a one-element array).
+  ...tanstackQuery.configs['flat/recommended'].map(config => ({ ...config, files: ['src/**/*.{ts,tsx}'] })),
+  // Type-aware React rules. Rules that eslint-plugin-react or react-hooks already
+  // enforce above are switched off here so each finding is reported once.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: eslintReact.configs['recommended-type-checked'].plugins,
+    settings: eslintReact.configs['recommended-type-checked'].settings,
+    rules: {
+      ...eslintReact.configs['recommended-type-checked'].rules,
+      '@eslint-react/rules-of-hooks': 'off',
+      '@eslint-react/exhaustive-deps': 'off',
+      '@eslint-react/no-missing-key': 'off',
+      '@eslint-react/no-array-index-key': 'off',
+      '@eslint-react/no-nested-component-definitions': 'off',
+      '@eslint-react/jsx-no-children-prop': 'off',
+      '@eslint-react/jsx-no-comment-textnodes': 'off',
+      '@eslint-react/dom-no-dangerously-set-innerhtml-with-children': 'off',
+    },
+  },
+  // Accessibility of rendered markup; test mocks are not shipped.
+  {
+    files: ['src/**/*.tsx'],
+    ignores: ['src/__tests__/**', 'src/**/*.test.tsx'],
+    plugins: jsxA11y.flatConfigs.recommended.plugins,
+    rules: jsxA11y.flatConfigs.recommended.rules,
   },
   // src/ only: the browser and API server log through warn/error; scripts and the worker log by design.
   {

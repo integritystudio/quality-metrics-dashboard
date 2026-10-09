@@ -61,6 +61,7 @@ export function useApiQuery<TRaw, T = TRaw>(
   // have no org (null) — keys and headers are unchanged.
   const org = useOrgOptional();
   const activeOrgId = org?.activeOrgId ?? null;
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- onNotFound shapes the result, never the request
   return useQuery<TRaw, Error, T>({
     queryKey: [activeOrgId, ...queryKey],
     // Passing `signal` on lets react-query abort a request once no observer

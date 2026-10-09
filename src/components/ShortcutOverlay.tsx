@@ -12,8 +12,8 @@ export function ShortcutOverlay() {
   }
 
   return (
-    <div className="shortcut-overlay-backdrop" onClick={toggleOverlay} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
-      <div className="shortcut-overlay" onClick={e => e.stopPropagation()}>
+    <div className="shortcut-overlay-backdrop" role="presentation" onClick={e => { if (e.target === e.currentTarget) toggleOverlay(); }}>
+      <div className="shortcut-overlay" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
         <div className="flex-center mb-3 justify-between">
           <h2 className="text-md m-0">Keyboard Shortcuts</h2>
           <button type="button" onClick={toggleOverlay} aria-label="Close" className="text-lg text-secondary cursor-pointer btn-reset">

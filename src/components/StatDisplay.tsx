@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 interface StatDisplayProps {
   value: ReactNode;
@@ -17,7 +17,7 @@ export function StatDisplay({ value, label, valueClassName, valueColor, variant 
     <div className={wrapperClass}>
       <div
         className={`value${valueClassName ? ` ${valueClassName}` : ''}`}
-        style={valueColor ? { color: valueColor } : undefined}
+        style={valueColor ? { '--stat-value-color': valueColor } as CSSProperties : undefined}
       >
         {value}
       </div>

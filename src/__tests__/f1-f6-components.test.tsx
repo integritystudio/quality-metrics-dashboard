@@ -219,7 +219,7 @@ describe('CorrelationHeatmap', () => {
   it('renders table with correct role', () => {
     const { correlations, metrics } = makeCorrelations();
     const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
-    expect(container.querySelector('[role="table"]')).toBeInTheDocument();
+    expect(container.querySelector('[role="grid"]')).toBeInTheDocument();
   });
 
   it('renders column headers', () => {
@@ -233,7 +233,7 @@ describe('CorrelationHeatmap', () => {
     const { correlations, metrics } = makeCorrelations();
     const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
     // Diagonal cells have aria-label like "relevance vs relevance: 1.00"
-    const allCells = container.querySelectorAll('[role="cell"]');
+    const allCells = container.querySelectorAll('[role="gridcell"]');
     let diagCount = 0;
     allCells.forEach(cell => {
       if (cell.textContent === '1.00') diagCount++;

@@ -118,6 +118,14 @@ export const SCORE_DISPLAY_PRECISION = 3;
 export const SCORE_CHIP_PRECISION = 2;
 /** Decimal places for formatted raw score values in formatScore. */
 export const SCORE_FORMAT_PRECISION = 4;
+/** Decimal places for a score drawn inside a tight SVG label. */
+export const SCORE_LABEL_PRECISION = 1;
+/** Decimal places for percentages shown to the user. */
+export const PERCENT_DISPLAY_PRECISION = 1;
+/** Decimal places before a unit suffix (k, M, K tok, h, d). */
+export const COMPACT_UNIT_PRECISION = 1;
+/** Decimal places for a USD amount. */
+export const USD_DISPLAY_PRECISION = 4;
 
 /** OpenTelemetry span status code for errors. */
 export const OTEL_STATUS_ERROR_CODE = 2;
@@ -213,4 +221,4 @@ export const CHART_TOOLTIP_CONTENT_STYLE = {
 };
 export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
 export const CHART_YAXIS_WIDTH = 48;
-export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(2);
+export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(SCORE_CHIP_PRECISION);

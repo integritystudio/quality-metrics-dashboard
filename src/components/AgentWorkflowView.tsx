@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
+import { max } from 'd3-array';
 import { WorkflowGraphView } from './WorkflowGraph.js';
 import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
@@ -50,7 +51,7 @@ export function AgentWorkflowView({
   );
 
   const maxDurationMs = useMemo(
-    () => Math.max(0, ...graph.nodes.map(n => n.durationMs)),
+    () => Math.max(0, max(graph.nodes, n => n.durationMs) ?? 0),
     [graph.nodes],
   );
 

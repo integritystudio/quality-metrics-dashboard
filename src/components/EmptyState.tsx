@@ -12,7 +12,7 @@ export function EmptyState({ message, title, description, showSyncHint }: EmptyS
     return (
       <div className="empty-state">
         {title && <h2>{title}</h2>}
-        {description && <p>{description}</p>}
+        {description ? <p>{description}</p> : null}
         {showSyncHint && (
           <p className="text-muted text-xs mt-2">
             Data may not have been synced yet. Try again after the next sync cycle.

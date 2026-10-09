@@ -1,14 +1,14 @@
 import type { CSSProperties } from 'react';
 import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import { SCORE_DISPLAY_PRECISION, PERCENT_DISPLAY_PRECISION } from '../lib/constants.js';
 
 function segmentColor(contribution: CQIContribution): string {
   return scoreColor(contribution.rawScore, 'maximize');
 }
 
 export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
-  const displayValue = (cqi.value * 100).toFixed(1);
+  const displayValue = (cqi.value * 100).toFixed(PERCENT_DISPLAY_PRECISION);
   const overallColor = scoreColor(cqi.value, 'maximize');
 
   return (

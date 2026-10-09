@@ -29,7 +29,8 @@ export function RoleSelector() {
   ];
 
   return (
-    <nav className="tab-nav" role="tablist" aria-label="Dashboard views">
+    <nav aria-label="Dashboard views">
+      <div className="tab-nav" role="tablist">
       {tabs.map((tab) => {
         const active = location === tab.path;
         return (
@@ -44,6 +45,7 @@ export function RoleSelector() {
           </button>
         );
       })}
+      </div>
     </nav>
   );
 }

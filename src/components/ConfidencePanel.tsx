@@ -1,4 +1,5 @@
 import type { ConfidenceIndicator } from '../types.js';
+import { min as minOf, max as maxOf } from 'd3-array';
 import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
 import {
   SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
@@ -41,8 +42,8 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
 
 function JudgePanel({ scores }: { scores: EvaluatorScore[] }) {
   const scoreValues = scores.map(s => s.score);
-  const minScore = Math.min(...scoreValues);
-  const maxScore = Math.max(...scoreValues);
+  const minScore = minOf(scoreValues) ?? 0;
+  const maxScore = maxOf(scoreValues) ?? 0;
   return (
     <div>
       <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>

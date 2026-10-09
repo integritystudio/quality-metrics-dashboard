@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AccountBadge } from '../components/AccountBadge.js';
 import { SUPABASE_API_KEY_HEADER } from '../lib/postgrest-client.js';
 
@@ -38,7 +38,7 @@ function stubFetch(status: number, body: unknown) {
 }
 
 function Wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 

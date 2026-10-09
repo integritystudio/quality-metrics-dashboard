@@ -14,7 +14,7 @@ import {
   CHART_COLORS, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK,
   CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
   CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
-  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION,
+  CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION, COMPACT_UNIT_PRECISION,
 } from '../lib/constants.js';
 import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
@@ -35,8 +35,8 @@ function formatBreachTime(iso: string): string {
   const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
   if (hours <= 0) return 'threshold exceeded';
   if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours < 48) return `${hours.toFixed(1)}h`;
-  return `${(hours / 24).toFixed(1)}d`;
+  if (hours < 48) return `${hours.toFixed(COMPACT_UNIT_PRECISION)}h`;
+  return `${(hours / 24).toFixed(COMPACT_UNIT_PRECISION)}d`;
 }
 
 export function TrendChart({

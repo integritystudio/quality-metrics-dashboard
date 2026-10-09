@@ -1,6 +1,6 @@
 import type { QualityDashboardSummary } from '../types.js';
 import { formatTimestamp } from '../lib/quality-utils.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { TIME_MS, PERIOD_MS, COMPACT_UNIT_PRECISION } from '../lib/constants.js';
 import { HealthBanner } from './HealthBanner.js';
 import { StatDisplay } from './StatDisplay.js';
 
@@ -29,15 +29,15 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
     periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
   }
   const perHour = totalSamples / periodHours;
-  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(1)}k/hr`
-    : perHour >= 1 ? `${perHour.toFixed(0)}/hr`
-    : `${(perHour * 24).toFixed(1)}/day`;
+  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(COMPACT_UNIT_PRECISION)}k/hr`
+    : perHour >= 1 ? `${Math.round(perHour)}/hr`
+    : `${(perHour * 24).toFixed(COMPACT_UNIT_PRECISION)}/day`;
 
   return { evalVolume: totalSamples, lastEvalAge, evalRate };
 }
 
 function formatVolume(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(COMPACT_UNIT_PRECISION)}k`;
   return String(n);
 }
 

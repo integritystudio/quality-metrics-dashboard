@@ -48,6 +48,7 @@ const MIN_INCIDENTS_WARN = 5;
 const DEFAULT_BACKTEST_DAYS = 90;
 /** Configurations printed in the console summary. */
 const SUMMARY_TOP_CONFIGS = 5;
+const F1_DISPLAY_PRECISION = 3;
 /** Configurations per metric kept in the results file. */
 const RESULTS_TOP_CONFIGS = 10;
 const DEFAULT_OUTPUT_FILE = 'backtest-results.json';
@@ -212,18 +213,18 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
     const tag = r === currentConfigResult ? ' [prod]' : '';
     console.log(
       `${String(rank + 1).padStart(4)} | ${formatConfig(r.config).padEnd(43)} | ` +
-      `${r.tapr.f1.toFixed(3)}  | ${r.tapr.precision.toFixed(3)}  | ` +
-      `${r.tapr.recall.toFixed(3)}  | ${Math.round(r.tapr.detectionDelay)}ms${tag}`,
+      `${r.tapr.f1.toFixed(F1_DISPLAY_PRECISION)}  | ${r.tapr.precision.toFixed(F1_DISPLAY_PRECISION)}  | ` +
+      `${r.tapr.recall.toFixed(F1_DISPLAY_PRECISION)}  | ${Math.round(r.tapr.detectionDelay)}ms${tag}`,
     );
   }
 
   console.log('');
-  console.log(`Production: ${formatConfig(currentConfigResult.config)} → F1=${currentConfigResult.tapr.f1.toFixed(3)}`);
-  console.log(`Best F1:    ${formatConfig(bestByF1.config)} → F1=${bestByF1.tapr.f1.toFixed(3)} (Δ${f1Gain >= 0 ? '+' : ''}${f1Gain.toFixed(3)})`);
+  console.log(`Production: ${formatConfig(currentConfigResult.config)} → F1=${currentConfigResult.tapr.f1.toFixed(F1_DISPLAY_PRECISION)}`);
+  console.log(`Best F1:    ${formatConfig(bestByF1.config)} → F1=${bestByF1.tapr.f1.toFixed(F1_DISPLAY_PRECISION)} (Δ${f1Gain >= 0 ? '+' : ''}${f1Gain.toFixed(F1_DISPLAY_PRECISION)})`);
 
   if (f1Gain >= F1_GRADUATION_THRESHOLD) {
     console.log('');
-    console.log(`GRADUATION RECOMMENDED: best config outperforms production by +${f1Gain.toFixed(3)} F1`);
+    console.log(`GRADUATION RECOMMENDED: best config outperforms production by +${f1Gain.toFixed(F1_DISPLAY_PRECISION)} F1`);
     console.log('  Update CURRENT_PRODUCTION_CONFIG in src/lib/quality/quality-feature-engineering.ts:');
     console.log(`    varianceThreshold:        ${bestByF1.config.varianceThreshold}`);
     console.log(`    coverageDropoutThreshold: ${bestByF1.config.coverageDropoutThreshold}`);

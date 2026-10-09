@@ -92,7 +92,7 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
   if (!hasTooltip) return badge;
 
   return (
-    <span className="score-badge-wrapper inline-flex-center" tabIndex={0}>
+    <button type="button" className="score-badge-wrapper inline-flex-center btn-reset">
       {badge}
       <Tooltip
         score={score}
@@ -102,6 +102,6 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
         explanation={explanation}
         traceId={traceId}
       />
-    </span>
+    </button>
   );
 }

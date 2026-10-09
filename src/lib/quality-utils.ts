@@ -34,6 +34,7 @@ import {
   HALLUCINATION_RISK_EVALUATION_NAMES,
   HALLUCINATION_RISK_THRESHOLD,
   SCORE_FORMAT_PRECISION,
+  COMPACT_UNIT_PRECISION,
 } from './constants.js';
 export type FeatureRoleType = Role;
 
@@ -333,8 +334,8 @@ export function groupBy<T, K extends PropertyKey = string>(
 }
 
 export function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(COMPACT_UNIT_PRECISION)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(COMPACT_UNIT_PRECISION)}K`;
   return String(n);
 }
 

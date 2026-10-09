@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { max } from 'd3-array';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
@@ -89,7 +90,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
     return <EmptyState message="No agent activity recorded for this period." />;
   }
 
-  const maxInvocations = Math.max(...agents.map(a => a.invocations), 1);
+  const maxInvocations = Math.max(max(agents, a => a.invocations) ?? 0, 1);
 
   const sorted = [...agents].sort((a, b) => {
     const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
@@ -221,7 +222,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               label={`Daily invocations for ${agent.agentName}`}
                             />
                             <span className="mono text-muted text-2xs shrink-0">
-                              peak {Math.max(...agent.dailyCounts)}/day
+                              peak {max(agent.dailyCounts) ?? 0}/day
                             </span>
                           </div>
                         </div>

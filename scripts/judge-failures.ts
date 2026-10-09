@@ -80,6 +80,8 @@ export function trackFailure(metric: string, err: unknown, sessionPreview?: stri
   if (sessionPreview !== undefined) console.warn(`  [${metric}] Error for ${sessionPreview}: ${message}`);
 }
 
+const PERCENT_DISPLAY_PRECISION = 1;
+
 /** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */
 export const HIGH_FAILURE_RATE_THRESHOLD = 0.5;
 
@@ -161,7 +163,7 @@ export function summarizeJudgeRun(
     verdict = 'NO SCORES PRODUCED — every evaluation failed';
   } else if (attempted > 0 && failed / attempted > HIGH_FAILURE_RATE_THRESHOLD) {
     exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * PERCENT_MULTIPLIER).toFixed(1)}%); check failure classes above`;
+    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}%); check failure classes above`;
   } else if (
     prev !== undefined &&
     prevRate !== undefined &&
@@ -172,7 +174,7 @@ export function summarizeJudgeRun(
     // Rates, not counts: a run with fewer new turns scores fewer evaluations
     // without anything having failed, and a count comparison called that a drop.
     exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${prev.attempted} on the previous run; check for a new failure class`;
+    verdict = `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}% of ${prev.attempted} on the previous run; check for a new failure class`;
   }
   const { usage, estimatedUsd, keySource } = spend;
   const actualUsd = tokenUsageCostUsd(usage, judgePricing());

@@ -453,7 +453,7 @@ describe('network failure handling', () => {
 
   it('persists the shipped index on every exit path, not just clean ones', () => {
     // A trailing saveShipped is not enough — it must be in a finally block.
-    expect(SCRIPT).toMatch(/finally\s*\{\s*\n\s*if \(!opts\.dryRun\) saveShipped/);
+    expect(SCRIPT).toMatch(/finally\s*\{\s*if \(!opts\.dryRun\) saveShipped/);
   });
 
   it('retries transient failures and logs once on exhaustion', () => {
