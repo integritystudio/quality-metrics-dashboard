@@ -381,7 +381,7 @@ export function fingerprint(line: string): string {
  */
 export function evaluationId(record: Record<string, unknown>): string {
   const { [IDENTITY_KEY_REF_FIELD]: _stamp, [STABLE_EVALUATION_KEY_FIELD]: stableKey, ...rest } = record;
-  if (typeof stableKey === 'string') {
+  if (typeof stableKey === 'string' && stableKey.length > 0) {
     return createHash('sha256').update(stableKey).digest('hex').slice(0, EVALUATION_ID_LENGTH);
   }
   return createHash('sha256').update(JSON.stringify(rest)).digest('hex').slice(0, EVALUATION_ID_LENGTH);

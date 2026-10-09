@@ -304,6 +304,11 @@ describe('evaluationId', () => {
     // the field was stripped — it was never part of the hash for ordinary records.
     expect(evaluationId(base)).toBe(evaluationId({ ...base, stableEvaluationKey: undefined }));
   });
+
+  it('falls back to full-record hash when stableEvaluationKey is an empty string', () => {
+    // An empty key collapsing many records to sha256('') would be a data bug.
+    expect(evaluationId({ ...base, stableEvaluationKey: '' })).toBe(evaluationId(base));
+  });
 });
 
 describe('windowFiles', () => {
