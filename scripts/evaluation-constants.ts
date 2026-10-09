@@ -8,7 +8,7 @@
 import { join } from 'path';
 import type { EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
 
-const HOME = process.env.HOME ?? '';
+export const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.
 // `TELEMETRY_DIR` overrides it, as it does for the other scripts that read
 // telemetry, so a run can be pointed at a scratch directory.

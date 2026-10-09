@@ -15,9 +15,9 @@ import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './acc
 import type { EvalRecord } from './eval-record.js';
 import { pushTo } from './collections.js';
 import { LOGS_FILE_PREFIX, TRACES_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
+import { HOME } from './evaluation-constants.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
-export const HOME = process.env.HOME ?? '';
 
 /** Maximum characters per turn to prevent oversized LLM prompts and token explosion */
 export const MAX_TURN_TEXT_LEN = 8000;
