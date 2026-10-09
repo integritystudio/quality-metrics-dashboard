@@ -3,12 +3,8 @@
  * Derive rule-based evaluations from trace data and post them to ingest.
  *
  * Reads spans from obtool-api (`/v1/traces`, one query per `OBTOOL_API_KEY*`
- * account in the environment) or, with `--source=local`, from
- * `traces-*.jsonl`. Without `--date=`/`--days=`, the cloud source reads the
- * last `DERIVE_DEFAULT_DAYS`, as populate does, and the local source reads
- * every trace file. `--source=local` is kept for one release as the rollback
- * (cloud-read Phase 6); `derive-parity.ts` checks that the two sources agree.
- * A failed cloud read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is
+ * account in the environment). Without `--date=`/`--days=`, it reads the
+ * last `DERIVE_DEFAULT_DAYS`, as populate does. A failed cloud read exits `DERIVE_EXIT_READ_FAILED` (9) before anything is
  * posted.
  *
  * Every record is POSTed straight to ingest (`post-evaluations.ts`) with an
@@ -22,13 +18,10 @@
  *   tsx scripts/derive-evaluations.ts --dry-run                    # what populate runs: 7 days read, 2 posted
  *   tsx scripts/derive-evaluations.ts --date=2026-10-01 --dry-run
  *   tsx scripts/derive-evaluations.ts --days=3
- *   tsx scripts/derive-evaluations.ts --source=local --days=3      # the rollback
  */
 
-import { readdirSync } from 'fs';
 import { mean, rollup } from 'd3-array';
 import pLimit from 'p-limit';
-import { join } from 'path';
 import {
   computeCalibrationDistributions,
   loadCalibrationState,
@@ -36,9 +29,8 @@ import {
   shouldRecalibrate,
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
-import { localTraceSpanSchema, type LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
+import type { LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
-import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
 import {
   normalizeScore,
   EVAL_SCORE_PRECISION,
@@ -49,14 +41,14 @@ import {
   toOTelRecord,
   type EvalRecord,
 } from './eval-record.js';
-import { TELEMETRY_DIR, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
+import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
-import { ACCOUNT_INDEX_WINDOW_DAYS, TRACE_FILE_PATTERN, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
+import type { AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, parseTraceSource, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedSourceFlags } from './pipeline-stages.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
@@ -529,16 +521,8 @@ export async function deriveAgentHeuristics(
 
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
-/** Every flag derive reads; judge-evaluations and the parity scripts reuse the readers below. */
-const DERIVE_CLI: CliSpec = { values: [SOURCE_ARG, DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_FLAG] };
-
-/**
- * `--source=local|cloud`, else `defaultSource`: `cloud` for derive and the
- * judge since cloud-read Phase 6. `local` is kept for one release as the rollback.
- */
-export function resolveSource(args: string[], defaultSource: TraceSource = DERIVE_DEFAULT_SOURCE): TraceSource {
-  return parseTraceSource(SOURCE_ARG, parseCli(args, DERIVE_CLI).value(SOURCE_ARG), defaultSource);
-}
+/** Every flag derive reads; judge-evaluations reuses the readers below. */
+const DERIVE_CLI: CliSpec = { values: [DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_FLAG] };
 
 /** The last `days` UTC dates, today included. */
 function lastUtcDays(days: number, now: Date = new Date()): Set<string> {
@@ -552,22 +536,17 @@ function lastUtcDays(days: number, now: Date = new Date()): Set<string> {
 }
 
 /**
- * The dates a run reads: the caller's `--date=`/`--days=`, else, for the cloud
- * source, the last `defaultDays`. The cloud needs a bound because an unbounded
- * read has no memory ceiling; an unscoped local run still reads every trace file.
+ * The dates a run reads: the caller's `--date=`/`--days=`, else the last
+ * `defaultDays`. The cloud read needs a bound because an unbounded read has no
+ * memory ceiling.
  */
-export function readScope(
-  source: TraceSource,
-  dateScope: Set<string> | null,
-  defaultDays: number,
-  now: Date = new Date(),
-): Set<string> | null {
-  return source === 'cloud' && !dateScope ? lastUtcDays(defaultDays, now) : dateScope;
+export function readScope(dateScope: Set<string> | null, defaultDays: number, now: Date = new Date()): Set<string> {
+  return dateScope ?? lastUtcDays(defaultDays, now);
 }
 
 /**
  * The dates the caller asked for with `--date=` or `--days=`, or null when
- * neither was given. Null is not "all dates" for the cloud source: see
+ * neither was given. Null is not "all dates": see
  * `readScope`. It also leaves the post window to `DERIVE_POST_WINDOW_DAYS`.
  */
 export function resolveDateScope(args: string[], now: Date = new Date()): Set<string> | null {
@@ -584,25 +563,11 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
   return days === undefined ? null : lastUtcDays(days, now);
 }
 
-/** Every span in the in-scope `traces-<date>.jsonl` files, in file then line order. */
-export function loadLocalSpans(dir: string, dateScope: Set<string> | null): LoadedSpans {
-  const traceFiles = readdirSync(dir)
-    .filter(f => {
-      const date = TRACE_FILE_PATTERN.exec(f)?.[1];
-      return date !== undefined && (!dateScope || dateScope.has(date));
-    })
-    .sort();
-  const accounts = indexTraceFiles(dir, traceFiles).bySpan;
-  const spans = traceFiles.flatMap(file => readJsonlWithValidationSync(join(dir, file), localTraceSpanSchema));
-  return { spans, accounts };
-}
-
 /**
  * Ascending by start time, span id breaking ties: the order `loadCloudSpans`
- * returns. Local files are in write order, which differs when spans overlap
- * (two agents finishing in parallel), and the session-level records attach
- * to the session's last span, so without one order the two sources named
- * different spans, and so different evaluation ids, for the same record.
+ * returns. The session-level records attach to the session's last span, so a
+ * fixed order keeps their evaluation ids stable when spans overlap (two agents
+ * finishing in parallel).
  */
 function byStartThenSpanId(a: LocalTraceSpan, b: LocalTraceSpan): number {
   return a.startTime[0] - b.startTime[0]
@@ -612,8 +577,8 @@ function byStartThenSpanId(a: LocalTraceSpan, b: LocalTraceSpan): number {
 
 /**
  * Every rule record for `spans`, taken in start order whatever order they
- * arrive in. Clears the per-session accumulators first, so two sources can be
- * derived in one process (`derive-parity.ts`).
+ * arrive in. Clears the per-session accumulators first, so repeated calls in
+ * one process start clean.
  */
 export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   sessionTasks.clear();
@@ -786,26 +751,22 @@ function updateCalibration(allEvals: readonly EvalRecord[], dryRun: boolean): vo
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  rejectRemovedSourceFlags(argv);
   const dateScope = resolveDateScope(argv);
-  const source = resolveSource(argv);
-  const scope = readScope(source, dateScope, DERIVE_DEFAULT_DAYS);
+  const scope = readScope(dateScope, DERIVE_DEFAULT_DAYS);
   const postDays = resolvePostDays(argv);
   const dryRun = parseCli(argv, DERIVE_CLI).has(DRY_RUN_FLAG);
 
   let loaded: LoadedSpans;
-  if (source === 'cloud' && scope) {
-    try {
-      loaded = await loadCloudSpans(scope);
-    } catch (err) {
-      // Nothing is derived or posted yet, so populate carries on
-      // without derive. The whole error, cause included, goes to stderr so
-      // populate can tell a network failure (retried) from anything else.
-      console.error('[derive] cloud read failed:', err);
-      process.exitCode = DERIVE_EXIT_READ_FAILED;
-      return;
-    }
-  } else {
-    loaded = loadLocalSpans(TELEMETRY_DIR, scope);
+  try {
+    loaded = await loadCloudSpans(scope);
+  } catch (err) {
+    // Nothing is derived or posted yet, so populate carries on
+    // without derive. The whole error, cause included, goes to stderr so
+    // populate can tell a network failure (retried) from anything else.
+    console.error('[derive] cloud read failed:', err);
+    process.exitCode = DERIVE_EXIT_READ_FAILED;
+    return;
   }
   const allEvals = deriveAll(loaded);
   // The window comes from the caller's scope, not the defaulted read, so an
@@ -816,15 +777,13 @@ async function main(): Promise<void> {
     Math.max(floorMs, DERIVE_NO_REPOST_BEFORE_MS),
     new Map(scanTranscriptDirs().map(t => [t.sessionId, t.path])),
   ));
-  // A span in an in-scope trace file can carry an out-of-scope timestamp;
-  // never post a date the run did not read.
-  const inScope = scope ? allEvals.filter(ev => scope.has(toDateOnly(ev.timestamp))) : allEvals;
+  // A span can carry a timestamp outside the dates read; never post a date the
+  // run did not read.
+  const inScope = allEvals.filter(ev => scope.has(toDateOnly(ev.timestamp)));
 
-  // Unstamped records fall back to the local account join only when the spans
-  // were local; every cloud span is stamped with the org that shipped it.
-  const accounts = source === 'local'
-    ? buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now())
-    : emptyAccountIndex();
+  // Every cloud span is stamped with the org that shipped it, so no record
+  // needs the local account join.
+  const accounts = emptyAccountIndex();
   const { toPost, heldBack } = splitAtRepostFloor(inScope.filter(ev => Date.parse(ev.timestamp) >= floorMs));
   if (heldBack.length > 0) {
     console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies without an evaluationId, so a re-post would duplicate them`);

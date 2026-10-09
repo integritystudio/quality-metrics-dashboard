@@ -5,10 +5,10 @@
  * Steps:
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
  *                            over the cloud's last 7 days of spans, the last 2 days
- *                            POSTed to ingest (`--source=cloud --days=7 --post-days=2`)
+ *                            POSTed to ingest (`--days=7 --post-days=2`)
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
- *                            (`--source=cloud --days=7`), POSTed to ingest and
+ *                            (`--days=7`), POSTed to ingest and
  *                            appended to evaluations-<date>.jsonl
  *   3. upload-evaluations  → ship the hooks' and survival-fitness records in evaluations JSONL
  *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
@@ -32,9 +32,7 @@
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
  *   npm run populate -- --judge-days=30       # judge turns from the last 30 days instead of 7
- *   npm run populate -- --judge-source=local  # judge discovery from local telemetry (rollback)
  *   npm run populate -- --derive-days=14      # derive over the last 14 days instead of 7
- *   npm run populate -- --derive-source=local # derive from local trace files (rollback)
  *
  * Exit codes (read by the launchd wrapper, which logs FAILED for anything non-zero):
  *   0     every stage succeeded
@@ -89,8 +87,7 @@ const POPULATE_CLI: CliSpec = {
 
 /**
  * The run's switches and each stage's scope. Both stages read the cloud over
- * the last week unless --derive-source= / --derive-days= / --judge-source= /
- * --judge-days= say otherwise. Read before any stage runs, so a bad flag stops
+ * the last week unless --derive-days= / --judge-days= say otherwise. Read before any stage runs, so a bad flag stops
  * the run before derive.
  */
 function readArgs(argv: readonly string[]) {

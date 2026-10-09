@@ -1,5 +1,5 @@
 /**
- * Cloud trace source for `derive-evaluations --source=cloud` (Phase 1 of
+ * Cloud trace source for `derive-evaluations` (Phase 1 of
  * docs/roadmap/dashboard-cloud-read-migration.md).
  *
  * Reads `/v1/traces` once per identity-map account and converts each span to

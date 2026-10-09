@@ -1,12 +1,9 @@
-/** Keys for the already-judged set, and the local ledger they are read from. */
+/** Keys for the already-judged set, and the records that count as this script's. */
 
-import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
-import { otelEvaluationRecordSchema, LLM_EVALUATOR_TYPE, type EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
-import { nsToMs } from './hrt.js';
+import { LLM_EVALUATOR_TYPE, type EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
 import { CANARY_COHORT } from './evaluation-constants.js';
 import { EVALUATION_ATTRS, LEGACY_EVALUATOR_TYPE_ATTR, NORMAL_COHORT, SEED_COHORT, BACKFILL_COHORT, SEED_EVALUATOR_TYPE, TRACE_BACKFILL_EVALUATOR_TYPE } from './eval-record.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
-import { EVALUATIONS_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
 
 export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
 
@@ -68,35 +65,4 @@ export function isThisScriptsRecord(attrs: Record<string, unknown>): boolean {
   return legacy === LLM_EVALUATOR_TYPE
     || legacy === SEED_EVALUATOR_TYPE
     || legacy === TRACE_BACKFILL_EVALUATOR_TYPE;
-}
-
-export function _loadExistingKeys(): Set<string> {
-  const keys = new Set<string>();
-  for (const filepath of listTelemetryJsonl(EVALUATIONS_FILE_PREFIX)) {
-    const records = readJsonlWithValidationSync(filepath, otelEvaluationRecordSchema);
-
-    for (const record of records) {
-      const attrs = record.attributes;
-      if (!isThisScriptsRecord(attrs)) continue;
-
-      const sessionId = attrs[EVALUATION_ATTRS.SESSION_ID] as string || '';
-      const metricName = attrs[EVALUATION_ATTRS.NAME] as string || '';
-      // record.timestamp is epoch nanos (bigint) — the schema decodes ISO to nanos.
-      // Turn keys are compared against ISO-prefix keys, so convert back.
-      const ms = nsToMs(record.timestamp);
-      const turnKey = turnKeyOf(ms);
-      const judgeModel = attrs[EVALUATION_ATTRS.JUDGE_MODEL];
-      const cohort = attrs[EVALUATION_ATTRS.COHORT];
-
-      addJudgedKeys(keys, {
-        sessionId,
-        evaluationName: metricName,
-        turnKey,
-        ...(typeof judgeModel === 'string' && { judgeModel }),
-        ...(typeof cohort === 'string' && { cohort }),
-      });
-    }
-  }
-
-  return keys;
 }

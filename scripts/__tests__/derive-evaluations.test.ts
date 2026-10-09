@@ -12,7 +12,6 @@ import {
   detectInputDrift,
   resolvePostDays,
   readScope,
-  resolveSource,
   scoreTask,
   sessionTasks,
   splitAtRepostFloor,
@@ -406,40 +405,16 @@ describe('deriveEvaluationLatency', () => {
   });
 });
 
-describe('resolveSource', () => {
-  it('defaults to cloud (cloud-read Phase 6)', () => {
-    expect(resolveSource([])).toBe('cloud');
-  });
-
-  it('keeps local as the rollback', () => {
-    expect(resolveSource(['--source=local'])).toBe('local');
-  });
-
-  it("uses the caller's default when no flag is given", () => {
-    expect(resolveSource([], 'local')).toBe('local');
-    expect(resolveSource(['--source=cloud'], 'local')).toBe('cloud');
-  });
-
-  it('rejects an unknown source', () => {
-    expect(() => resolveSource(['--source=s3'])).toThrow('local|cloud');
-  });
-});
-
 describe('readScope', () => {
   const now = new Date('2026-10-04T12:00:00.000Z');
   const named = new Set(['2026-09-30']);
 
-  it('bounds an unscoped cloud read to the last N UTC days, today included', () => {
-    expect(readScope('cloud', null, 3, now)).toEqual(new Set(['2026-10-02', '2026-10-03', '2026-10-04']));
+  it('bounds an unscoped read to the last N UTC days, today included', () => {
+    expect(readScope(null, 3, now)).toEqual(new Set(['2026-10-02', '2026-10-03', '2026-10-04']));
   });
 
-  it("keeps the caller's dates for either source", () => {
-    expect(readScope('cloud', named, 3, now)).toBe(named);
-    expect(readScope('local', named, 3, now)).toBe(named);
-  });
-
-  it('leaves an unscoped local read unbounded, so it reads every trace file', () => {
-    expect(readScope('local', null, 3, now)).toBeNull();
+  it("keeps the caller's dates", () => {
+    expect(readScope(named, 3, now)).toBe(named);
   });
 });
 

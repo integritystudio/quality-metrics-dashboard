@@ -198,43 +198,44 @@ describe('nextStepAfter', () => {
 });
 
 describe('judgeScopeArgs', () => {
-  it('points the judge at the cloud over the last seven days when populate is given nothing', () => {
-    expect(judgeScopeArgs(['--limit', '100', '--batch'])).toEqual(['--source=cloud', '--days=7']);
+  it('reads the last seven days when populate is given nothing', () => {
+    expect(judgeScopeArgs(['--limit', '100', '--batch'])).toEqual(['--days=7']);
   });
 
-  it('takes the source and the day count from their overrides', () => {
-    expect(judgeScopeArgs(['--judge-source=local', '--judge-days=30'])).toEqual(['--source=local', '--days=30']);
+  it('takes the day count from its override', () => {
+    expect(judgeScopeArgs(['--judge-days=30'])).toEqual(['--days=30']);
   });
 
   it('reads an override given as the next argument', () => {
-    expect(judgeScopeArgs(['--judge-source', 'local', '--judge-days', '30'])).toEqual(['--source=local', '--days=30']);
+    expect(judgeScopeArgs(['--judge-days', '30'])).toEqual(['--days=30']);
   });
 
   it.each([
-    ['an unknown source', ['--judge-source=s3'], /--judge-source must be one of local\|cloud/],
     ['a zero day count', ['--judge-days=0'], /--judge-days must be a positive integer/],
     ['a fractional day count', ['--judge-days=1.5'], /--judge-days must be a positive integer/],
     ['a day count with trailing text', ['--judge-days=7d'], /--judge-days must be a positive integer/],
+    ['the removed --judge-source', ['--judge-source=local'], /--judge-source was removed/],
+    ['the removed --source', ['--source=local'], /--source was removed/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => judgeScopeArgs(args)).toThrow(message);
   });
 });
 
 describe('deriveScopeArgs', () => {
-  it('reads the cloud over seven days and posts only the last two when populate is given nothing', () => {
-    expect(deriveScopeArgs(['--limit', '100', '--batch'])).toEqual(['--source=cloud', '--days=7', '--post-days=2']);
+  it('reads seven days and posts only the last two when populate is given nothing', () => {
+    expect(deriveScopeArgs(['--limit', '100', '--batch'])).toEqual(['--days=7', '--post-days=2']);
   });
 
-  it('takes the source and the day count from their own overrides, not the judge\'s', () => {
-    const args = ['--derive-source=local', '--derive-days=14', '--judge-source=cloud', '--judge-days=30'];
+  it("takes the day count from its own override, not the judge's", () => {
+    const args = ['--derive-days=14', '--judge-days=30'];
 
-    expect(deriveScopeArgs(args)).toEqual(['--source=local', '--days=14', '--post-days=2']);
-    expect(judgeScopeArgs(args)).toEqual(['--source=cloud', '--days=30']);
+    expect(deriveScopeArgs(args)).toEqual(['--days=14', '--post-days=2']);
+    expect(judgeScopeArgs(args)).toEqual(['--days=30']);
   });
 
   it.each([
-    ['an unknown source', ['--derive-source=s3'], /--derive-source must be one of local\|cloud/],
     ['a zero day count', ['--derive-days=0'], /--derive-days must be a positive integer/],
+    ['the removed --derive-source', ['--derive-source=local'], /--derive-source was removed/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => deriveScopeArgs(args)).toThrow(message);
   });

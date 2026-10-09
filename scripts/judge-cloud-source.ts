@@ -1,5 +1,5 @@
 /**
- * Cloud discovery for `judge-evaluations --source=cloud` (cloud-read migration
+ * Cloud discovery for `judge-evaluations` (cloud-read migration
  * Phase 4). Which sessions to judge, which account each turn ran under, and
  * which turns are already scored all come from obtool-api; only the turn text
  * still comes from the transcripts on this machine (Phase 5 keeps it there).
@@ -13,7 +13,7 @@
  * - **Transcripts**: found by session id under `TRANSCRIPT_DIRS`, never through
  *   the local token-metrics logs, so no telemetry file is read.
  * - **Already judged**: `/v1/evaluations` rows from the judge's two producers,
- *   one query per account and producer, keyed like `_loadExistingKeys`. This
+ *   one query per account and producer, keyed like `turnScoreKey`. This
  *   is the cloud's record of what reached the dashboard, so a turn judged
  *   locally but never delivered is judged again, and this time posted.
  */
@@ -75,7 +75,7 @@ function evaluationEventMs(row: EvaluationResult): number {
   return typeof legacy === 'number' ? legacy : nsToMs(row.timestamp);
 }
 
-/** Dedup keys in `_loadExistingKeys`' shape, plain and per judge model; a row without a session scores no transcript turn. */
+/** Dedup keys in `turnScoreKey`'s shape, plain and per judge model; a row without a session scores no transcript turn. */
 export function judgedKeys(rows: Iterable<EvaluationResult>): Set<string> {
   const keys = new Set<string>();
   for (const row of rows) {
