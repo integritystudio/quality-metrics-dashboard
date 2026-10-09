@@ -6,9 +6,7 @@ import {
   TIME_MS,
 } from '../../src/lib/core/units.js';
 
-export function msToNs(ms: number): bigint {
-  return BigInt(ms) * NANOSECONDS_PER_MILLISECOND_BIGINT;
-}
+export { msToNs } from '../src/api/api-constants.js';
 
 export function nsToMs(ns: bigint): number {
   return Number(ns / NANOSECONDS_PER_MILLISECOND_BIGINT);

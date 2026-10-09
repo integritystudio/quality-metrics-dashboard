@@ -50,6 +50,11 @@ export type SafeLogEntry = Partial<Pick<LogRecord, LogSummaryField>>;
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;
 
+/** Epoch milliseconds to the epoch-nanosecond bigint the cloud backend queries take. */
+export function msToNs(ms: number): bigint {
+  return BigInt(ms) * BigInt(NANOS_TO_MS);
+}
+
 const NS_THRESHOLD = 1e15;
 const NS_PER_MS_BIG = 1_000_000n;
 
@@ -252,3 +257,10 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
  * coverage filter (`src/api/aggregates/coverage.ts`) and the evaluation record
  * writer (`scripts/eval-record.ts`). */
 export const RULE_EVALUATOR_TYPE = 'rule';
+
+/**
+ * Canary evaluations carry synthetic scores. Records written before OBP16 mark
+ * one in the overloaded `evaluatorType`; records after it use `cohort`.
+ */
+export const CANARY_EVALUATOR_TYPE = 'canary';
+export const CANARY_COHORT = 'canary';

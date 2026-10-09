@@ -6,7 +6,6 @@
  */
 
 import { join } from 'path';
-import type { EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
 
 export const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.
@@ -22,6 +21,4 @@ export const TELEMETRY_DIR = process.env.TELEMETRY_DIR || join(HOME, '.claude-hi
  */
 export const CALIBRATION_STATE_DIR = TELEMETRY_DIR;
 
-/** Legacy (pre-OBP16) canary marker, carried in the overloaded `evaluatorType`. */
-export const CANARY_EVALUATOR_TYPE = 'canary';
-export const CANARY_COHORT: EvaluationCohort = 'canary';
+export { CANARY_COHORT, CANARY_EVALUATOR_TYPE } from '../src/api/api-constants.js';
