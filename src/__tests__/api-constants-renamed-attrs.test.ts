@@ -53,14 +53,20 @@ describe('renamedAttr', () => {
     expect(renamedAttr(span(attributes), 'integritystudio.mcp.success', 'mcp.success', 'boolean')).toBe(expected);
   });
 
-  it('skips a canonical value of the wrong type for the legacy one', () => {
-    const mistyped = span({ 'integritystudio.tokens.input': '120', 'tokens.input': 80 });
-
-    expect(renamedAttr(mistyped, 'integritystudio.tokens.input', 'tokens.input', 'number')).toBe(80);
+  it('coerces a canonical string-encoded number (D1 stores all OTel int attrs as strings)', () => {
+    // Production D1 serialises integer OTel attributes as JSON strings.
+    // renamedAttr must coerce them rather than falling through to the legacy key.
+    const stringEncoded = span({ 'integritystudio.tokens.input': '120', 'tokens.input': 80 });
+    expect(renamedAttr(stringEncoded, 'integritystudio.tokens.input', 'tokens.input', 'number')).toBe(120);
   });
 
-  it('is undefined when neither key holds the requested type', () => {
+  it('coerces a legacy string-encoded number when the canonical key is absent', () => {
     expect(renamedAttr(span({ 'tokens.input': '80' }), 'integritystudio.tokens.input', 'tokens.input', 'number'))
+      .toBe(80);
+  });
+
+  it('is undefined when neither key holds a parseable number', () => {
+    expect(renamedAttr(span({ 'tokens.input': 'not-a-number' }), 'integritystudio.tokens.input', 'tokens.input', 'number'))
       .toBeUndefined();
   });
 });

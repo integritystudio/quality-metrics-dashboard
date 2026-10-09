@@ -187,7 +187,12 @@ export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): stri
 
 export function attrNum(span: SpanLike, key: string, fallback = 0): number {
   const v = span.attributes?.[key];
-  return typeof v === 'number' ? v : fallback;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return fallback;
 }
 
 export type SpanAttrType = 'string' | 'number' | 'boolean';
@@ -206,6 +211,10 @@ type SpanAttrValue<K extends SpanAttrType> =
 export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, type: K): SpanAttrValue<K> | undefined {
   const v = span.attributes?.[key];
   if (typeof v === type) return v as SpanAttrValue<K>;
+  if (type === 'number' && typeof v === 'string') {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n as SpanAttrValue<K>;
+  }
   return undefined;
 }
 
