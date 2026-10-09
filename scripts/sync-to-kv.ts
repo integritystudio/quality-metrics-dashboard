@@ -87,6 +87,7 @@ import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } 
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { bigintReplacer } from '../../src/lib/core/file-utils.js';
+import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../../src/lib/quality/bucket-utils.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
@@ -991,25 +992,24 @@ function computeTrendEntries(
   const degradationBuckets = new Map<Period, Record<string, DegradationBucket[]>>();
   for (const [period, cached] of groupedByPeriod) {
     const ms = PERIOD_MS[period];
-    const start = new Date(now.getTime() - ms);
+    const startMs = now.getTime() - ms;
     const bucketMs = ms / TREND_BUCKETS;
+    const bucketWindows = buildEvenBucketBoundaries(startMs, now.getTime(), TREND_BUCKETS).map(b => ({
+      startTime: new Date(b.start).toISOString(),
+      endTime: new Date(b.end).toISOString(),
+    }));
 
     for (const name of metricNames) {
       const config = getQualityMetric(name);
       if (!config) continue;
       const evaluations = cached.get(name) ?? [];
 
-      const timeBuckets: Array<{ startTime: string; endTime: string; scores: number[]; evals: EvaluationResult[] }> = [];
-      for (let i = 0; i < TREND_BUCKETS; i++) {
-        const bStart = new Date(start.getTime() + i * bucketMs);
-        const bEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-        timeBuckets.push({ startTime: bStart.toISOString(), endTime: bEnd.toISOString(), scores: [], evals: [] });
-      }
+      const timeBuckets: Array<{ startTime: string; endTime: string; scores: number[]; evals: EvaluationResult[] }> =
+        bucketWindows.map(w => ({ ...w, scores: [], evals: [] }));
       for (const ev of evaluations) {
-        const ts = timestampToMs(ev.timestamp);
-        const idx = Math.min(Math.floor((ts - start.getTime()) / bucketMs), TREND_BUCKETS - 1);
-        const tb = timeBuckets[idx];
-        if (idx >= 0 && tb && isValidScore(ev.scoreValue)) {
+        const idx = getEvenBucketIndex(timestampToMs(ev.timestamp), startMs, bucketMs, TREND_BUCKETS);
+        const tb = idx === null ? undefined : timeBuckets[idx];
+        if (tb && isValidScore(ev.scoreValue)) {
           tb.scores.push(ev.scoreValue);
           tb.evals.push(ev);
         }

@@ -10,6 +10,7 @@ import { type MetricTrend } from '../../types.js';
 import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
 import { computePercentileDistribution } from '../parent/qfe-percentiles.js';
+import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../parent/bucket-utils.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, computePeriodDates, TIME_MS, type Period } from '../../lib/constants.js';
 import { CONCENTRATION_THRESHOLD, PARAM_METRIC_NAME_RE, SCORE_ROUND_FACTOR, extractFiniteScores, isValidParam, timestampToMs } from '../api-constants.js';
@@ -65,31 +66,20 @@ trendRoutes.get('/trends/:name', async (c) => {
 
   // single pass — avoids O(n*buckets) re-filter later
   type BucketEntry = { startTime: string; endTime: string; scores: number[]; evals: typeof evaluations };
-  const buckets: BucketEntry[] = [];
-
-  for (let i = 0; i < bucketCount; i++) {
-    const bucketStart = new Date(start.getTime() + i * bucketMs);
-    const bucketEnd = new Date(start.getTime() + (i + 1) * bucketMs);
-    buckets.push({
-      startTime: bucketStart.toISOString(),
-      endTime: bucketEnd.toISOString(),
-      scores: [],
-      evals: [],
-    });
-  }
+  const buckets: BucketEntry[] = buildEvenBucketBoundaries(start.getTime(), end.getTime(), bucketCount).map(b => ({
+    startTime: new Date(b.start).toISOString(),
+    endTime: new Date(b.end).toISOString(),
+    scores: [],
+    evals: [],
+  }));
 
   for (const { ev, ts } of validTs) {
-    const bucketIdx = Math.min(
-      Math.floor((ts - start.getTime()) / bucketMs),
-      bucketCount - 1,
-    );
-    if (bucketIdx >= 0) {
-      const bucket = buckets[bucketIdx];
-      if (bucket) {
-        bucket.evals.push(ev);
-        if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
-          bucket.scores.push(ev.scoreValue);
-        }
+    const bucketIdx = getEvenBucketIndex(ts, start.getTime(), bucketMs, bucketCount);
+    const bucket = bucketIdx === null ? undefined : buckets[bucketIdx];
+    if (bucket) {
+      bucket.evals.push(ev);
+      if (ev.scoreValue != null && Number.isFinite(ev.scoreValue)) {
+        bucket.scores.push(ev.scoreValue);
       }
     }
   }
