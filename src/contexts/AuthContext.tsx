@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
@@ -129,8 +129,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logout({ logoutParams: { returnTo: window.location.origin } });
   }, [session, logout, getAccessToken]);
 
+  const value = useMemo<AuthContextValue>(
+    () => ({ session, isLoading, signOut: handleSignOut, getAccessToken }),
+    [session, isLoading, handleSignOut, getAccessToken],
+  );
+
   return (
-    <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut, getAccessToken }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

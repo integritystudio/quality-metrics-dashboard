@@ -265,7 +265,7 @@ async function main(): Promise<void> {
   if (pipelineExitCode !== 0) process.exit(pipelineExitCode);
 }
 
-main().catch(err => {
+main().catch((err: unknown) => {
   console.error('[populate] fatal:', err);
   process.exit(1);
 });

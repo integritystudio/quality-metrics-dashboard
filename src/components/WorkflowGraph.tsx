@@ -422,7 +422,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
           setEdges(rfEdges);
         }
       })
-      .catch(err => {
+      .catch((err: unknown) => {
         if (!cancelled) {
           setLayoutError(err instanceof Error ? err.message : 'Layout computation failed');
         }

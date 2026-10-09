@@ -29,6 +29,7 @@ const typeSafetyRules = {
   '@typescript-eslint/no-invalid-void-type': 'error',
   '@typescript-eslint/no-shadow': 'error',
   '@typescript-eslint/no-dynamic-delete': 'error',
+  '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
   'radix': 'error',
   'no-param-reassign': ['error', { props: false }],
@@ -73,6 +74,10 @@ export default tseslint.config(
       'react/no-children-prop': 'error',
       'react/no-danger-with-children': 'error',
       'react/no-unescaped-entities': 'error',
+      'react/jsx-key': ['error', { checkFragmentShorthand: true, checkKeyMustBeforeSpread: true, warnOnDuplicates: true }],
+      'react/no-unstable-nested-components': ['error', { allowAsProps: false }],
+      'react/jsx-no-constructed-context-values': 'error',
+      'react/no-object-type-as-default-prop': 'error',
     },
   },
   // src/ only: the browser and API server log through warn/error; scripts and the worker log by design.

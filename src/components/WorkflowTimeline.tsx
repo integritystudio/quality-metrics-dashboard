@@ -114,7 +114,9 @@ export interface WorkflowTimelineProps {
   selectedAgents?: ReadonlySet<string>;
 }
 
-export function WorkflowTimeline({ turns, handoffs = [], agentNames, selectedAgents }: WorkflowTimelineProps) {
+const NO_HANDOFFS: HandoffEvaluation[] = [];
+
+export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, selectedAgents }: WorkflowTimelineProps) {
   if (turns.length === 0) {
     return <EmptyState message="No turns to display." />;
   }
