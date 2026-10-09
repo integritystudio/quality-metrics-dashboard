@@ -4,7 +4,7 @@ import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
 import { useMetricCalibration } from '../contexts/CalibrationContext.js';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode; mono?: boolean }) {
   if (value == null || value === '') return null;
@@ -28,7 +28,8 @@ interface ScoreBadgeProps {
   calibration?: { distribution: PercentileDistribution; sampleSize: number };
 }
 
-function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId }: {
+function Tooltip({ id, score, label, evaluator, evaluatorType, explanation, traceId }: {
+  id: string;
   score: number;
   label?: string;
   evaluator?: string;
@@ -37,7 +38,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
   traceId?: string;
 }) {
   return (
-    <div className="score-badge-tooltip surface-elevated" role="tooltip">
+    <div id={id} className="score-badge-tooltip surface-elevated" role="tooltip">
       <MetadataRow label="Score" value={formatScore(score)} mono />
       <MetadataRow label="Label" value={label} />
       <MetadataRow label="Evaluator" value={evaluator} mono />
@@ -60,6 +61,7 @@ function Tooltip({ score, label, evaluator, evaluatorType, explanation, traceId 
 export function ScoreBadge({ score, metricName, direction = 'maximize', label, evaluator, evaluatorType, explanation, traceId, calibration: calibrationProp }: ScoreBadgeProps) {
   const contextCalibration = useMetricCalibration(metricName);
   const calibration = calibrationProp ?? contextCalibration;
+  const tooltipId = useId();
   const hasTooltip = !!evaluator || !!evaluatorType || !!explanation || !!traceId;
 
   if (score === null) {
@@ -92,9 +94,10 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
   if (!hasTooltip) return badge;
 
   return (
-    <button type="button" className="score-badge-wrapper inline-flex-center btn-reset">
-      {badge}
+    <span className="score-badge-wrapper inline-flex-center">
+      <button type="button" className="score-badge-trigger inline-flex-center btn-reset" aria-describedby={tooltipId}>{badge}</button>
       <Tooltip
+        id={tooltipId}
         score={score}
         label={label}
         evaluator={evaluator}
@@ -102,6 +105,6 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
         explanation={explanation}
         traceId={traceId}
       />
-    </button>
+    </span>
   );
 }

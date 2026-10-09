@@ -814,9 +814,12 @@ body {
 
 /* Score badge tooltip */
 .score-badge-wrapper {
+  position: relative;
+  cursor: default;
+}
+.score-badge-trigger {
   font: inherit;
   color: inherit;
-  position: relative;
   cursor: default;
 }
 .score-no-data { color: var(--status-no-data); }

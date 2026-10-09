@@ -64,7 +64,7 @@ export interface GitCommit {
 export function extractGitCommit(span: ExtractableSpan): GitCommit | null {
   const raw = spanAttr(span, 'integritystudio.git.command', 'string') ?? '';
   if (!raw) return null;
-  const filesMatch = raw.match(/git add ([^&]+)&&/);
+  const filesMatch = raw.match(/git add ((?:[^&]|&[^&])+?)&&/);
   const files = filesMatch ? (filesMatch[1] ?? '').trim() : '';
   const msgMatch = raw.match(/<<'?EOF'?\n([\s\S]+?)\nCo-Authored/);
   const fullMessage = msgMatch ? msgMatch[1] ?? '' : '';

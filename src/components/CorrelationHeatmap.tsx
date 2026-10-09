@@ -82,20 +82,21 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
         '--heatmap-grid-rows': `${HEATMAP_COL_HEADER_HEIGHT}px repeat(${n}, 1fr)`,
       } as CSSProperties}
     >
-      <div role="cell" />
-
-      {metrics.map((m) => (
-        <div
-          key={`col-${m}`}
-          role="columnheader"
-          className="text-secondary text-xs font-semibold truncate flex-center"
-        >
-          {shortName(m)}
-        </div>
-      ))}
+      <div role="row" className="contents">
+        <div role="gridcell" />
+        {metrics.map((m) => (
+          <div
+            key={`col-${m}`}
+            role="columnheader"
+            className="text-secondary text-xs font-semibold truncate flex-center"
+          >
+            {shortName(m)}
+          </div>
+        ))}
+      </div>
 
       {metrics.map((rowMetric, ri) => (
-        <div key={`row-${rowMetric}`} role="presentation" className="contents">
+        <div key={`row-${rowMetric}`} role="row" className="contents">
           <div
             role="rowheader"
             className="text-secondary text-xs font-semibold truncate flex-center heatmap-row-header"
