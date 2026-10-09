@@ -1,17 +1,9 @@
 import type { Period } from '../types.js';
-import type { AgentStat, EvalMetricSummary } from '../api/aggregates/agent-stats.js';
+import type { AgentStat, EvalMetricSummary, AgentStatsResponse } from '../api/aggregates/agent-stats.js';
 import { STALE_TIME, ErrorMessage } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export type { AgentStat, EvalMetricSummary };
-
-/** The dev route and the synced KV value; the Worker answers null dates when no key is synced. */
-interface AgentStatsResponse {
-  period: string;
-  startDate: string | null;
-  endDate: string | null;
-  agents: AgentStat[];
-}
+export type { AgentStat, EvalMetricSummary, AgentStatsResponse };
 
 /** Shallow shape check — validates envelope fields only, not individual AgentStat elements. */
 function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResponse {

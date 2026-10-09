@@ -78,8 +78,9 @@ export interface AgentStat {
 
 export interface AgentStatsResponse {
   period: Period;
-  startDate: string;
-  endDate: string;
+  /** Null when the Worker serves the empty envelope before the first sync run. */
+  startDate: string | null;
+  endDate: string | null;
   agents: AgentStat[];
 }
 

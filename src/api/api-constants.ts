@@ -247,3 +247,8 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>
     .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
     .map(e => e.scoreValue as number);
 }
+
+/** `evaluatorType` value for rule-based (non-LLM) evaluators. Shared by the
+ * coverage filter (`src/api/aggregates/coverage.ts`) and the evaluation record
+ * writer (`scripts/eval-record.ts`). */
+export const RULE_EVALUATOR_TYPE = 'rule';

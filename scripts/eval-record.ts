@@ -9,6 +9,7 @@ import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../sr
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { knownLabelSchema, type KnownLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { IDENTITY_KEY_REF_FIELD, type AccountRef } from './account-stamps.js';
+import { RULE_EVALUATOR_TYPE as _RULE_EVALUATOR_TYPE } from '../src/api/api-constants.js';
 
 export const SESSION_ID_PREVIEW_LEN = 8;
 
@@ -23,7 +24,7 @@ export const PRODUCER = 'dashboard:judge-evaluations';
 
 export const SEED_EVALUATOR_TYPE = 'seed';
 
-export const RULE_EVALUATOR_TYPE = 'rule';
+export const RULE_EVALUATOR_TYPE = _RULE_EVALUATOR_TYPE;
 
 export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
 

@@ -9,9 +9,10 @@
  */
 
 import { computeCoverageMatrix } from '../parent/quality-visualization.js';
+import { RULE_EVALUATOR_TYPE } from '../api-constants.js';
 import type { EvaluationResult } from '../../types.js';
 
-export const RULE_EVALUATOR_TYPE = 'rule';
+export { RULE_EVALUATOR_TYPE };
 
 /**
  * Remove rule-based evaluations before computing the coverage matrix.
