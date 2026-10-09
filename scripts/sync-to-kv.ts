@@ -290,8 +290,8 @@ const SPAN_QUERY_LIMIT = 1_000_000;
  * Must exceed the longest `--days` query window so entries are not prematurely expired.
  * 90 days is 3x the default 30-day window and prevents unbounded key accumulation.
  */
-export const TRACE_KEY_TTL_SECONDS = SECONDS.DAY * 90;
-export const SESSION_KEY_TTL_SECONDS = SECONDS.DAY * 90;
+export const KV_ENTRY_TTL_DAYS = 90;
+export const KV_ENTRY_TTL_SECONDS = SECONDS.DAY * KV_ENTRY_TTL_DAYS;
 
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
@@ -766,12 +766,12 @@ export function buildTraceEntries(
     traceEntries.push({
       key: `${TRACE_EVALS_KEY_PREFIX}${traceId}`,
       value: toKVValue({ evaluations: traceEvals }),
-      expirationTtl: TRACE_KEY_TTL_SECONDS,
+      expirationTtl: KV_ENTRY_TTL_SECONDS,
     });
     traceEntries.push({
       key: `${TRACE_KEY_PREFIX}${traceId}`,
       value: toKVValue({ traceId, spans, evaluations: traceEvals }),
-      expirationTtl: TRACE_KEY_TTL_SECONDS,
+      expirationTtl: KV_ENTRY_TTL_SECONDS,
     });
   }
   return traceEntries;
@@ -1248,7 +1248,7 @@ function computeSessionAndAgentEntries(
         // serves the graph precomputed here.
         workflowGraph: buildWorkflowGraph(detail.multiAgentEvaluation, sessionSpans),
       }),
-      expirationTtl: SESSION_KEY_TTL_SECONDS,
+      expirationTtl: KV_ENTRY_TTL_SECONDS,
     });
 
     for (const ag of detail.agentActivity) {

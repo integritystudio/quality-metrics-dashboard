@@ -8,11 +8,11 @@ import {
   loadCalibrationEntry,
   orgPrefixedKey,
   ORG_KEY_PREFIX_RE,
-  SESSION_KEY_TTL_SECONDS,
+  KV_ENTRY_TTL_DAYS,
   stripOrgPrefix,
   SYSTEM_LAST_SYNC_KEY,
   toKVValue,
-  TRACE_KEY_TTL_SECONDS,
+  KV_ENTRY_TTL_SECONDS,
 } from '../sync-to-kv.js';
 import { CALIBRATION_STATE_DIR } from '../evaluation-constants.js';
 import { loadCalibrationState, saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
@@ -186,26 +186,22 @@ describe('buildCalibrationEntry: graceful skip on missing or invalid state', () 
   });
 });
 
-describe('KV trace/session TTL constants', () => {
-  const TTL_DAYS = 90;
+describe('KV trace/session TTL constant', () => {
   // Default --days=30 window; a TTL longer than it keeps entries alive until the next sync rewrites them.
   const DEFAULT_QUERY_WINDOW_DAYS = 30;
-  const ttls = [
-    ['TRACE_KEY_TTL_SECONDS', TRACE_KEY_TTL_SECONDS],
-    ['SESSION_KEY_TTL_SECONDS', SESSION_KEY_TTL_SECONDS],
-  ] as const;
 
-  it.each(ttls)('%s is a positive integer (required by Cloudflare KV)', (_name, ttl) => {
-    expect(Number.isInteger(ttl)).toBe(true);
-    expect(ttl).toBeGreaterThan(0);
+  it('is a positive integer (required by Cloudflare KV)', () => {
+    expect(Number.isInteger(KV_ENTRY_TTL_SECONDS)).toBe(true);
+    expect(KV_ENTRY_TTL_SECONDS).toBeGreaterThan(0);
   });
 
-  it.each(ttls)('%s exceeds the default 30-day query window', (_name, ttl) => {
-    expect(ttl).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
+  it('exceeds the default 30-day query window', () => {
+    expect(KV_ENTRY_TTL_SECONDS).toBeGreaterThan(DEFAULT_QUERY_WINDOW_DAYS * SECONDS.DAY);
   });
 
-  it.each(ttls)('%s is exactly 90 days in seconds', (_name, ttl) => {
-    expect(ttl).toBe(TTL_DAYS * SECONDS.DAY);
+  it('is exactly 90 days in seconds', () => {
+    expect(KV_ENTRY_TTL_SECONDS).toBe(KV_ENTRY_TTL_DAYS * SECONDS.DAY);
+    expect(KV_ENTRY_TTL_DAYS).toBe(90);
   });
 });
 
