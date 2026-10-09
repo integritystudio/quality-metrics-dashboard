@@ -81,8 +81,9 @@ dependency and is left in place. `stg` no longer holds it; `prd` holds `https://
     - **Found on the way.** `LLM_JUDGE_ANTHROPIC_KEY` in Doppler `prd` returns `401 invalid x-api-key`: the 2026-10-08
       07:11 scheduled run judged fine, the 18:00 run and every one since exit 3 with `NO SCORES PRODUCED`.
       `ANTHROPIC_API_KEY` in the same config still works, and the check's judge ran with it. Rotate the judge key.
-  - **Constraint from JUDGE-BACKFILL-FLAG.** `--backfill` was kept, so `_loadExistingKeys` and the parts of
-    `account-stamps.ts` it uses stay, or backfill moves to cloud dedup first.
+  - **JUDGE-BACKFILL-FLAG: resolved, 2026-10-09.** `--backfill` was removed, so it no longer holds `_loadExistingKeys`
+    or `account-stamps.ts` in place. The `backfill` cohort and `trace-backfill` evaluator type stay readable for
+    rows already written.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.11](changelog/3.0.11/CHANGELOG.md) (2026-10-09).
