@@ -86,6 +86,8 @@ interface MetricEvaluationRowRaw {
   timestamp: EvaluationResult['timestamp'];
   evaluator: EvaluationResult['evaluator'];
   label: EvaluationResult['scoreLabel'];
+  /** True when `label` is the dashboard's derivation from the score, not the producer's. */
+  labelDerived: boolean;
   evaluatorType: EvaluationResult['evaluatorType'];
   spanId: EvaluationResult['spanId'];
   sessionId: EvaluationResult['sessionId'];

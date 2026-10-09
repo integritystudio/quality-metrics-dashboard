@@ -1245,6 +1245,8 @@ details[open] > .cot-summary::before {
   color: var(--chip-color);
   background-color: color-mix(in srgb, var(--chip-color) var(--chip-tint), transparent);
 }
+/* A label the dashboard derived from the score rather than one the producer assigned. */
+.chip-derived { outline: 1px dashed currentColor; outline-offset: -1px; }
 
 /* Gap */
 .gap-half { gap: var(--space-px); }

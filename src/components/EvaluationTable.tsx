@@ -44,6 +44,8 @@ export interface EvalRow {
   timestamp?: string;
   evaluator?: string;
   label?: string;
+  /** The label was derived from the score by the dashboard; the producer assigned none. */
+  labelDerived?: boolean;
   evaluatorType?: string;
   spanId?: string;
   sessionId?: string;
@@ -52,6 +54,8 @@ export interface EvalRow {
   stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
   toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
 }
+
+const DERIVED_LABEL_TITLE = 'Derived from the score by the dashboard; the producer assigned no label';
 
 const CATEGORY_COLORS: Record<LabelFilterCategory, string> = {
   Pass: SCORE_COLORS.excellent,
@@ -126,8 +130,13 @@ const columns = columnHelper.columns([
     cell: (info) => {
       const label = info.getValue() ?? 'unknown';
       const { category } = labelToOrdinal(label);
+      const derived = info.row.original.labelDerived === true;
       return (
-        <ColoredChip color={CATEGORY_COLORS[category]} className="font-medium">
+        <ColoredChip
+          color={CATEGORY_COLORS[category]}
+          className={derived ? 'font-medium chip-derived' : 'font-medium'}
+          title={derived ? DERIVED_LABEL_TITLE : undefined}
+        >
           {label}
         </ColoredChip>
       );

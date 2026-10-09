@@ -70,7 +70,7 @@ import {
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
-import { resolveScoreLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
+import { resolveScoreLabelWithSource } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../src/api/session-detail.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
 import { BYTES, PERCENT_MULTIPLIER, TIME_MS, SECONDS } from '../../src/lib/core/units.js';
@@ -946,23 +946,27 @@ function computeEvaluationRowEntries(
       const evals = grouped.get(name);
       if (!evals || evals.length === 0) continue;
       const sorted = [...evals].sort((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0));
-      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => ({
-        score: e.scoreValue ?? 0,
-        explanation: e.explanation,
-        traceId: e.traceId,
-        timestamp: e.timestamp,
-        evaluator: e.evaluator,
-        label: resolveScoreLabel(e),
-        evaluatorType: e.evaluatorType,
-        evaluatorKind: e.evaluatorKind,
-        cohort: e.cohort,
-        spanId: e.spanId,
-        sessionId: e.sessionId,
-        agentName: e.agentName,
-        trajectoryLength: e.trajectoryLength,
-        stepScores: e.stepScores,
-        toolVerifications: e.toolVerifications,
-      }));
+      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => {
+        const { label, derived } = resolveScoreLabelWithSource(e);
+        return {
+          score: e.scoreValue ?? 0,
+          explanation: e.explanation,
+          traceId: e.traceId,
+          timestamp: e.timestamp,
+          evaluator: e.evaluator,
+          label,
+          labelDerived: derived,
+          evaluatorType: e.evaluatorType,
+          evaluatorKind: e.evaluatorKind,
+          cohort: e.cohort,
+          spanId: e.spanId,
+          sessionId: e.sessionId,
+          agentName: e.agentName,
+          trajectoryLength: e.trajectoryLength,
+          stepScores: e.stepScores,
+          toolVerifications: e.toolVerifications,
+        };
+      });
       entries.push({
         key: `metric:evaluations:${name}:${period}`,
         value: toKVValue({ rows }),
