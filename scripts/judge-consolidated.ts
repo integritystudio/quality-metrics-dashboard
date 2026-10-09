@@ -47,6 +47,7 @@ import {
   LLM_TEMPERATURE_EVALUATION,
 } from '../../src/lib/judge/llm-judge-constants.js';
 import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
+import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { type Turn, fitContextForJudge, turnSourceFields } from './judge-turns.js';
 import {
   type EvalRecord,
@@ -415,6 +416,7 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
     timestamp: turn.timestamp,
     evaluationName,
     scoreValue: normalizeScore(scoreValue),
+    scoreLabel: scoreLabelForMetric(evaluationName, scoreValue),
     explanation,
     evaluator: CONSOLIDATED_PRODUCER,
     evaluatorType: LLM_EVALUATOR_TYPE,

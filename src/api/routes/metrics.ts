@@ -7,6 +7,7 @@ import {
 } from '../parent/quality-metrics.js';
 import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
+import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam, jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus, type Period } from '../../lib/constants.js';
@@ -87,7 +88,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   const start = subMilliseconds(now, periodMs);
 
   const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
-  const evaluations = (scoreLabel ? allEvaluations.filter(e => e.scoreLabel === scoreLabel) : allEvaluations)
+  const evaluations = (scoreLabel ? allEvaluations.filter(e => resolveScoreLabel(e) === scoreLabel) : allEvaluations)
     .slice().sort((a, b) => {
     if (sortBy === 'score_asc' || sortBy === 'score_desc') {
       const aVal = a.scoreValue ?? null;
@@ -109,7 +110,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
     traceId: e.traceId,
     timestamp: e.timestamp,
     evaluator: e.evaluator,
-    label: e.scoreLabel,
+    label: resolveScoreLabel(e),
     evaluatorType: e.evaluatorType,
     spanId: e.spanId,
     sessionId: e.sessionId,

@@ -7,6 +7,7 @@
 import type { EvaluatorType, EvaluatorKind, EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
+import { knownLabelSchema, type KnownLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { IDENTITY_KEY_REF_FIELD, type AccountRef } from './account-stamps.js';
 
 export const SESSION_ID_PREVIEW_LEN = 8;
@@ -110,8 +111,8 @@ export interface EvalRecord {
   timestamp: string;
   evaluationName: string;
   scoreValue: number;
-  /** Categorical verdict beside the score (`pass`/`fail`, `relevant`/`off-topic`, …); omitted when the producer assigns none. */
-  scoreLabel?: string;
+  /** Categorical verdict beside the score, one of the toolkit's documented labels; omitted when the producer assigns none. */
+  scoreLabel?: KnownLabel;
   /** e.g. 'seconds', 'ratio_0_1'; omitted when the score is unitless. */
   scoreUnit?: string;
   explanation: string;
@@ -167,7 +168,7 @@ export function toOTelRecord(ev: EvalRecord): object {
     ...(ev.judgeModel && { [EVALUATION_ATTRS.JUDGE_MODEL]: ev.judgeModel }),
   };
   if (ev.scoreUnit) attrs[EVALUATION_ATTRS.SCORE_UNIT] = ev.scoreUnit;
-  if (ev.scoreLabel) attrs[EVALUATION_ATTRS.SCORE_LABEL] = ev.scoreLabel;
+  if (ev.scoreLabel) attrs[EVALUATION_ATTRS.SCORE_LABEL] = knownLabelSchema.parse(ev.scoreLabel);
   if (ev.responseId) attrs[EVALUATION_ATTRS.RESPONSE_ID] = ev.responseId;
   if (ev.sessionId) attrs[EVALUATION_ATTRS.SESSION_ID] = ev.sessionId;
   return {

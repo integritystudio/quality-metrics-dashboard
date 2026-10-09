@@ -61,6 +61,7 @@ import { TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
+import { knownLabelSchema } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';
 import { resolveTranscriptPath, scanTranscriptDirs } from './judge-turns.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
@@ -462,7 +463,7 @@ function heuristicRecords(
       scoreValue: normalizeScore(ev.scoreValue),
       scoreUnit: ev.scoreUnit,
       explanation: ev.explanation ?? fallbackExplanation,
-      ...(ev.scoreLabel && { scoreLabel: ev.scoreLabel }),
+      ...(ev.scoreLabel && { scoreLabel: knownLabelSchema.parse(ev.scoreLabel) }),
     }),
   ]);
 }

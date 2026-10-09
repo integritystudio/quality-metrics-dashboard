@@ -48,6 +48,7 @@ import type { LLMProvider, ResponseJsonSchema, QagVerificationMode } from '../..
 import { LLMJudge, COHERENCE_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
 import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE, type EvaluatorKind, type EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
+import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { TELEMETRY_DIR, CANARY_COHORT } from './evaluation-constants.js';
 import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_DEFAULT_SOURCE, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, type TraceSource } from './pipeline-stages.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
@@ -159,6 +160,7 @@ function createEvalRecord(
     timestamp: turn.timestamp,
     evaluationName,
     scoreValue: normalizeScore(scoreValue),
+    scoreLabel: scoreLabelForMetric(evaluationName, scoreValue),
     explanation,
     evaluator: PRODUCER,
     // Narrowed to the kind axis; the cohort has its own field now.

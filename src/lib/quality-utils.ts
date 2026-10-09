@@ -152,16 +152,21 @@ const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilter
   pass: { ordinal: 3, category: 'Pass' },
   correct: { ordinal: 3, category: 'Pass' },
   coherent: { ordinal: 3, category: 'Pass' },
+  complete: { ordinal: 3, category: 'Pass' },
+  appropriate: { ordinal: 3, category: 'Pass' },
   partial: { ordinal: 2, category: 'Review' },
   borderline: { ordinal: 2, category: 'Review' },
   adequate: { ordinal: 2, category: 'Review' },
   mixed: { ordinal: 2, category: 'Review' },
   off_topic: { ordinal: 1, category: 'Fail' },
   irrelevant: { ordinal: 1, category: 'Fail' },
+  not_relevant: { ordinal: 1, category: 'Fail' },
   unfaithful: { ordinal: 1, category: 'Fail' },
   fail: { ordinal: 1, category: 'Fail' },
   incorrect: { ordinal: 1, category: 'Fail' },
   incoherent: { ordinal: 1, category: 'Fail' },
+  incomplete: { ordinal: 1, category: 'Fail' },
+  inappropriate: { ordinal: 1, category: 'Fail' },
   hallucinated: { ordinal: 0, category: 'Fail' },
   fabricated: { ordinal: 0, category: 'Fail' },
   toxic: { ordinal: 0, category: 'Fail' },
@@ -185,6 +190,51 @@ export function ordinalToCategory(ordinal: number): LabelFilterCategory {
   if (ordinal >= 3) return 'Pass';
   if (ordinal === 2) return 'Review';
   return 'Fail';
+}
+
+type LabelTier = 'excellent' | 'pass' | 'review' | 'fail';
+type LabelVocabulary = Record<LabelTier, string>;
+
+/** Per-metric labels, every value a key of LABEL_ORDINAL_MAP so the derived label maps to its tier. */
+const METRIC_LABEL_VOCABULARY: Record<string, LabelVocabulary> = {
+  relevance: { excellent: 'highly_relevant', pass: 'relevant', review: 'partial', fail: 'irrelevant' },
+  faithfulness: { excellent: 'fully_faithful', pass: 'faithful', review: 'partial', fail: 'unfaithful' },
+  coherence: { excellent: 'coherent', pass: 'coherent', review: 'partial', fail: 'incoherent' },
+};
+const DEFAULT_LABEL_VOCABULARY: LabelVocabulary = { excellent: 'excellent', pass: 'pass', review: 'partial', fail: 'fail' };
+const HALLUCINATED_LABEL = 'hallucinated';
+const PASS_LABEL = 'pass';
+
+const BAND_TIER: Record<ScoreColorBand, LabelTier> = {
+  excellent: 'excellent',
+  good: 'pass',
+  adequate: 'review',
+  poor: 'fail',
+  failing: 'fail',
+};
+
+/**
+ * The categorical label a score implies for a metric, for producers that score
+ * without labelling and for rows that reached the dashboard without one. A
+ * hallucination rate is a two-way verdict at HALLUCINATION_RISK_THRESHOLD, the
+ * same cutoff isHallucinationIndicator applies; every other metric takes the
+ * tier of its color band.
+ */
+export function scoreLabelForMetric(evaluationName: string, score: number): string {
+  const name = evaluationName.toLowerCase();
+  if (HALLUCINATION_RISK_EVALUATION_NAMES.has(name)) {
+    return score >= HALLUCINATION_RISK_THRESHOLD ? HALLUCINATED_LABEL : PASS_LABEL;
+  }
+  const vocabulary = METRIC_LABEL_VOCABULARY[name] ?? DEFAULT_LABEL_VOCABULARY;
+  return vocabulary[BAND_TIER[scoreColorBand(score)]];
+}
+
+/** The evaluation's own label, or the one its score implies; undefined only when it has neither. */
+export function resolveScoreLabel(evaluation: ScoredEvaluation): string | undefined {
+  if (evaluation.scoreLabel) return evaluation.scoreLabel;
+  const score = evaluation.scoreValue;
+  if (typeof score !== 'number' || !Number.isFinite(score)) return undefined;
+  return scoreLabelForMetric(evaluation.evaluationName, score);
 }
 
 /** The display-limit half of {@link RoleFeatureConfig} — the numeric fields only */

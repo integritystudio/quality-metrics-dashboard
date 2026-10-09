@@ -70,6 +70,7 @@ import {
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
+import { resolveScoreLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../src/api/session-detail.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
 import { BYTES, PERCENT_MULTIPLIER, TIME_MS, SECONDS } from '../../src/lib/core/units.js';
@@ -951,7 +952,7 @@ function computeEvaluationRowEntries(
         traceId: e.traceId,
         timestamp: e.timestamp,
         evaluator: e.evaluator,
-        label: e.scoreLabel,
+        label: resolveScoreLabel(e),
         evaluatorType: e.evaluatorType,
         evaluatorKind: e.evaluatorKind,
         cohort: e.cohort,
