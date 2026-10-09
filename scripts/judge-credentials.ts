@@ -13,6 +13,9 @@
  */
 
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
+import { HAIKU_MODEL } from './judge-criteria.js';
+
+const PROBE_MESSAGE = 'ping';
 
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
@@ -49,9 +52,10 @@ export function resolveJudgeApiKey(env: NodeJS.ProcessEnv = process.env): JudgeA
 /** Resolves when Anthropic accepts the key; rejects with the SDK's error otherwise. */
 export type JudgeKeyProbe = (apiKey: string) => Promise<void>;
 
-const probeWithModelsList: JudgeKeyProbe = async apiKey => {
+/** Counting tokens is free and sits on the Messages permission surface the judge calls. */
+const probeWithCountTokens: JudgeKeyProbe = async apiKey => {
   const client = await createJudgeAnthropicClient({ apiKey, maxRetries: 0 });
-  await client.models.list({ limit: 1 });
+  await client.messages.countTokens({ model: HAIKU_MODEL, messages: [{ role: 'user', content: PROBE_MESSAGE }] });
 };
 
 function isCredentialRejection(error: unknown): boolean {
@@ -76,7 +80,7 @@ export async function pickWorkingJudgeApiKey(
       await probe(apiKey);
     } catch (error) {
       if (!isCredentialRejection(error)) return { apiKey, source };
-      console.warn(`[judge] ${source} was rejected by Anthropic; trying the next key`);
+      console.warn(`[judge] ${source} was rejected by Anthropic (HTTP ${(error as { status: number }).status}); trying the next key`);
       continue;
     }
     if (source !== JUDGE_API_KEY_ENV_PRECEDENCE[0]) {
@@ -90,7 +94,12 @@ export async function pickWorkingJudgeApiKey(
 let workingKey: Promise<JudgeApiKey | undefined> | undefined;
 
 /** `pickWorkingJudgeApiKey` on process.env, probed once per process. */
-export function resolveWorkingJudgeApiKey(): Promise<JudgeApiKey | undefined> {
-  workingKey ??= pickWorkingJudgeApiKey(process.env, probeWithModelsList);
+export function resolveWorkingJudgeApiKey(probe: JudgeKeyProbe = probeWithCountTokens): Promise<JudgeApiKey | undefined> {
+  workingKey ??= pickWorkingJudgeApiKey(process.env, probe);
   return workingKey;
+}
+
+/** Forget the memoized key, so a test can probe again. */
+export function resetWorkingJudgeApiKeyForTests(): void {
+  workingKey = undefined;
 }

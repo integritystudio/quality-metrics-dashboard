@@ -5,6 +5,8 @@ import {
   DEFAULT_API_KEY_ENV,
   JUDGE_API_KEY_ENV_PRECEDENCE,
   pickWorkingJudgeApiKey,
+  resolveWorkingJudgeApiKey,
+  resetWorkingJudgeApiKeyForTests,
 } from '../judge-credentials.js';
 
 // Placeholders, not credentials: the resolver never inspects the value.
@@ -92,6 +94,24 @@ describe('pickWorkingJudgeApiKey', () => {
 
     expect(await pickWorkingJudgeApiKey({ [DEFAULT_API_KEY_ENV]: DEFAULT_KEY }, probe))
       .toEqual({ apiKey: DEFAULT_KEY, source: DEFAULT_API_KEY_ENV });
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resolveWorkingJudgeApiKey', () => {
+  afterEach(() => {
+    resetWorkingJudgeApiKeyForTests();
+    vi.unstubAllEnvs();
+  });
+
+  it('probes once per process however many callers ask', async () => {
+    vi.stubEnv(JUDGE_API_KEY_ENV, JUDGE_KEY);
+    vi.stubEnv(DEFAULT_API_KEY_ENV, DEFAULT_KEY);
+    const probe = vi.fn().mockResolvedValue(undefined);
+
+    const [first, second] = [await resolveWorkingJudgeApiKey(probe), await resolveWorkingJudgeApiKey(probe)];
+
+    expect(first).toBe(second);
     expect(probe).toHaveBeenCalledTimes(1);
   });
 });
