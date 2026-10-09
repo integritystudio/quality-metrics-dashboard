@@ -369,11 +369,14 @@ export function evaluationId(record: Record<string, unknown>): string {
   return createHash('sha256').update(JSON.stringify(rest)).digest('hex').slice(0, EVALUATION_ID_LENGTH);
 }
 
+/** The shape `appendEvaluation` writes; anything else falls back to the content hash rather than collapse rows. */
+const STAMPED_EVALUATION_ID_PATTERN = new RegExp(`^[0-9a-f]{${EVALUATION_ID_LENGTH}}$`);
+
 function stampedEvaluationId(record: Record<string, unknown>): string | undefined {
   const attrs = record.attributes;
   if (typeof attrs !== 'object' || attrs === null) return undefined;
   const id = (attrs as Record<string, unknown>)[INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID];
-  return typeof id === 'string' && id !== '' ? id : undefined;
+  return typeof id === 'string' && STAMPED_EVALUATION_ID_PATTERN.test(id) ? id : undefined;
 }
 
 /** Top-level record fields excluded from the fingerprint (see `fingerprint`). */

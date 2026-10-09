@@ -299,6 +299,12 @@ describe('evaluationId', () => {
     expect(evaluationId({ ...stamped, spanId: 'span-b', identityKeyRef: 'OBTOOL_API_KEY' })).toBe('f'.repeat(32));
   });
 
+  it('ignores a stamp that is not 32 hex characters, so a bad producer cannot collapse rows', () => {
+    const malformed = { ...base, attributes: { ...base.attributes, [INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]: 'not-an-id' } };
+    expect(evaluationId(malformed)).toMatch(/^[0-9a-f]{32}$/);
+    expect(evaluationId(malformed)).not.toBe('not-an-id');
+  });
+
   it('uses stableEvaluationKey when present, so session records hash the same across different span anchors', () => {
     const key = 'session:sess-abc:conversation_completeness';
     const withKeySpanA = { ...base, spanId: 'span-a', traceId: 'trace-1', stableEvaluationKey: key };
