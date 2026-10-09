@@ -22,8 +22,6 @@
     "typecheck:scripts": "node node_modules/typescript7/bin/tsc --noEmit -p tsconfig.scripts.json",
     "populate": "tsx scripts/populate-dashboard.ts",
     "derive": "tsx scripts/derive-evaluations.ts",
-    "derive:parity": "tsx scripts/derive-parity.ts",
-    "judge:parity": "tsx scripts/judge-parity.ts",
     "upload": "tsx scripts/upload-evaluations.ts",
     "trace-coverage": "tsx scripts/trace-coverage.ts",
     "sync": "tsx scripts/sync-to-kv.ts",
