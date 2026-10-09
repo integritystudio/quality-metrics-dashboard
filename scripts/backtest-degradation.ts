@@ -31,7 +31,8 @@ import type {
   BacktestConfig,
 } from '../../src/lib/quality/qfe-backtest.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
-import { TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+import { msToNs, nsToMs } from './hrt.js';
 import { importMetaDirname } from '../src/lib/dashboard-file-utils.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain } from './cli-args.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
@@ -114,7 +115,7 @@ export function buildDailyBuckets(
     scores: [],
   }));
   for (const ev of evaluations) {
-    const ts = Number(ev.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
+    const ts = nsToMs(ev.timestamp);
     const idx = Math.floor((ts - startMs) / TIME_MS.DAY);
     const bucket = buckets[idx];
     if (idx >= 0 && idx < bucketCount && bucket) {
@@ -259,8 +260,8 @@ async function main(): Promise<void> {
   const backend = new CloudBackend({ fetch: http1Fetch });
   const now = Date.now();
   const startMs = now - days * TIME_MS.DAY;
-  const startDate = BigInt(startMs) * NANOSECONDS_PER_MILLISECOND_BIGINT;
-  const endDate = BigInt(now) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+  const startDate = msToNs(startMs);
+  const endDate = msToNs(now);
 
   const metricNames = metricFilter
     ? [metricFilter]

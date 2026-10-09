@@ -19,9 +19,9 @@
  */
 
 import type { EvaluationResult } from '../../src/backends/index.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-stamps.js';
-import { dateScopeBounds, loadCloudSpans, msToNs, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
+import { dateScopeBounds, loadCloudSpans, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
+import { msToNs, nsToMs } from './hrt.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
@@ -72,7 +72,7 @@ export function indexCloudSpans(loaded: LoadedSpans): AccountIndex {
 /** When the scored turn happened: the row's event time, or the legacy attribute on a receipt-time row. */
 function evaluationEventMs(row: EvaluationResult): number {
   const legacy = row.attributes?.[LEGACY_EVENT_TIME_ATTR];
-  return typeof legacy === 'number' ? legacy : Number(row.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
+  return typeof legacy === 'number' ? legacy : nsToMs(row.timestamp);
 }
 
 /** Dedup keys in `_loadExistingKeys`' shape, plain and per judge model; a row without a session scores no transcript turn. */

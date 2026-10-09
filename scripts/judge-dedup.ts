@@ -2,7 +2,7 @@
 
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
 import { otelEvaluationRecordSchema, LLM_EVALUATOR_TYPE, type EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
+import { nsToMs } from './hrt.js';
 import { CANARY_COHORT } from './evaluation-constants.js';
 import { EVALUATION_ATTRS, LEGACY_EVALUATOR_TYPE_ATTR, NORMAL_COHORT, SEED_COHORT, BACKFILL_COHORT, SEED_EVALUATOR_TYPE, TRACE_BACKFILL_EVALUATOR_TYPE } from './eval-record.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
@@ -83,7 +83,7 @@ export function _loadExistingKeys(): Set<string> {
       const metricName = attrs[EVALUATION_ATTRS.NAME] as string || '';
       // record.timestamp is epoch nanos (bigint) — the schema decodes ISO to nanos.
       // Turn keys are compared against ISO-prefix keys, so convert back.
-      const ms = Number(record.timestamp / NANOSECONDS_PER_MILLISECOND_BIGINT);
+      const ms = nsToMs(record.timestamp);
       const turnKey = turnKeyOf(ms);
       const judgeModel = attrs[EVALUATION_ATTRS.JUDGE_MODEL];
       const cohort = attrs[EVALUATION_ATTRS.COHORT];

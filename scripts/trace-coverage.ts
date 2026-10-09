@@ -24,8 +24,8 @@
 import { readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
-import { asHrTime, hrtToMs } from './hrt.js';
+import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
+import { asHrTime, hrtToMs, nsToMs } from './hrt.js';
 import { incrementIn, pushTo } from './collections.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
@@ -191,7 +191,7 @@ async function fetchCloudSpans(apiKey: string, window: CoverageWindow): Promise<
   }
   const byKey = new Map<string, number>();
   for (const span of spans) {
-    const startMs = Number(span.startTimeUnixNano / NANOSECONDS_PER_MILLISECOND_BIGINT);
+    const startMs = nsToMs(span.startTimeUnixNano);
     // The route filters by whole UTC day; re-apply the exact window so the settle margin holds.
     if (startMs < window.fromMs || startMs > window.toMs) continue;
     byKey.set(spanKey(span.traceId, span.spanId), startMs);

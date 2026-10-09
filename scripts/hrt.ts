@@ -2,10 +2,21 @@
 
 import {
   NANOSECONDS_PER_MILLISECOND,
+  NANOSECONDS_PER_MILLISECOND_BIGINT,
   NANOSECONDS_PER_SECOND,
   NANOSECONDS_PER_SECOND_BIGINT,
   TIME_MS,
 } from '../../src/lib/core/units.js';
+
+/** Epoch ms as the nanosecond bigint the backend's timestamps and query bounds use. */
+export function msToNs(ms: number): bigint {
+  return BigInt(ms) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+}
+
+/** A nanosecond bigint timestamp as epoch ms. */
+export function nsToMs(ns: bigint): number {
+  return Number(ns / NANOSECONDS_PER_MILLISECOND_BIGINT);
+}
 
 export type HrTime = [number, number];
 

@@ -72,7 +72,7 @@ import {
 import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../src/api/session-detail.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
-import { BYTES, PERCENT_MULTIPLIER, TIME_MS, NANOSECONDS_PER_MILLISECOND_BIGINT, SECONDS } from '../../src/lib/core/units.js';
+import { BYTES, PERCENT_MULTIPLIER, TIME_MS, SECONDS } from '../../src/lib/core/units.js';
 import {
   SCORE_ROUND_FACTOR,
   LATENCY_P95,
@@ -86,6 +86,7 @@ import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 import { incrementIn, pushTo } from './collections.js';
+import { msToNs } from './hrt.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { bigintReplacer } from '../../src/lib/core/file-utils.js';
 import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../../src/lib/quality/bucket-utils.js';
@@ -303,10 +304,6 @@ const RECOMMENDED_MIN_BUDGET = MIN_TRACE_BUDGET + HIGH_PRIORITY_HEADROOM;
 const MAX_EVAL_ROWS = 200;
 /** Metric detail compares the last week with the one before it, so the read spans at least two. */
 const METRIC_DETAIL_WEEKS = 2;
-
-function msToNs(ms: number): bigint {
-  return BigInt(ms) * NANOSECONDS_PER_MILLISECOND_BIGINT;
-}
 
 const TREND_BUCKETS = 10;
 

@@ -14,8 +14,8 @@ import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { TraceSpan } from '../../src/backends/index.js';
 import { statusCodeSchema } from '../../src/lib/otel/constants-otel.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT, TIME_MS } from '../../src/lib/core/units.js';
-import { nanosToHrt } from './hrt.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+import { msToNs, nanosToHrt, nsToMs } from './hrt.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { localTraceSpanSchema, type LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { IDENTITY_KEY_REF_PATTERN, asString, type AccountRef } from './account-stamps.js';
@@ -62,11 +62,6 @@ export function toLocalTraceSpan(span: TraceSpan): LocalTraceSpan | null {
 /** Identity-map secret names set in `env`, sorted so the first account to claim a span is stable. */
 export function accountRefsFromEnv(env: NodeJS.ProcessEnv): string[] {
   return Object.keys(env).filter((name) => IDENTITY_KEY_REF_PATTERN.test(name) && asString(env[name])).sort();
-}
-
-/** Epoch ms as the nanosecond bigint the backend's query bounds take. */
-export function msToNs(ms: number): bigint {
-  return BigInt(ms) * NANOSECONDS_PER_MILLISECOND_BIGINT;
 }
 
 /** A backend reading as one account. HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
@@ -126,7 +121,7 @@ export function dateScopeBounds(dates: ReadonlySet<string>): { fromMs: number; t
 }
 
 function utcDateOfNanos(ns: bigint): string {
-  return toDateOnly(new Date(Number(ns / NANOSECONDS_PER_MILLISECOND_BIGINT)));
+  return toDateOnly(new Date(nsToMs(ns)));
 }
 
 /**
