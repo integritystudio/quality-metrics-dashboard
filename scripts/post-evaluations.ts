@@ -30,6 +30,7 @@ import {
 } from './upload-evaluations.js';
 import type { AccountIndex } from './account-stamps.js';
 import { sleep } from './sleep.js';
+import { pushTo } from './collections.js';
 
 export interface PostOptions {
   dryRun: boolean;
@@ -95,9 +96,7 @@ export async function postEvaluationRecords(
       summary.heldForKey[delivery.ref] = (summary.heldForKey[delivery.ref] ?? 0) + 1;
       continue;
     }
-    const batch = batches.get(delivery.destination) ?? [];
-    batch.push(mapped.payload!);
-    batches.set(delivery.destination, batch);
+    pushTo(batches, delivery.destination, mapped.payload!);
   }
 
   const { baseUrl, secret } = resolveSendConfig();

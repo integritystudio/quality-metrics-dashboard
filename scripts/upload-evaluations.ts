@@ -87,6 +87,7 @@ import {
 import { evaluationCohortSchema } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
+import { pushTo } from './collections.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
@@ -766,9 +767,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           continue;
         }
         const { destination } = delivery;
-        const batch = batches.get(destination) ?? [];
-        batch.push({ payload: mapped.payload!, fp });
-        batches.set(destination, batch);
+        const batch = pushTo(batches, destination, { payload: mapped.payload!, fp });
         if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
       }
       for (const destination of [...batches.keys()]) {

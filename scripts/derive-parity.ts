@@ -21,6 +21,7 @@
  */
 
 import { CHECK_EXIT, runIfMain } from './cli-args.js';
+import { pushTo } from './collections.js';
 import { EVAL_SCORE_PRECISION, type EvalRecord } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { deriveAll, loadLocalSpans, resolveDateScope } from './derive-evaluations.js';
@@ -55,12 +56,7 @@ function recordKey(r: EvalRecord): string {
 
 function groupByKey(records: readonly EvalRecord[]): Map<string, EvalRecord[]> {
   const groups = new Map<string, EvalRecord[]>();
-  for (const r of records) {
-    const key = recordKey(r);
-    const list = groups.get(key) ?? [];
-    list.push(r);
-    groups.set(key, list);
-  }
+  for (const r of records) pushTo(groups, recordKey(r), r);
   return groups;
 }
 

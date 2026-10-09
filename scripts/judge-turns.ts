@@ -13,6 +13,7 @@ import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judg
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
 import type { EvalRecord } from './eval-record.js';
+import { pushTo } from './collections.js';
 import { LOGS_FILE_PREFIX, TRACES_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
@@ -86,11 +87,7 @@ export function turnKey(turn: { sessionId: string; timestamp: string }): string 
  */
 export function anchorTurns(turns: Turn[], index: AccountIndex): void {
   const bySession = new Map<string, Turn[]>();
-  for (const turn of turns) {
-    const group = bySession.get(turn.sessionId) ?? [];
-    group.push(turn);
-    bySession.set(turn.sessionId, group);
-  }
+  for (const turn of turns) pushTo(bySession, turn.sessionId, turn);
   for (const [sessionId, group] of bySession) {
     const timed = group
       .map((turn) => ({ turn, atMs: Date.parse(turn.timestamp) }))

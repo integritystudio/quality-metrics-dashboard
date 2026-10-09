@@ -24,6 +24,7 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { asHrTime, hrtToMs } from './hrt.js';
+import { pushTo } from './collections.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /**
@@ -88,12 +89,6 @@ export function fileInWindow(file: string, pattern: RegExp, windowDays: number, 
   // Compare on the date in the name, never mtime: derive rewrites evaluation
   // files wholesale, so mtime says nothing about which day's records are inside.
   return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
-}
-
-function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {
-  const values = map.get(key) ?? [];
-  values.push(value);
-  map.set(key, values);
 }
 
 /** Every parseable line of the trace files `files` (names under `dir`). */

@@ -85,6 +85,7 @@ import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './e
 import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
+import { pushTo } from './collections.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { bigintReplacer } from '../../src/lib/core/file-utils.js';
 import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../../src/lib/quality/bucket-utils.js';
@@ -628,7 +629,7 @@ export function prioritizeTraces(
       skippedCount++;
       continue;
     }
-    pushToGroup(traceGroups, traceId, entry);
+    pushTo(traceGroups, traceId, entry);
   }
   if (skippedCount > 0) {
     console.warn(`[prioritizeTraces] Skipped ${skippedCount} entries with non-trace key format`);
@@ -658,12 +659,6 @@ function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {
 /** Narrows to rows with a non-empty `traceId`, so `group` keys them by `string`. */
 function hasTraceId<T extends { traceId?: string }>(row: T): row is T & { traceId: string } {
   return Boolean(row.traceId);
-}
-
-function pushToGroup<V>(map: Map<string, V[]>, key: string, value: V): void {
-  let group = map.get(key);
-  if (!group) map.set(key, group = []);
-  group.push(value);
 }
 
 /** In-memory cross-session accumulator for a single agent. Never serialized directly. */
@@ -1218,7 +1213,7 @@ function computeSessionAndAgentEntries(
   for (const span of allSpans) {
     const sid = spanSessionId(span);
     if (!sid) continue;
-    pushToGroup(spansBySession, sid, span);
+    pushTo(spansBySession, sid, span);
     if (span.traceId) traceToSession.set(span.traceId, sid);
   }
   const evalsBySession = new Map<string, EvaluationResult[]>();
@@ -1226,7 +1221,7 @@ function computeSessionAndAgentEntries(
     if (!ev.traceId) continue;
     const sid = traceToSession.get(ev.traceId);
     if (!sid) continue;
-    pushToGroup(evalsBySession, sid, ev);
+    pushTo(evalsBySession, sid, ev);
   }
 
   const agentCrossSession = new Map<string, AgentAccumulator>();
@@ -1370,7 +1365,7 @@ async function main(): Promise<void> {
       if (isHome) allEntries.push(e);
     }
     for (const [traceId, evals] of res.evalsByTrace) {
-      for (const ev of evals) pushToGroup(evalsByTrace, traceId, ev);
+      for (const ev of evals) pushTo(evalsByTrace, traceId, ev);
     }
     for (const id of res.referencedTraceIds) referencedTraceIds.add(id);
   }
