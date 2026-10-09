@@ -71,7 +71,7 @@ export function resetFailureTracking(): void {
   for (const cls of JUDGE_FAILURE_CLASSES) failureClasses[cls] = 0;
 }
 
-/** Count a failed criterion; with `sessionPreview`, also log the per-criterion warning line. */
+/** With `sessionPreview`, also logs the per-criterion warning line. */
 export function trackFailure(metric: string, err: unknown, sessionPreview?: string): void {
   const message = describeUnknown(err);
   increment(evalFailures, metric);

@@ -498,12 +498,7 @@ export async function evaluateTurnConsolidated(
   return records;
 }
 
-/**
- * One criterion on its own: its cached steps, a one-criterion prompt and
- * schema, and the verdict's normalized (0–1) score. Throws the parse failure
- * when the verdict is missing. The one-shot evals' reference judge scores
- * this way, one call per criterion.
- */
+/** One criterion's normalized (0–1) score; throws the parse failure when the verdict is missing. */
 export async function scoreCriterion(
   provider: ConsolidatedProvider,
   turn: Turn,

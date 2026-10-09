@@ -527,7 +527,6 @@ export function destinationFor(route: Route): string {
   return route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
 }
 
-/** What this run does with a routed record: batch it for a destination, withhold it, or hold it for a key `env` lacks. */
 export type Delivery =
   | { kind: 'send'; destination: string }
   | { kind: 'withheld' }

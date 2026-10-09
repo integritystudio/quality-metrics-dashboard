@@ -39,17 +39,15 @@ export async function createJudgeAnthropicClient(options: ClientOptions = {}): P
   return new AnthropicClient({ ...options, fetch: await getHttp1Fetch() });
 }
 
-/** `stop_reason` of a reply cut off by `max_tokens`; a structured verdict is then unparseable. */
 export const MAX_TOKENS_STOP_REASON = 'max_tokens';
 
 type JsonOutputSchema = Anthropic.Messages.JSONOutputFormat['schema'];
 
-/** `output_config.format` constraining the reply to `schema` (structured outputs). */
 export function jsonSchemaFormat(schema: JsonOutputSchema): Anthropic.Messages.JSONOutputFormat {
   return { type: 'json_schema', schema };
 }
 
-/** `{ output_config }` for `schema`, or `{}` without one so the request is unchanged. */
+/** `{}` without a schema, so the request is unchanged. */
 export function jsonSchemaOutputConfig(
   schema: JsonOutputSchema | undefined,
 ): Pick<Anthropic.Messages.MessageCreateParamsNonStreaming, 'output_config'> {

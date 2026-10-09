@@ -91,7 +91,7 @@ export function fileInWindow(file: string, pattern: RegExp, windowDays: number, 
   return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
 }
 
-/** Every parseable line of the trace files `files` (names under `dir`); an unreadable file is reported to `onReadError` and skipped. */
+/** Every parseable line of the trace files `files` (names under `dir`). */
 export function* traceFileRecords(
   dir: string,
   files: readonly string[],
@@ -125,17 +125,15 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
   return indexSpanRecords(traceFileRecords(dir, files));
 }
 
-/** What the pipeline reads off a raw span record. */
 export interface SpanRecordFields {
   spanId?: string;
   traceId?: string;
   startTime?: HrTime;
   sessionId?: string;
-  /** The stamp as written: a secret name, `null` for an unmapped account, `undefined` when absent (pre-TKR6). */
+  /** As written: a secret name, `null` for an unmapped account, `undefined` when absent (pre-TKR6). */
   stamp: AccountRef | undefined;
 }
 
-/** The fields of one parsed span line in the file exporters' shape; `undefined` when it is not an object. */
 export function readSpanRecord(parsed: unknown): SpanRecordFields | undefined {
   if (typeof parsed !== 'object' || parsed === null) return undefined;
   const span = parsed as Record<string, unknown>;
@@ -174,7 +172,6 @@ export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
     const span = readSpanRecord(parsed);
     if (!span) continue;
     const { spanId, traceId, sessionId, stamp: ref } = span;
-    // `UNTIMED_MS` when the start time is absent or malformed.
     const atMs = span.startTime ? hrtToMs(span.startTime) : UNTIMED_MS;
     if (ref !== undefined && spanId) index.bySpan.set(spanId, ref);
     if (sessionId) pushTo(index.sessionSpans, sessionId, { atMs, spanId, traceId, ref });

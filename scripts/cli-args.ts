@@ -148,24 +148,15 @@ export function nonNegativeNumberArg(label: string, raw: string | undefined): nu
 
 const FATAL_EXIT_CODE = 1;
 
-/** Exit codes of the read-only check scripts (parity, coverage): pass, fail, or a usage/fetch error. */
 export const CHECK_EXIT = { PASS: 0, FAIL: 1, ERROR: 2 } as const;
 
 export interface RunIfMainOptions {
-  /** Exit code when `main` rejects; `FATAL_EXIT_CODE` when absent. */
   fatalExitCode?: number;
 }
 
 /**
- * Run `main()` only when this module is the entry point. Replaces the fragile
- * `process.argv[1]?.endsWith('foo.ts')` pattern used in several scripts.
- *
- * Sets `process.exitCode` rather than calling `process.exit`, so buffered
- * stdout and stderr are flushed before the process ends.
- *
- * @param moduleUrl  Pass `import.meta.url` from the calling module.
- * @param main       Async entry point; may return an exit code.
- * @param logPrefix  Prefix for fatal error messages, e.g. `'[sync]'`.
+ * Run `main()` only when this module is the entry point. Sets `process.exitCode`
+ * rather than calling `process.exit`, so buffered stdout and stderr are flushed.
  */
 export function runIfMain(
   moduleUrl: string,

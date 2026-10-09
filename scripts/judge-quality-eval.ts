@@ -301,10 +301,7 @@ export function compareToReference<K extends string>(
   return { byCriterion, overall: toDistance(agreement.overall, overallSigned) };
 }
 
-/**
- * Per criterion, the configuration with the lowest MAE against the reference;
- * `'tie'` when the lowest is shared or fewer than two configurations scored it.
- */
+/** `'tie'` when the lowest MAE is shared or fewer than two configurations scored the criterion. */
 export function closestConfiguration<K extends string>(
   summaries: Record<K, ReferenceSummary>,
   configurations: readonly K[],
@@ -322,7 +319,6 @@ export function closestConfiguration<K extends string>(
   return verdict;
 }
 
-/** {@link closestConfiguration} over the two Haiku paths. */
 export function closerConfiguration(
   perCriterion: ReferenceSummary,
   consolidated: ReferenceSummary,

@@ -110,7 +110,6 @@ export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
 export const TRACE_SOURCES = ['local', 'cloud'] as const;
 export type TraceSource = typeof TRACE_SOURCES[number];
 
-/** `value` as a `TraceSource`, else `defaultSource`; throws `CliArgError` naming `flag` on anything else. */
 export function parseTraceSource(flag: string, value: string | undefined, defaultSource: TraceSource): TraceSource {
   const source = value ?? defaultSource;
   if (!(TRACE_SOURCES as readonly string[]).includes(source)) {

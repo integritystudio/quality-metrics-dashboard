@@ -21,11 +21,7 @@ export interface ProviderUsage {
   cache_creation_input_tokens?: number | null;
 }
 
-/**
- * One response's usage, or a run's totals, in the one shape every script
- * accounts in. `ProviderUsage` is converted here at the SDK boundary and
- * nowhere else.
- */
+/** The one accounting shape; `ProviderUsage` is converted to it at the SDK boundary and nowhere else. */
 export interface JudgeTokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -46,7 +42,6 @@ export function createUsageTotals(): JudgeTokenUsage {
   return { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
 }
 
-/** Fold one response's usage into the run totals. */
 export function addUsage(totals: JudgeTokenUsage, usage: JudgeTokenUsage): void {
   totals.inputTokens += usage.inputTokens;
   totals.outputTokens += usage.outputTokens;
@@ -54,7 +49,6 @@ export function addUsage(totals: JudgeTokenUsage, usage: JudgeTokenUsage): void 
   totals.cacheReadInputTokens += usage.cacheReadInputTokens;
 }
 
-/** A one-shot eval's totals for one configuration: usage plus the number of responses. */
 export interface CallUsageTotals extends JudgeTokenUsage {
   calls: number;
 }
@@ -68,7 +62,6 @@ export function createCallUsageTotals(): CallUsageTotals {
   return { calls: 0, ...createUsageTotals() };
 }
 
-/** Fold one response's usage into a configuration's totals. */
 export function addCallUsage(totals: CallUsageTotals, usage: JudgeTokenUsage): void {
   totals.calls += 1;
   addUsage(totals, usage);

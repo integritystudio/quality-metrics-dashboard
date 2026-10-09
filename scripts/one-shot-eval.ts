@@ -41,19 +41,12 @@ export function oneShotArgError(err: unknown): string {
   return err.kind === 'unknown' ? `${err.message} ${NO_FORCE_HINT}` : err.message;
 }
 
-/** What every one-shot eval's command line carries. */
 export interface OneShotArgs {
   yes: boolean;
-  /** Set when the invocation must be refused; the message says why. */
   error?: string;
 }
 
-/**
- * Parse a one-shot eval's command line: `--yes` plus `spec`, with unknown
- * arguments refused. `read` returns the script's own flags, and may throw
- * `CliArgError` for a value it rejects. A refused line comes back as
- * `defaults` with `error` set.
- */
+/** `read` may throw `CliArgError` to refuse a value; a refused line comes back as `defaults` with `error` set. */
 export function parseOneShotArgs<T extends object>(
   argv: readonly string[],
   spec: CliSpec,
@@ -152,11 +145,7 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
   };
 }
 
-/**
- * The checks every one-shot eval runs before spending: refuse a bad command
- * line, resolve the judge key, refuse a second start. The key, or `undefined`
- * once a refusal has been logged.
- */
+/** The judge key, or `undefined` once a refusal has been logged. */
 export function admitOneShot(guard: RunGuard, args: OneShotArgs): JudgeApiKey | undefined {
   if (args.error) {
     guard.refuse(args.error);
@@ -172,14 +161,12 @@ export function admitOneShot(guard: RunGuard, args: OneShotArgs): JudgeApiKey | 
   return credential;
 }
 
-/** Write `results` to the run's dated results file under `DOCS_DIR`; returns its path. */
 export function writeResults(guard: RunGuard, startedAt: Date, results: object): string {
   const outPath = guard.resultsFilePath(DOCS_DIR, startedAt);
   writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
   return outPath;
 }
 
-/** A `<prefix> n/total turns done<detail>` line per call. */
 export function turnProgress(logPrefix: string, total: number): (detail?: string) => void {
   let completed = 0;
   return (detail = '') => {
@@ -188,7 +175,6 @@ export function turnProgress(logPrefix: string, total: number): (detail?: string
   };
 }
 
-/** One turn's failures, as the results files record them. */
 export interface TurnErrors {
   sessionId: string;
   timestamp: string;

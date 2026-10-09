@@ -64,12 +64,11 @@ export function accountRefsFromEnv(env: NodeJS.ProcessEnv): string[] {
   return Object.keys(env).filter((name) => IDENTITY_KEY_REF_PATTERN.test(name) && asString(env[name])).sort();
 }
 
-/** A backend reading as one account. HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
+/** HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
 export function accountBackend(apiKey: string | undefined): CloudBackend {
   return new CloudBackend({ apiKey, fetch: http1Fetch });
 }
 
-/** `/v1/traces` over `[fromMs, toMs]` for one account, at most `limit` spans. */
 export function queryAccountTraces(
   backend: CloudBackend,
   fromMs: number,
@@ -79,19 +78,13 @@ export function queryAccountTraces(
   return backend.queryTraces({ startDate: msToNs(fromMs), endDate: msToNs(toMs), limit });
 }
 
-/** What a per-account query returns, for its log line and its truncation error. */
+/** Wording for the log line and truncation error, e.g. `{ rows: 'spans', truncates: 'the scope' }`. */
 export interface AccountQueryLabel {
-  /** The rows, e.g. `spans`. */
   rows: string;
-  /** What a truncated read would cut, e.g. `the scope`. */
   truncates: string;
 }
 
-/**
- * `query` once per identity-map account key in `env`, in ref order. Throws when
- * an account returned `limit` rows, since the read may then be truncated; logs
- * each account's count under `logPrefix`.
- */
+/** Throws when an account returned `limit` rows: the read may then be truncated. */
 export async function queryEachAccount<T>(
   env: NodeJS.ProcessEnv,
   limit: number,
