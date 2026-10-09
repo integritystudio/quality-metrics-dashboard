@@ -35,17 +35,13 @@ import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js'
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
-import { fitContextForJudge, type Turn } from './judge-turns.js';
+import type { Turn } from './judge-turns.js';
 import { resetFailureTracking } from './judge-failures.js';
 import { FAITHFULNESS_EVAL_NAME, HAIKU_MODEL } from './judge-criteria.js';
 import {
-  buildConsolidatedPrompt,
-  buildConsolidatedSchema,
-  cachedEvaluationSteps,
   createConsolidatedProvider,
   evaluateTurnConsolidated,
-  parseConsolidatedResponse,
-  toNormalizedScore,
+  scoreCriterion,
   type ConsolidatedCriteriaOptions,
   type ConsolidatedProvider,
   type EvaluationStepsCache,
@@ -228,13 +224,7 @@ async function scoreReferenceHallucination(
   turn: Turn,
   stepsCache: EvaluationStepsCache,
 ): Promise<number> {
-  const steps = await cachedEvaluationSteps(provider, HALLUCINATION_CRITERIA, stepsCache);
-  const prompt = buildConsolidatedPrompt(turn, fitContextForJudge(turn.toolResults), [{ config: HALLUCINATION_CRITERIA, steps }]);
-  const response = await provider.generate(prompt, { schema: buildConsolidatedSchema([HALLUCINATION_CRITERIA.name]) });
-  const parsed = parseConsolidatedResponse(response.text, [HALLUCINATION_CRITERIA.name]);
-  const verdict = parsed.verdicts.get(HALLUCINATION_CRITERIA.name);
-  if (!verdict) throw parsed.failures.get(HALLUCINATION_CRITERIA.name) ?? new Error('no hallucination verdict');
-  return 1 - toNormalizedScore(verdict.score);
+  return 1 - await scoreCriterion(provider, turn, HALLUCINATION_CRITERIA, stepsCache);
 }
 
 // ---------------------------------------------------------------------------

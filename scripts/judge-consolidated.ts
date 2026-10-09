@@ -509,6 +509,27 @@ export async function evaluateTurnConsolidated(
   return records;
 }
 
+/**
+ * One criterion on its own: its cached steps, a one-criterion prompt and
+ * schema, and the verdict's normalized (0–1) score. Throws the parse failure
+ * when the verdict is missing. The one-shot evals' reference judge scores
+ * this way, one call per criterion.
+ */
+export async function scoreCriterion(
+  provider: ConsolidatedProvider,
+  turn: Turn,
+  config: GEvalConfig,
+  stepsCache: EvaluationStepsCache,
+): Promise<number> {
+  const steps = await cachedEvaluationSteps(provider, config, stepsCache);
+  const prompt = buildConsolidatedPrompt(turn, fitContextForJudge(turn.toolResults), [{ config, steps }]);
+  const response = await provider.generate(prompt, { schema: buildConsolidatedSchema([config.name]) });
+  const parsed = parseConsolidatedResponse(response.text, [config.name]);
+  const verdict = parsed.verdicts.get(config.name);
+  if (!verdict) throw parsed.failures.get(config.name) ?? new Error(`no verdict for ${config.name}`);
+  return toNormalizedScore(verdict.score);
+}
+
 // ---------------------------------------------------------------------------
 // Anthropic provider
 // ---------------------------------------------------------------------------

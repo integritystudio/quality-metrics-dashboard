@@ -44,13 +44,9 @@ import {
 import { processBatch } from './judge-evaluations.js';
 import { FAITHFULNESS_EVAL_NAME } from './judge-criteria.js';
 import {
-  buildConsolidatedPrompt,
-  buildConsolidatedSchema,
-  cachedEvaluationSteps,
-  parseConsolidatedResponse,
+  scoreCriterion,
   selectCriteria,
   toFivePointScale,
-  toNormalizedScore,
   type ConsolidatedGenerateOptions,
   type ConsolidatedProvider,
   type ConsolidatedResponse,
@@ -377,7 +373,6 @@ async function scoreTurnWithReference(
   errors: string[],
 ): Promise<Record<string, number>> {
   const selection = selectCriteria(turn, new Set());
-  const toolContext = fitContextForJudge(turn.toolResults);
   const scores: Record<string, number> = {};
 
   for (const config of selection.criteria) {
@@ -386,13 +381,7 @@ async function scoreTurnWithReference(
       continue;
     }
     try {
-      const steps = await cachedEvaluationSteps(provider, config, stepsCache);
-      const prompt = buildConsolidatedPrompt(turn, toolContext, [{ config, steps }]);
-      const response = await provider.generate(prompt, { schema: buildConsolidatedSchema([config.name]) });
-      const verdict = parseConsolidatedResponse(response.text, [config.name]);
-      const parsed = verdict.verdicts.get(config.name);
-      if (!parsed) throw verdict.failures.get(config.name) ?? new Error(`no verdict for ${config.name}`);
-      const normalized = toNormalizedScore(parsed.score);
+      const normalized = await scoreCriterion(provider, turn, config, stepsCache);
       scores[config.name] = normalized;
       if (config.name === FAITHFULNESS_EVAL_NAME) scores[HALLUCINATION_EVAL_NAME] = 1 - normalized;
     } catch (err) {
