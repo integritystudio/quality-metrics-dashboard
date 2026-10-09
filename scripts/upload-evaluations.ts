@@ -84,13 +84,10 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 
 import {
-  BACKFILL_COHORT,
   EVALUATION_ATTRS,
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
-  NORMAL_COHORT,
-  SEED_COHORT,
 } from './eval-record.js';
 import { CANARY_COHORT, CANARY_EVALUATOR_TYPE, TELEMETRY_DIR } from './evaluation-constants.js';
 import {
@@ -106,25 +103,28 @@ import {
 import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
 import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, type CliSpec } from './cli-args.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
+import {
+  WEBHOOK_MAX_BATCH_SIZE,
+  WEBHOOK_MAX_EXPLANATION_LENGTH,
+  WEBHOOK_MAX_NAME_LENGTH,
+  WEBHOOK_SIGNATURE_HEADER,
+  WEBHOOK_SIGNATURE_PREFIX,
+} from '../../src/lib/core/obtool-contract.js';
+import { evaluationCohortSchema } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
 
-export { buildAccountIndex, type AccountIndex, type AccountRef };
-
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
-export const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
+const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
 
+/** The webhook's batch cap (`obtool-contract.ts`, shared with the ingest worker). */
+export const MAX_BATCH_SIZE = WEBHOOK_MAX_BATCH_SIZE;
 /**
- * Webhook caps, mirrored from `services/obtool-ingest/src/evaluations.ts`.
- * They are module-private there, so this is a copy rather than an import; the
- * copy is deliberately the *stricter* webhook set, not the looser MCP set in
- * `src/lib/validation/api-schemas.ts`. `upload-evaluations.test.ts` asserts
- * they still match the source.
+ * Per-evaluation byte cap. Still module-private in
+ * `services/obtool-ingest/src/evaluations.ts`, so this is a copy;
+ * `upload-evaluations.test.ts` asserts it still matches the source.
  */
-export const MAX_BATCH_SIZE = 100;
 const MAX_EVALUATION_BYTES = 10_000;
-const WEBHOOK_MAX_NAME_LENGTH = 255;
-const WEBHOOK_MAX_EXPLANATION_LENGTH = 2000;
 
 /**
  * File-name window, in days. Matches `SHIP_DAYS` in the span shipper so both
@@ -139,9 +139,9 @@ const DEFAULT_WINDOW_DAYS = 2;
  */
 const DEFAULT_MAX_AGE_HOURS = 36;
 
-
 /** Pause between batches so a large first run does not burst the worker. */
 export const INTER_BATCH_DELAY_MS = 250;
+
 /** Response body kept in a failed send's log line. */
 const RESPONSE_SNIPPET_CHARS = 300;
 
@@ -189,8 +189,8 @@ const EVALUATION_ID_LENGTH = 32;
 /** Fingerprints already shipped, grouped by source file so they prune together. */
 export type ShippedIndex = Record<string, string[]>;
 
-/** The cohorts the webhook's `cohort` field accepts (the parent's `evaluationCohortSchema`). */
-const WEBHOOK_COHORTS: ReadonlySet<string> = new Set([NORMAL_COHORT, SEED_COHORT, CANARY_COHORT, BACKFILL_COHORT]);
+/** The cohorts the webhook's `cohort` field accepts, read from the same schema the ingest validator uses. */
+const WEBHOOK_COHORTS: ReadonlySet<string> = new Set(evaluationCohortSchema.options);
 
 export interface EvaluationPayload {
   evaluationName: string;
@@ -219,7 +219,7 @@ export interface EvaluationPayload {
   metadata?: Record<string, unknown>;
 }
 
-export interface MapResult {
+interface MapResult {
   payload?: EvaluationPayload;
   /**
    * The record's own account stamp (TKR8 Phase 1); absent when the record has
@@ -438,7 +438,7 @@ export function windowFiles(dir: string, windowDays: number, nowMs: number): str
 }
 
 /** One manifest entry: which record to re-ship, and under which account's key. */
-export interface ManifestEntry {
+interface ManifestEntry {
   ref: string;
   evaluationName: string;
   traceId: string;
@@ -506,16 +506,16 @@ export function routeRecord(mapped: MapResult, index: AccountIndex): { route: Ro
 }
 
 function signature(payload: string, secret: string): string {
-  return `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
+  return `${WEBHOOK_SIGNATURE_PREFIX}${createHmac('sha256', secret).update(payload).digest('hex')}`;
 }
 
-export interface SendRequest { url: string; headers: Record<string, string>; body: string }
+interface SendRequest { url: string; headers: Record<string, string>; body: string }
 
 export function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secret: string): SendRequest {
   const body = JSON.stringify({ evaluations: batch });
   return {
     url: `${baseUrl}${WEBHOOK_PATH}`,
-    headers: { 'Content-Type': 'application/json', 'x-signature': signature(body, secret) },
+    headers: { 'Content-Type': 'application/json', [WEBHOOK_SIGNATURE_HEADER]: signature(body, secret) },
     body,
   };
 }
@@ -529,7 +529,7 @@ export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey
   };
 }
 
-export interface SendResult { ok: boolean; detail: string; retryable: boolean }
+interface SendResult { ok: boolean; detail: string; retryable: boolean }
 
 /** `{ k=v … }` summary for a counts record; yields `'none'` for an empty map. */
 export function formatCounts(counts: Record<string, number>): string {
@@ -541,7 +541,11 @@ export function destinationFor(route: Route): string {
   return route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
 }
 
-/** Resolve the ingest base URL and HMAC secret from the environment. */
+/**
+ * Resolve the ingest base URL and HMAC secret from the environment. `asString`,
+ * not `??`: an empty OBTOOL_INGEST_URL must fall back to the default host, and
+ * `??` would keep the empty string and POST to `/v1/...`.
+ */
 export function resolveSendConfig(): { baseUrl: string; secret: string | undefined } {
   return {
     baseUrl: asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL,
@@ -584,6 +588,22 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
       retryable: true,
     };
   }
+}
+
+/**
+ * Send one batch to a destination from `destinationFor`. A keyed destination
+ * is read from the environment, so callers must have checked the key is set
+ * (the held-for-key rule); the webhook needs `secret`.
+ */
+export function sendBatch(
+  destination: string,
+  payloads: EvaluationPayload[],
+  baseUrl: string,
+  secret: string | undefined,
+): Promise<SendResult> {
+  return postBatch(destination === WEBHOOK_DESTINATION
+    ? webhookRequest(baseUrl, payloads, secret!)
+    : keyedRequest(baseUrl, payloads, process.env[destination]!));
 }
 
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
@@ -637,14 +657,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     console.error(`[upload-evaluations] ${err.message}`);
     return 1;
   }
-  const secret = process.env.INJECT_HMAC_SECRET;
+  const { baseUrl, secret } = resolveSendConfig();
   if (!secret && !opts.dryRun) {
     console.error('[upload-evaluations] INJECT_HMAC_SECRET is not set — nothing can be signed. Run under `doppler run --project integrity-studio --config prd`.');
     return 1;
   }
-  // asString, not `??`: an empty OBTOOL_INGEST_URL must fall back to the
-  // default host, and `??` would keep the empty string and POST to `/v1/...`.
-  const baseUrl = asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL;
 
   const manifest = opts.onlyKeysPath ? parseKeyManifest(readFileSync(opts.onlyKeysPath, 'utf8')) : undefined;
   // The flush dates rows by evaluatedAtMs, so a targeted re-ship of old records
@@ -675,101 +692,98 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   // otherwise skip saveShipped and lose the fingerprints of batches this run
   // already delivered, which the next run re-sends as duplicates.
   try {
-  for (const file of files) {
-    if (sent >= opts.limit) break;
-    const done = new Set(shipped[file] ?? []);
+    for (const file of files) {
+      if (sent >= opts.limit) break;
+      const done = new Set(shipped[file] ?? []);
 
-    /** One pending batch per destination: `WEBHOOK_DESTINATION` or a key ref. */
-    const batches = new Map<string, { payload: EvaluationPayload; fp: string }[]>();
-    /** Confirmed-delivered fingerprints for this file, recorded only after a 2xx. */
-    const delivered: string[] = [...done];
+      /** One pending batch per destination: `WEBHOOK_DESTINATION` or a key ref. */
+      const batches = new Map<string, { payload: EvaluationPayload; fp: string }[]>();
+      /** Confirmed-delivered fingerprints for this file, recorded only after a 2xx. */
+      const delivered: string[] = [...done];
 
-    const flush = async (destination: string): Promise<boolean> => {
-      const batch = batches.get(destination) ?? [];
-      if (batch.length === 0) return true;
-      if (!opts.dryRun) {
-        const payloads = batch.map((b) => b.payload);
-        const request = destination === WEBHOOK_DESTINATION
-          ? webhookRequest(baseUrl, payloads, secret!)
-          : keyedRequest(baseUrl, payloads, process.env[destination]!);
-        const res = await postBatch(request);
-        if (!res.ok) {
-          console.error(`[upload-evaluations] POST failed for ${file} (${destination}): ${res.detail}`);
-          return false;
+      const flush = async (destination: string): Promise<boolean> => {
+        const batch = batches.get(destination) ?? [];
+        if (batch.length === 0) return true;
+        if (!opts.dryRun) {
+          const res = await sendBatch(destination, batch.map((b) => b.payload), baseUrl, secret);
+          if (!res.ok) {
+            console.error(`[upload-evaluations] POST failed for ${file} (${destination}): ${res.detail}`);
+            return false;
+          }
         }
-      }
-      sent += batch.length;
-      sentByDestination[destination] = (sentByDestination[destination] ?? 0) + batch.length;
-      // Record only what the worker accepted. A batch that never got a 2xx is
-      // left unrecorded so the next run retries it — the one direction that
-      // errs toward a duplicate rather than toward silent data loss.
-      for (const b of batch) delivered.push(b.fp);
-      batches.delete(destination);
-      if (!opts.dryRun) await sleep(INTER_BATCH_DELAY_MS);
-      return true;
-    };
-    const pendingCount = (): number => [...batches.values()].reduce((n, b) => n + b.length, 0);
+        sent += batch.length;
+        sentByDestination[destination] = (sentByDestination[destination] ?? 0) + batch.length;
+        // Record only what the worker accepted. A batch that never got a 2xx is
+        // left unrecorded so the next run retries it — the one direction that
+        // errs toward a duplicate rather than toward silent data loss.
+        for (const b of batch) delivered.push(b.fp);
+        batches.delete(destination);
+        if (!opts.dryRun) await sleep(INTER_BATCH_DELAY_MS);
+        return true;
+      };
+      const pendingCount = (): number => [...batches.values()].reduce((n, b) => n + b.length, 0);
 
-    let ok = true;
-    for (const line of readFileSync(join(TELEMETRY_DIR, file), 'utf8').split('\n')) {
-      if (!line.trim()) continue;
-      if (sent + pendingCount() >= opts.limit) break;
-      const fp = fingerprint(line);
-      if (done.has(fp)) { alreadyShipped++; continue; }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        parseErrors++;
-        continue;
+      let ok = true;
+      for (const line of readFileSync(join(TELEMETRY_DIR, file), 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        if (sent + pendingCount() >= opts.limit) break;
+        const fp = fingerprint(line);
+        if (done.has(fp)) { alreadyShipped++; continue; }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          parseErrors++;
+          continue;
+        }
+        const mapped = mapRecord(parsed, nowMs, maxAgeMs);
+        const key = manifest && mapped.payload ? payloadManifestKey(mapped.payload) : undefined;
+        if (manifest && (key === undefined || !manifest.has(key))) {
+          // Not ours to touch: left unrecorded so a normal run handles it as before.
+          notInManifest++;
+          continue;
+        }
+        if (mapped.skip) {
+          skips[mapped.skip] = (skips[mapped.skip] ?? 0) + 1;
+          // Remember the decision so a permanently-unshippable record is not
+          // re-examined, and cannot be shipped later by a widened --max-age-hours.
+          if (mapped.skip !== 'too-old') delivered.push(fp);
+          continue;
+        }
+        const manifestRef = key === undefined ? undefined : manifest!.get(key);
+        const { route, basis }: { route: Route; basis: RouteBasis } = manifestRef
+          ? { route: { kind: 'keyed', ref: manifestRef }, basis: 'stamp' }
+          : routeRecord(mapped, accounts);
+        if (key !== undefined) matchedKeys.add(key);
+        routedBy[basis]++;
+        if (route.kind === 'withheld') {
+          // Unmapped account: consumed unsent, never re-examined (TKR3).
+          withheld++;
+          delivered.push(fp);
+          continue;
+        }
+        if (route.kind === 'keyed' && !asString(process.env[route.ref])) {
+          // Left unrecorded so a run that has the key ships it.
+          heldForKey[route.ref] = (heldForKey[route.ref] ?? 0) + 1;
+          continue;
+        }
+        const destination = destinationFor(route);
+        const batch = batches.get(destination) ?? [];
+        batch.push({ payload: mapped.payload!, fp });
+        batches.set(destination, batch);
+        if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
       }
-      const mapped = mapRecord(parsed, nowMs, maxAgeMs);
-      const key = manifest && mapped.payload ? payloadManifestKey(mapped.payload) : undefined;
-      if (manifest && (key === undefined || !manifest.has(key))) {
-        // Not ours to touch: left unrecorded so a normal run handles it as before.
-        notInManifest++;
-        continue;
+      for (const destination of [...batches.keys()]) {
+        if (!ok) break;
+        ok = await flush(destination);
       }
-      if (mapped.skip) {
-        skips[mapped.skip] = (skips[mapped.skip] ?? 0) + 1;
-        // Remember the decision so a permanently-unshippable record is not
-        // re-examined, and cannot be shipped later by a widened --max-age-hours.
-        if (mapped.skip !== 'too-old') delivered.push(fp);
-        continue;
-      }
-      const { route, basis } = key !== undefined
-        ? { route: { kind: 'keyed', ref: manifest!.get(key)! } as Route, basis: 'stamp' as RouteBasis }
-        : routeRecord(mapped, accounts);
-      if (key !== undefined) matchedKeys.add(key);
-      routedBy[basis]++;
-      if (route.kind === 'withheld') {
-        // Unmapped account: consumed unsent, never re-examined (TKR3).
-        withheld++;
-        delivered.push(fp);
-        continue;
-      }
-      if (route.kind === 'keyed' && !asString(process.env[route.ref])) {
-        // Left unrecorded so a run that has the key ships it.
-        heldForKey[route.ref] = (heldForKey[route.ref] ?? 0) + 1;
-        continue;
-      }
-      const destination = destinationFor(route);
-      const batch = batches.get(destination) ?? [];
-      batch.push({ payload: mapped.payload!, fp });
-      batches.set(destination, batch);
-      if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
-    }
-    for (const destination of [...batches.keys()]) {
-      if (!ok) break;
-      ok = await flush(destination);
-    }
 
-    shipped[file] = delivered;
-    if (!ok) {
-      console.error('[upload-evaluations] aborted on send failure — state saved up to the last accepted batch');
-      return UPLOAD_EXIT_SEND_FAILED;
+      shipped[file] = delivered;
+      if (!ok) {
+        console.error('[upload-evaluations] aborted on send failure — state saved up to the last accepted batch');
+        return UPLOAD_EXIT_SEND_FAILED;
+      }
     }
-  }
   } finally {
     if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
   }

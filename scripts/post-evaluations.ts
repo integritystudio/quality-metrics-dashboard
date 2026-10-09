@@ -21,12 +21,10 @@ import {
   WEBHOOK_DESTINATION,
   destinationFor,
   formatCounts,
-  keyedRequest,
   mapRecord,
-  postBatch,
   resolveSendConfig,
   routeRecord,
-  webhookRequest,
+  sendBatch,
   type EvaluationPayload,
   type RouteBasis,
 } from './upload-evaluations.js';
@@ -112,10 +110,7 @@ export async function postEvaluationRecords(
     for (let i = 0; i < payloads.length; i += MAX_BATCH_SIZE) {
       const chunk = payloads.slice(i, i + MAX_BATCH_SIZE);
       if (!opts.dryRun) {
-        const request = destination === WEBHOOK_DESTINATION
-          ? webhookRequest(baseUrl, chunk, secret!)
-          : keyedRequest(baseUrl, chunk, process.env[destination]!);
-        const res = await postBatch(request);
+        const res = await sendBatch(destination, chunk, baseUrl, secret);
         if (!res.ok) {
           summary.failure = `POST to ${destination} failed: ${res.detail}`;
           return summary;

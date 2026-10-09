@@ -11,7 +11,6 @@ import {
   saveShipped,
   pruneShipped,
   windowFiles,
-  buildAccountIndex,
   keyedRequest,
   manifestKey,
   parseKeyManifest,
@@ -20,6 +19,7 @@ import {
   type EvaluationPayload,
   main,
 } from '../upload-evaluations.js';
+import { buildAccountIndex } from '../account-stamps.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
 import { toOTelRecord } from '../eval-record.js';
 
@@ -382,30 +382,22 @@ describe('account index (TKR7/TKR9)', () => {
   });
 });
 
-describe('webhook caps mirrored from the ingest worker', () => {
-  // These four are module-private in services/obtool-ingest/src/evaluations.ts,
-  // so upload-evaluations.ts copies them. This test is what keeps the copy
-  // honest: if the worker tightens a cap, the uploader starts sending payloads
-  // the worker rejects, and nothing else would catch it.
-  it('match services/obtool-ingest/src/evaluations.ts', () => {
+describe('MAX_EVALUATION_BYTES mirrored from the ingest worker', () => {
+  // The other webhook caps come from src/lib/core/obtool-contract.ts. This one
+  // is still module-private in the ingest worker, so the uploader copies it and
+  // this test keeps the copy honest: if the worker tightens it, the uploader
+  // starts sending payloads the worker rejects, and nothing else would catch it.
+  it('matches services/obtool-ingest/src/evaluations.ts', () => {
     const source = readFileSync(
       resolve(__dirname, '../../../services/obtool-ingest/src/evaluations.ts'),
       'utf8',
     );
     const uploader = readFileSync(resolve(__dirname, '../upload-evaluations.ts'), 'utf8');
 
-    for (const name of [
-      'MAX_BATCH_SIZE',
-      'MAX_EVALUATION_BYTES',
-      'WEBHOOK_MAX_NAME_LENGTH',
-      'WEBHOOK_MAX_EXPLANATION_LENGTH',
-    ]) {
-      const pattern = new RegExp(`const ${name} = ([0-9_]+)`);
-      const fromSource = pattern.exec(source)?.[1];
-      const fromUploader = pattern.exec(uploader)?.[1];
-      expect(fromSource, `${name} not found in ingest worker`).toBeDefined();
-      expect(fromUploader, `${name} not found in uploader`).toBe(fromSource);
-    }
+    const pattern = /const MAX_EVALUATION_BYTES = ([0-9_]+)/;
+    const fromSource = pattern.exec(source)?.[1];
+    expect(fromSource, 'MAX_EVALUATION_BYTES not found in ingest worker').toBeDefined();
+    expect(pattern.exec(uploader)?.[1], 'MAX_EVALUATION_BYTES not found in uploader').toBe(fromSource);
   });
 });
 
