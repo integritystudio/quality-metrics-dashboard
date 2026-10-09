@@ -52,9 +52,22 @@ export function resolveJudgeApiKey(env: NodeJS.ProcessEnv = process.env): JudgeA
 /** Resolves when Anthropic accepts the key; rejects with the SDK's error otherwise. */
 export type JudgeKeyProbe = (apiKey: string) => Promise<void>;
 
+/**
+ * The probe could not be set up (SDK import or client construction), so it says nothing about
+ * the key. It is a bug, not a network blip, and has no HTTP status to tell them apart by.
+ */
+export class JudgeProbeSetupError extends Error {
+  constructor(cause: unknown) {
+    super('judge key probe could not be set up', { cause });
+    this.name = 'JudgeProbeSetupError';
+  }
+}
+
 /** Counting tokens is free and sits on the Messages permission surface the judge calls. */
 const probeWithCountTokens: JudgeKeyProbe = async apiKey => {
-  const client = await createJudgeAnthropicClient({ apiKey, maxRetries: 0 });
+  const client = await createJudgeAnthropicClient({ apiKey, maxRetries: 0 }).catch((cause: unknown) => {
+    throw new JudgeProbeSetupError(cause);
+  });
   await client.messages.countTokens({ model: HAIKU_MODEL, messages: [{ role: 'user', content: PROBE_MESSAGE }] });
 };
 
@@ -66,7 +79,8 @@ function isCredentialRejection(error: unknown): boolean {
 /**
  * The first key in precedence order that Anthropic accepts. Only a 401/403
  * rejects a candidate: a network or 5xx failure says nothing about the key, so
- * that candidate is kept and the judge's own retry handling deals with it.
+ * that candidate is kept and the judge's own retry handling deals with it. A probe that
+ * could not be set up throws, so a bug cannot pass for an accepted key.
  * Returns undefined when every set key is rejected, or none is set.
  */
 export async function pickWorkingJudgeApiKey(
@@ -79,6 +93,7 @@ export async function pickWorkingJudgeApiKey(
     try {
       await probe(apiKey);
     } catch (error) {
+      if (error instanceof JudgeProbeSetupError) throw error;
       if (!isCredentialRejection(error)) return { apiKey, source };
       console.warn(`[judge] ${source} was rejected by Anthropic (HTTP ${(error as { status: number }).status}); trying the next key`);
       continue;

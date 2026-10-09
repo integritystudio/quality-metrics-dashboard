@@ -5,6 +5,7 @@ import {
   DEFAULT_API_KEY_ENV,
   JUDGE_API_KEY_ENV_PRECEDENCE,
   pickWorkingJudgeApiKey,
+  JudgeProbeSetupError,
   resolveWorkingJudgeApiKey,
   resetWorkingJudgeApiKeyForTests,
 } from '../judge-credentials.js';
@@ -80,6 +81,12 @@ describe('pickWorkingJudgeApiKey', () => {
 
     expect(await pickWorkingJudgeApiKey(BOTH, probe)).toEqual({ apiKey: JUDGE_KEY, source: JUDGE_API_KEY_ENV });
     expect(probe).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when the probe could not be set up, instead of accepting the key', async () => {
+    const probe = vi.fn().mockRejectedValue(new JudgeProbeSetupError(new Error('sdk missing')));
+
+    await expect(pickWorkingJudgeApiKey(BOTH, probe)).rejects.toBeInstanceOf(JudgeProbeSetupError);
   });
 
   it('returns undefined when every set key is rejected', async () => {
