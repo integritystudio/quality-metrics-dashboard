@@ -1297,6 +1297,8 @@ details[open] > .cot-summary::before {
 .p-4-5  { padding: var(--space-4) var(--space-5); }
 .p-6    { padding: var(--space-6); }
 .py-2   { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.pt-2   { padding-top: var(--space-2); }
+.pt-3   { padding-top: var(--space-3); }
 
 /* Text align */
 .text-center { text-align: center; }
@@ -1347,8 +1349,6 @@ details[open] > .cot-summary::before {
 .break-all { word-break: break-all; }
 .leading-normal  { line-height: 1.5; }
 .leading-relaxed { line-height: 1.6; }
-.pt-2 { padding-top: var(--space-2); }
-.pt-3 { padding-top: var(--space-3); }
 
 /* Form select */
 .form-select { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); border: var(--border-width-thin) solid var(--border); }
