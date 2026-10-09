@@ -8,7 +8,7 @@
  * clock instead of a real thirty-minute wait.
  */
 
-import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
+import { CliArgError, displayLabel, parseCli, positiveIntArg } from './cli-args.js';
 import { sleep } from './sleep.js';
 
 /** judge-evaluations exit: calls were refused for billing (credit balance). Nothing to retry; the fix is external. */
@@ -109,6 +109,15 @@ export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
 /** `--source=` values: where derive, and the judge's discovery, read telemetry from. */
 export const TRACE_SOURCES = ['local', 'cloud'] as const;
 export type TraceSource = typeof TRACE_SOURCES[number];
+
+/** `value` as a `TraceSource`, else `defaultSource`; throws `CliArgError` naming `flag` on anything else. */
+export function parseTraceSource(flag: string, value: string | undefined, defaultSource: TraceSource): TraceSource {
+  const source = value ?? defaultSource;
+  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
+    throw new CliArgError(`${displayLabel(flag)} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
+  }
+  return source as TraceSource;
+}
 /** Stage flags: `--source=local|cloud`, and `--days=N` for the last N UTC days. */
 export const SOURCE_FLAG = '--source=';
 export const DAYS_FLAG = '--days=';
@@ -165,11 +174,7 @@ interface StageScope {
 /** A stage's `--source=` and `--days=` from its populate overrides, else its defaults. */
 function stageScopeArgs(args: readonly string[], scope: StageScope): string[] {
   const cli = parseCli(args, { values: [scope.sourceFlag, scope.daysFlag] });
-  const source = cli.value(scope.sourceFlag) ?? scope.defaultSource;
-  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
-    const label = scope.sourceFlag.endsWith('=') ? scope.sourceFlag.slice(0, -1) : scope.sourceFlag;
-    throw new CliArgError(`${label} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
-  }
+  const source = parseTraceSource(scope.sourceFlag, cli.value(scope.sourceFlag), scope.defaultSource);
   const days = positiveIntArg(scope.daysFlag, cli.value(scope.daysFlag)) ?? scope.defaultDays;
   return [`${SOURCE_FLAG}${source}`, `${DAYS_FLAG}${days}`];
 }

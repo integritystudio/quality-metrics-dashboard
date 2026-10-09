@@ -56,7 +56,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import { ACCOUNT_INDEX_WINDOW_DAYS, TRACE_FILE_PATTERN, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, parseTraceSource, type TraceSource } from './pipeline-stages.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
@@ -536,11 +536,7 @@ const DERIVE_CLI: CliSpec = { values: [SOURCE_ARG, DATE_ARG, DAYS_ARG, POST_DAYS
  * judge since cloud-read Phase 6. `local` is kept for one release as the rollback.
  */
 export function resolveSource(args: string[], defaultSource: TraceSource = DERIVE_DEFAULT_SOURCE): TraceSource {
-  const source = parseCli(args, DERIVE_CLI).value(SOURCE_ARG) ?? defaultSource;
-  if (!(TRACE_SOURCES as readonly string[]).includes(source)) {
-    throw new CliArgError(`${SOURCE_ARG} must be one of ${TRACE_SOURCES.join('|')}, got "${source}"`);
-  }
-  return source as TraceSource;
+  return parseTraceSource(SOURCE_ARG, parseCli(args, DERIVE_CLI).value(SOURCE_ARG), defaultSource);
 }
 
 /** The last `days` UTC dates, today included. */

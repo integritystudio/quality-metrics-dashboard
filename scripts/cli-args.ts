@@ -118,7 +118,7 @@ export function exitOnCliArgError<T>(logPrefix: string, read: () => T): T {
 }
 
 /** Strip a trailing `=` from a flag label so error messages read `--days` not `--days=`. */
-function displayLabel(label: string): string {
+export function displayLabel(label: string): string {
   return label.endsWith(INLINE_VALUE_SEPARATOR) ? label.slice(0, -INLINE_VALUE_SEPARATOR.length) : label;
 }
 
