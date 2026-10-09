@@ -122,6 +122,8 @@ export const SOURCE_FLAG = '--source=';
 export const DAYS_FLAG = '--days=';
 /** derive flag: post only records from the last N days, whatever `--days=` read. */
 export const POST_DAYS_FLAG = '--post-days=';
+/** sync-to-kv flag: KV writes one run may spend. populate forwards `--sync-budget <n>` as `--budget=<n>`. */
+export const SYNC_BUDGET_FLAG = '--budget';
 
 /**
  * How far back derive posts when nothing narrower is asked for: an unscoped

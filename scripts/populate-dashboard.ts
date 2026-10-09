@@ -24,6 +24,8 @@
  *   npm run populate -- --seed                # offline: synthetic judge scores
  *   npm run populate -- --dry-run --seed      # preview only, no writes
  *   npm run populate -- --skip-judge          # rule-based + upload + sync only
+ *   npm run populate -- --skip-derive --skip-judge --sync-budget 700
+ *                                             # refresh only: upload + sync, capped KV writes (the hourly launchd job)
  *   npm run populate -- --skip-upload         # derive + judge + sync (derive still posts its own records)
  *   npm run populate -- --skip-sync           # derive + judge + upload only
  *   npm run populate -- --limit 5 --seed      # judge at most 5 turns
@@ -50,6 +52,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import {
   DRY_RUN_FLAG,
+  SYNC_BUDGET_FLAG,
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
@@ -70,13 +73,16 @@ const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
 const STDERR_CAPTURE_MAX_BYTES = 16 * 1024 * 1024;
 const MS_PER_SECOND = 1000;
 
+const SKIP_DERIVE_FLAG = '--skip-derive';
 const SKIP_JUDGE_FLAG = '--skip-judge';
 const SKIP_UPLOAD_FLAG = '--skip-upload';
 const SKIP_SYNC_FLAG = '--skip-sync';
+/** Forwarded to sync-to-kv as `--budget=<n>`; unset leaves sync's own default. */
+const SYNC_BUDGET_ARG = '--sync-budget';
 const POPULATE_CLI: CliSpec = {
-  values: [JUDGE_LIMIT_FLAG],
+  values: [JUDGE_LIMIT_FLAG, SYNC_BUDGET_ARG],
   switches: [
-    SKIP_JUDGE_FLAG, SKIP_UPLOAD_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
+    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_UPLOAD_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
     JUDGE_SEED_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
@@ -91,6 +97,7 @@ function readArgs(argv: readonly string[]) {
   const cli = parseCli(argv, POPULATE_CLI);
   const limit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
   return {
+    skipDerive: cli.has(SKIP_DERIVE_FLAG),
     skipJudge: cli.has(SKIP_JUDGE_FLAG),
     skipUpload: cli.has(SKIP_UPLOAD_FLAG),
     skipSync: cli.has(SKIP_SYNC_FLAG),
@@ -99,12 +106,13 @@ function readArgs(argv: readonly string[]) {
     batch: cli.has(JUDGE_BATCH_FLAG),
     perCriterion: cli.has(JUDGE_PER_CRITERION_FLAG),
     limit: limit === undefined ? undefined : String(limit),
+    syncBudget: positiveIntArg(SYNC_BUDGET_ARG, cli.value(SYNC_BUDGET_ARG)),
     deriveScope: deriveScopeArgs(argv),
     judgeScope: judgeScopeArgs(argv),
   };
 }
 
-const { skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, deriveScope, judgeScope } =
+const { skipDerive, skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key: never fall back to
@@ -187,7 +195,7 @@ function abort(name: string, outcome: Extract<StepOutcome, { ok: false }>): neve
 let pipelineExitCode = 0;
 
 async function main(): Promise<void> {
-  if (!dryRun) {
+  if (!dryRun && !skipDerive) {
     // Derive reads /v1/traces and posts to ingest, so it is the first stage
     // that needs the network. A failed read or post loses
     // nothing — the next run covers the same window — so once the retries are
@@ -250,6 +258,7 @@ async function main(): Promise<void> {
   if (!skipSync) {
     const syncArgs: string[] = [];
     if (dryRun) syncArgs.push(DRY_RUN_FLAG);
+    if (syncBudget !== undefined) syncArgs.push(`${SYNC_BUDGET_FLAG}=${syncBudget}`);
     const sync = await runWithNetworkRetry('sync-to-kv', 'sync-to-kv.ts', syncArgs);
     if (!sync.ok) abort('sync-to-kv', sync);
   }

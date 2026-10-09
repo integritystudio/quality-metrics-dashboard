@@ -84,7 +84,7 @@ import {
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { group, max, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
-import { DRY_RUN_FLAG } from './pipeline-stages.js';
+import { DRY_RUN_FLAG, SYNC_BUDGET_FLAG } from './pipeline-stages.js';
 import { incrementIn, pushTo } from './collections.js';
 import { msToNs } from './hrt.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
@@ -153,7 +153,7 @@ const DEFAULT_WRITE_BUDGET = 3_000;
 const MAX_WRITES_HEADROOM = 50;
 const DEFAULT_MAX_WRITES_PER_RUN = DEFAULT_WRITE_BUDGET + MAX_WRITES_HEADROOM;
 const DAYS_FLAG = '--days';
-const BUDGET_FLAG = '--budget';
+const BUDGET_FLAG = SYNC_BUDGET_FLAG;
 const MAX_WRITES_FLAG = '--max-writes';
 const SYNC_CLI: CliSpec = { values: [DAYS_FLAG, BUDGET_FLAG, MAX_WRITES_FLAG], switches: [DRY_RUN_FLAG] };
 
