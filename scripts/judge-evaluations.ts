@@ -60,7 +60,7 @@ import {
   type BatchLLMProvider,
 } from './judge-batch-provider.js';
 import { toDateOnly } from '../src/api/api-constants.js';
-import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
+import { resolveWorkingJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, type AccountIndex } from './account-stamps.js';
 import { createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
@@ -748,9 +748,9 @@ async function main() {
 
   // Validate API key early (before expensive operations). Seed mode needs no
   // key; the LLM branch below narrows on the same value.
-  const judgeKey = seed ? undefined : resolveJudgeApiKey();
+  const judgeKey = seed ? undefined : await resolveWorkingJudgeApiKey();
   if (!seed && !judgeKey) {
-    console.error(`Error: ${JUDGE_API_KEY_ENV} or ${DEFAULT_API_KEY_ENV} required (or use --seed for offline mode)`);
+    console.error(`Error: no working ${JUDGE_API_KEY_ENV} or ${DEFAULT_API_KEY_ENV}: unset, or rejected by Anthropic (or use --seed for offline mode)`);
     process.exit(1);
   }
 
