@@ -67,8 +67,20 @@ dependency and is left in place. `stg` no longer holds it; `prd` holds `https://
     | `survival-fitness` | 17 + 0 + 0 = 17 | 17 |
     | derive (`rule`) | 15,405 + 20,854 + 501 | no file since Phase 6 |
 
-  - **Exit check 1: not run.** An end-to-end run from an empty `TELEMETRY_DIR` posts to ingest and writes KV, so it
-    is a production write, not a read.
+  - **Exit check 1: passed, 2026-10-09.** Run against `prd` from an empty `TELEMETRY_DIR` with the scheduled run's
+    flags (`--limit 100 --batch`); the judge ran under option A, since option B (Phase 5) is undecided. derive posted
+    22,314 records, the judge 704 (100 turns, $0.98 at batch rate), upload sent 0 (`skipped[too-old=704]`: the judge's
+    records carry turn time, so the 36 h guard drops them, as the roadmap says), sync wrote 310 keys, exit 0.
+    All 704 judge rows were in D1 42 min after the post (`dashboard:judge-consolidated` 344 → 902 and 2,520 → 2,666
+    per key; judged turns 433 → 533), 146 of them at 27 min: each 100-record POST is one R2 object and the flush
+    drains 100 objects per signal per 5 min, so a run's ~230 derive objects clear before the judge's 8.
+    - **Side effect.** derive wrote a fresh `.calibration-state.json` from its 7-day window, without
+      `handoff_correctness` and `task_completion` (the host's file carries them from earlier runs), and sync published
+      it as `meta:calibration`. Reverted the same hour with `npm run sync` from the host's dir. An empty-dir machine
+      publishes a narrower calibration than the host.
+    - **Found on the way.** `LLM_JUDGE_ANTHROPIC_KEY` in Doppler `prd` returns `401 invalid x-api-key`: the 2026-10-08
+      07:11 scheduled run judged fine, the 18:00 run and every one since exit 3 with `NO SCORES PRODUCED`.
+      `ANTHROPIC_API_KEY` in the same config still works, and the check's judge ran with it. Rotate the judge key.
   - **Constraint from JUDGE-BACKFILL-FLAG.** `--backfill` was kept, so `_loadExistingKeys` and the parts of
     `account-stamps.ts` it uses stay, or backfill moves to cloud dedup first.
 
