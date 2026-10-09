@@ -526,6 +526,18 @@ export function destinationFor(route: Route): string {
   return route.kind === 'keyed' ? route.ref : WEBHOOK_DESTINATION;
 }
 
+/** What this run does with a routed record: batch it for a destination, withhold it, or hold it for a key `env` lacks. */
+export type Delivery =
+  | { kind: 'send'; destination: string }
+  | { kind: 'withheld' }
+  | { kind: 'held-for-key'; ref: string };
+
+export function deliveryFor(route: Route, env: NodeJS.ProcessEnv = process.env): Delivery {
+  if (route.kind === 'withheld') return { kind: 'withheld' };
+  if (route.kind === 'keyed' && !asString(env[route.ref])) return { kind: 'held-for-key', ref: route.ref };
+  return { kind: 'send', destination: destinationFor(route) };
+}
+
 /**
  * Resolve the ingest base URL and HMAC secret from the environment. `asString`,
  * not `??`: an empty OBTOOL_INGEST_URL must fall back to the default host, and
@@ -741,18 +753,19 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           : routeRecord(mapped, accounts);
         if (key !== undefined) matchedKeys.add(key);
         routedBy[basis]++;
-        if (route.kind === 'withheld') {
+        const delivery = deliveryFor(route);
+        if (delivery.kind === 'withheld') {
           // Unmapped account: consumed unsent, never re-examined (TKR3).
           withheld++;
           delivered.push(fp);
           continue;
         }
-        if (route.kind === 'keyed' && !asString(process.env[route.ref])) {
+        if (delivery.kind === 'held-for-key') {
           // Left unrecorded so a run that has the key ships it.
-          heldForKey[route.ref] = (heldForKey[route.ref] ?? 0) + 1;
+          heldForKey[delivery.ref] = (heldForKey[delivery.ref] ?? 0) + 1;
           continue;
         }
-        const destination = destinationFor(route);
+        const { destination } = delivery;
         const batch = batches.get(destination) ?? [];
         batch.push({ payload: mapped.payload!, fp });
         batches.set(destination, batch);

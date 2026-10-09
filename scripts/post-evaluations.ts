@@ -19,7 +19,7 @@ import {
   INTER_BATCH_DELAY_MS,
   MAX_BATCH_SIZE,
   WEBHOOK_DESTINATION,
-  destinationFor,
+  deliveryFor,
   formatCounts,
   mapRecord,
   resolveSendConfig,
@@ -28,7 +28,7 @@ import {
   type EvaluationPayload,
   type RouteBasis,
 } from './upload-evaluations.js';
-import { asString, type AccountIndex } from './account-stamps.js';
+import type { AccountIndex } from './account-stamps.js';
 import { sleep } from './sleep.js';
 
 export interface PostOptions {
@@ -86,18 +86,18 @@ export async function postEvaluationRecords(
     }
     const { route, basis } = routeRecord(mapped, opts.accounts);
     summary.routedBy[basis]++;
-    if (route.kind === 'withheld') {
+    const delivery = deliveryFor(route);
+    if (delivery.kind === 'withheld') {
       summary.withheld++;
       continue;
     }
-    if (route.kind === 'keyed' && !asString(process.env[route.ref])) {
-      summary.heldForKey[route.ref] = (summary.heldForKey[route.ref] ?? 0) + 1;
+    if (delivery.kind === 'held-for-key') {
+      summary.heldForKey[delivery.ref] = (summary.heldForKey[delivery.ref] ?? 0) + 1;
       continue;
     }
-    const destination = destinationFor(route);
-    const batch = batches.get(destination) ?? [];
+    const batch = batches.get(delivery.destination) ?? [];
     batch.push(mapped.payload!);
-    batches.set(destination, batch);
+    batches.set(delivery.destination, batch);
   }
 
   const { baseUrl, secret } = resolveSendConfig();
