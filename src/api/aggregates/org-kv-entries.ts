@@ -15,7 +15,6 @@ import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js'
 import { computeRollingDegradationSignals, type DegradationState } from '../parent/qfe-backtest.js';
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { bigintReplacer } from '../parent/file-utils.js';
 import { BYTES, PERCENT_MULTIPLIER, SECONDS, TIME_MS } from '../parent/units.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
@@ -28,6 +27,7 @@ import {
   CANARY_EVALUATOR_TYPE,
   LATENCY_P95,
   RATE_DISPLAY_PRECISION,
+  bigintReplacer,
   msToNs,
   timestampToMs,
 } from '../api-constants.js';
@@ -49,6 +49,8 @@ import { projectEvaluationRow } from './evaluation-rows.js';
 import { computeAllDashboardEntries } from './dashboard-summary.js';
 import { computeMetricDetailView, metricDetailKey, previousWindow } from './metric-detail.js';
 import { computeTrend, trendKey, type ScoredBucket } from './trend.js';
+
+const LOG_PREFIX = '[org-kv-entries]';
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
@@ -112,7 +114,7 @@ export type KVEntry = { key: string; value: string; expirationTtl?: number; hash
  */
 export function toKVValue(value: unknown): string {
   const json: string | undefined = JSON.stringify(value, bigintReplacer);
-  if (typeof json !== 'string') throw new TypeError(`[sync-to-kv] KV value has no JSON form (${typeof value})`);
+  if (typeof json !== 'string') throw new TypeError(`${LOG_PREFIX} KV value has no JSON form (${typeof value})`);
   return json;
 }
 
@@ -297,7 +299,7 @@ async function computeCodeQuality(backend: OrgReadBackend, now: Date) {
     }),
   ]);
   if (checkpointSpans.length === CODE_QUALITY_CHECKPOINT_LIMIT) {
-    console.warn(`[sync-to-kv] Code-quality checkpoint query hit ${CODE_QUALITY_CHECKPOINT_LIMIT} — oldest checkpoints dropped`);
+    console.warn(`${LOG_PREFIX} Code-quality checkpoint query hit ${CODE_QUALITY_CHECKPOINT_LIMIT} — oldest checkpoints dropped`);
   }
   return summarizeCodeQuality(checkpointSpans, invocationSpans);
 }
@@ -338,7 +340,7 @@ async function readOrgEvaluations(backend: OrgReadBackend, nowMs: number, maxDay
   const evals = truncated ? fetched.slice(0, QUERY_LIMIT) : fetched;
   if (truncated) {
     console.warn(
-      `[sync-to-kv] Evaluation query returned ${QUERY_LIMIT} results — oldest evaluations dropped; all sessions marked partial`,
+      `${LOG_PREFIX} Evaluation query returned ${QUERY_LIMIT} results — oldest evaluations dropped; all sessions marked partial`,
     );
   }
   const inWindow = (startNs: bigint, endNs: bigint): EvaluationResult[] =>
@@ -372,7 +374,7 @@ function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates:
     const coverageSizeBytes = new TextEncoder().encode(coverageValue).length;
     if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
       console.warn(
-        `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
+        `${LOG_PREFIX} ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
         ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
         ' — reduce MAX_COVERAGE_COLUMNS',
       );
@@ -733,7 +735,7 @@ export async function computeOrgKvEntries(backend: OrgReadBackend, now: Date, op
   });
   const spansHitCap = allSpans.length >= SPAN_QUERY_LIMIT;
   if (spansHitCap) {
-    console.warn(`[sync-to-kv] Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
+    console.warn(`${LOG_PREFIX} Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
   }
   const spansByTrace: Map<string, TraceSpan[]> = group(allSpans.filter(hasTraceId), span => span.traceId);
   const traceEntries = buildTraceEntries(traceIds, evalsByTrace, spansByTrace);

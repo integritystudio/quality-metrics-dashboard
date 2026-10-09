@@ -50,6 +50,11 @@ export type SafeLogEntry = Partial<Pick<LogRecord, LogSummaryField>>;
 /** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
 export const NANOS_TO_MS = 1_000_000;
 
+/** `JSON.stringify` replacer writing a bigint (span and evaluation epoch-ns timestamps) as its decimal string. */
+export function bigintReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? value.toString() : value;
+}
+
 /** Epoch milliseconds to the epoch-nanosecond bigint the cloud backend queries take. */
 export function msToNs(ms: number): bigint {
   return BigInt(ms) * BigInt(NANOS_TO_MS);
