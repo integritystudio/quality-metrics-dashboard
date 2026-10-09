@@ -33,7 +33,7 @@ No open items.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
-| PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | Source: session 2026-10-06 scripts audit |
+| PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | ✅ Done 2026-10-09, ahead of the rollback-release gate at the owner's request; Source: session 2026-10-06 scripts audit |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
 `VITE_API_URL`. It was removed from the local `.env`, but left in Doppler `integrity-studio`.
@@ -48,7 +48,7 @@ production build still points at its API.
 *Won't Do, 2026-10-05.* tcad-scraper's `deploy.yml` reads the `prd` value, so the key is that repo's
 dependency and is left in place. `stg` no longer holds it; `prd` holds `https://api.alephatx.info/api`.
 
-**PHASE6-LOCAL-RETIREMENT.** The cloud-read roadmap (`../../docs/roadmap/dashboard-cloud-read-migration.md:166`) keeps
+**PHASE6-LOCAL-RETIREMENT.** *Done 2026-10-09.* Removed: `--source`, `--judge-source` and `--derive-source` (all now fail), derive's `loadLocalSpans`, the judge's local discovery and `_loadExistingKeys`, `derive-parity.ts`, `judge-parity.ts`, their tests and the two `:parity` npm scripts. Kept: `trace-coverage.ts` (decided: it measures shipper loss, not the rollback), `account-stamps.ts` (upload's account join and `anchorTurns` still use it) and `_discoverTranscripts` (judge-agreement and judge-quality-eval read it). The gate notes below are the record of what was checked. Original scope: The cloud-read roadmap (`../../docs/roadmap/dashboard-cloud-read-migration.md:166`) keeps
 `--source=local` for one release after the 2026-10-04 default flip, then deletes it. That release removes ~900 lines:
 `derive-parity.ts`, `judge-parity.ts`, `trace-coverage.ts` (or keep it as a shipper-health check — decide),
 `account-stamps.ts` (apart from what judge option A needs), derive's `loadLocalSpans`, and the judge's local discovery and
