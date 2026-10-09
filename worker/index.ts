@@ -796,7 +796,7 @@ app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(Per
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `${TREND_KEY_PREFIX}${name}:${period}`);
-  // `emptyTrendView` in src/api/aggregates/trend.ts, restated: the page reads `trendData`.
+  // The empty `TrendView` of src/api/aggregates/trend.ts, restated: the page reads `trendData`.
   if (!data) {
     return c.json({ metric: name, period, bucketCount: 0, totalEvaluations: 0, overallPercentiles: null, trendData: [], narrowed: false });
   }
