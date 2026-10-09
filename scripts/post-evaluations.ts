@@ -30,7 +30,7 @@ import {
 } from './upload-evaluations.js';
 import type { AccountIndex } from './account-stamps.js';
 import { sleep } from './sleep.js';
-import { pushTo } from './collections.js';
+import { increment, pushTo } from './collections.js';
 
 export interface PostOptions {
   dryRun: boolean;
@@ -82,7 +82,7 @@ export async function postEvaluationRecords(
   for (const record of records) {
     const mapped = mapRecord(record, nowMs, Number.POSITIVE_INFINITY);
     if (mapped.skip) {
-      summary.skipped[mapped.skip] = (summary.skipped[mapped.skip] ?? 0) + 1;
+      increment(summary.skipped, mapped.skip);
       continue;
     }
     const { route, basis } = routeRecord(mapped, opts.accounts);
@@ -93,7 +93,7 @@ export async function postEvaluationRecords(
       continue;
     }
     if (delivery.kind === 'held-for-key') {
-      summary.heldForKey[delivery.ref] = (summary.heldForKey[delivery.ref] ?? 0) + 1;
+      increment(summary.heldForKey, delivery.ref);
       continue;
     }
     pushTo(batches, delivery.destination, mapped.payload!);
@@ -117,7 +117,7 @@ export async function postEvaluationRecords(
         await sleep(INTER_BATCH_DELAY_MS);
       }
       summary.sent += chunk.length;
-      summary.byDestination[destination] = (summary.byDestination[destination] ?? 0) + chunk.length;
+      increment(summary.byDestination, destination, chunk.length);
     }
   }
   return summary;

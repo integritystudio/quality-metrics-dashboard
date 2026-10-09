@@ -85,7 +85,7 @@ import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './e
 import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
-import { pushTo } from './collections.js';
+import { incrementIn, pushTo } from './collections.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { bigintReplacer } from '../../src/lib/core/file-utils.js';
 import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../../src/lib/quality/bucket-utils.js';
@@ -1497,7 +1497,7 @@ async function main(): Promise<void> {
     const scope = orgMatch
       ? orgMatch[0].slice(0, -1)
       : (key === SYSTEM_LAST_SYNC_KEY ? WRITE_SCOPE.SYSTEM : WRITE_SCOPE.LEGACY);
-    writesByScope.set(scope, (writesByScope.get(scope) ?? 0) + 1);
+    incrementIn(writesByScope, scope);
   }
   const writeCounter = [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
   if (writtenKeys.size > MAX_WRITES_PER_RUN) {

@@ -10,6 +10,7 @@ import { EVAL_SCORE_PRECISION } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { judgePricing, tokenUsageCostUsd, type JudgeTokenUsage } from './judge-usage.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
+import { increment } from './collections.js';
 
 /** Track evaluation failures for summary reporting */
 export const evalFailures: Record<string, number> = {};
@@ -73,7 +74,7 @@ export function resetFailureTracking(): void {
 /** Count a failed criterion; with `sessionPreview`, also log the per-criterion warning line. */
 export function trackFailure(metric: string, err: unknown, sessionPreview?: string): void {
   const message = describeUnknown(err);
-  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
+  increment(evalFailures, metric);
   failureClasses[classifyJudgeFailure(message)] += 1;
   if (sessionPreview !== undefined) console.warn(`  [${metric}] Error for ${sessionPreview}: ${message}`);
 }

@@ -43,6 +43,7 @@ import {
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
 import { CliArgError, positiveIntArg, runIfMain } from './cli-args.js';
+import { increment } from './collections.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -310,7 +311,7 @@ export function countMissing(outcomes: readonly TurnOutcome[], side: Configurati
   for (const outcome of outcomes) {
     for (const name of outcome.expected) {
       if (outcome[side][name] !== undefined) continue;
-      missing[name] = (missing[name] ?? 0) + 1;
+      increment(missing, name);
     }
   }
   return missing;

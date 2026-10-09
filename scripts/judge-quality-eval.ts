@@ -62,6 +62,7 @@ import {
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { runIfMain } from './cli-args.js';
+import { incrementIn } from './collections.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -281,7 +282,7 @@ export function compareToReference<K extends string>(
       const reference = turn.reference[name];
       if (reference === undefined) continue;
       const diff = toFivePointScale(value) - toFivePointScale(reference);
-      signedSums.set(name, (signedSums.get(name) ?? 0) + diff);
+      incrementIn(signedSums, name, diff);
       overallSigned += diff;
     }
   }

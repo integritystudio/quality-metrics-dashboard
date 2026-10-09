@@ -63,6 +63,7 @@ import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeA
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, type AccountIndex } from './account-stamps.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
+import { incrementIn } from './collections.js';
 import { discoverFromCloud } from './judge-cloud-source.js';
 import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched } from './judge-consolidated.js';
 import { readScope, resolveDateScope, resolveSource } from './derive-evaluations.js';
@@ -615,7 +616,7 @@ async function runBackfill(): Promise<void> {
       writeEvaluations(seedResult.evals);
       const byCat = new Map<string, number>();
       for (const ev of seedResult.evals) {
-        byCat.set(ev.evaluationName, (byCat.get(ev.evaluationName) ?? 0) + 1);
+        incrementIn(byCat, ev.evaluationName);
       }
       console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
       for (const [name, count] of byCat) {
@@ -638,7 +639,7 @@ function printDryRun(allTurns: Turn[], batch: boolean, consolidated: boolean): v
   const bySession = new Map<string, number>();
   for (const t of allTurns) {
     const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
-    bySession.set(sid, (bySession.get(sid) ?? 0) + 1);
+    incrementIn(bySession, sid);
   }
   const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, DRY_RUN_TOP_SESSIONS);
   console.log('[dry-run] top sessions by turn count:');

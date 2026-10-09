@@ -87,7 +87,7 @@ import {
 import { evaluationCohortSchema } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
-import { pushTo } from './collections.js';
+import { increment, pushTo } from './collections.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
@@ -710,7 +710,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           }
         }
         sent += batch.length;
-        sentByDestination[destination] = (sentByDestination[destination] ?? 0) + batch.length;
+        increment(sentByDestination, destination, batch.length);
         // Record only what the worker accepted. A batch that never got a 2xx is
         // left unrecorded so the next run retries it — the one direction that
         // errs toward a duplicate rather than toward silent data loss.
@@ -742,7 +742,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           continue;
         }
         if (mapped.skip) {
-          skips[mapped.skip] = (skips[mapped.skip] ?? 0) + 1;
+          increment(skips, mapped.skip);
           // Remember the decision so a permanently-unshippable record is not
           // re-examined, and cannot be shipped later by a widened --max-age-hours.
           if (mapped.skip !== 'too-old') delivered.push(fp);
@@ -763,7 +763,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         }
         if (delivery.kind === 'held-for-key') {
           // Left unrecorded so a run that has the key ships it.
-          heldForKey[delivery.ref] = (heldForKey[delivery.ref] ?? 0) + 1;
+          increment(heldForKey, delivery.ref);
           continue;
         }
         const { destination } = delivery;

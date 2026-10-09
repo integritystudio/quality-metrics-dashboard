@@ -26,7 +26,7 @@ import { join } from 'path';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { asHrTime, hrtToMs } from './hrt.js';
-import { pushTo } from './collections.js';
+import { incrementIn, pushTo } from './collections.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
@@ -142,7 +142,7 @@ export function compareAccount(
       entry.matched++;
     } else {
       entry.missing++;
-      missingBySession.set(span.sessionId, (missingBySession.get(span.sessionId) ?? 0) + 1);
+      incrementIn(missingBySession, span.sessionId);
     }
   }
   for (const [key, startMs] of cloud) {

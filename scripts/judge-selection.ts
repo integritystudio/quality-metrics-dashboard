@@ -25,6 +25,7 @@
 import { asString } from './account-stamps.js';
 import { selectCriteria } from './judge-consolidated.js';
 import type { Turn } from './judge-turns.js';
+import { increment } from './collections.js';
 
 /** Signs the webhook, which is where an unstamped turn's records go. */
 export const WEBHOOK_SECRET_ENV = 'INJECT_HMAC_SECRET';
@@ -97,7 +98,7 @@ export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, o
       selection.withheld++;
     } else if (skip === 'held-for-key') {
       const secret = deliverySecret(turn)!;
-      selection.heldForKey[secret] = (selection.heldForKey[secret] ?? 0) + 1;
+      increment(selection.heldForKey, secret);
     } else {
       selection.selected.push(turn);
     }
