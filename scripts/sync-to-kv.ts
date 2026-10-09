@@ -85,6 +85,7 @@ import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
+import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
@@ -640,7 +641,7 @@ export function prioritizeTraces(
 }
 
 function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
-  return (span.attributes?.['session.id'] ?? span.attributes?.['session_id']) as string | undefined;
+  return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.['session_id']) as string | undefined;
 }
 
 function isValidScore(v: number | null | undefined): v is number {

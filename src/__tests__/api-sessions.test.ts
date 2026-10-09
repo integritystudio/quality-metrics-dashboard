@@ -16,6 +16,7 @@ import type { JsonSafe } from '../api/api-constants.js';
 import type { SessionDetailResponse } from '../hooks/useSessionDetail.js';
 import { makeEvaluation } from './support/fixtures.js';
 import { ErrorMessage } from '../lib/constants.js';
+import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
 type SessionDetailBody = JsonSafe<SessionDetailResponse>;
@@ -41,7 +42,7 @@ function makeSessionSpanWire(name = 'hook:builtin-post-tool', attrs: Record<stri
     startTimeUnixNano: 1737000000_000_000_000n,
     endTimeUnixNano: 1737000001_000_000_000n,
     attributes: {
-      'session.id': 'sess-abc',
+      [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       'builtin.tool': 'Read',
       ...attrs,
     },
@@ -99,7 +100,7 @@ describe('GET /sessions/:sessionId', () => {
       body: 'secret content',
       traceId: 'trace-1',
       // session.id must be set so the client-side sessionId filter in queryLogs passes.
-      attributes: { 'user.token': 'abc123', 'session.id': 'sess-abc' },
+      attributes: { 'user.token': 'abc123', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     })]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
@@ -135,8 +136,8 @@ describe('GET /sessions/:sessionId', () => {
   it('builds tool usage from post-rename canonical keys and legacy keys alike', async () => {
     const toolAttrs = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
     fixture.setTraces([
-      makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, 'gen_ai.tool.name': 'Bash' }),
-      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, 'gen_ai.tool.name': 'Bash' }), span_id: 'span-002', trace_id: 'trace-002' },
+      makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' }),
+      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' }), span_id: 'span-002', trace_id: 'trace-002' },
       { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Bash' }), span_id: 'span-003', trace_id: 'trace-003' },
     ]);
 
@@ -150,7 +151,7 @@ describe('GET /sessions/:sessionId', () => {
     fixture.setTraces([
       makeSessionSpanWire('hook:builtin-post-tool', {
         'builtin.tool': undefined,
-        'gen_ai.tool.name': 'Edit',
+        [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit',
         'integritystudio.tool.has_error': true,
         'integritystudio.tool.error_type': 'file_not_read',
         'file.path': '/repo/src/a.ts',
@@ -172,7 +173,7 @@ describe('GET /sessions/:sessionId', () => {
   it('counts a span with numeric status_code 2 as an error', async () => {
     const span = makeSessionSpanWire('hook:builtin-post-tool', {
       'builtin.tool': undefined,
-      'gen_ai.tool.name': 'Bash',
+      [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash',
     });
     fixture.setTraces([{ ...span, status_code: 2 }]);
 
@@ -189,7 +190,7 @@ describe('GET /sessions/:sessionId', () => {
     const finalize = {
       'builtin.tool': undefined,
       'integritystudio.hook.name': 'agent.operation.finalize',
-      'gen_ai.agent.name': 'Explore',
+      [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'Explore',
       'integritystudio.agent.output_size': 300,
     };
     fixture.setTraces([
@@ -233,7 +234,7 @@ describe('GET /sessions/:sessionId', () => {
 
   it('spans the timespan across log timestamps', async () => {
     fixture.setLogs(['2026-01-01T02:00:00.000Z', '2026-01-01T00:00:00.000Z'].map(timestamp =>
-      logToWire({ timestamp, attributes: { 'session.id': 'sess-abc' } })));
+      logToWire({ timestamp, attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc' } })));
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
@@ -244,7 +245,7 @@ describe('GET /sessions/:sessionId', () => {
   it('computes dataSources total from all sources', async () => {
     fixture.setTraces([makeSessionSpanWire()]);
     // session.id must be in attributes so the client-side sessionId filter passes.
-    fixture.setLogs([logToWire({ timestamp: '2026-01-01T00:00:00.000Z', attributes: { 'session.id': 'sess-abc' } })]);
+    fixture.setLogs([logToWire({ timestamp: '2026-01-01T00:00:00.000Z', attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc' } })]);
     fixture.setEvals([evalToWire(makeEvaluation({ sessionId: 'sess-abc' }))]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');

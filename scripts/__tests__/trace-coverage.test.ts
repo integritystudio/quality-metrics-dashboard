@@ -7,6 +7,7 @@ import {
   spanKey,
   type LocalSpan,
 } from '../trace-coverage.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 const DAY_1_NOON_MS = Date.parse('2026-09-26T12:00:00.000Z');
 const DAY_2_NOON_MS = Date.parse('2026-09-27T12:00:00.000Z');
@@ -22,7 +23,7 @@ function jsonLine(fields: Record<string, unknown>): string {
     traceId: 't1',
     spanId: 'a1',
     startTime: [DAY_1_NOON_MS / 1000, 0],
-    attributes: { 'session.id': 's1' },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 's1' },
     identityKeyRef: REF,
     ...fields,
   });

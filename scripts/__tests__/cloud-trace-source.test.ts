@@ -6,6 +6,7 @@ import {
   mergeAccountSpans,
   toLocalTraceSpan,
 } from '../cloud-trace-source.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 const TRACE_ID = '0123456789abcdef0123456789abcdef';
 const START_NS = 1_790_553_614_235_000_000n; // 2026-09-28T00:00:14.235Z
@@ -22,7 +23,7 @@ function cloudSpan(spanId: string, overrides: Partial<TraceSpan> = {}): TraceSpa
     endTimeUnixNano: END_NS,
     status: { code: 'OK' },
     statusCode: 'OK',
-    attributes: { 'session.id': 's1' },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 's1' },
     ...overrides,
   };
 }
@@ -37,7 +38,7 @@ describe('toLocalTraceSpan', () => {
       endTime: [1_790_553_614, 236_463_666],
       duration: [0, 1_463_666],
       status: { code: 1 },
-      attributes: { 'session.id': 's1' },
+      attributes: { [SESSION_ATTRIBUTES.ID]: 's1' },
     });
   });
 

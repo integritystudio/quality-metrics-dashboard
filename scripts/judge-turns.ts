@@ -14,6 +14,7 @@ import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
 import type { EvalRecord } from './eval-record.js';
 import { LOGS_FILE_PREFIX, TRACES_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
+import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 export const HOME = process.env.HOME ?? '';
 
@@ -231,7 +232,8 @@ export async function discoverSessionsFromTraces(): Promise<Turn[]> {
     for await (const span of streamJsonlWithValidation(filepath, localTraceSpanSchema)) {
       const attrs = span.attributes;
 
-      const sessionId = typeof attrs['session.id'] === 'string' ? attrs['session.id'] : '';
+      const recordedSessionId = attrs[SESSION_ATTRIBUTES.ID];
+      const sessionId = typeof recordedSessionId === 'string' ? recordedSessionId : '';
       if (!sessionId) continue;
 
       const startTime = Array.isArray(span.startTime) ? span.startTime[0] : 0;

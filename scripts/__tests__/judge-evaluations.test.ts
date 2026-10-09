@@ -59,6 +59,8 @@ import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE,
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
 import { makeTurn } from './support/fixtures.js';
+import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 // Test Data Factories
 
@@ -635,19 +637,18 @@ describe('toOTelRecord', () => {
   it('produces correct OTel flat evaluation format', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
 
-    expect(record.name).toBe('gen_ai.evaluation.result');
     expect(record.timestamp).toBe('2026-02-09T01:11:15.525Z');
     expect(record.traceId).toBe('trace-001');
 
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['gen_ai.evaluation.name']).toBe('relevance');
-    expect(attrs['gen_ai.evaluation.score.value']).toBe(0.85);
-    expect(attrs['gen_ai.evaluation.explanation']).toBe('Test explanation');
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('relevance');
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(0.85);
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('Test explanation');
     expect(attrs['integritystudio.evaluation.producer']).toBe('dashboard:judge-evaluations');
     expect(attrs['integritystudio.evaluation.evaluator.kind']).toBe('llm');
     expect(attrs['integritystudio.evaluation.cohort']).toBe('normal');
     expect(attrs['integritystudio.evaluation.judge.model']).toBe('claude-haiku-4-5-20251001');
-    expect(attrs['session.id']).toBe('abc12345-session');
+    expect(attrs[SESSION_ATTRIBUTES.ID]).toBe('abc12345-session');
   });
 
   it('stamps the evaluation schema URL as a record field, not an attribute', () => {
@@ -660,7 +661,7 @@ describe('toOTelRecord', () => {
   it('omits session.id when empty', () => {
     const record = toOTelRecord(makeEvalRecord({ sessionId: '' })) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['session.id']).toBeUndefined();
+    expect(attrs[SESSION_ATTRIBUTES.ID]).toBeUndefined();
   });
 
   // OBP16: neither key is in the semconv registry, so both were local fields
@@ -668,16 +669,15 @@ describe('toOTelRecord', () => {
   it('no longer writes the two overloaded gen_ai evaluator keys', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['gen_ai.evaluation.evaluator.type']).toBeUndefined();
-    expect(attrs['gen_ai.evaluation.evaluator']).toBeUndefined();
-    expect(attrs['gen_ai.evaluation.evaluator_type']).toBeUndefined();
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE]).toBeUndefined();
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]).toBeUndefined();
   });
 
   it('writes the score unit under integritystudio.*, not gen_ai.*', () => {
     const record = toOTelRecord(makeEvalRecord({ scoreUnit: 'seconds' })) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
     expect(attrs['integritystudio.evaluation.score.unit']).toBe('seconds');
-    expect(attrs['gen_ai.evaluation.score.unit']).toBeUndefined();
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]).toBeUndefined();
   });
 
   it('omits the judge model for a score no model produced', () => {

@@ -8,7 +8,9 @@ vi.mock('../../../src/lib/core/http1-fetch.js', async (importOriginal) => ({
 }));
 
 import { emptyAccountIndex, postEvaluationRecords } from '../post-evaluations.js';
+import { EVALUATION_RESULT_EVENT } from '../eval-record.js';
 import { evaluationId, MAX_BATCH_SIZE } from '../upload-evaluations.js';
+import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 
 const NOW = Date.parse('2026-09-28T12:00:00.000Z');
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
@@ -18,11 +20,11 @@ const HMAC_SECRET = 'test-hmac-secret';
 function record(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     timestamp: '2026-09-28T11:00:00.000Z',
-    name: 'gen_ai.evaluation.result',
+    name: EVALUATION_RESULT_EVENT,
     traceId: 'trace-1',
     attributes: {
-      'gen_ai.evaluation.name': 'tool_correctness',
-      'gen_ai.evaluation.score.value': 1,
+      [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'tool_correctness',
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1,
       'integritystudio.evaluation.producer': 'rule',
     },
     ...extra,

@@ -27,6 +27,7 @@
 
 import { readdirSync } from 'fs';
 import { mean, rollup } from 'd3-array';
+import pLimit from 'p-limit';
 import { join } from 'path';
 import {
   computeCalibrationDistributions,
@@ -35,7 +36,7 @@ import {
   shouldRecalibrate,
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
-import { localTraceSpanSchema, type LocalTraceSpan, type EvaluatorType } from '../../src/lib/validation/dashboard-schemas.js';
+import { localTraceSpanSchema, type LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import { readJsonlWithValidationSync } from '../src/lib/dashboard-file-utils.js';
 import {
@@ -61,13 +62,9 @@ import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from '
 import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
 import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';
 import { resolveTranscriptPath, scanTranscriptDirs } from './judge-turns.js';
+import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
-// EvalRecord and toOTelRecord live in eval-record.ts. Both scripts write
-// the same wire format, and keeping two copies is how the empty-traceId bug
-// ended up needing the same fix twice. Re-exported for existing importers.
-export type { EvalRecord } from './eval-record.js';
-
-/** Span attributes are `unknown`-valued; render primitives, never objects. */
 /**
  * Each span's account stamp by span id, set by `main` from the raw trace lines
  * (TKR8 Phase 1). The raw lines, because `localTraceSpanSchema` strips unknown
@@ -85,17 +82,15 @@ function spanAccountField(span: LocalTraceSpan): Pick<EvalRecord, 'identityKeyRe
   return spanAccounts.has(span.spanId) ? { identityKeyRef: spanAccounts.get(span.spanId)! } : {};
 }
 
-const RULE_EVALUATOR: EvaluatorType = 'rule';
-
 /** What each rule metric decides; every other record field comes from `span`. */
-type RuleScore = Pick<EvalRecord, 'evaluationName' | 'scoreValue' | 'explanation' | 'scoreUnit'>;
+type RuleScore = Pick<EvalRecord, 'evaluationName' | 'scoreValue' | 'explanation' | 'scoreUnit' | 'scoreLabel'>;
 
 /** A rule record attached to `span`: its time, ids and account stamp. */
 function ruleRecord(span: LocalTraceSpan, sessionId: string, score: RuleScore): EvalRecord {
   return {
     timestamp: hrtToISO(span.startTime),
     ...score,
-    evaluator: RULE_EVALUATOR,
+    evaluator: RULE_EVALUATOR_TYPE,
     evaluatorType: RULE_EVALUATOR_TYPE,
     evaluatorKind: RULE_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
@@ -136,25 +131,33 @@ const MCP_ATTR = {
   SERVER: ['integritystudio.mcp.server', 'mcp.server'],
 } as const satisfies Record<string, readonly [string, string]>;
 
+/** Agent hook attribute keys, canonical; `attrsOf` maps the pre-rename `agent.*` spellings onto them. */
+const AGENT_ATTR = {
+  TYPE: 'integritystudio.agent.type',
+  HAS_ERROR: 'integritystudio.agent.has_error',
+  TRANSCRIPT_PATH: 'integritystudio.agent.transcript_path',
+} as const;
+
 /** A renamed attribute's value: the canonical key first, then the legacy one. */
 function renamedValue(attrs: Record<string, unknown>, [canonical, legacy]: readonly [string, string]): unknown {
   return attrs[canonical] ?? attrs[legacy];
 }
 
+/** Span attributes are `unknown`-valued; render primitives, never objects. */
 function attrString(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return fallback;
 }
 
+/** Earliest start a real hook span can have: 2001-09-09, the first 10-digit Unix second. */
+const MIN_PLAUSIBLE_EPOCH_SECONDS = 1_000_000_000;
+
 // Returns NaN rather than throwing on a malformed tuple, so the single caller's
 // Number.isFinite guard (OBP15) is the one place a bad duration is handled. Spans read
 // through localTraceSpanSchema cannot arrive malformed — zod rejects both NaN and a
 // missing tuple — but deriveEvaluationLatency is exported and directly callable, and its
 // contract is to return null on malformed input, never to throw.
-/** Earliest start a real hook span can have: 2001-09-09, the first 10-digit Unix second. */
-const MIN_PLAUSIBLE_EPOCH_SECONDS = 1_000_000_000;
-
 function hrtToSeconds(hrt: [number, number]): number {
   if (!Array.isArray(hrt)) return NaN;
   return hrt[0] + hrt[1] / NANOSECONDS_PER_SECOND;
@@ -167,6 +170,9 @@ function hrtToISO(hrt: [number, number]): string {
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
 const MAX_RAW_SCORES_PER_METRIC = 500;
 
+/** Transcripts parsed at once by `deriveAgentHeuristics`. */
+const TRANSCRIPT_READ_CONCURRENCY = 8;
+
 /**
  * The Agent tool's pre- and post-tool hook spans. Derive matched their old
  * names (`hook:agent-pre-tool` / `hook:agent-post-tool`) for six weeks after
@@ -177,6 +183,7 @@ const AGENT_PREPARE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_PREPARE}`;
 const AGENT_FINALIZE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_FINALIZE}`;
 const BUILTIN_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.BUILTIN_POST_TOOL}`;
 const MCP_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.MCP_POST_TOOL}`;
+const SUBAGENT_STOP_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.SUBAGENT_STOP}`;
 /** `tsc-check` has no `HOOK_NAME` entry. */
 const TSC_CHECK_SPAN = `${HOOK_SPAN_PREFIX}tsc-check`;
 
@@ -205,7 +212,7 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   const isMcp = !isBuiltin;
 
   const success = toolSuccessOf(span, attrs);
-  const tool = attrString(isBuiltin ? attrs['gen_ai.tool.name'] : renamedValue(attrs, MCP_ATTR.TOOL), 'unknown');
+  const tool = attrString(isBuiltin ? attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME] : renamedValue(attrs, MCP_ATTR.TOOL), 'unknown');
   const errorType = attrString(isBuiltin ? attrs['integritystudio.tool.error_type'] : renamedValue(attrs, MCP_ATTR.ERROR_TYPE));
   const server = isMcp ? attrString(renamedValue(attrs, MCP_ATTR.SERVER)) : '';
 
@@ -219,7 +226,7 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
     explanation = `Tool ${toolLabel} failed${errorType ? `: ${errorType}` : ''}`;
   }
 
-  return ruleRecord(span, attrString(attrs['session.id']), {
+  return ruleRecord(span, attrString(attrs[SESSION_ATTRIBUTES.ID]), {
     evaluationName: TOOL_CORRECTNESS_CRITERIA.name,
     scoreValue: score,
     explanation,
@@ -240,12 +247,12 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   const attrs = attrsOf(span);
 
   let hookType: string;
-  if (span.name === BUILTIN_POST_TOOL_SPAN) hookType = `builtin/${attrString(attrs['gen_ai.tool.name'], 'unknown')}`;
+  if (span.name === BUILTIN_POST_TOOL_SPAN) hookType = `builtin/${attrString(attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME], 'unknown')}`;
   else if (span.name === MCP_POST_TOOL_SPAN) hookType = `mcp/${attrString(renamedValue(attrs, MCP_ATTR.TOOL), 'unknown')}`;
-  else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs['integritystudio.agent.type'], 'unknown')}`;
+  else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs[AGENT_ATTR.TYPE], 'unknown')}`;
   else hookType = span.name.replace(HOOK_SPAN_PREFIX, '');
 
-  return ruleRecord(span, attrString(attrs['session.id']), {
+  return ruleRecord(span, attrString(attrs[SESSION_ATTRIBUTES.ID]), {
     evaluationName: 'evaluation_latency',
     scoreValue: durationSec,
     scoreUnit: 'seconds',
@@ -265,9 +272,12 @@ interface SessionTaskData {
   lastSpan: LocalTraceSpan | null;
 }
 
-const sessionTasks = new Map<string, SessionTaskData>();
+export const sessionTasks = new Map<string, SessionTaskData>();
 
 const TASK_COMPLETION_EVAL_NAME = 'task_completion';
+
+/** The old fallback assumes each task gets a status update and a completion update. */
+const EXPECTED_UPDATES_PER_TASK = 2;
 
 export const STATUS_SCORES: { pending: number; in_progress: number; completed: number } = {
   pending: 0.0,
@@ -275,15 +285,13 @@ export const STATUS_SCORES: { pending: number; in_progress: number; completed: n
   completed: 1.0,
 };
 
-export { sessionTasks };
-
 export function trackTaskActivity(span: LocalTraceSpan): void {
   if (span.name !== BUILTIN_POST_TOOL_SPAN) return;
   const attrs = attrsOf(span);
-  const tool = attrs['gen_ai.tool.name'];
+  const tool = attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
 
-  const sessionId = attrString(attrs['session.id'], 'unknown');
+  const sessionId = attrString(attrs[SESSION_ATTRIBUTES.ID], 'unknown');
   let entry = sessionTasks.get(sessionId);
   if (!entry) sessionTasks.set(sessionId, entry = { tasks: new Map(), creates: 0, updates: 0, lastSpan: null });
   entry.lastSpan = span;
@@ -340,8 +348,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
       }));
     } else {
       // Fallback: old trace data without a task status attribute
-      if (data.creates === 0) continue;
-      const completionRatio = Math.min(data.updates / (data.creates * 2), 1.0);
+      const completionRatio = Math.min(data.updates / (data.creates * EXPECTED_UPDATES_PER_TASK), 1.0);
 
       evals.push(ruleRecord(lastSpan, sessionId, {
         evaluationName: TASK_COMPLETION_EVAL_NAME,
@@ -356,8 +363,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
 
 interface AgentSessionData {
   pre: number;
-  post: number;
-  spans: LocalTraceSpan[];
+  lastSpan: LocalTraceSpan;
   /** Ordered agent names per post-tool span, used for handoff detection */
   agentSequence: { agentName: string; score: number; span: LocalTraceSpan }[];
 }
@@ -368,21 +374,20 @@ function trackAgentActivity(span: LocalTraceSpan): void {
   const isPost = span.name === AGENT_FINALIZE_SPAN;
   if (!isPre && !isPost) return;
 
-  const sessionId = attrString(span.attributes['session.id'], 'unknown');
+  const sessionId = attrString(span.attributes[SESSION_ATTRIBUTES.ID], 'unknown');
   let entry = sessionAgents.get(sessionId);
-  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, post: 0, spans: [], agentSequence: [] });
+  if (!entry) sessionAgents.set(sessionId, entry = { pre: 0, lastSpan: span, agentSequence: [] });
+  entry.lastSpan = span;
   if (isPre) entry.pre++;
   if (isPost) {
-    entry.post++;
-    const agentName = attrString(span.attributes['gen_ai.agent.name'], 'unknown');
+    const agentName = attrString(span.attributes[GENAI_AGENT_ATTRIBUTES.AGENT_NAME], 'unknown');
     const attrs = attrsOf(span);
     // Score on the agent's own error flag (set from Agent tool `is_error`); fall
     // back to span status so a hook crash is also counted as a failure.
-    const hasError = attrs['integritystudio.agent.has_error'] === true || span.status?.code === OTEL_STATUS_ERROR_CODE;
+    const hasError = attrs[AGENT_ATTR.HAS_ERROR] === true || span.status?.code === OTEL_STATUS_ERROR_CODE;
     const score = hasError ? 0 : 1;
     entry.agentSequence.push({ agentName, score, span });
   }
-  entry.spans.push(span);
 }
 
 function deriveAgentCompletionPerSession(): EvalRecord[] {
@@ -390,15 +395,14 @@ function deriveAgentCompletionPerSession(): EvalRecord[] {
 
   for (const [sessionId, data] of sessionAgents) {
     if (data.pre === 0) continue;
-    const rate = Math.min(data.post / data.pre, 1.0);
-    const lastSpan = data.spans[data.spans.length - 1];
-    if (!lastSpan) continue;
+    const post = data.agentSequence.length;
+    const rate = Math.min(post / data.pre, 1.0);
     const sessionPreview = sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
 
-    evals.push(ruleRecord(lastSpan, sessionId, {
+    evals.push(ruleRecord(data.lastSpan, sessionId, {
       evaluationName: TASK_COMPLETION_EVAL_NAME,
       scoreValue: normalizeScore(rate),
-      explanation: `Agent completion: ${data.post}/${data.pre} agents finished in session ${sessionPreview}`,
+      explanation: `Agent completion: ${post}/${data.pre} agents finished in session ${sessionPreview}`,
     }));
   }
 
@@ -413,8 +417,6 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   const evals: EvalRecord[] = [];
 
   for (const [sessionId, data] of sessionAgents) {
-    if (data.agentSequence.length < MIN_HANDOFF_AGENTS) continue;
-
     const distinctAgentCount = new Set(data.agentSequence.map(a => a.agentName)).size;
     if (distinctAgentCount < MIN_HANDOFF_AGENTS) continue;
 
@@ -434,8 +436,6 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
       }
     }
 
-    if (count === 0) continue;
-
     const avgScore = sum / count;
     const lastSequenceEntry = data.agentSequence[data.agentSequence.length - 1];
     if (!lastSequenceEntry) continue;
@@ -453,34 +453,22 @@ function deriveHandoffCorrectnessPerSession(): EvalRecord[] {
   return evals;
 }
 
-const SUBAGENT_STOP_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.SUBAGENT_STOP}`;
-/** Canonical keys; `attrsOf` maps the pre-rename `agent.*` spellings onto them. */
-const AGENT_TRANSCRIPT_PATH_ATTR = 'integritystudio.agent.transcript_path';
-const AGENT_TYPE_ATTR = 'integritystudio.agent.type';
-
-type AgentHeuristic = ReturnType<typeof computeAgentHeuristicEvaluations>[number];
-
-/** A heuristic result as a rule record on `span`, keeping the label only that scorer assigns. */
-function heuristicRecord(span: LocalTraceSpan, sessionId: string, ev: AgentHeuristic, fallbackExplanation: string): EvalRecord | null {
-  if (ev.scoreValue === undefined) return null;
-  return {
-    ...ruleRecord(span, sessionId, {
+/** The heuristics' scored results as rule records on `span`, keeping the label only some scorers assign. */
+function heuristicRecords(
+  span: LocalTraceSpan,
+  sessionId: string,
+  input: Parameters<typeof computeAgentHeuristicEvaluations>[0],
+  fallbackExplanation: string,
+): EvalRecord[] {
+  return computeAgentHeuristicEvaluations(input).flatMap(ev => ev.scoreValue === undefined ? [] : [
+    ruleRecord(span, sessionId, {
       evaluationName: ev.evaluationName,
       scoreValue: normalizeScore(ev.scoreValue),
       scoreUnit: ev.scoreUnit,
       explanation: ev.explanation ?? fallbackExplanation,
+      ...(ev.scoreLabel && { scoreLabel: ev.scoreLabel }),
     }),
-    ...(ev.scoreLabel && { scoreLabel: ev.scoreLabel }),
-  };
-}
-
-function heuristicRecords(span: LocalTraceSpan, sessionId: string, evs: readonly AgentHeuristic[], fallbackExplanation: string): EvalRecord[] {
-  return evs.flatMap(ev => heuristicRecord(span, sessionId, ev, fallbackExplanation) ?? []);
-}
-
-/** Session transcripts on this machine by session id, first transcript directory winning. */
-export function sessionTranscriptIndex(): Map<string, string> {
-  return new Map(scanTranscriptDirs().map(t => [t.sessionId, t.path]));
+  ]);
 }
 
 /**
@@ -498,38 +486,43 @@ export async function deriveAgentHeuristics(
   sinceMs: number,
   sessionTranscripts: ReadonlyMap<string, string>,
 ): Promise<EvalRecord[]> {
-  const evals: EvalRecord[] = [];
+  const limit = pLimit(TRANSCRIPT_READ_CONCURRENCY);
+  const jobs: Promise<EvalRecord[]>[] = [];
   const lastSpanBySession = new Map<string, LocalTraceSpan>();
 
   for (const span of spans) {
     if (hrtToSeconds(span.startTime) * TIME_MS.SECOND < sinceMs) continue;
     const attrs = attrsOf(span);
-    const sessionId = attrString(attrs['session.id']);
+    const sessionId = attrString(attrs[SESSION_ATTRIBUTES.ID]);
     if (!sessionId) continue;
     const last = lastSpanBySession.get(sessionId);
     if (!last || byStartThenSpanId(last, span) < 0) lastSpanBySession.set(sessionId, span);
 
     if (span.name !== SUBAGENT_STOP_SPAN) continue;
-    const recordedPath = attrs[AGENT_TRANSCRIPT_PATH_ATTR];
+    const recordedPath = attrs[AGENT_ATTR.TRANSCRIPT_PATH];
     const path = typeof recordedPath === 'string' ? resolveTranscriptPath(recordedPath) : null;
     if (!path) continue;
-    const input = await readSingleTurnInput(path);
-    if (!input) continue;
-    const agentType = attrString(attrs[AGENT_TYPE_ATTR], 'unknown');
-    evals.push(...heuristicRecords(span, sessionId, computeAgentHeuristicEvaluations(input),
-      `${agentType} agent: ${input.toolCalls.length} tool calls`));
+    const agentType = attrString(attrs[AGENT_ATTR.TYPE], 'unknown');
+    jobs.push(limit(async () => {
+      const input = await readSingleTurnInput(path);
+      return input
+        ? heuristicRecords(span, sessionId, input, `${agentType} agent: ${input.toolCalls.length} tool calls`)
+        : [];
+    }));
   }
 
   for (const [sessionId, span] of lastSpanBySession) {
     const path = sessionTranscripts.get(sessionId);
     if (!path) continue;
-    const input = await readMultiTurnInput(path);
-    if (!input) continue;
-    evals.push(...heuristicRecords(span, sessionId, computeAgentHeuristicEvaluations(input),
-      `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`));
+    jobs.push(limit(async () => {
+      const input = await readMultiTurnInput(path);
+      return input
+        ? heuristicRecords(span, sessionId, input, `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`)
+        : [];
+    }));
   }
 
-  return evals;
+  return (await Promise.all(jobs)).flat();
 }
 
 /** `traces-YYYY-MM-DD.jsonl` */
@@ -705,7 +698,7 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
     let day = days.get(date);
     if (!day) days.set(date, day = { agentEvidence: 0, agentMatched: 0, toolSpans: 0, toolMissingSuccess: 0 });
     const attrs = attrsOf(span);
-    if (attrs['gen_ai.operation.name'] === INVOKE_AGENT_OPERATION) day.agentEvidence++;
+    if (attrs[GENAI_CORE_ATTRIBUTES.OPERATION_NAME] === INVOKE_AGENT_OPERATION) day.agentEvidence++;
     if (span.name === AGENT_PREPARE_SPAN || span.name === AGENT_FINALIZE_SPAN) day.agentMatched++;
     if (isToolSpan(span)) {
       day.toolSpans++;
@@ -775,29 +768,31 @@ function updateCalibration(allEvals: readonly EvalRecord[], dryRun: boolean): vo
   ));
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
-  if (Object.keys(newDistributions).length > 0) {
-    const previousState = loadCalibrationState(CALIBRATION_STATE_DIR);
-    const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
-    // psiValues reflects PSI at the time of last write (when shouldWrite: true),
-    // not from every check — stable runs don't update the file.
-    if (shouldWrite && dryRun) {
-      console.log('[dry-run] would update .calibration-state.json');
-    } else if (shouldWrite) {
-      const distributions = carryForwardDistributions(previousState?.distributions, newDistributions);
-      const carried = Object.keys(distributions).filter(metric => !(metric in newDistributions));
-      if (carried.length > 0) {
-        console.log(`[derive] calibration: kept the previous distribution for ${carried.join(', ')} (too few samples this run)`);
-      }
-      saveCalibrationState(CALIBRATION_STATE_DIR, {
-        lastCalibrated: new Date().toISOString(),
-        distributions,
-        psiValues,
-        rawScores: Object.fromEntries(
-          Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
-        ),
-      });
-    }
+  if (Object.keys(newDistributions).length === 0) return;
+
+  const previousState = loadCalibrationState(CALIBRATION_STATE_DIR);
+  const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
+  // psiValues reflects PSI at the time of last write (when shouldWrite: true),
+  // not from every check — stable runs don't update the file.
+  if (!shouldWrite) return;
+  if (dryRun) {
+    console.log('[dry-run] would update .calibration-state.json');
+    return;
   }
+
+  const distributions = carryForwardDistributions(previousState?.distributions, newDistributions);
+  const carried = Object.keys(distributions).filter(metric => !(metric in newDistributions));
+  if (carried.length > 0) {
+    console.log(`[derive] calibration: kept the previous distribution for ${carried.join(', ')} (too few samples this run)`);
+  }
+  saveCalibrationState(CALIBRATION_STATE_DIR, {
+    lastCalibrated: new Date().toISOString(),
+    distributions,
+    psiValues,
+    rawScores: Object.fromEntries(
+      Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
+    ),
+  });
 }
 
 async function main(): Promise<void> {
@@ -828,7 +823,10 @@ async function main(): Promise<void> {
   // unscoped run posts the last DERIVE_POST_WINDOW_DAYS of its 7-day read.
   const floorMs = postFloorMs(dateScope, Date.now(), postDays);
   allEvals.push(...await deriveAgentHeuristics(
-    loaded.spans, Math.max(floorMs, DERIVE_NO_REPOST_BEFORE_MS), sessionTranscriptIndex()));
+    loaded.spans,
+    Math.max(floorMs, DERIVE_NO_REPOST_BEFORE_MS),
+    new Map(scanTranscriptDirs().map(t => [t.sessionId, t.path])),
+  ));
   // A span in an in-scope trace file can carry an out-of-scope timestamp;
   // never post a date the run did not read.
   const inScope = scope ? allEvals.filter(ev => scope.has(toDateOnly(ev.timestamp))) : allEvals;

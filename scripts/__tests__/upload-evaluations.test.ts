@@ -21,7 +21,9 @@ import {
 } from '../upload-evaluations.js';
 import { buildAccountIndex } from '../account-stamps.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
-import { toOTelRecord } from '../eval-record.js';
+import { EVALUATION_RESULT_EVENT, toOTelRecord } from '../eval-record.js';
+import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;
@@ -29,10 +31,10 @@ const MAX_AGE_MS = 36 * 3_600_000;
 function record(attrs: Record<string, unknown>, extra: Record<string, unknown> = {}): unknown {
   return {
     timestamp: '2026-09-15T11:00:00.000Z',
-    name: 'gen_ai.evaluation.result',
+    name: EVALUATION_RESULT_EVENT,
     attributes: {
-      'gen_ai.evaluation.name': 'relevance',
-      'gen_ai.evaluation.score.value': 0.9,
+      [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance',
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 0.9,
       ...attrs,
     },
     ...extra,
@@ -45,10 +47,10 @@ describe('mapRecord', () => {
       'integritystudio.evaluation.producer': 'hook:stop-quality-evaluation',
       'integritystudio.evaluation.evaluator.kind': 'llm',
       'integritystudio.evaluation.cohort': 'normal',
-      'session.id': 'sess-1',
+      [SESSION_ATTRIBUTES.ID]: 'sess-1',
       'trace.id': 'trace-1',
       'span.id': 'span-1',
-      'gen_ai.evaluation.explanation': 'because',
+      [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'because',
     }), NOW, MAX_AGE_MS);
 
     expect(skip).toBeUndefined();
@@ -77,14 +79,14 @@ describe('mapRecord', () => {
 
   it('carries a stamped schema URL to the row as metadata.schemaUrl', () => {
     const schemaUrl = 'https://integritystudio.ai/schemas/evaluation/1.0.0';
-    const { payload } = mapRecord(record({ 'session.id': 'sess-1' }, { schemaUrl }), NOW, MAX_AGE_MS);
+    const { payload } = mapRecord(record({ [SESSION_ATTRIBUTES.ID]: 'sess-1' }, { schemaUrl }), NOW, MAX_AGE_MS);
 
     expect(payload?.metadata).toMatchObject({ schemaUrl });
     expect(payload).not.toHaveProperty('schemaUrl');
   });
 
   it('writes no metadata.schemaUrl for a record written before the stamp existed', () => {
-    const { payload } = mapRecord(record({ 'session.id': 'sess-1' }), NOW, MAX_AGE_MS);
+    const { payload } = mapRecord(record({ [SESSION_ATTRIBUTES.ID]: 'sess-1' }), NOW, MAX_AGE_MS);
 
     expect(payload?.metadata).not.toHaveProperty('schemaUrl');
   });
@@ -93,7 +95,7 @@ describe('mapRecord', () => {
     const { payload } = mapRecord(record({
       'integritystudio.evaluation.evaluator.kind': 'llm',
       'integritystudio.evaluation.judge.model': 'claude-haiku-4-5-20251001',
-      'session.id': 'sess-1',
+      [SESSION_ATTRIBUTES.ID]: 'sess-1',
     }), NOW, MAX_AGE_MS);
 
     expect(payload?.judgeModel).toBe('claude-haiku-4-5-20251001');
@@ -103,9 +105,9 @@ describe('mapRecord', () => {
   // COMPAT until 2026-10-29 for its score-unit half: the old gen_ai.evaluation.score.unit key.
   it('maps a derive record that carries only the legacy overloaded evaluator.type', () => {
     const { payload } = mapRecord(record({
-      'gen_ai.evaluation.evaluator': 'derive-evaluations',
-      'gen_ai.evaluation.evaluator.type': 'rule',
-      'gen_ai.evaluation.score.unit': 'ratio_0_1',
+      [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations',
+      [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE]: 'rule',
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
     expect(payload).toMatchObject({
@@ -118,7 +120,7 @@ describe('mapRecord', () => {
   it('reads the score unit from its integritystudio key, over the old gen_ai key', () => {
     const { payload } = mapRecord(record({
       'integritystudio.evaluation.score.unit': 'seconds',
-      'gen_ai.evaluation.score.unit': 'ratio_0_1',
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
     expect(payload?.scoreUnit).toBe('seconds');
@@ -155,15 +157,15 @@ describe('mapRecord', () => {
   });
 
   it('drops canary records marked by the legacy overloaded field', () => {
-    const { skip } = mapRecord(record({ 'gen_ai.evaluation.evaluator.type': 'canary' }), NOW, MAX_AGE_MS);
+    const { skip } = mapRecord(record({ [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE]: 'canary' }), NOW, MAX_AGE_MS);
     expect(skip).toBe('canary');
   });
 
   it('drops records older than the max age rather than mis-dating them', () => {
     const old = {
       timestamp: '2026-09-01T00:00:00.000Z',
-      name: 'gen_ai.evaluation.result',
-      attributes: { 'gen_ai.evaluation.name': 'relevance', 'gen_ai.evaluation.score.value': 1 },
+      name: EVALUATION_RESULT_EVENT,
+      attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1 },
     };
     expect(mapRecord(old, NOW, MAX_AGE_MS).skip).toBe('too-old');
   });
@@ -176,15 +178,15 @@ describe('mapRecord', () => {
   it('drops records with no numeric score, which the webhook would reject', () => {
     const noScore = {
       timestamp: '2026-09-15T11:00:00.000Z',
-      name: 'gen_ai.evaluation.result',
-      attributes: { 'gen_ai.evaluation.name': 'relevance' },
+      name: EVALUATION_RESULT_EVENT,
+      attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance' },
     };
     expect(mapRecord(noScore, NOW, MAX_AGE_MS).skip).toBe('no-score');
   });
 
   it('truncates an over-long explanation to the webhook cap', () => {
     const { payload } = mapRecord(
-      record({ 'gen_ai.evaluation.explanation': 'x'.repeat(5000) }),
+      record({ [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'x'.repeat(5000) }),
       NOW,
       MAX_AGE_MS,
     );
@@ -194,8 +196,8 @@ describe('mapRecord', () => {
   it('keeps every payload under the per-evaluation byte cap', () => {
     const { payload, skip } = mapRecord(
       record({
-        'gen_ai.evaluation.name': 'n'.repeat(500),
-        'gen_ai.evaluation.explanation': 'e'.repeat(9000),
+        [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'n'.repeat(500),
+        [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'e'.repeat(9000),
       }),
       NOW,
       MAX_AGE_MS,
@@ -271,9 +273,9 @@ describe('fingerprint', () => {
 describe('evaluationId', () => {
   const base = {
     timestamp: '2026-09-15T11:00:00.000Z',
-    name: 'gen_ai.evaluation.result',
+    name: EVALUATION_RESULT_EVENT,
     traceId: 'trace-1',
-    attributes: { 'gen_ai.evaluation.name': 'tool_correctness', 'gen_ai.evaluation.score.value': 1 },
+    attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'tool_correctness', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1 },
   };
 
   it('is the same whether or not the record carries an account stamp', () => {
@@ -286,7 +288,7 @@ describe('evaluationId', () => {
   });
 
   it('is sent on every mapped payload, so a re-send is dropped by the ingest worker', () => {
-    const r = record({ 'gen_ai.evaluation.evaluator': 'derive-evaluations' }) as Record<string, unknown>;
+    const r = record({ [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations' }) as Record<string, unknown>;
     expect(mapRecord(r, NOW, MAX_AGE_MS).payload?.evaluationId).toBe(evaluationId(r));
   });
 });
@@ -340,7 +342,7 @@ describe('account index (TKR7/TKR9)', () => {
 
   const span = (spanId: string, sessionId: string, ref?: string | null): string => JSON.stringify({
     spanId,
-    attributes: { 'session.id': sessionId },
+    attributes: { [SESSION_ATTRIBUTES.ID]: sessionId },
     ...(ref === undefined ? {} : { identityKeyRef: ref }),
   });
   const writeTraces = (name: string, lines: string[]): void =>
@@ -483,7 +485,7 @@ describe('payloadManifestKey', () => {
       startTime: [1_790_553_614, 235_000_000] as [number, number],
       endTime: [1_790_553_614, 236_463_666] as [number, number],
       duration: [0, 1_463_666] as [number, number],
-      attributes: { 'session.id': 's1', 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true },
+      attributes: { [SESSION_ATTRIBUTES.ID]: 's1', [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true },
     };
     const line = JSON.stringify(toOTelRecord(deriveToolCorrectness(span)!));
 

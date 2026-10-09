@@ -18,6 +18,7 @@ import {
 } from '../data-loader.js';
 import { MAX_QUERY_LIMIT } from '../parent/constants.js';
 import { handleRouteError, parseParam } from '../route-errors.js';
+import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 
 export const sessionRoutes = new Hono();
 sessionRoutes.onError(handleRouteError);
@@ -34,7 +35,7 @@ async function loadSessionSpans(sessionId: string, startDate?: string, endDate?:
   const end = endDate ?? formatISO(now, { representation: 'date' });
   const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });
   const rows = await loadTracesByFilter(
-    { 'session.id': sessionId },
+    { [SESSION_ATTRIBUTES.ID]: sessionId },
     toIsoWindowBound(start, 'start'),
     toIsoWindowBound(end, 'end'),
     LIMIT_SESSION_SPANS + TRUNCATION_PROBE_ROWS,

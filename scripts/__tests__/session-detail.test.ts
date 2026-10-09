@@ -9,6 +9,7 @@ import { computeSessionDetail, type SessionSpan } from '../../src/api/session-de
 import { computeMultiAgentEvaluation } from '../../../src/lib/quality/quality-multi-agent.js';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { evaluation } from './support/evaluations.js';
+import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 
 function detailOf(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated?: boolean) {
   return computeSessionDetail({ sessionId: 's1', spans, evaluations, evaluationsTruncated }, computeMultiAgentEvaluation);
@@ -21,8 +22,8 @@ describe('computeSessionDetail multi-agent attribution', () => {
 
   it('attributes turns by gen_ai.agent.name, the key hooks emit', () => {
     const detail = detailOf([
-      span('a', { 'gen_ai.agent.name': 'planner' }),
-      span('b', { 'gen_ai.agent.name': 'executor' }),
+      span('a', { [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'planner' }),
+      span('b', { [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'executor' }),
     ], []);
 
     expect(detail.multiAgentEvaluation.turns.map(t => t.agentName)).toEqual(['planner', 'executor']);
@@ -49,9 +50,9 @@ describe('computeSessionDetail after the builtin.* rename', () => {
 
   it('counts tool usage by gen_ai.tool.name', () => {
     const detail = detailOf([
-      { name: 'hook:builtin-post-tool', attributes: { ...postTool, 'gen_ai.tool.name': 'Bash' } },
-      { name: 'hook:builtin-post-tool', attributes: { ...postTool, 'gen_ai.tool.name': 'Bash' } },
-      { name: 'hook:builtin-post-tool', attributes: { ...postTool, 'gen_ai.tool.name': 'Read' } },
+      { name: 'hook:builtin-post-tool', attributes: { ...postTool, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' } },
+      { name: 'hook:builtin-post-tool', attributes: { ...postTool, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' } },
+      { name: 'hook:builtin-post-tool', attributes: { ...postTool, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read' } },
     ], []);
 
     expect(detail.toolUsage).toEqual({ Bash: 2, Read: 1 });
@@ -62,7 +63,7 @@ describe('computeSessionDetail after the builtin.* rename', () => {
       name: 'hook:builtin-post-tool',
       attributes: {
         ...postTool,
-        'gen_ai.tool.name': 'Edit',
+        [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit',
         'integritystudio.tool.has_error': true,
         'integritystudio.tool.error_type': 'file_not_read',
         'file.path': '/repo/src/a.ts',
@@ -85,7 +86,7 @@ describe('computeSessionDetail after the agent hook rename', () => {
     name: 'hook:agent.operation.finalize',
     attributes: {
       'integritystudio.hook.name': 'agent.operation.finalize',
-      'gen_ai.agent.name': agentName,
+      [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
       'integritystudio.agent.has_error': hasError,
       'integritystudio.agent.output_size': 400,
     },

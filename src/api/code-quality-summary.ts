@@ -6,6 +6,7 @@
  */
 
 import { CONTENT_KIND, SURVIVAL_COHORT, type ContentKind, type SurvivalCohort } from '../lib/constants.js';
+import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { attrStr, timestampToMs, type SpanLike } from './api-constants.js';
 
 export const CODE_QUALITY_LOOKBACK_DAYS = 90;
@@ -26,8 +27,8 @@ export const CODE_EVENT_ATTR = 'integritystudio.code.event';
 const KEY_SEP = '\x00';
 
 const ATTR = {
-  AGENT_NAME: 'gen_ai.agent.name',
-  AGENT_VERSION: 'gen_ai.agent.version',
+  AGENT_NAME: GENAI_AGENT_ATTRIBUTES.AGENT_NAME,
+  AGENT_VERSION: GENAI_AGENT_ATTRIBUTES.AGENT_VERSION,
   WINDOW: 'integritystudio.code.checkpoint_window',
   COHORT: 'integritystudio.code.survival.cohort',
   CONTENT_KIND: 'integritystudio.code.content_kind',

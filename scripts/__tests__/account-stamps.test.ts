@@ -5,9 +5,11 @@ import { join } from 'path';
 
 import { buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
 import { anchorTurns, turnSourceFields, type Turn } from '../judge-turns.js';
-import { toOTelRecord, type EvalRecord } from '../eval-record.js';
+import { EVALUATION_RESULT_EVENT, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../derive-evaluations.js';
 import { fingerprint, mapRecord, routeRecord } from '../upload-evaluations.js';
+import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 // TKR8 Phase 1: evaluations carry the account of what they score, and upload
 // routes on that stamp instead of joining by trace and time. Phase 2: they also
@@ -28,7 +30,7 @@ const spanLine = ({ spanId, traceId, atMs, ref, sessionId = SESSION }: SpanFixtu
   traceId,
   spanId,
   startTime: hrTime(atMs),
-  attributes: { 'session.id': sessionId },
+  attributes: { [SESSION_ATTRIBUTES.ID]: sessionId },
   ...(ref === undefined ? {} : { identityKeyRef: ref }),
 });
 
@@ -147,7 +149,7 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
 
     it('writes the response id as the semconv attribute', () => {
       const out = toOTelRecord(record({ responseId: 'msg_1' })) as { attributes: Record<string, unknown> };
-      expect(out.attributes['gen_ai.response.id']).toBe('msg_1');
+      expect(out.attributes[GENAI_RESPONSE_ATTRIBUTES.ID]).toBe('msg_1');
     });
 
     it('writes a null stamp and omits an absent one', () => {
@@ -159,7 +161,7 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
   describe('derive: span stamps', () => {
     const measurable = (spanId: string): TraceSpan => ({
       traceId: 't1', spanId, name: 'hook:session-start', startTime: [1707400000, 0], duration: [1, 0],
-      attributes: { 'session.id': SESSION },
+      attributes: { [SESSION_ATTRIBUTES.ID]: SESSION },
     });
 
     it("copies the scored span's stamp and leaves an unstamped span's record unstamped", () => {
@@ -176,8 +178,8 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
   describe('upload', () => {
     const evalLine = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
       timestamp: '2026-09-23T11:30:00.000Z',
-      name: 'gen_ai.evaluation.result',
-      attributes: { 'gen_ai.evaluation.name': 'relevance', 'gen_ai.evaluation.score.value': 0.8 },
+      name: EVALUATION_RESULT_EVENT,
+      attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 0.8 },
       traceId: 't1',
       ...extra,
     });
@@ -211,7 +213,7 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
 
     it('forwards the response id as the payload field, not in metadata', () => {
       const mapped = mapRecord(evalLine({
-        attributes: { 'gen_ai.evaluation.name': 'relevance', 'gen_ai.evaluation.score.value': 0.8, 'gen_ai.response.id': 'msg_1' },
+        attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 0.8, [GENAI_RESPONSE_ATTRIBUTES.ID]: 'msg_1' },
       }), NOW, MAX_AGE_MS);
       expect(mapped.payload!.responseId).toBe('msg_1');
       expect(mapped.payload!.metadata).not.toHaveProperty('responseId');

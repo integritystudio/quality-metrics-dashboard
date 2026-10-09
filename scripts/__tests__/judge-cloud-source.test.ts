@@ -14,6 +14,7 @@ import {
 import { anchorTurns, type Turn } from '../judge-turns.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME } from '../judge-criteria.js';
 import { turnSkip } from '../judge-selection.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 const TRACE_ID = '0123456789abcdef0123456789abcdef';
 const SESSION = '1a2b3c4d-0000-4000-8000-000000000001';
@@ -32,7 +33,7 @@ function span(spanId: string, atMs: number, sessionId = SESSION): LocalTraceSpan
     startTime: hrt,
     endTime: hrt,
     duration: [0, 0],
-    attributes: { 'session.id': sessionId },
+    attributes: { [SESSION_ATTRIBUTES.ID]: sessionId },
   };
 }
 

@@ -27,6 +27,8 @@ import { toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { type Turn } from '../judge-turns.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
+import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 // Helpers
 
@@ -42,7 +44,7 @@ function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<str
     status: { code: 0 },
     ...rest,
     attributes: {
-      'session.id': 'sess-pipeline',
+      [SESSION_ATTRIBUTES.ID]: 'sess-pipeline',
       'builtin.tool': 'TaskCreate',
       'builtin.task_status': 'pending',
       'builtin.task_id': 'task-001',
@@ -71,10 +73,10 @@ describe('pipeline contract: derive → judge', () => {
   it('derive-evaluations toOTelRecord produces valid gen_ai.evaluation.result events', () => {
     // Simulate a full task lifecycle
     trackTaskActivity(makeTraceSpan({
-      attributes: { 'session.id': 'sess-pipeline', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-1' },
+      attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-pipeline', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-1' },
     }));
     trackTaskActivity(makeTraceSpan({
-      attributes: { 'session.id': 'sess-pipeline', 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 'task-1' },
+      attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-pipeline', 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 'task-1' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -85,24 +87,23 @@ describe('pipeline contract: derive → judge', () => {
     const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
 
     // Validate the OTel record shape that sync-to-kv expects to read back
-    expect(otelRecord.name).toBe('gen_ai.evaluation.result');
     expect(typeof otelRecord.timestamp).toBe('string');
     expect(typeof otelRecord.traceId).toBe('string');
 
     const attrs = otelRecord.attributes as Record<string, unknown>;
-    expect(attrs['gen_ai.evaluation.name']).toBe('task_completion');
-    expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-    expect(attrs['gen_ai.evaluation.score.value']).toBe(1.0);
-    expect(typeof attrs['gen_ai.evaluation.explanation']).toBe('string');
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('task_completion');
+    expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(1.0);
+    expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('string');
     expect(attrs['integritystudio.evaluation.producer']).toBe('rule');
     expect(attrs['integritystudio.evaluation.evaluator.kind']).toBe('rule');
     expect(attrs['integritystudio.evaluation.cohort']).toBe('normal');
-    expect(attrs['session.id']).toBe('sess-pipeline');
+    expect(attrs[SESSION_ATTRIBUTES.ID]).toBe('sess-pipeline');
   });
 
   it('derive evaluation record has all required fields for judge dedup keys', () => {
     trackTaskActivity(makeTraceSpan({
-      attributes: { 'session.id': 'sess-dedup', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-2' },
+      attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-dedup', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-2' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -135,12 +136,11 @@ describe('pipeline contract: judge seed output', () => {
       const attrs = otelRecord.attributes as Record<string, unknown>;
 
       // Required fields for sync-to-kv CloudBackend to ingest
-      expect(otelRecord.name).toBe('gen_ai.evaluation.result');
       expect(typeof otelRecord.timestamp).toBe('string');
       expect(new Date(otelRecord.timestamp as string).getTime()).toBeGreaterThan(0);
-      expect(typeof attrs['gen_ai.evaluation.name']).toBe('string');
-      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      const score = attrs['gen_ai.evaluation.score.value'] as number;
+      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('string');
+      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
+      const score = attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE] as number;
       expect(score).toBeGreaterThanOrEqual(0);
       expect(score).toBeLessThanOrEqual(1);
     }
@@ -245,15 +245,14 @@ describe('pipeline contract: judge → sync-to-kv', () => {
 
     for (const record of records) {
       // CloudBackend.queryEvaluations() checks these fields
-      expect(record.name).toBe('gen_ai.evaluation.result');
       expect(typeof record.timestamp).toBe('string');
       const ts = new Date(record.timestamp as string);
       expect(ts.getFullYear()).toBe(2026);
 
       const attrs = record.attributes as Record<string, unknown>;
-      const evalName = attrs['gen_ai.evaluation.name'] as string;
+      const evalName = attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] as string;
       expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
-      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
+      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
       expect(evaluatorKindSchema.safeParse(attrs['integritystudio.evaluation.evaluator.kind']).success).toBe(true);
       expect(evaluationCohortSchema.safeParse(attrs['integritystudio.evaluation.cohort']).success).toBe(true);
     }
@@ -335,7 +334,7 @@ describe('full pipeline: derive + judge write/read cycle', () => {
     // Step 1: Derive rule-based evaluations from trace spans
     trackTaskActivity(makeTraceSpan({
       attributes: {
-        'session.id': 'full-pipeline-session',
+        [SESSION_ATTRIBUTES.ID]: 'full-pipeline-session',
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
         'builtin.task_id': 'task-full',
@@ -344,7 +343,7 @@ describe('full pipeline: derive + judge write/read cycle', () => {
     trackTaskActivity(makeTraceSpan({
       spanId: 'span-002',
       attributes: {
-        'session.id': 'full-pipeline-session',
+        [SESSION_ATTRIBUTES.ID]: 'full-pipeline-session',
         'builtin.tool': 'TaskUpdate',
         'builtin.task_status': 'completed',
         'builtin.task_id': 'task-full',
@@ -377,11 +376,10 @@ describe('full pipeline: derive + judge write/read cycle', () => {
 
     // All records must have the standard OTel evaluation shape
     for (const record of records) {
-      expect(record.name).toBe('gen_ai.evaluation.result');
       const attrs = record.attributes as Record<string, unknown>;
-      expect(typeof attrs['gen_ai.evaluation.name']).toBe('string');
-      expect(typeof attrs['gen_ai.evaluation.score.value']).toBe('number');
-      const score = attrs['gen_ai.evaluation.score.value'] as number;
+      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('string');
+      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
+      const score = attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE] as number;
       expect(score).toBeGreaterThanOrEqual(0);
       expect(score).toBeLessThanOrEqual(1);
     }
@@ -389,18 +387,18 @@ describe('full pipeline: derive + judge write/read cycle', () => {
     // Verify rule-based eval is in the combined output
     const taskCompletionRecords = records.filter(r => {
       const attrs = r.attributes as Record<string, unknown>;
-      return attrs['gen_ai.evaluation.name'] === 'task_completion';
+      return attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] === 'task_completion';
     });
     expect(taskCompletionRecords).toHaveLength(1);
     const tcAttrs = taskCompletionRecords[0]!.attributes as Record<string, unknown>;
-    expect(tcAttrs['gen_ai.evaluation.score.value']).toBe(1.0);
+    expect(tcAttrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(1.0);
 
     // Verify LLM judge evals are in the combined output
     const llmEvalNames = ['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness'];
     for (const name of llmEvalNames) {
       const found = records.some(r => {
         const attrs = r.attributes as Record<string, unknown>;
-        return attrs['gen_ai.evaluation.name'] === name;
+        return attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] === name;
       });
       expect(found).toBe(true);
     }

@@ -26,6 +26,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
+import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
@@ -42,7 +43,6 @@ const CLOUD_SPAN_LIMIT = 500_000;
 const TOP_MISSING_SESSIONS = 10;
 const COVERAGE_DECIMALS = 2;
 const JSON_INDENT = 2;
-const SESSION_ID_ATTR = 'session.id';
 const NO_SESSION = '(none)';
 const CLI_PREFIX = '[trace-coverage]';
 
@@ -122,7 +122,7 @@ export function parseLocalSpan(line: string, window: CoverageWindow): LocalSpan 
     key: spanKey(traceId, spanId),
     ref: typeof rawRef === 'string' ? rawRef : null,
     startMs,
-    sessionId: asString(attrs[SESSION_ID_ATTR]) ?? NO_SESSION,
+    sessionId: asString(attrs[SESSION_ATTRIBUTES.ID]) ?? NO_SESSION,
   };
 }
 

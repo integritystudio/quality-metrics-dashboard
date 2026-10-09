@@ -19,6 +19,7 @@ import type { FixtureServer } from './support/fixture-server.js';
 import { agentRoutes } from '../api/routes/agents.js';
 import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
+import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 let fixture: FixtureServer;
 
@@ -54,12 +55,12 @@ function makeAgentSpanWire(
       // weeks after the hooks renamed it, and passed against a route that matched
       // nothing in production (AGENT-POST-TOOL-READERS-DEAD).
       'integritystudio.hook.name': 'agent.operation.finalize',
-      'gen_ai.agent.name': agentName,
+      [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
       'integritystudio.agent.has_error': false,
       'integritystudio.agent.has_rate_limit': false,
       'integritystudio.agent.output_size': 500,
       'integritystudio.agent.source_type': 'active',
-      'session.id': 'sess-001',
+      [SESSION_ATTRIBUTES.ID]: 'sess-001',
       ...attrs,
     },
   });
@@ -166,7 +167,7 @@ describe('GET /agents', () => {
 
 describe('GET /agents/:sessionId', () => {
   it('returns 200 for a valid sessionId', async () => {
-    fixture.setTraces([makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' })]);
+    fixture.setTraces([makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { [SESSION_ATTRIBUTES.ID]: 'sess-001' })]);
     fixture.setEvals([evalToWire(makeEvaluation({ traceId: 'trace-001', timestamp: EVAL_NANOS }))]);
 
     const res = await agentRoutes.request('/agents/sess-001');
@@ -195,8 +196,8 @@ describe('GET /agents/:sessionId/graph', () => {
     // The graph's nodes come from the evaluation's turns. A session with one
     // distinct agent is scored as single-agent and names no agents, so serve two.
     fixture.setTraces([
-      makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { 'session.id': 'sess-001' }),
-      makeAgentSpanWire('trace-001', 'span-002', 'Explore', { 'session.id': 'sess-001' }),
+      makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { [SESSION_ATTRIBUTES.ID]: 'sess-001' }),
+      makeAgentSpanWire('trace-001', 'span-002', 'Explore', { [SESSION_ATTRIBUTES.ID]: 'sess-001' }),
     ]);
 
     const res = await agentRoutes.request('/agents/sess-001/graph');

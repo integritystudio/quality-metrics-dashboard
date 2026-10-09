@@ -26,6 +26,7 @@ import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { EvaluationRow, LogRow, TraceSpan } from '@obtool-api/types';
+import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 
 // ── Wire-format row types ─────────────────────────────────────────────────────
 // Typed off obtool-api's own response rows (type-only import, erased at runtime),
@@ -289,7 +290,7 @@ export function spanToWire(s: {
   serviceName?: string;
 }): TraceWireRow {
   const attrs = { ...(s.attributes ?? {}) };
-  if (s.sessionId && !attrs['session.id']) attrs['session.id'] = s.sessionId;
+  if (s.sessionId && !attrs[SESSION_ATTRIBUTES.ID]) attrs[SESSION_ATTRIBUTES.ID] = s.sessionId;
   const start = s.startTimeUnixNano ?? FIXTURE_TIMESTAMP_NS;
   return {
     org_id: FIXTURE_ORG_ID,
@@ -303,7 +304,7 @@ export function spanToWire(s: {
     status_code: s.status?.code ?? 'OK',
     status_message: s.status?.message ?? null,
     service_name: s.serviceName ?? FIXTURE_SERVICE_NAME,
-    session_id: (attrs['session.id'] as string | undefined) ?? s.sessionId ?? null,
+    session_id: (attrs[SESSION_ATTRIBUTES.ID] as string | undefined) ?? s.sessionId ?? null,
     attributes: JSON.stringify(attrs),
     r2_key: FIXTURE_R2_KEY,
   };

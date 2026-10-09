@@ -3,6 +3,7 @@ import { buildWorkflowGraph } from '../lib/workflow-graph.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
+import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 // 1. 3-agent linear workflow
 
@@ -172,8 +173,8 @@ describe('buildWorkflowGraph — node data binding', () => {
   });
 
   const spans: TraceSpan[] = [
-    makeSpan({ attributes: { 'gen_ai.agent.name': 'worker', 'llm.usage.total_tokens': 512 }, durationMs: 2500 }),
-    makeSpan({ spanId: 'span-2', name: 'tool_call', attributes: { 'gen_ai.agent.name': 'worker' } }),
+    makeSpan({ attributes: { [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'worker', 'llm.usage.total_tokens': 512 }, durationMs: 2500 }),
+    makeSpan({ spanId: 'span-2', name: 'tool_call', attributes: { [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'worker' } }),
   ];
 
   it('node evaluationScore reflects turn relevance', () => {
@@ -245,8 +246,8 @@ describe('buildWorkflowGraph — edge data binding', () => {
   it('edge latencyMs is computed from span timing when spans are provided', () => {
     // agentA ends at 2_000_000 ns, agentB starts at 7_000_000 ns → gap = 5_000_000 ns = 5 ms
     const spansWithTiming: TraceSpan[] = [
-      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.name': 'agentA' }, startTimeUnixNano: 1_000_000n, endTimeUnixNano: 2_000_000n, durationMs: 1 }),
-      makeSpan({ spanId: 's2', attributes: { 'gen_ai.agent.name': 'agentB' }, startTimeUnixNano: 7_000_000n, endTimeUnixNano: 9_000_000n, durationMs: 2 }),
+      makeSpan({ spanId: 's1', attributes: { [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'agentA' }, startTimeUnixNano: 1_000_000n, endTimeUnixNano: 2_000_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'agentB' }, startTimeUnixNano: 7_000_000n, endTimeUnixNano: 9_000_000n, durationMs: 2 }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spansWithTiming);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
@@ -348,7 +349,7 @@ describe('buildWorkflowGraph — droppedTurns counter', () => {
 
   it('returns droppedTurns 0 for span-inferred graphs (no evaluation)', () => {
     const spans = [
-      makeSpan({ spanId: 's1', attributes: { 'gen_ai.agent.id': 'agentA' } }),
+      makeSpan({ spanId: 's1', attributes: { [GENAI_AGENT_ATTRIBUTES.AGENT_ID]: 'agentA' } }),
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     expect(graph.droppedTurns).toBe(0);
@@ -357,7 +358,7 @@ describe('buildWorkflowGraph — droppedTurns counter', () => {
 
 // 9. Span-inference fallback (evaluation === null, spans carry gen_ai.agent.id)
 
-const ATTR_AGENT_ID = 'gen_ai.agent.id';
+const ATTR_AGENT_ID = GENAI_AGENT_ATTRIBUTES.AGENT_ID;
 
 describe('buildWorkflowGraph — span-inference fallback', () => {
   it('infers 2 nodes from spans when evaluation is null', () => {

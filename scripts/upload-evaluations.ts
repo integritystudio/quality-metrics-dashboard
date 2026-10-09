@@ -113,6 +113,7 @@ import {
 import { evaluationCohortSchema } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
+import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
 const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
@@ -276,7 +277,7 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   if (scoreValue === undefined) return { skip: 'no-score' };
 
   const evaluator = asString(attrs[EVALUATION_ATTRS.PRODUCER])
-    ?? asString(attrs['gen_ai.evaluation.evaluator'])
+    ?? asString(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR])
     ?? 'unknown';
   const evaluatorType = asString(attrs[EVALUATION_ATTRS.EVALUATOR_KIND])
     ?? legacyType

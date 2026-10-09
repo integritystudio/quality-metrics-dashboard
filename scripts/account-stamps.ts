@@ -24,6 +24,7 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { NANOSECONDS_PER_MILLISECOND, TIME_MS } from '../../src/lib/core/units.js';
+import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /**
  * Trace files read for the account index, in days. Wider than the upload
@@ -41,7 +42,6 @@ export const IDENTITY_KEY_REF_FIELD = 'identityKeyRef';
 /** `traces-YYYY-MM-DD.jsonl` — the stamped spans. */
 export const TRACE_FILE_PATTERN = /^traces-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 
-const SPAN_SESSION_ID_ATTR = 'session.id';
 /**
  * Start time given to a stamp whose span has none: it sorts last and is never at
  * or before an evaluation's time, so it can decide only a single-account trace.
@@ -157,7 +157,7 @@ export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
     const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
       ? span.attributes as Record<string, unknown>
       : {};
-    const sessionId = asString(attrs[SPAN_SESSION_ID_ATTR]);
+    const sessionId = asString(attrs[SESSION_ATTRIBUTES.ID]);
 
     let ref: AccountRef | undefined;
     if (IDENTITY_KEY_REF_FIELD in span) {

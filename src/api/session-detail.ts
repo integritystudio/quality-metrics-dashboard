@@ -29,6 +29,7 @@ import {
 } from './api-constants.js';
 import { SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
 import type { StepScore } from '../types.js';
+import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 /** Minimal shape required by the span-extraction helpers. */
 export type ExtractableSpan = {
@@ -236,7 +237,7 @@ function computeUsageCounts(spans: SessionSpan[]) {
     if (spanAttr(s, 'integritystudio.hook.trigger', 'string') !== 'PostToolUse') continue;
     const type = spanAttr(s, 'integritystudio.hook.type', 'string');
     if (type === 'builtin') {
-      incrementCount(toolUsage, spanAttr(s, 'gen_ai.tool.name', 'string') ?? 'unknown');
+      incrementCount(toolUsage, spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? 'unknown');
     } else if (type === 'mcp') {
       incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
     }
@@ -269,7 +270,7 @@ function computeErrorSummary(spans: SessionSpan[]) {
   const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
   for (const s of spans) {
     if (!isSpanError(s)) continue;
-    const tool = spanAttr(s, 'gen_ai.tool.name', 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
+    const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
     const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
     incrementCount(byCategory, `${tool} -> ${errType}`);
     details.push({
@@ -308,7 +309,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
   const byAgent = rollup(
     hookSpans(spans, HOOK_NAME.AGENT_FINALIZE),
     summarizeAgentSpans,
-    s => spanAttr(s, 'gen_ai.agent.name', 'string') ?? 'unknown',
+    s => spanAttr(s, GENAI_AGENT_ATTRIBUTES.AGENT_NAME, 'string') ?? 'unknown',
   );
   return Array.from(byAgent, ([agentName, d]) => ({
     agentName,
@@ -397,7 +398,7 @@ export function sessionAgentMap(spans: SessionSpan[]): Map<number, string> {
   spans.forEach((span, i) => {
     // Hooks emit the semconv 'gen_ai.agent.name'. The pre-OBP7b 'agent.name' stopped
     // on 2026-07-12, older than every window a session is read over, so it is not read.
-    const agent = spanAttr(span, 'gen_ai.agent.name', 'string');
+    const agent = spanAttr(span, GENAI_AGENT_ATTRIBUTES.AGENT_NAME, 'string');
     if (agent) agentMap.set(i, agent);
   });
   return agentMap;

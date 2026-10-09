@@ -7,6 +7,7 @@ import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { toIsoWindowBound, NANOS_TO_MS } from './api-constants.js';
+import { SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
@@ -148,7 +149,7 @@ export async function loadTracesByTraceId(traceId: string, startDate?: string, e
 
 export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
   const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ attributeFilter: { 'session.id': sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
+  return (await queryTracesTool({ attributeFilter: { [SESSION_ATTRIBUTES.ID]: sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
 }
 
 /**

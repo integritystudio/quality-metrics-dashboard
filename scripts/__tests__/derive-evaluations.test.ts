@@ -24,6 +24,8 @@ import {
 } from '../derive-evaluations.js';
 import { type EvalRecord } from '../eval-record.js';
 import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
+import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 // Test Data Factories
 
@@ -39,7 +41,7 @@ function makeSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, 
     status: { code: 0 },
     ...rest,
     attributes: {
-      'session.id': 'sess-abc',
+      [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       'builtin.tool': 'TaskCreate',
       ...attrOverrides,
     },
@@ -91,7 +93,7 @@ describe('trackTaskActivity', () => {
   });
 
   it('ignores non-task tools', () => {
-    trackTaskActivity(makeSpan({ attributes: { 'builtin.tool': 'Read', 'session.id': 'sess-abc' } }));
+    trackTaskActivity(makeSpan({ attributes: { 'builtin.tool': 'Read', [SESSION_ATTRIBUTES.ID]: 'sess-abc' } }));
     expect(sessionTasks.size).toBe(0);
   });
 
@@ -100,7 +102,7 @@ describe('trackTaskActivity', () => {
       attributes: {
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -118,7 +120,7 @@ describe('trackTaskActivity', () => {
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
         'builtin.task_id': 'task-1',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -128,7 +130,7 @@ describe('trackTaskActivity', () => {
         'builtin.tool': 'TaskUpdate',
         'builtin.task_status': 'in_progress',
         'builtin.task_id': 'task-1',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -138,7 +140,7 @@ describe('trackTaskActivity', () => {
         'builtin.tool': 'TaskUpdate',
         'builtin.task_status': 'completed',
         'builtin.task_id': 'task-1',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -156,7 +158,7 @@ describe('trackTaskActivity', () => {
         'builtin.tool': 'TaskUpdate',
         'builtin.task_status': 'in_progress',
         'builtin.task_id': 'task-rapid',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
     trackTaskActivity(makeSpan({
@@ -164,7 +166,7 @@ describe('trackTaskActivity', () => {
         'builtin.tool': 'TaskUpdate',
         'builtin.task_status': 'completed',
         'builtin.task_id': 'task-rapid',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -180,7 +182,7 @@ describe('trackTaskActivity', () => {
         'builtin.tool': 'TaskUpdate',
         'builtin.task_status': 'deleted',
         'builtin.task_id': 'task-1',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -195,7 +197,7 @@ describe('trackTaskActivity', () => {
       attributes: {
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -209,7 +211,7 @@ describe('trackTaskActivity', () => {
       attributes: {
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
     trackTaskActivity(makeSpan({
@@ -217,7 +219,7 @@ describe('trackTaskActivity', () => {
       attributes: {
         'builtin.tool': 'TaskCreate',
         'builtin.task_status': 'pending',
-        'session.id': 'sess-abc',
+        [SESSION_ATTRIBUTES.ID]: 'sess-abc',
       },
     }));
 
@@ -229,10 +231,10 @@ describe('trackTaskActivity', () => {
 
   it('falls back to counting when no status attributes', () => {
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskCreate', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskUpdate', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
 
     const data = sessionTasks.get('sess-abc')!;
@@ -250,13 +252,13 @@ describe('deriveTaskCompletionPerSession', () => {
   it('scores all-completed session as 1.0', () => {
     // Task 1: full lifecycle
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'in_progress', 'builtin.task_id': 't1', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'in_progress', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 't1', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -269,18 +271,18 @@ describe('deriveTaskCompletionPerSession', () => {
   it('scores mixed session as average', () => {
     // Task 1: completed
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 't1', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
 
     // Task 2: only in_progress
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't2', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't2', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'in_progress', 'builtin.task_id': 't2', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'in_progress', 'builtin.task_id': 't2', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -291,13 +293,13 @@ describe('deriveTaskCompletionPerSession', () => {
   it('uses ratio fallback for old data without status attributes', () => {
     // Old-style spans without builtin.task_status
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'session.id': 'sess-old' },
+      attributes: { 'builtin.tool': 'TaskCreate', [SESSION_ATTRIBUTES.ID]: 'sess-old' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'session.id': 'sess-old' },
+      attributes: { 'builtin.tool': 'TaskUpdate', [SESSION_ATTRIBUTES.ID]: 'sess-old' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'session.id': 'sess-old' },
+      attributes: { 'builtin.tool': 'TaskUpdate', [SESSION_ATTRIBUTES.ID]: 'sess-old' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -321,7 +323,7 @@ describe('deriveTaskCompletionPerSession', () => {
 
   it('handles session with only pending tasks', () => {
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', 'session.id': 'sess-abc' },
+      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -333,15 +335,15 @@ describe('deriveTaskCompletionPerSession', () => {
   it('handles multiple sessions independently', () => {
     // Session 1: completed
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', 'session.id': 'sess-1' },
+      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-1' },
     }));
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 't1', 'session.id': 'sess-1' },
+      attributes: { 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 't1', [SESSION_ATTRIBUTES.ID]: 'sess-1' },
     }));
 
     // Session 2: only pending
     trackTaskActivity(makeSpan({
-      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't2', 'session.id': 'sess-2' },
+      attributes: { 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 't2', [SESSION_ATTRIBUTES.ID]: 'sess-2' },
     }));
 
     const evals = deriveTaskCompletionPerSession();
@@ -563,13 +565,13 @@ function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
     endTime: [1790553614, 236463666],
     duration: [0, 1463666],
     status: { code: 1 },
-    attributes: { 'session.id': 'sess-abc', 'integritystudio.hook.name': 'builtin-post-tool', ...attributes },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', 'integritystudio.hook.name': 'builtin-post-tool', ...attributes },
   };
 }
 
 describe('deriveToolCorrectness across the builtin.* rename', () => {
   it.each([
-    ['canonical', { 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true }],
+    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true }],
     ['legacy', { 'builtin.tool': 'Bash', 'builtin.success': true }],
   ])('scores a successful call 1 from %s keys', (_era, attributes) => {
     const record = deriveToolCorrectness(renamedToolSpan(attributes));
@@ -579,7 +581,7 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
   });
 
   it.each([
-    ['canonical', { 'gen_ai.tool.name': 'Edit', 'integritystudio.tool.success': false, 'integritystudio.tool.error_type': 'file_not_read' }],
+    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', 'integritystudio.tool.success': false, 'integritystudio.tool.error_type': 'file_not_read' }],
     ['legacy', { 'builtin.tool': 'Edit', 'builtin.success': false, 'builtin.error_type': 'file_not_read' }],
   ])('scores a failed call 0 with its error type from %s keys', (_era, attributes) => {
     const record = deriveToolCorrectness(renamedToolSpan(attributes));
@@ -600,7 +602,7 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
 
 describe('task tracking across the builtin.* rename', () => {
   it.each([
-    ['canonical', { 'gen_ai.tool.name': 'TaskUpdate', 'integritystudio.task.id': 't1', 'integritystudio.task.status': 'completed' }],
+    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'TaskUpdate', 'integritystudio.task.id': 't1', 'integritystudio.task.status': 'completed' }],
     ['legacy', { 'builtin.tool': 'TaskUpdate', 'builtin.task_id': 't1', 'builtin.task_status': 'completed' }],
   ])('scores a completed task 1 from %s keys', (_era, attributes) => {
     trackTaskActivity(renamedToolSpan(attributes));
@@ -614,7 +616,7 @@ describe('task tracking across the builtin.* rename', () => {
 
 describe('deriveEvaluationLatency across the builtin.* rename', () => {
   it('names the tool from the canonical key', () => {
-    const record = deriveEvaluationLatency(renamedToolSpan({ 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true }));
+    const record = deriveEvaluationLatency(renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true }));
 
     expect(record?.explanation).toMatch(/^Hook builtin\/Bash executed in /);
   });
@@ -623,9 +625,9 @@ describe('deriveEvaluationLatency across the builtin.* rename', () => {
 describe('deriveAll across the builtin.* rename', () => {
   it('scores a day of mostly successful post-rename calls as mostly successful', () => {
     const spans = [
-      renamedToolSpan({ 'gen_ai.tool.name': 'Read', 'integritystudio.tool.success': true }),
-      { ...renamedToolSpan({ 'gen_ai.tool.name': 'Bash', 'integritystudio.tool.success': true }), spanId: 'span-002' },
-      { ...renamedToolSpan({ 'gen_ai.tool.name': 'Edit', 'integritystudio.tool.success': false }), spanId: 'span-003' },
+      renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read', 'integritystudio.tool.success': true }),
+      { ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true }), spanId: 'span-002' },
+      { ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', 'integritystudio.tool.success': false }), spanId: 'span-003' },
     ];
 
     const scores = deriveAll({ spans, accounts: new Map() })
@@ -648,7 +650,7 @@ function mcpToolSpan(attributes: Record<string, unknown>): TraceSpan {
   return {
     ...renamedToolSpan({}),
     name: 'hook:mcp-post-tool',
-    attributes: { 'session.id': 'sess-abc', 'integritystudio.hook.name': 'mcp-post-tool', ...attributes },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', 'integritystudio.hook.name': 'mcp-post-tool', ...attributes },
   };
 }
 
@@ -723,9 +725,9 @@ function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId:
     duration: [0, 1_000_000],
     status: { code: OTEL_STATUS_OK },
     attributes: {
-      'session.id': 'sess-agents',
-      'gen_ai.operation.name': 'invoke_agent',
-      'gen_ai.agent.name': agentName,
+      [SESSION_ATTRIBUTES.ID]: 'sess-agents',
+      [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent',
+      [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
       'integritystudio.agent.type': agentName,
       'integritystudio.hook.name': `agent.operation.${phase}`,
     },
@@ -801,9 +803,9 @@ describe('handoff_correctness scores agent failures correctly', () => {
     return {
       ...agentHookSpan(phase, agentName, spanId, startSec),
       attributes: {
-        'session.id': 'sess-failure',
-        'gen_ai.operation.name': 'invoke_agent',
-        'gen_ai.agent.name': agentName,
+        [SESSION_ATTRIBUTES.ID]: 'sess-failure',
+        [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent',
+        [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
         'integritystudio.agent.type': agentName,
         'integritystudio.hook.name': `agent.operation.${phase}`,
         ...(extra.hasError !== undefined && { 'integritystudio.agent.has_error': extra.hasError }),
@@ -887,7 +889,7 @@ describe('detectInputDrift', () => {
 
   function toolSpans(count: number, attributes: Record<string, unknown>, fromIndex = 0): TraceSpan[] {
     return Array.from({ length: count }, (_, i) => ({
-      ...renamedToolSpan({ 'gen_ai.tool.name': 'Read', ...attributes }),
+      ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read', ...attributes }),
       spanId: `tool-${fromIndex + i}`,
       startTime: [DAY_START_SEC + fromIndex + i, 0] as [number, number],
     }));
@@ -918,12 +920,12 @@ describe('detectInputDrift', () => {
   // `invoke_agent <agent>` span is the only evidence of an invocation.
   const withoutOperation = (span: TraceSpan): TraceSpan => ({
     ...span,
-    attributes: Object.fromEntries(Object.entries(span.attributes).filter(([key]) => key !== 'gen_ai.operation.name')),
+    attributes: Object.fromEntries(Object.entries(span.attributes).filter(([key]) => key !== GENAI_CORE_ATTRIBUTES.OPERATION_NAME)),
   });
   const syntheticInvokeSpan: TraceSpan = {
     ...agentHookSpan('finalize', 'Explore', 'span-i1', DAY_START_SEC + 5),
     name: 'invoke_agent Explore',
-    attributes: { 'session.id': 'sess-agents', 'gen_ai.operation.name': 'invoke_agent', 'gen_ai.agent.name': 'Explore' },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-agents', [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent', [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'Explore' },
   };
 
   it('is quiet when only the synthetic span carries the operation and the hook spans keep their names', () => {

@@ -14,6 +14,7 @@ import type { FixtureServer } from './support/fixture-server.js';
 
 import { codeQualityRoutes } from '../api/routes/code-quality.js';
 import type { CodeQualityResponse } from '../api/routes/code-quality.js';
+import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 const NS_PER_MS = 1_000_000n;
 const RECENT_NS = BigInt(Date.now()) * NS_PER_MS;
@@ -50,8 +51,8 @@ function checkpoint(attrs: Record<string, unknown>) {
     endTimeUnixNano: RECENT_NS + SPAN_DURATION_NS,
     attributes: {
       'integritystudio.code.event': 'survival_checkpoint',
-      'gen_ai.agent.name': AGENT,
-      'gen_ai.agent.version': VERSION,
+      [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: AGENT,
+      [GENAI_AGENT_ATTRIBUTES.AGENT_VERSION]: VERSION,
       'integritystudio.code.checkpoint_window': '21d',
       'integritystudio.code.quality.survival_rate': 0.9,
       'integritystudio.code.quality.churn_rate': 0.1,
@@ -71,8 +72,8 @@ function invocation(attrs: Record<string, unknown>, agentName = AGENT) {
     endTimeUnixNano: RECENT_NS + SPAN_DURATION_NS,
     attributes: {
       'integritystudio.code.event': 'generated',
-      'gen_ai.agent.name': agentName,
-      'gen_ai.agent.version': VERSION,
+      [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
+      [GENAI_AGENT_ATTRIBUTES.AGENT_VERSION]: VERSION,
       ...attrs,
     },
   });
@@ -89,7 +90,7 @@ describe('GET /code-quality', () => {
     fixture.setTraces([
       checkpoint({ 'integritystudio.code.survival.cohort': 'scored', 'integritystudio.code.content_kind': 'code' }),
       checkpoint({
-        'gen_ai.agent.name': BASELINE_AGENT,
+        [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: BASELINE_AGENT,
         'integritystudio.code.survival.cohort': 'baseline',
         'integritystudio.code.content_kind': 'code',
         'integritystudio.code.quality.survival_rate': 0.5,

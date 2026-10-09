@@ -5,6 +5,8 @@
  */
 
 import type { EvaluatorType, EvaluatorKind, EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
+import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
+import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { IDENTITY_KEY_REF_FIELD, type AccountRef } from './account-stamps.js';
 
 export const SESSION_ID_PREVIEW_LEN = 8;
@@ -68,25 +70,25 @@ export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
  * unit moved off `gen_ai.evaluation.score.unit` on 2026-09-29.
  */
 export const EVALUATION_ATTRS = {
-  NAME: 'gen_ai.evaluation.name',
-  SCORE_VALUE: 'gen_ai.evaluation.score.value',
-  SCORE_LABEL: 'gen_ai.evaluation.score.label',
+  NAME: GENAI_EVALUATION_ATTRIBUTES.NAME,
+  SCORE_VALUE: GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE,
+  SCORE_LABEL: GENAI_EVALUATION_ATTRIBUTES.SCORE_LABEL,
   SCORE_UNIT: 'integritystudio.evaluation.score.unit',
-  EXPLANATION: 'gen_ai.evaluation.explanation',
+  EXPLANATION: GENAI_EVALUATION_ATTRIBUTES.EXPLANATION,
   EVALUATOR_KIND: 'integritystudio.evaluation.evaluator.kind',
   COHORT: 'integritystudio.evaluation.cohort',
   PRODUCER: 'integritystudio.evaluation.producer',
   JUDGE_MODEL: 'integritystudio.evaluation.judge.model',
-  SESSION_ID: 'session.id',
+  SESSION_ID: SESSION_ATTRIBUTES.ID,
   /** Semconv fallback link to the scored response when no span id is known (TKR8 Phase 2). */
-  RESPONSE_ID: 'gen_ai.response.id',
+  RESPONSE_ID: GENAI_RESPONSE_ATTRIBUTES.ID,
 } as const;
 
 /** Legacy overloaded key, read-only — still present on every pre-OBP16 record. */
-export const LEGACY_EVALUATOR_TYPE_ATTR = 'gen_ai.evaluation.evaluator.type';
+export const LEGACY_EVALUATOR_TYPE_ATTR = GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE;
 
 /** COMPAT until 2026-10-29: the score unit's key on records written before 2026-09-29. Read-only. */
-export const LEGACY_SCORE_UNIT_ATTR = 'gen_ai.evaluation.score.unit';
+export const LEGACY_SCORE_UNIT_ATTR = GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT;
 
 export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';
 

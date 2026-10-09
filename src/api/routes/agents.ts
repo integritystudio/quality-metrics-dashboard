@@ -7,6 +7,7 @@ import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
 import { mean } from 'd3-array';
 import { handleRouteError } from '../route-errors.js';
+import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 
@@ -87,7 +88,7 @@ agentRoutes.get('/agents', async (c) => {
   const traceToAgents = new Map<string, Set<string>>();
 
   for (const span of agentSpans) {
-    const name = attrStr(span, 'gen_ai.agent.name');
+    const name = attrStr(span, GENAI_AGENT_ATTRIBUTES.AGENT_NAME);
     const entry = (acc[name] ??= createAgentAccumulator(periodDays));
     entry.invocations++;
     if (span.startTimeUnixNano) {
@@ -98,7 +99,7 @@ agentRoutes.get('/agents', async (c) => {
     if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
     if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
     entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
-    const sid = attrStr(span, 'session.id', '');
+    const sid = attrStr(span, SESSION_ATTRIBUTES.ID, '');
     if (sid) entry.sessions.add(sid);
     if (span.traceId) {
       entry.traceIds.add(span.traceId);

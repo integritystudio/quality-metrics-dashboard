@@ -19,6 +19,7 @@ import { CANARY_COHORT } from '../evaluation-constants.js';
 import { BACKFILL_COHORT, SEED_COHORT } from '../eval-record.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
+import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 /** 01:08 UTC, so every window's start is mid-day and the day rounding is visible. */
 const NOW = new Date('2026-10-08T01:08:00.000Z');
@@ -32,7 +33,7 @@ const sessionSpan: TraceSpan = {
   name: 'session-span',
   kind: 'INTERNAL',
   startTimeUnixNano: isoToNs('2026-10-07T12:00:00.000Z'),
-  attributes: { 'session.id': SESSION_ID },
+  attributes: { [SESSION_ATTRIBUTES.ID]: SESSION_ID },
 };
 
 function fakeBackend(evaluations: EvaluationResult[], spans: TraceSpan[] = []): OrgReadBackend {
