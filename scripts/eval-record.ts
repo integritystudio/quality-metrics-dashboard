@@ -87,9 +87,11 @@ export const EVALUATION_ATTRS = {
 } as const;
 
 /** Legacy overloaded key, read-only — still present on every pre-OBP16 record. */
+// eslint-disable-next-line @typescript-eslint/no-deprecated -- the legacy key is what pre-OBP16 records carry
 export const LEGACY_EVALUATOR_TYPE_ATTR = GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE;
 
 /** COMPAT until 2026-10-29: the score unit's key on records written before 2026-09-29. Read-only. */
+// eslint-disable-next-line @typescript-eslint/no-deprecated -- the legacy key is what pre-2026-09-29 records carry
 export const LEGACY_SCORE_UNIT_ATTR = GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT;
 
 export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';

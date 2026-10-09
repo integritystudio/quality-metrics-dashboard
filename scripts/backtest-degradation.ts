@@ -89,7 +89,7 @@ function loadIncidents(): LabeledIncident[] {
     const data: unknown = JSON.parse(raw);
     const result = z.array(labeledIncidentSchema).safeParse(data);
     if (!result.success) {
-      console.error('Invalid .degradation-incidents.json:', result.error.flatten().fieldErrors);
+      console.error('Invalid .degradation-incidents.json:', z.treeifyError(result.error));
       return [];
     }
     return result.data;

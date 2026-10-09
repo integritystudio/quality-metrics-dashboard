@@ -23,7 +23,7 @@ import { IDENTITY_KEY_REF_PATTERN, asString, type AccountRef } from './account-s
 /** Upper bound on cloud rows held in memory per account; ~10k spans/day locally. */
 export const CLOUD_SPAN_LIMIT = 500_000;
 const CLI_PREFIX = '[derive:cloud]';
-const STATUS_CODE_NAMES = statusCodeSchema.removeDefault().options;
+const STATUS_CODE_NAMES = statusCodeSchema.unwrap().options;
 
 export interface LoadedSpans {
   /** Ascending by start time, span id breaking ties. */

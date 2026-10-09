@@ -302,6 +302,7 @@ describe('evaluateTurnConsolidated', () => {
       // only field that says which one a stored record came from.
       expect(record.evaluator).toBe(CONSOLIDATED_PRODUCER);
       expect(record.evaluator).not.toBe(PRODUCER);
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- the mirrored legacy field must keep matching evaluatorKind
       expect(record.evaluatorType).toBe('llm');
       expect(record.evaluatorKind).toBe('llm');
       expect(record.cohort).toBe('normal');

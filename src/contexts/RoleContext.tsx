@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, use, useEffect, useMemo, type ReactNode } from 'react';
 import { useRoute } from 'wouter';
 import {
   ROLE_FEATURE_CONFIG,
@@ -47,14 +47,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   }, [role]);
 
   return (
-    <RoleContext.Provider value={value}>
+    <RoleContext value={value}>
       {children}
-    </RoleContext.Provider>
+    </RoleContext>
   );
 }
 
 export function useRole(): RoleContextValue {
-  const ctx = useContext(RoleContext);
+  const ctx = use(RoleContext);
   if (!ctx) {
     throw new Error('useRole must be used within a RoleProvider');
   }

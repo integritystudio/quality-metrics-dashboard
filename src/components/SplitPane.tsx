@@ -11,22 +11,22 @@ interface SplitPaneProps {
 export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct = 75 }: SplitPaneProps) {
   const [splitPct, setSplitPct] = useState(initialSplit);
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
+  const draggingRef = useRef(false);
 
-  const onMouseDown = useCallback(() => { dragging.current = true; }, []);
+  const onMouseDown = useCallback(() => { draggingRef.current = true; }, []);
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
-      if (!dragging.current || !containerRef.current) return;
+      if (!draggingRef.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const pct = ((e.clientX - rect.left) / rect.width) * 100;
       setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
     }
-    function onMouseUp() { dragging.current = false; }
+    function onMouseUp() { draggingRef.current = false; }
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
     return () => {
-      dragging.current = false;
+      draggingRef.current = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };

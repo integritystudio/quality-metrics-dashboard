@@ -14,7 +14,7 @@
  * identical to today.
  */
 
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { createContext, use, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './AuthContext.js';
 import { apiFetch, getStoredOrgId, setStoredOrgId } from '../lib/api-client.js';
@@ -78,11 +78,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     () => ({ activeOrgId, memberships, isStaff, switchOrg }),
     [activeOrgId, memberships, isStaff, switchOrg],
   );
-  return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
+  return <OrgContext value={value}>{children}</OrgContext>;
 }
 
 export function useOrg(): OrgContextValue {
-  const ctx = useContext(OrgContext);
+  const ctx = use(OrgContext);
   if (!ctx) throw new Error('useOrg must be used within an OrgProvider');
   return ctx;
 }
@@ -92,5 +92,5 @@ export function useOrg(): OrgContextValue {
  * stubs). Returns null context instead of throwing.
  */
 export function useOrgOptional(): OrgContextValue | null {
-  return useContext(OrgContext);
+  return use(OrgContext);
 }

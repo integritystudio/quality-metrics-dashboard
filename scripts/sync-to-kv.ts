@@ -266,6 +266,7 @@ export function toKVValue(value: unknown): string {
  */
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev =>
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- pre-OBP16 canaries are marked only here
     ev.cohort !== CANARY_COHORT && ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
 

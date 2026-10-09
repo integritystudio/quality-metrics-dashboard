@@ -9,6 +9,7 @@ export function Auth0Provider({ children }: { children: ReactNode }) {
   return createElement('div', { 'data-testid': 'auth0-stub' }, children);
 }
 
+// eslint-disable-next-line @eslint-react/no-unnecessary-use-prefix -- must match the @auth0/auth0-react export it replaces
 export function useAuth0() {
   return {
     isLoading: false,

@@ -102,11 +102,11 @@ export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
  * a working route into a 500.
  */
 const calibrationPercentilesSchema = z.object({
-  p10: z.number().finite(),
-  p25: z.number().finite(),
-  p50: z.number().finite(),
-  p75: z.number().finite(),
-  p90: z.number().finite(),
+  p10: z.number(),
+  p25: z.number(),
+  p50: z.number(),
+  p75: z.number(),
+  p90: z.number(),
 });
 
 /**

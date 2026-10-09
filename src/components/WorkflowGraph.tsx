@@ -378,7 +378,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
-  const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(new Set());
+  const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(() => new Set());
 
   // Stable identity for the keyboard-activation callback baked into node data,
   // so layout does not recompute when the parent passes a new onNodeClick closure.

@@ -30,6 +30,8 @@ import {
   normalizeScore,
   toOTelRecord,
   EVAL_SCORE_PRECISION,
+  LEGACY_EVALUATOR_TYPE_ATTR,
+  LEGACY_SCORE_UNIT_ATTR,
   type EvalRecord,
 } from '../eval-record.js';
 import { judgedByKey } from '../judge-dedup.js';
@@ -671,7 +673,7 @@ describe('toOTelRecord', () => {
   it('no longer writes the two overloaded gen_ai evaluator keys', () => {
     const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE]).toBeUndefined();
+    expect(attrs[LEGACY_EVALUATOR_TYPE_ATTR]).toBeUndefined();
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]).toBeUndefined();
   });
 
@@ -679,7 +681,7 @@ describe('toOTelRecord', () => {
     const record = toOTelRecord(makeEvalRecord({ scoreUnit: 'seconds' })) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
     expect(attrs['integritystudio.evaluation.score.unit']).toBe('seconds');
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]).toBeUndefined();
+    expect(attrs[LEGACY_SCORE_UNIT_ATTR]).toBeUndefined();
   });
 
   it('omits the judge model for a score no model produced', () => {

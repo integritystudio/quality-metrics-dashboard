@@ -76,6 +76,8 @@ export default tseslint.config(
   {
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
     plugins: { 'react-hooks': reactHooks, 'react': react },
+    // 'detect' calls context.getFilename, removed in ESLint 10, so the major is pinned here.
+    settings: { react: { version: '19' } },
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',

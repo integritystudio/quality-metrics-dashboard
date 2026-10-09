@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 /** Single-char key (e.g. "1") or two-key combo (e.g. "g h"). A single key MUST NOT also be a combo prefix. */
 type ShortcutKey = string;
@@ -30,7 +30,7 @@ interface KeyboardNavContextValue {
 const KeyboardNavContext = createContext<KeyboardNavContextValue | null>(null);
 
 export function useShortcut(key: ShortcutKey, description: string, scope: string, action: () => void) {
-  const ctx = useContext(KeyboardNavContext);
+  const ctx = use(KeyboardNavContext);
   if (!ctx) throw new Error('useShortcut must be used within KeyboardNavProvider');
   const { register } = ctx;
   const actionRef = useRef(action);
@@ -40,7 +40,7 @@ export function useShortcut(key: ShortcutKey, description: string, scope: string
 }
 
 export function useKeyboardNav() {
-  const ctx = useContext(KeyboardNavContext);
+  const ctx = use(KeyboardNavContext);
   if (!ctx) throw new Error('useKeyboardNav must be used within KeyboardNavProvider');
   return ctx;
 }
@@ -150,8 +150,8 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <KeyboardNavContext.Provider value={value}>
+    <KeyboardNavContext value={value}>
       {children}
-    </KeyboardNavContext.Provider>
+    </KeyboardNavContext>
   );
 }

@@ -11,7 +11,7 @@ const stringOrEmpty = z.string().nullish().transform((v) => v ?? '');
 /** `@Default(0)` on an `int`: json_serializable truncates a double and reads null as 0. */
 const intOrZero = z.number().nullish().transform((v) => Math.trunc(v ?? 0));
 /** A Dart `is List ? ... : []` read: anything but a list is an empty one. */
-const listOf = <T extends z.ZodTypeAny>(item: T) =>
+const listOf = <T extends z.ZodType>(item: T) =>
   z.preprocess((raw: unknown): unknown[] => (Array.isArray(raw) ? (raw as unknown[]) : []), z.array(item));
 /** A Dart `is Map ? ... : {}` read. */
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

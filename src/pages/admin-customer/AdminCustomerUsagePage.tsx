@@ -151,7 +151,7 @@ export function AdminCustomerUsagePage({ orgId }: { orgId: string }) {
         <CustomerCard title={text.cardTitle} isLoading={summary.isPending}>
           {data ? (
             <>
-              <UsageBar quota={acceptedQuota} bucketTotal={bucketTotal} periodLabel={periodLabel} resetLabel={monthlyResetLabel(new Date())} />
+              <UsageBar quota={acceptedQuota} bucketTotal={bucketTotal} periodLabel={periodLabel} resetLabel={monthlyResetLabel(new Date(summary.dataUpdatedAt))} />
               {data.buckets.length > 0 && (
                 <DailyUsageChart buckets={data.buckets} monthlyLimit={acceptedQuota?.monthlyLimit ?? 0} />
               )}

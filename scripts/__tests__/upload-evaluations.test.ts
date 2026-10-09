@@ -21,7 +21,7 @@ import {
 } from '../upload-evaluations.js';
 import { buildAccountIndex } from '../account-stamps.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
-import { EVALUATION_RESULT_EVENT, toOTelRecord } from '../eval-record.js';
+import { EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, LEGACY_SCORE_UNIT_ATTR, toOTelRecord } from '../eval-record.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
@@ -107,8 +107,8 @@ describe('mapRecord', () => {
   it('maps a derive record that carries only the legacy overloaded evaluator.type', () => {
     const { payload } = mapRecord(record({
       [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations',
-      [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE]: 'rule',
-      [GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]: 'ratio_0_1',
+      [LEGACY_EVALUATOR_TYPE_ATTR]: 'rule',
+      [LEGACY_SCORE_UNIT_ATTR]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
     expect(payload).toMatchObject({
@@ -121,7 +121,7 @@ describe('mapRecord', () => {
   it('reads the score unit from its integritystudio key, over the old gen_ai key', () => {
     const { payload } = mapRecord(record({
       'integritystudio.evaluation.score.unit': 'seconds',
-      [GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]: 'ratio_0_1',
+      [LEGACY_SCORE_UNIT_ATTR]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
     expect(payload?.scoreUnit).toBe('seconds');
@@ -158,7 +158,7 @@ describe('mapRecord', () => {
   });
 
   it('drops canary records marked by the legacy overloaded field', () => {
-    const { skip } = mapRecord(record({ [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR_TYPE]: 'canary' }), NOW, MAX_AGE_MS);
+    const { skip } = mapRecord(record({ [LEGACY_EVALUATOR_TYPE_ATTR]: 'canary' }), NOW, MAX_AGE_MS);
     expect(skip).toBe('canary');
   });
 

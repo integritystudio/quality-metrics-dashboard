@@ -4,13 +4,17 @@
  * horizontal grid lines; and, with a monthly limit, a dashed line at its daily share with
  * each bar coloured by its ratio to that line.
  */
-import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Bar, BarChart, CartesianGrid, Rectangle, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type BarShapeProps,
+} from 'recharts';
 import {
   CHART_AXIS_TICK, CHART_COLORS, CHART_DASH_THRESHOLD, CHART_GRID_PROPS, CHART_MARGIN,
   CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE,
 } from '../../lib/constants.js';
 import { USAGE_BAR_CATEGORY_GAP, USAGE_CHART_GRID_LINES, USAGE_CHART_HEIGHT } from '../../lib/admin-customer-constants.js';
-import { aggregateUsageByDate, dailyBarTone, dailyQuotaLine, usageTickLabel, type QuotaTone } from '../../lib/admin-customer.js';
+import {
+  aggregateUsageByDate, dailyBarTone, dailyQuotaLine, usageTickLabel, type DailyUsage, type QuotaTone,
+} from '../../lib/admin-customer.js';
 import { CUSTOMER_VIEW } from '../../lib/admin-customer-strings.js';
 import type { UsageBucket } from '../../lib/validation/admin-customer-schemas.js';
 
@@ -24,6 +28,19 @@ const TONE_FILL: Record<QuotaTone, string> = {
 const Y_TICK_COUNT = USAGE_CHART_GRID_LINES + 1;
 const UNITS_LABEL = 'units';
 
+interface TonedDailyUsage extends DailyUsage {
+  fill: string;
+}
+
+interface TonedBarShapeProps extends BarShapeProps {
+  payload?: TonedDailyUsage;
+}
+
+/** Per-bar colour from the datum (Recharts 3 deprecates `Cell` in favour of `shape`). */
+function tonedBar(props: TonedBarShapeProps) {
+  return <Rectangle {...props} fill={props.payload?.fill} />;
+}
+
 interface DailyUsageChartProps {
   buckets: readonly UsageBucket[];
   /** The org's monthly limit, or 0 when there is none; drives the reference line and bar colours. */
@@ -31,7 +48,8 @@ interface DailyUsageChartProps {
 }
 
 export function DailyUsageChart({ buckets, monthlyLimit }: DailyUsageChartProps) {
-  const daily = aggregateUsageByDate(buckets);
+  const daily: TonedDailyUsage[] = aggregateUsageByDate(buckets)
+    .map((d) => ({ ...d, fill: TONE_FILL[dailyBarTone(d.total, monthlyLimit)] }));
   if (daily.length === 0) return null;
   const quotaLine = dailyQuotaLine(monthlyLimit);
 
@@ -60,11 +78,7 @@ export function DailyUsageChart({ buckets, monthlyLimit }: DailyUsageChartProps)
             {quotaLine !== null && (
               <ReferenceLine y={quotaLine} stroke={CHART_COLORS.text} strokeDasharray={CHART_DASH_THRESHOLD} />
             )}
-            <Bar dataKey="total" isAnimationActive={false}>
-              {daily.map((d) => (
-                <Cell key={d.date} fill={TONE_FILL[dailyBarTone(d.total, monthlyLimit)]} />
-              ))}
-            </Bar>
+            <Bar dataKey="total" isAnimationActive={false} shape={tonedBar} />
           </BarChart>
         </ResponsiveContainer>
       </div>

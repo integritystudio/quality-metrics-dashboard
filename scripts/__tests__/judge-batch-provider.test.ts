@@ -148,7 +148,7 @@ describe('createBatchProvider', () => {
       temperature: TEMPERATURE,
       messages: [{ role: 'user', content: 'alpha' }],
     });
-    expect(requests[1]!.params.temperature).toBe(0.7);
+    expect(requests[1]!.params).toMatchObject({ temperature: 0.7 });
   });
 
   it('polls until the batch has ended and only then reads results', async () => {

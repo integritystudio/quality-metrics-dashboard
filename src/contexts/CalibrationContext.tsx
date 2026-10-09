@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, use, useMemo, type ReactNode } from 'react';
 import { useCalibration, getMetricCalibration, type MetricCalibration } from '../hooks/useCalibration.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 
@@ -13,14 +13,14 @@ export function CalibrationProvider({ children }: { children: ReactNode }) {
   const { data, isLoading } = useCalibration();
   const value = useMemo(() => ({ data, isLoading }), [data, isLoading]);
   return (
-    <CalibrationContext.Provider value={value}>
+    <CalibrationContext value={value}>
       {children}
-    </CalibrationContext.Provider>
+    </CalibrationContext>
   );
 }
 
 export function useCalibrationData(): CalibrationContextValue {
-  const ctx = useContext(CalibrationContext);
+  const ctx = use(CalibrationContext);
   if (!ctx) {
     throw new Error('useCalibrationData must be used within a CalibrationProvider');
   }
@@ -28,7 +28,7 @@ export function useCalibrationData(): CalibrationContextValue {
 }
 
 export function useMetricCalibration(metricName: string): MetricCalibration | undefined {
-  const ctx = useContext(CalibrationContext);
+  const ctx = use(CalibrationContext);
   if (!ctx) return undefined;
   return getMetricCalibration(ctx.data, metricName);
 }
