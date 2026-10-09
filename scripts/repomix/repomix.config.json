@@ -25,8 +25,6 @@
     "includeEmptyDirectories": false,
     "includeFullDirectoryStructure": false,
 
-    "instructionFilePath": "CLAUDE.md",
-
     "git": {
       "sortByChanges": true,
       "sortByChangesMaxCommits": 200,

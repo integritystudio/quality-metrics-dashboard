@@ -12,6 +12,7 @@
     "files": true,
     "showLineNumbers": false,
     "includeEmptyDirectories": false,
+    "instructionFilePath": "CLAUDE.md",
     "git": {
       "includeDiffs": false,
       "includeLogs": false,
