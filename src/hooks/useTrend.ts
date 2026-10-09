@@ -1,4 +1,5 @@
 import type { Period, MetricTrend, MetricDynamics } from '../types.js';
+import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export interface PercentileSnapshot {
@@ -29,7 +30,8 @@ export interface TrendResponse {
   narrowed?: boolean;
 }
 
-export function useTrend(metricName: string, period: Period, buckets = 7) {
+/** The Worker serves the synced `trend:<name>:<period>` key, which holds DEFAULT_TREND_BUCKETS buckets whatever `buckets` says. */
+export function useTrend(metricName: string, period: Period, buckets: number = DEFAULT_TREND_BUCKETS) {
   return useApiQuery<TrendResponse>(
     ['trend', metricName, period, buckets],
     () => `/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,

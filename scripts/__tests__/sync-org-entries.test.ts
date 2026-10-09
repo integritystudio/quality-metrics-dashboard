@@ -97,7 +97,7 @@ describe('computeOrgEntries metric detail weeks', () => {
       evaluation('last ms before it', '2026-09-30T23:59:59.999Z'),
     ]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.sampleCount).toBe(1);
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.sampleCount).toBe(1);
   });
 
   it('baselines against the week starting at the UTC midnight 14 days back', async () => {
@@ -107,13 +107,13 @@ describe('computeOrgEntries metric detail weeks', () => {
       evaluation('before the previous week', '2026-09-23T23:59:59.999Z', { scoreValue: 0.1 }),
     ]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.trend?.previousValue).toBe(0.3);
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend?.previousValue).toBe(0.3);
   });
 
   it('has no trend when the previous week holds no scores', async () => {
     const result = await compute([evaluation('current', '2026-10-05T12:00:00.000Z')]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.trend).toBeUndefined();
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend).toBeUndefined();
   });
 
   // METRIC-WEEK-OVERLAP: day now − 7d belongs to the current week only.
@@ -121,7 +121,7 @@ describe('computeOrgEntries metric detail weeks', () => {
     const result = await compute([
       evaluation('boundary day', '2026-10-01T12:00:00.000Z', { scoreValue: 0.9 }),
     ]);
-    const detail = entryValue<MetricDetail>(result, `metric:${METRIC}`);
+    const detail = entryValue<MetricDetail>(result, `metric:${METRIC}:7d`);
 
     expect(detail?.sampleCount).toBe(1);
     expect(detail?.trend).toBeUndefined();
@@ -133,7 +133,7 @@ describe('computeOrgEntries metric detail weeks', () => {
       evaluation('last ms of the previous week', '2026-09-30T23:59:59.999Z', { scoreValue: 0.3 }),
     ]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.trend?.previousValue).toBe(0.3);
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend?.previousValue).toBe(0.3);
   });
 
   it('writes no detail for evaluations whose name only resembles the metric', async () => {
@@ -143,7 +143,7 @@ describe('computeOrgEntries metric detail weeks', () => {
       evaluation('prefixed', '2026-10-05T12:00:00.000Z', { evaluationName: 'answer_relevance' }),
     ]);
 
-    expect(entryValue(result, `metric:${METRIC}`)).toBeUndefined();
+    expect(entryValue(result, `metric:${METRIC}:7d`)).toBeUndefined();
   });
 
   it('counts only the evaluations whose name matches exactly', async () => {
@@ -153,7 +153,7 @@ describe('computeOrgEntries metric detail weeks', () => {
       evaluation('suffixed', '2026-10-05T12:00:00.000Z', { evaluationName: 'relevance_v2' }),
     ]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}`)?.sampleCount).toBe(1);
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.sampleCount).toBe(1);
   });
 });
 

@@ -172,7 +172,7 @@ function snapshotToEvalRow(s: {
 
 function MetricDetailPage({ name, period }: { name: string; period: Period }) {
   const { data, isLoading, error } = useMetricDetail(name, period);
-  const { data: trendData } = useTrend(name, period, 10);
+  const { data: trendData } = useTrend(name, period);
 
   if (isLoading) {
     return (

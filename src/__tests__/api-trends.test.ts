@@ -12,6 +12,7 @@ import type { FixtureServer } from './support/fixture-server.js';
 import { trendRoutes } from '../api/routes/trends.js';
 import type { TrendDetailResponse, TrendSummaryResponse } from './support/api-responses.js';
 import { recentEvalNanos } from './support/fixtures.js';
+import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
 
 let fixture: FixtureServer;
 
@@ -82,7 +83,7 @@ describe('GET /trends/:name', () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
     expect(res.status).toBe(200);
     const body = await res.json() as TrendDetailResponse;
-    expect(body).toMatchObject({ metric: METRIC, period: '7d', bucketCount: 7 });
+    expect(body).toMatchObject({ metric: METRIC, period: '7d', bucketCount: DEFAULT_TREND_BUCKETS });
     expect(body.trendData).toHaveLength(body.bucketCount);
   });
 
@@ -109,7 +110,7 @@ describe('GET /trends/:name', () => {
       scoreValue: DAILY_SCORES[i],
       timestamp: recentEvalNanos(daysAgo * ONE_DAY_MS),
     }, i + 1)));
-    const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
+    const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=${DAILY_DAYS_AGO.length}`);
     const body = await res.json() as TrendDetailResponse;
     const [first, ...rest] = body.trendData;
     expect(first?.trend).toBeNull();
