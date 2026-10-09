@@ -303,20 +303,33 @@ export function compareToReference<K extends string>(
   return { byCriterion, overall: toDistance(agreement.overall, overallSigned) };
 }
 
-/** Per criterion, the configuration with the lower MAE against the reference; 'tie' when equal or unpaired. */
+/**
+ * Per criterion, the configuration with the lowest MAE against the reference;
+ * `'tie'` when the lowest is shared or fewer than two configurations scored it.
+ */
+export function closestConfiguration<K extends string>(
+  summaries: Record<K, ReferenceSummary>,
+  configurations: readonly K[],
+): Record<string, K | 'tie'> {
+  const names = new Set(configurations.flatMap(c => Object.keys(summaries[c].byCriterion)));
+  const verdict: Record<string, K | 'tie'> = {};
+  for (const name of [...names].sort()) {
+    const scored = configurations
+      .map(c => ({ c, mae: summaries[c].byCriterion[name]?.meanAbsDiff ?? null }))
+      .filter((e): e is { c: K; mae: number } => e.mae !== null)
+      .sort((a, b) => a.mae - b.mae);
+    const [best, next] = scored;
+    verdict[name] = !best || scored.length < 2 || best.mae === next!.mae ? 'tie' : best.c;
+  }
+  return verdict;
+}
+
+/** {@link closestConfiguration} over the two Haiku paths. */
 export function closerConfiguration(
   perCriterion: ReferenceSummary,
   consolidated: ReferenceSummary,
 ): Record<string, Side | 'tie'> {
-  const names = new Set([...Object.keys(perCriterion.byCriterion), ...Object.keys(consolidated.byCriterion)]);
-  const verdict: Record<string, Side | 'tie'> = {};
-  for (const name of [...names].sort()) {
-    const a = perCriterion.byCriterion[name]?.meanAbsDiff ?? null;
-    const b = consolidated.byCriterion[name]?.meanAbsDiff ?? null;
-    if (a === null || b === null || a === b) verdict[name] = 'tie';
-    else verdict[name] = a < b ? 'perCriterion' : 'consolidated';
-  }
-  return verdict;
+  return closestConfiguration<Side>({ perCriterion, consolidated }, ['perCriterion', 'consolidated']);
 }
 
 // ---------------------------------------------------------------------------

@@ -48,6 +48,7 @@ import {
 } from './judge-consolidated.js';
 import { estimateSpend } from './judge-agreement.js';
 import {
+  closestConfiguration as closestAmong,
   compareToReference,
   createReferenceProvider,
   estimateCallInputTokens,
@@ -115,7 +116,6 @@ const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as
 export type Configuration = typeof CONFIGURATIONS[number];
 
 const TABLE_CELL_WIDTH = 12;
-const TIE = 'tie';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -200,18 +200,8 @@ export function countComplements(scores: readonly Record<string, number>[]): Com
 /** Per criterion, the configuration with the lowest MAE against the reference; 'tie' when tied or unpaired. */
 export function closestConfiguration(
   summaries: Record<Configuration, ReferenceSummary>,
-): Record<string, Configuration | typeof TIE> {
-  const names = new Set(CONFIGURATIONS.flatMap(c => Object.keys(summaries[c].byCriterion)));
-  const verdict: Record<string, Configuration | typeof TIE> = {};
-  for (const name of [...names].sort()) {
-    const scored = CONFIGURATIONS
-      .map(c => ({ c, mae: summaries[c].byCriterion[name]?.meanAbsDiff ?? null }))
-      .filter((e): e is { c: Configuration; mae: number } => e.mae !== null)
-      .sort((a, b) => a.mae - b.mae);
-    const [best, next] = scored;
-    verdict[name] = !best || scored.length < 2 || best.mae === next!.mae ? TIE : best.c;
-  }
-  return verdict;
+): Record<string, Configuration | 'tie'> {
+  return closestAmong(summaries, CONFIGURATIONS);
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +224,7 @@ async function scoreReferenceHallucination(
 
 function printTable(
   summaries: Record<Configuration, ReferenceSummary>,
-  closest: Record<string, Configuration | typeof TIE>,
+  closest: Record<string, Configuration | 'tie'>,
   complements: Record<Configuration | 'reference', ComplementCount>,
 ): void {
   console.log(`\n[hallucination] MAE from ${REFERENCE_MODEL} (1–5 scale)`);
