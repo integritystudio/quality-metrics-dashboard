@@ -81,7 +81,6 @@
 import { createHash, createHmac } from 'crypto';
 import { readdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { pathToFileURL } from 'url';
 
 import {
   EVALUATION_ATTRS,
@@ -101,7 +100,7 @@ import {
   type AccountRef,
 } from './account-stamps.js';
 import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
-import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, type CliSpec } from './cli-args.js';
+import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, runIfMain, type CliSpec } from './cli-args.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import {
   WEBHOOK_MAX_BATCH_SIZE,
@@ -811,9 +810,4 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((code) => process.exit(code)).catch((err: unknown) => {
-    console.error('[upload-evaluations] fatal:', err);
-    process.exit(1);
-  });
-}
+runIfMain(import.meta.url, main, '[upload-evaluations]');

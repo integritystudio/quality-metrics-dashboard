@@ -31,7 +31,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
@@ -62,7 +62,7 @@ import {
   type CriterionAgreement,
 } from './judge-agreement.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
-import { parseCli } from './cli-args.js';
+import { parseCli, runIfMain } from './cli-args.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -544,10 +544,4 @@ async function main(): Promise<void> {
   console.log(`\n[quality] results written: ${outPath}`);
 }
 
-// Only run when executed directly (not imported as a module for testing)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err: unknown) => {
-    console.error('[quality] fatal:', err);
-    process.exitCode = EXIT_REFUSED;
-  });
-}
+runIfMain(import.meta.url, main, '[quality]', { fatalExitCode: EXIT_REFUSED });

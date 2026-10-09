@@ -31,7 +31,6 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { pathToFileURL } from 'url';
 import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
@@ -65,7 +64,7 @@ import {
   type QualityTurn,
   type ReferenceSummary,
 } from './judge-quality-eval.js';
-import { parseCli } from './cli-args.js';
+import { parseCli, runIfMain } from './cli-args.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -404,10 +403,4 @@ async function main(): Promise<void> {
   console.log(`\n[hallucination] spent ${formatUsd(spentUsd())}; results written: ${outPath}`);
 }
 
-// Only run when executed directly (not imported as a module for testing)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err: unknown) => {
-    console.error('[hallucination] fatal:', err);
-    process.exitCode = EXIT_REFUSED;
-  });
-}
+runIfMain(import.meta.url, main, '[hallucination]', { fatalExitCode: EXIT_REFUSED });

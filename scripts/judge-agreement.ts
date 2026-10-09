@@ -22,7 +22,6 @@
  */
 
 import { writeFileSync } from 'fs';
-import { pathToFileURL } from 'url';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
@@ -44,7 +43,7 @@ import {
   toFivePointScale,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
-import { parseCli, positiveIntArg } from './cli-args.js';
+import { parseCli, positiveIntArg, runIfMain } from './cli-args.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -468,10 +467,4 @@ async function main(): Promise<void> {
   console.log(`\n[agreement] results written: ${outPath}`);
 }
 
-// Only run when executed directly (not imported as a module for testing)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err: unknown) => {
-    console.error('[agreement] fatal:', err);
-    process.exitCode = EXIT_REFUSED;
-  });
-}
+runIfMain(import.meta.url, main, '[agreement]', { fatalExitCode: EXIT_REFUSED });

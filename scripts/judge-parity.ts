@@ -24,11 +24,10 @@
  * Exit: 0 when discovery and selection match, 1 on any difference, 2 on a usage or fetch error.
  */
 
-import { pathToFileURL } from 'url';
 import { discoverTurns } from './judge-evaluations.js';
 import { type Turn } from './judge-turns.js';
 import { resolveDateScope } from './derive-evaluations.js';
-import { parseCli, positiveIntArg } from './cli-args.js';
+import { parseCli, positiveIntArg, runIfMain } from './cli-args.js';
 import { selectTurns } from './judge-selection.js';
 
 const CLI_PREFIX = '[judge:parity]';
@@ -150,10 +149,4 @@ async function main(): Promise<number> {
   return report.clean ? EXIT_MATCH : EXIT_MISMATCH;
 }
 
-// Only run when executed directly (not imported as a module for testing)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((code) => { process.exitCode = code; }).catch((err: unknown) => {
-    console.error(`${CLI_PREFIX} fatal:`, err);
-    process.exitCode = EXIT_ERROR;
-  });
-}
+runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: EXIT_ERROR });

@@ -146,9 +146,19 @@ export function nonNegativeNumberArg(label: string, raw: string | undefined): nu
   return value;
 }
 
+const FATAL_EXIT_CODE = 1;
+
+export interface RunIfMainOptions {
+  /** Exit code when `main` rejects; `FATAL_EXIT_CODE` when absent. */
+  fatalExitCode?: number;
+}
+
 /**
  * Run `main()` only when this module is the entry point. Replaces the fragile
  * `process.argv[1]?.endsWith('foo.ts')` pattern used in several scripts.
+ *
+ * Sets `process.exitCode` rather than calling `process.exit`, so buffered
+ * stdout and stderr are flushed before the process ends.
  *
  * @param moduleUrl  Pass `import.meta.url` from the calling module.
  * @param main       Async entry point; may return an exit code.
@@ -158,12 +168,13 @@ export function runIfMain(
   moduleUrl: string,
   main: () => Promise<unknown>,
   logPrefix: string,
+  { fatalExitCode = FATAL_EXIT_CODE }: RunIfMainOptions = {},
 ): void {
   if (!process.argv[1] || moduleUrl !== pathToFileURL(process.argv[1]).href) return;
   main()
-    .then(code => { if (typeof code === 'number') process.exit(code); })
+    .then(code => { if (typeof code === 'number') process.exitCode = code; })
     .catch((err: unknown) => {
       console.error(`${logPrefix} fatal:`, err);
-      process.exit(1);
+      process.exitCode = fatalExitCode;
     });
 }

@@ -23,7 +23,6 @@
 
 import { readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { pathToFileURL } from 'url';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
@@ -31,7 +30,7 @@ import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCEN
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 import { toDateOnly } from '../src/api/api-constants.js';
-import { nonNegativeNumberArg, parseCli, type CliSpec } from './cli-args.js';
+import { nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_SETTLE_MINUTES = 60;
@@ -310,10 +309,4 @@ async function main(): Promise<number> {
   return EXIT_OK;
 }
 
-// Only run when executed directly (not imported as a module for testing)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((code) => { process.exitCode = code; }).catch((err: unknown) => {
-    console.error(`${CLI_PREFIX} fatal:`, err);
-    process.exitCode = EXIT_CONFIG;
-  });
-}
+runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: EXIT_CONFIG });

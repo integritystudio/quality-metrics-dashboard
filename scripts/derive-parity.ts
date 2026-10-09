@@ -20,7 +20,7 @@
  * Exit: 0 when every record matches, 1 on any difference, 2 on a usage or fetch error.
  */
 
-import { pathToFileURL } from 'url';
+import { runIfMain } from './cli-args.js';
 import { EVAL_SCORE_PRECISION, type EvalRecord } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { deriveAll, loadLocalSpans, resolveDateScope } from './derive-evaluations.js';
@@ -157,10 +157,4 @@ async function main(): Promise<number> {
   return report.clean ? EXIT_MATCH : EXIT_MISMATCH;
 }
 
-// Only run when executed directly (not imported as a module for testing)
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then((code) => { process.exitCode = code; }).catch((err: unknown) => {
-    console.error(`${CLI_PREFIX} fatal:`, err);
-    process.exitCode = EXIT_ERROR;
-  });
-}
+runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: EXIT_ERROR });
