@@ -1,28 +1,22 @@
 /**
  * Message Batches provider for the scheduled judge (`--batch`).
  *
- * Nobody waits on the twice-daily launchd run, so its calls go through the
- * Message Batches API: every token at half price, results usually within
- * minutes, a hard 24-hour expiry. `generate()` queues a request and hands back
- * a promise; `flush()` ships the queue as one batch, polls it to `ended`, and
- * settles every promise by `custom_id` — never by position, because the
- * results file is not in request order.
+ * The scheduled run has nobody waiting on it, so its calls go through the
+ * Message Batches API at half price. `generate()` queues a request and returns
+ * a promise; `flush()` ships the queue, polls the batch to `ended`, and settles
+ * every promise by `custom_id`, since the results file is not in request order.
  *
- * The judge library chains calls (G-Eval scores after it generates steps; QAG
- * extracts, then asks, then answers), and each link is issued only once the
- * previous one resolves. `flush()` therefore drains in rounds: after a batch
- * settles it waits one idle window for those continuations to enqueue, ships
- * whatever arrived as the next batch, and returns once a window passes empty.
- * The same idle window arms an auto-flush on every `generate()`, so a caller
- * that awaits one call before issuing the next can never hang the run — it
- * just pays for more, smaller batches.
+ * The judge library chains calls (steps, then scores; QAG extracts, asks, then
+ * answers), each issued only once the previous resolves, so `flush()` drains in
+ * rounds: after a batch settles it waits one idle window for the continuations
+ * to enqueue, ships them as the next batch, and returns once a window passes
+ * empty. Every `generate()` arms the same idle auto-flush, so a caller that
+ * awaits one call before issuing the next cannot hang the run.
  *
- * The run has a wall clock. When it runs out with a batch still processing,
- * the batch is cancelled. A cancelled batch keeps the results of the requests
- * it had already answered, readable once it reaches `ended`, so those are
- * settled like any others and only the remainder is abandoned. That is the
- * run's deadline, not a failure: `flush()` resolves and the caller keeps every
- * result that came back (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN).
+ * At the wall clock a batch still processing is cancelled; what it had already
+ * answered is settled and the rest abandoned. That is the run's deadline, not a
+ * failure: `flush()` resolves with every result that came back
+ * (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN).
  */
 
 import type Anthropic from '@anthropic-ai/sdk';

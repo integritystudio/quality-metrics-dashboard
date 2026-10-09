@@ -26,21 +26,14 @@
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=local   # the rollback: local discovery, every log file
  *   npx tsx dashboard/scripts/judge-evaluations.ts --backfill   # synthetic scores for trace-only sessions; see below
  *
- * `--backfill` covers sessions that have traces but no transcript, which the
- * judge cannot score. It reads every local `traces-*.jsonl`, makes one turn per
- * session, and writes seeded, deterministic (hashed) relevance, coherence,
- * faithfulness and hallucination scores to the local ledger only: no LLM call,
- * no post to ingest, and no other flag applies. Rows are cohort `backfill`
- * (canary draws stay `canary`), and turns the ledger already covers are
- * skipped. Nothing schedules it. Run it by hand. `backfill` is not an
- * evidence cohort (`isEvidenceCohort`), so its rows stay out of the
- * `dashboard:*` aggregates, but a row young enough for upload's age guard
- * (36 h by default) still reaches sync's `metric:*` keys, which drop only
- * canaries.
+ * `--backfill` (run by hand, no other flag applies) seeds hashed scores for
+ * sessions with traces but no transcript, into the local ledger only, under
+ * cohort `backfill` (canary draws stay `canary`). That cohort is not evidence
+ * (`isEvidenceCohort`), but a row young enough for upload's age guard still
+ * reaches sync's `metric:*` keys, which drop only canaries.
  *
- * Scoring is consolidated by default — one call per turn carrying every
- * criterion (judge-consolidated.ts). `--batch`
- * applies to either mode.
+ * Scoring is consolidated by default, one call per turn carrying every
+ * criterion (judge-consolidated.ts); `--batch` applies to either mode.
  *
  * LLM_JUDGE_ANTHROPIC_KEY, when set, is used instead of ANTHROPIC_API_KEY so
  * judge spend is attributable to its own key (see judge-credentials.ts).

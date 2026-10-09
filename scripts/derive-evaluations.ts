@@ -733,17 +733,10 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
 }
 
 /**
- * Derive never posts a record dated before this instant, however it is scoped.
- * D1 holds 45,887 derive rows (`evaluator = 'rule'`) dated 2026-09-16 to
- * 2026-09-27 with no `evaluation_id`: upload shipped them before migration 0015
- * added the column. Ingest drops a re-post only when the earlier copy carries
- * the id, so posting any of those days again would duplicate them. Every derive
- * row from 2026-09-28 on has an id (counted 2026-10-04 with
- * `CLOUDFLARE_D1_READ_TOKEN`).
- *
- * The same instant was the Phase 3 cutover `DERIVE_DIRECT_POST_SINCE_MS`, which
- * also sent earlier records to a file for upload. The file went in Phase 6;
- * this is the half of the cutover that still guards something.
+ * Derive never posts a record dated before this instant, however it is scoped:
+ * D1's derive rows before it were shipped without an `evaluation_id` (before
+ * migration 0015), so ingest cannot drop a re-post and would duplicate them.
+ * Every derive row from this date on has an id (counted 2026-10-04).
  */
 export const DERIVE_NO_REPOST_BEFORE_MS = Date.parse('2026-09-28T00:00:00.000Z');
 

@@ -11,14 +11,13 @@
  * the stamp of the span or turn they score here and copy it onto the record
  * (Phase 1); `upload-evaluations` then routes on the record's own stamp.
  *
- * Two consumers, two lookups:
- * - `derive-evaluations` scores a span it holds: `bySpan`.
+ * Lookups:
+ * - `derive-evaluations` and `upload-evaluations` score or route a span they
+ *   hold: `bySpan`.
  * - `judge-evaluations` scores a transcript turn, whose own spans are the
  *   session's spans between that turn and the next: `turnAccount` for its
  *   stamp and `turnSpan` for the span it is parented to (Phase 2).
- * - `upload-evaluations`: `bySpan` for a record that names its span.
- *   The pre-Phase-1 time-based join (`byTrace`/`bySession`) was removed once
- *   `join=0` held across all pipeline runs (TKR9, 2026-10-01).
+ * The pre-Phase-1 time-based join was removed under TKR9; see `indexSpanRecords`.
  */
 
 import { readdirSync, readFileSync } from 'fs';
@@ -142,9 +141,9 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
  * through here, stamped with the account whose key read them.
  *
  * The pre-Phase-1 `byTrace`/`bySession` time-based join was removed once
- * `join=0` held across all pipeline runs (TKR9, 2026-10-01). A record with
- * neither its own stamp nor a named span follows the unstamped rule, as spans
- * do, and routes to the webhook destination.
+ * `join=0` held across all pipeline runs (TKR9, 2026-10-01), so a record with
+ * neither its own stamp nor a named span routes to the webhook, as an
+ * unstamped span does.
  */
 export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
   const index: AccountIndex = { sessionSpans: new Map(), bySpan: new Map() };

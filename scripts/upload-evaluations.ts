@@ -2,53 +2,30 @@
 /**
  * Ship locally-derived evaluations to the cloud `evaluations` table.
  *
- * **This closes the seam that killed the dashboard.** The hooks and the judge
- * write `evaluations-<date>.jsonl` into `TELEMETRY_DIR`; `sync-to-kv` reads the
- * *cloud* (`CloudBackend.queryEvaluations`, which
- * defaults to the `'table'` source — the D1 `evaluations` table). Nothing
- * connected the two: the detached span shipper
- * (`~/.claude/hooks/lib/span-shipper.ts`) matches only
- * `(traces|logs|metrics)-<date>.jsonl`, and the `evaluations` table is fed
- * solely by the HMAC webhook and `obs_inject_evaluations`. Without this stage
- * local evaluations stay on disk and every sync computes an empty dashboard.
+ * `sync-to-kv` reads only the cloud, and the span shipper ships only
+ * `(traces|logs|metrics)-*.jsonl`, so without this stage the hooks' records in
+ * `evaluations-<date>.jsonl` never leave the disk and every sync computes an
+ * empty dashboard (docs/data-pipeline.md § Historical incidents).
  *
- * Transport is chosen per record by the account that produced it (TKR7). The
- * hooks stamp every span with `identityKeyRef` — the identity map's secret name
- * for the signed-in account, or `null` for an unmapped one (TKR6). Since TKR8
- * Phase 1, `derive-evaluations` and `judge-evaluations` copy the stamp of the
- * span or turn they score onto the evaluation record itself, and that stamp
- * routes it. A record without a stamp that names its span (Phase 2: derive and
- * judge records, and the hooks' judge-span `span.id`) takes that span's stamp,
- * which is just as exact. Anything else was written before Phase 1, so it is
- * joined to its source spans instead — by trace id, then by session id when the
- * session saw only one account. The summary's `routedBy[stamp=… span=… join=…]`
- * shows how much still takes the join; once it reads `join=0` the join can be
- * deleted.
+ * Each record is routed by the account that produced it (`routeRecord`): its
+ * own `identityKeyRef` stamp (TKR8 Phase 1), else the stamp of the span it
+ * names (Phase 2), else the webhook. The time-based join those two replaced
+ * was removed once `routedBy` read `join=0` (TKR9).
  *
- * - **Attributed**: `POST /v1/ingest/backfill?signal=evaluations` with that
- *   account's API key, read from the environment under the ref's name. Ingest
- *   assigns the org from the key, and the flush reads the same line schema as
- *   the webhook's.
- * - **`null`**: withheld and recorded as consumed (TKR3's fail-closed rule).
- * - **Unattributed** (pre-TKR6 spans, or a session that switched account with
- *   no trace hit): the HMAC webhook `POST /v1/evaluations`, as before. It
- *   carries no per-org identity, so rows land in `HOME_ORG_ID`.
+ * - **Keyed**: `POST /v1/ingest/backfill?signal=evaluations` with that
+ *   account's API key; ingest assigns the org from the key.
+ * - **`null` stamp**: withheld and recorded as consumed (TKR3, fail closed).
+ * - **Unstamped**: the HMAC webhook `POST /v1/evaluations`; rows land in
+ *   `HOME_ORG_ID`.
  * - **Key not in the environment**: held, so the next run retries it.
  *
- * ## Two properties a caller must know
- *
- * 1. **Event time comes from `evaluatedAtMs`.** Since EVAL-WEBHOOK-EVENT-TIME
- *    (v3.1.17) the flush dates a row by the record's own time. Rows shipped
- *    before that carry receipt time; their real time is `metadata.evaluatedAt`.
- *    `--max-age-hours` is now a bound on how far back a normal run looks.
- * 2. **The shipped index is load-bearing, and must not be a byte offset.** Every
- *    payload carries `evaluationId`, and ingest drops an id the org already
- *    holds (migration 0015), so a re-send of anything shipped since then is a
- *    no-op. Rows shipped before it have no id, and re-sending one of those
- *    inserts a duplicate, since the only other key is `(r2_key, batch_index)`
- *    and every POST allocates a fresh `r2_key`. This tracks a content
- *    fingerprint per record rather than a file offset, so the resume point
- *    does not depend on where a record sits in its file.
+ * Two properties a caller must know:
+ * 1. The flush dates a row by `evaluatedAtMs` (EVAL-WEBHOOK-EVENT-TIME); rows
+ *    shipped before v3.1.17 carry receipt time, with the real time in
+ *    `metadata.evaluatedAt`. `--max-age-hours` bounds how far back a run looks.
+ * 2. The shipped index is a content fingerprint per record, never a byte
+ *    offset. Ingest drops a re-sent `evaluationId` (migration 0015), but rows
+ *    shipped before it have no id and a re-send duplicates them.
  *
  * Usage:
  *   tsx scripts/upload-evaluations.ts                  # ship the default window
@@ -66,13 +43,10 @@
  * guard is sent again here, and ingest drops it on its `evaluationId`.
  *
  * `--only-keys` re-ships exactly the records a manifest names, for replacing
- * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md). Each line
- * of the manifest is `{ref, evaluationName, traceId, evaluatedAtMs}`: a record
- * is sent only when its (name, trace, event time) is listed, always keyed with
- * the listed account's key so it lands in the org the deleted row came from,
- * and without the `--max-age-hours` guard, because the flush dates rows by
- * `evaluatedAtMs`. Everything else in the window is left untouched and
- * unrecorded, so the next normal run treats it exactly as before.
+ * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md): each line is
+ * `{ref, evaluationName, traceId, evaluatedAtMs}`, the record is keyed with the
+ * listed account and skips the age guard, and everything else in the window
+ * is left unrecorded for the next normal run.
  *
  * Env: INJECT_HMAC_SECRET (required), OBTOOL_INGEST_URL (optional), and one
  * `OBTOOL_API_KEY*` per mapped account (all present under `doppler run … prd`).

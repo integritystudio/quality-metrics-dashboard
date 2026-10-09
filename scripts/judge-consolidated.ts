@@ -11,29 +11,20 @@
  * 1–5 → 0–1 normalization, dedup keys, cohort and judge model — but its OWN
  * producer, see CONSOLIDATED_PRODUCER.
  *
- * Where it differs from the per-criterion path, and why:
- * - `faithfulness` is scored from FAITHFULNESS_CRITERIA, not from QAG, and
- *   `hallucination` is `1 - faithfulness` from that same verdict. The
- *   per-criterion path no longer does either: it runs one QAG sweep and scores
- *   `faithfulness` and `hallucination` as separate tallies over it, so its two
- *   series do not sum to 1 and this one's do. That is a second source of the
- *   disagreement between the two modes. `directHallucination`
- *   (ConsolidatedCriteriaOptions) judges it on its own criterion instead; it is
- *   opt-in and nothing in production sets it.
- * - Evaluation steps depend only on the criteria text, so they are generated
- *   once per criterion per run (`EvaluationStepsCache`) rather than per call.
- * - No `judge.method` attribute is written: `EvalRecord` has no slot for extra
- *   attributes and `toOTelRecord` emits fixed keys, so the record schema does
- *   not allow one. `evaluator` (the producer) carries the distinction instead
- *   — see CONSOLIDATED_PRODUCER.
+ * Where it differs from the per-criterion path:
+ * - `faithfulness` is G-Eval on FAITHFULNESS_CRITERIA and `hallucination` is
+ *   `1 - faithfulness`, so the two sum to 1 here and not on the per-criterion
+ *   path's QAG sweep. `directHallucination` (opt-in, unset in production)
+ *   judges it on its own criterion instead.
+ * - Evaluation steps are generated once per criterion per run
+ *   (`EvaluationStepsCache`), since they depend only on the criteria text.
+ * - The mode is recorded in `evaluator` (CONSOLIDATED_PRODUCER); `EvalRecord`
+ *   has no slot for a `judge.method` attribute.
  *
- * The default since 2026-09-22 (JCP4): against a claude-opus-5 reference on 25
- * real turns it was closer than the per-criterion path (MAE 0.945 vs 1.223 of
- * 5, docs/judge-quality-2026-09-22.json) at ~1/10 the cost. `--per-criterion`
- * in judge-evaluations.ts opts back out; `--batch` routes this path through
- * the Message Batches provider (`adaptBatchProvider`, JCP3).
- * Agreement with the per-criterion path is measured by judge-agreement.ts,
- * distance from a reference by judge-quality-eval.ts.
+ * The default since JCP4 (2026-09-22, docs/judge-quality-2026-09-22.json);
+ * `--per-criterion` opts back out and `--batch` routes it through the Message
+ * Batches provider (`adaptBatchProvider`). judge-agreement.ts measures agreement
+ * with the per-criterion path, judge-quality-eval.ts distance from a reference.
  */
 
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
