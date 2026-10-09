@@ -130,16 +130,6 @@ export interface TrendDetailResponse {
   narrowed: boolean;
 }
 
-/** `GET /trends`. */
-export interface TrendSummaryResponse {
-  period: string;
-  metrics: {
-    metric: string;
-    count: number;
-    percentiles: JsonSafe<PercentileDistribution> | null;
-  }[];
-}
-
 /** A span as it appears on the wire: `bigint` nanos encoded to decimal strings. */
 export interface WireSpan {
   traceId: string;

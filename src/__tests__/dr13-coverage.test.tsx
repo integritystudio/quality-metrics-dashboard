@@ -546,9 +546,4 @@ describe('trends API route validation', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns 400 for invalid period on /trends summary route', async () => {
-    const app = await loadTrendRoutes();
-    const res = await app.request('/trends?period=invalid');
-    expect(res.status).toBe(400);
-  });
 });
