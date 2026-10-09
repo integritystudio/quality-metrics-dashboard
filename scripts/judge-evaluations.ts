@@ -115,13 +115,11 @@ import {
   type Turn,
 } from './judge-turns.js';
 import {
+  addUsage,
   createUsageTotals,
   estimateJudgeRun,
-  recordUsage,
   toJudgeTokenUsage,
-  toProviderUsage,
   type JudgeTokenUsage,
-  type JudgeUsageTotals,
   type ProviderUsage,
 } from './judge-usage.js';
 import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
@@ -210,7 +208,7 @@ function judgeOutputConfig(
 /** The judge's synchronous provider; `onUsage` also sees each response's usage, which the one-shot evals total. */
 export async function createAnthropicProvider(
   apiKey: string,
-  usage: JudgeUsageTotals = createUsageTotals(),
+  usage: JudgeTokenUsage = createUsageTotals(),
   onUsage?: (usage: JudgeTokenUsage) => void,
 ): Promise<LLMProvider> {
   return anthropicProviderFor(await createJudgeAnthropicClient({ apiKey }), usage, onUsage);
@@ -219,7 +217,7 @@ export async function createAnthropicProvider(
 /** The judge's provider over an SDK client, or a fake one in tests. */
 export function anthropicProviderFor(
   client: JudgeMessagesClient,
-  usage: JudgeUsageTotals = createUsageTotals(),
+  usage: JudgeTokenUsage = createUsageTotals(),
   onUsage?: (usage: JudgeTokenUsage) => void,
 ): LLMProvider {
   return {
@@ -236,8 +234,9 @@ export function anthropicProviderFor(
         ...judgeOutputConfig(options?.jsonSchema),
       });
       if (response.usage) {
-        recordUsage(usage, response.usage);
-        onUsage?.(toJudgeTokenUsage(response.usage));
+        const seen = toJudgeTokenUsage(response.usage);
+        addUsage(usage, seen);
+        onUsage?.(seen);
       }
 
       const text = responseText(response.content);
@@ -676,7 +675,7 @@ async function judgeTurns(
         model: HAIKU_MODEL,
         maxTokens: JUDGE_MAX_TOKENS,
         temperature: JUDGE_DEFAULT_TEMPERATURE,
-        onUsage: (u) => recordUsage(usage, u),
+        onUsage: (u) => addUsage(usage, u),
       })
     : undefined;
   const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
@@ -694,7 +693,7 @@ async function judgeTurns(
     const evaluate = consolidated
       ? await createConsolidatedTurnEvaluator(existingKeys, {
           apiKey: judgeKey.apiKey,
-          onUsage: (u) => recordUsage(usage, toProviderUsage(u)),
+          onUsage: (u) => addUsage(usage, u),
         })
       : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
     allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);

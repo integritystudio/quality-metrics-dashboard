@@ -27,7 +27,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
-import type { ProviderUsage } from './judge-usage.js';
+import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey } from './judge-credentials.js';
@@ -128,7 +128,7 @@ export interface BatchProviderOptions {
   /** How long a batch cancelled at the wall clock gets to end; `BATCH_CANCEL_GRACE_MS` when absent. */
   cancelGraceMs?: number;
   /** Receives each succeeded result's `usage`, so batch runs feed the same totals as the sync provider. */
-  onUsage?: (usage: ProviderUsage) => void;
+  onUsage?: (usage: JudgeTokenUsage) => void;
 }
 
 export interface BatchLLMProvider extends LLMProvider {
@@ -300,7 +300,7 @@ class MessageBatchProvider implements BatchLLMProvider {
     try {
       if (result.type === 'succeeded') {
         // `usage` is required on a succeeded message; only the callback is optional.
-        this.options.onUsage?.(result.message.usage);
+        this.options.onUsage?.(toJudgeTokenUsage(result.message.usage));
         pending.resolve({ text: responseText(result.message.content) });
         return;
       }

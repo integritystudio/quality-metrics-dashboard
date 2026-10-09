@@ -13,14 +13,6 @@ export const CACHE_CREATION_INPUT_PRICE_RATIO = 1.25;
 /** Message Batches API bills at half the synchronous rate. */
 export const BATCH_PRICE_RATIO = 0.5;
 
-/** Token totals folded from every `response.usage` a run saw. Field names match the API. */
-export interface JudgeUsageTotals {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
-}
-
 /** The `usage` of one Messages API response; cache counts are null on models without caching. */
 export interface ProviderUsage {
   input_tokens: number;
@@ -29,7 +21,11 @@ export interface ProviderUsage {
   cache_creation_input_tokens?: number | null;
 }
 
-/** One response's usage in the camelCase shape the consolidated and one-shot scripts total. */
+/**
+ * One response's usage, or a run's totals, in the one shape every script
+ * accounts in. `ProviderUsage` is converted here at the SDK boundary and
+ * nowhere else.
+ */
 export interface JudgeTokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -46,16 +42,19 @@ export function toJudgeTokenUsage(usage: ProviderUsage): JudgeTokenUsage {
   };
 }
 
-export function toProviderUsage(usage: JudgeTokenUsage): ProviderUsage {
-  return {
-    input_tokens: usage.inputTokens,
-    output_tokens: usage.outputTokens,
-    cache_creation_input_tokens: usage.cacheCreationInputTokens,
-    cache_read_input_tokens: usage.cacheReadInputTokens,
-  };
+export function createUsageTotals(): JudgeTokenUsage {
+  return { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
 }
 
-/** A one-shot eval's totals for one configuration: camelCase usage plus the number of responses. */
+/** Fold one response's usage into the run totals. */
+export function addUsage(totals: JudgeTokenUsage, usage: JudgeTokenUsage): void {
+  totals.inputTokens += usage.inputTokens;
+  totals.outputTokens += usage.outputTokens;
+  totals.cacheCreationInputTokens += usage.cacheCreationInputTokens;
+  totals.cacheReadInputTokens += usage.cacheReadInputTokens;
+}
+
+/** A one-shot eval's totals for one configuration: usage plus the number of responses. */
 export interface CallUsageTotals extends JudgeTokenUsage {
   calls: number;
 }
@@ -66,28 +65,13 @@ export interface CallUsageReport extends CallUsageTotals {
 }
 
 export function createCallUsageTotals(): CallUsageTotals {
-  return { calls: 0, inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+  return { calls: 0, ...createUsageTotals() };
 }
 
 /** Fold one response's usage into a configuration's totals. */
 export function addCallUsage(totals: CallUsageTotals, usage: JudgeTokenUsage): void {
   totals.calls += 1;
-  totals.inputTokens += usage.inputTokens;
-  totals.outputTokens += usage.outputTokens;
-  totals.cacheCreationInputTokens += usage.cacheCreationInputTokens;
-  totals.cacheReadInputTokens += usage.cacheReadInputTokens;
-}
-
-export function createUsageTotals(): JudgeUsageTotals {
-  return { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
-}
-
-/** Fold one response's usage into the run totals. */
-export function recordUsage(totals: JudgeUsageTotals, usage: ProviderUsage): void {
-  totals.input_tokens += usage.input_tokens;
-  totals.output_tokens += usage.output_tokens;
-  totals.cache_read_input_tokens += usage.cache_read_input_tokens ?? 0;
-  totals.cache_creation_input_tokens += usage.cache_creation_input_tokens ?? 0;
+  addUsage(totals, usage);
 }
 
 /** List pricing for `model` (the judge's by default); throws rather than pricing a run at $0. */
@@ -112,11 +96,6 @@ export function tokenUsageCostUsd(usage: JudgeTokenUsage, pricing: ModelPricingE
 /** List cost of token counts with no cache traffic — how every pre-run estimate is priced. */
 export function listCostUsd(inputTokens: number, outputTokens: number, pricing: ModelPricingEntry): number {
   return tokenUsageCostUsd({ inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, pricing);
-}
-
-/** {@link tokenUsageCostUsd} for the run totals. */
-export function usageCostUsd(totals: JudgeUsageTotals, pricing: ModelPricingEntry): number {
-  return tokenUsageCostUsd(toJudgeTokenUsage(totals), pricing);
 }
 
 /** Estimated tokens for `chars` characters of prompt text (TOKENS_PER_CHAR, rounded up). */

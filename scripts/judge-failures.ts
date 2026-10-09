@@ -8,7 +8,7 @@ import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE,
 import type { JudgeApiKeySource } from './judge-credentials.js';
 import { EVAL_SCORE_PRECISION } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
-import { judgePricing, usageCostUsd, type JudgeUsageTotals } from './judge-usage.js';
+import { judgePricing, tokenUsageCostUsd, type JudgeTokenUsage } from './judge-usage.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 /** Track evaluation failures for summary reporting */
@@ -95,7 +95,7 @@ export const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json')
 /** What a run spent, for the summary line. */
 export interface JudgeSpend {
   /** Totals folded from every `response.usage` the run saw. */
-  usage: JudgeUsageTotals;
+  usage: JudgeTokenUsage;
   /** What estimateJudgeRun said before the run spent anything. */
   estimatedUsd: number;
   /** Environment variable NAME the key came from — never the value. */
@@ -108,7 +108,7 @@ export interface JudgeRunSummary {
   failed: number;
   byClass: Record<JudgeFailureClass, number>;
   /** Token totals the API reported, and what they cost at list rates. */
-  usage: JudgeUsageTotals;
+  usage: JudgeTokenUsage;
   estimatedUsd: number;
   actualUsd: number;
   /** Environment variable NAME the key came from — never the value. */
@@ -170,8 +170,8 @@ export function summarizeJudgeRun(
     verdict = `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(1)}% of ${prev.attempted} on the previous run; check for a new failure class`;
   }
   const { usage, estimatedUsd, keySource } = spend;
-  const actualUsd = usageCostUsd(usage, judgePricing());
-  const spent = `usage: in=${usage.input_tokens} out=${usage.output_tokens} cache_read=${usage.cache_read_input_tokens} cache_creation=${usage.cache_creation_input_tokens} est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=${keySource}`;
+  const actualUsd = tokenUsageCostUsd(usage, judgePricing());
+  const spent = `usage: in=${usage.inputTokens} out=${usage.outputTokens} cache_read=${usage.cacheReadInputTokens} cache_creation=${usage.cacheCreationInputTokens} est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=${keySource}`;
   const line = `[judge] summary: attempted=${attempted} succeeded=${succeeded} failed=${failed} classes: ${classes} ${spent} — ${verdict}`;
   return { attempted, succeeded, failed, byClass: { ...byClass }, usage: { ...usage }, estimatedUsd, actualUsd, keySource, exitCode, line };
 }

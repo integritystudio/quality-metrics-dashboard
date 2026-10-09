@@ -62,7 +62,9 @@ function makeBatch(status: MessageBatch['processing_status']): MessageBatch {
 }
 
 function succeeded(customId: string, text: string): ResultLine {
-  const message = { content: [{ type: 'text', text }, { type: 'tool_use', id: 'x', name: 'y', input: {} }] } as unknown as Anthropic.Messages.Message;
+  // `usage` is required on a succeeded message; the provider converts it before `onUsage` sees it.
+  const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: null, cache_creation_input_tokens: null };
+  const message = { content: [{ type: 'text', text }, { type: 'tool_use', id: 'x', name: 'y', input: {} }], usage } as unknown as Anthropic.Messages.Message;
   return { custom_id: customId, result: { type: 'succeeded', message } };
 }
 

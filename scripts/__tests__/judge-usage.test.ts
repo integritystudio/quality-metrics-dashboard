@@ -4,12 +4,12 @@ import {
   addCallUsage,
   charsToTokens,
   createCallUsageTotals,
+  addUsage,
   createUsageTotals,
   judgePricing,
-  recordUsage,
+  toJudgeTokenUsage,
   tokenUsageCostUsd,
   totalChars,
-  usageCostUsd,
   CACHE_CREATION_INPUT_PRICE_RATIO,
   CACHE_READ_INPUT_PRICE_RATIO,
 } from '../judge-usage.js';
@@ -29,25 +29,21 @@ describe('tokenUsageCostUsd', () => {
   });
 });
 
-describe('usageCostUsd', () => {
-  it('prices snake_case run totals the same way, and a run with no calls at zero', () => {
-    const totals = {
-      input_tokens: TOKENS_PER_MILLION,
-      output_tokens: TOKENS_PER_MILLION,
-      cache_read_input_tokens: TOKENS_PER_MILLION,
-      cache_creation_input_tokens: TOKENS_PER_MILLION,
-    };
-    expect(usageCostUsd(totals, PRICING)).toBeCloseTo(PRICING.input + PRICING.output + CACHE_PRICE);
-    expect(usageCostUsd(createUsageTotals(), PRICING)).toBe(0);
-  });
-});
-
 describe('usage totals', () => {
-  it('recordUsage sums every response and treats null cache counts as zero', () => {
+  it('prices a run with no calls at zero', () => {
+    expect(tokenUsageCostUsd(createUsageTotals(), PRICING)).toBe(0);
+  });
+
+  it('toJudgeTokenUsage treats null cache counts as zero', () => {
+    expect(toJudgeTokenUsage({ input_tokens: 200, output_tokens: 20, cache_read_input_tokens: null, cache_creation_input_tokens: null }))
+      .toEqual({ inputTokens: 200, outputTokens: 20, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 });
+  });
+
+  it('addUsage sums every response', () => {
     const totals = createUsageTotals();
-    recordUsage(totals, { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 });
-    recordUsage(totals, { input_tokens: 200, output_tokens: 20, cache_read_input_tokens: null, cache_creation_input_tokens: null });
-    expect(totals).toEqual({ input_tokens: 300, output_tokens: 30, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 });
+    addUsage(totals, { inputTokens: 100, outputTokens: 10, cacheCreationInputTokens: 1, cacheReadInputTokens: 5 });
+    addUsage(totals, { inputTokens: 200, outputTokens: 20, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 });
+    expect(totals).toEqual({ inputTokens: 300, outputTokens: 30, cacheCreationInputTokens: 1, cacheReadInputTokens: 5 });
   });
 
   it('addCallUsage accumulates usage and call counts', () => {

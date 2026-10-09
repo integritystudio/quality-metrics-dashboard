@@ -43,13 +43,13 @@ import {
   type JudgeFailureClass,
 } from '../judge-failures.js';
 import {
+  addUsage,
   createUsageTotals,
-  recordUsage,
   judgePricing,
   estimateJudgeRun,
   EST_OUTPUT_TOKENS_PER_EVAL,
   BATCH_PRICE_RATIO,
-  type JudgeUsageTotals,
+  type JudgeTokenUsage,
 } from '../judge-usage.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
@@ -1121,16 +1121,16 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('carries the usage totals, both cost figures and the key source name on the line', () => {
-    const usage: JudgeUsageTotals = {
-      input_tokens: 1_000_000, output_tokens: 100_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0,
+    const usage: JudgeTokenUsage = {
+      inputTokens: 1_000_000, outputTokens: 100_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0,
     };
     const estimatedUsd = 1.8;
 
     const summary = summarizeJudgeRun(5, {}, noFailures, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
 
     const pricing = judgePricing();
-    const actualUsd = (usage.input_tokens / TOKENS_PER_MILLION) * pricing.input
-      + (usage.output_tokens / TOKENS_PER_MILLION) * pricing.output;
+    const actualUsd = (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input
+      + (usage.outputTokens / TOKENS_PER_MILLION) * pricing.output;
     expect(summary.usage).toEqual(usage);
     expect(summary.estimatedUsd).toBe(estimatedUsd);
     expect(summary.actualUsd).toBeCloseTo(actualUsd);
@@ -1144,9 +1144,9 @@ describe('summarizeJudgeRun', () => {
     const usage = createUsageTotals();
     const summary = summarizeJudgeRun(0, {}, noFailures, { ...noSpend, usage });
 
-    recordUsage(usage, { input_tokens: 1, output_tokens: 1 });
+    addUsage(usage, { inputTokens: 1, outputTokens: 1, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 });
 
-    expect(summary.usage.input_tokens).toBe(0);
+    expect(summary.usage.inputTokens).toBe(0);
   });
 });
 
@@ -1286,12 +1286,12 @@ describe('anthropicProviderFor', () => {
     const client: JudgeMessagesClient = {
       messages: { create: () => Promise.resolve({ content: [], usage }) },
     };
-    const totals = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    const totals = createUsageTotals();
     const seen: unknown[] = [];
 
     await anthropicProviderFor(client, totals, u => seen.push(u)).generate('rate it', { jsonSchema: SCORE_SCHEMA });
 
-    expect(totals).toEqual({ input_tokens: 120, output_tokens: 30, cache_read_input_tokens: 0, cache_creation_input_tokens: 5 });
+    expect(totals).toEqual({ inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 5, cacheReadInputTokens: 0 });
     expect(seen).toEqual([{ inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 5, cacheReadInputTokens: 0 }]);
   });
 
