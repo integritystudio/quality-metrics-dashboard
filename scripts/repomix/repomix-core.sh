@@ -26,7 +26,7 @@ derive_config() {
 }
 
 # repomix_run <config> <output_file> [repomix flags...]
-# Runs from the project root so instructionFilePath (CLAUDE.md) resolves; console output on stdout.
+# Runs from the project root so the docs pack's instructionFilePath (CLAUDE.md) resolves; console output on stdout.
 repomix_run() {
   local config="$1" output_file="$2"
   shift 2
