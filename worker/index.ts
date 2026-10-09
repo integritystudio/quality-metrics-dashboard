@@ -761,10 +761,17 @@ app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), v
   return c.json({ rows: page, total, limit, offset, hasMore: offset + limit < total });
 });
 
-app.get('/api/metrics/:name', requirePermission('dashboard.read'), async (c) => {
+// Written by scripts/sync-to-kv.ts (METRIC_DETAIL_KEY_PREFIX in src/api/aggregates/metric-detail.ts).
+// The Worker cannot import that module, so the prefix is restated here.
+const METRIC_DETAIL_KEY_PREFIX = 'metric:';
+// The page's DEFAULT_PERIOD_DETAIL (src/lib/constants.ts), restated for the same reason.
+const METRIC_DETAIL_DEFAULT_PERIOD: PeriodKey = '30d';
+
+app.get('/api/metrics/:name', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(METRIC_DETAIL_DEFAULT_PERIOD) })), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
-  const data = await getSessionKv<unknown>(c,`metric:${name}`);
+  const { period } = c.req.valid('query');
+  const data = await getSessionKv<unknown>(c, `${METRIC_DETAIL_KEY_PREFIX}${name}:${period}`);
   if (!data) {
     return c.json({
       name,
@@ -781,12 +788,18 @@ app.get('/api/metrics/:name', requirePermission('dashboard.read'), async (c) => 
   return c.json(data);
 });
 
+// Written by scripts/sync-to-kv.ts (TREND_KEY_PREFIX in src/api/aggregates/trend.ts), restated as above.
+const TREND_KEY_PREFIX = 'trend:';
+
 app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const { period } = c.req.valid('query');
-  const data = await getSessionKv<unknown>(c,`trend:${name}:${period}`);
-  if (!data) return c.json({ metric: name, period, points: [], bucketCount: 0 });
+  const data = await getSessionKv<unknown>(c, `${TREND_KEY_PREFIX}${name}:${period}`);
+  // `emptyTrendView` in src/api/aggregates/trend.ts, restated: the page reads `trendData`.
+  if (!data) {
+    return c.json({ metric: name, period, bucketCount: 0, totalEvaluations: 0, overallPercentiles: null, trendData: [], narrowed: false });
+  }
   return c.json(data);
 });
 

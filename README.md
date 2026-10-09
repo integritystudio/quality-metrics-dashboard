@@ -173,8 +173,8 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `POST /api/activity` | ✓ | Log user activity event |
 | `GET /api/dashboard` | ✓ | Dashboard summary (`?period=7d&role=executive`) |
 | `GET /api/metrics/:name/evaluations` | ✓ | Metric evaluations (`?period=7d`) |
-| `GET /api/metrics/:name` | ✓ | Metric detail |
-| `GET /api/trends/:name` | ✓ | Metric trend data (`?period=7d`) |
+| `GET /api/metrics/:name` | ✓ | Metric detail (`?period=30d`); the dev route and the synced `metric:<name>:<period>` key share `src/api/aggregates/metric-detail.ts` |
+| `GET /api/trends/:name` | ✓ | Metric trend data (`?period=7d`); the dev route and the synced `trend:<name>:<period>` key share `src/api/aggregates/trend.ts`, and the key holds `DEFAULT_TREND_BUCKETS` buckets whatever `?buckets=` says |
 | `GET /api/evaluations/trace/:traceId` | ✓ | Evaluations for a trace |
 | `GET /api/traces/:traceId` | ✓ | Trace spans + evaluations |
 | `GET /api/correlations` | ✓ | Metric correlation matrix (`?period=30d`) |

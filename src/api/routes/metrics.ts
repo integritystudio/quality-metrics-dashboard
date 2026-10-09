@@ -1,21 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds } from 'date-fns';
-import {
-  computeAggregations,
-  getQualityMetric,
-} from '../parent/quality-metrics.js';
-import { computeMetricDetail } from '../parent/quality-views.js';
-import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
+import { getQualityMetric } from '../parent/quality-metrics.js';
 import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam, jsonSafe } from '../api-constants.js';
+import { PARAM_METRIC_NAME_RE, isValidParam, jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus, type Period } from '../../lib/constants.js';
 import { parseParam, handleRouteError } from '../route-errors.js';
 import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
-
-const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
-const DYNAMICS_BUCKET_HOURS_DAILY = 24;
+import { computeMetricDetailView, previousWindow } from '../aggregates/metric-detail.js';
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);
@@ -36,35 +29,20 @@ metricsRoutes.get('/metrics/:name', async (c) => {
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod) as Period;
   const topN = parseParam(TopNSchema, c.req.query('topN'), ErrorMessage.InvalidTopN);
   const bucketCount = parseParam(BucketCountSchema, c.req.query('bucketCount'), ErrorMessage.InvalidBucketCount);
 
   const now = new Date();
-  const periodMs = PERIOD_MS[period as Period];
-  const start = subMilliseconds(now, periodMs);
-  const prevStart = subMilliseconds(start, periodMs);
+  const start = subMilliseconds(now, PERIOD_MS[period]);
+  const previous = previousWindow(period, now);
 
   const [evaluations, prevEvaluations] = await Promise.all([
     loadEvaluationsForMetric(name, start.toISOString(), now.toISOString()),
-    loadEvaluationsForMetric(name, prevStart.toISOString(), start.toISOString()),
+    loadEvaluationsForMetric(name, previous.start.toISOString(), previous.end.toISOString()),
   ]);
 
-  const previousValues = prevEvaluations.length > 0
-    ? computeAggregations(extractFiniteScores(prevEvaluations), config.aggregations)
-    : undefined;
-
-  const detail = computeMetricDetail(evaluations, config, {
-    topN,
-    bucketCount,
-    previousValues,
-  });
-
-  const dynamics = detail.trend
-    ? computeMetricDynamics(detail.trend, period === '24h' ? DYNAMICS_BUCKET_HOURS_HOURLY : DYNAMICS_BUCKET_HOURS_DAILY)
-    : undefined;
-
-  return c.json(jsonSafe({ ...detail, dynamics }));
+  return c.json(jsonSafe(computeMetricDetailView(evaluations, prevEvaluations, config, { period, topN, bucketCount })));
 });
 
 metricsRoutes.get('/metrics/:name/evaluations', async (c) => {

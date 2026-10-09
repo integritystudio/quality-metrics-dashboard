@@ -133,6 +133,8 @@ export const STALE_TIME = {
 } as const;
 export const DEFAULT_TOP_N = 5;
 export const DEFAULT_BUCKET_COUNT = 10;
+/** Time buckets per trend series: what the page requests, the route defaults to, and the sync writes. */
+export const DEFAULT_TREND_BUCKETS = 10;
 
 export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;

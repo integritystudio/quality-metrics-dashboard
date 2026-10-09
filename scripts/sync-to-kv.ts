@@ -25,22 +25,17 @@ import { join } from 'path';
 import { CloudBackend, ALL_ORGS_SCOPE, queriedDateWindow } from '../../src/backends/cloud.js';
 import { http1Fetch, describeFetchError } from '../../src/lib/core/http1-fetch.js';
 import {
-  computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
-import { computeMetricDetail } from '../../src/lib/quality/quality-views.js';
 
-import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
 import type { EvaluationResult, TraceSpan } from '../../src/backends/index.js';
-import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/qfe-dynamics.js';
 import {
   computeRollingDegradationSignals,
   loadDegradationState,
   saveDegradationState,
 } from '../../src/lib/quality/qfe-backtest.js';
 import {
-  computePercentileDistribution,
   loadCalibrationState,
   type CalibrationState,
 } from '../../src/lib/quality/qfe-percentiles.js';
@@ -67,7 +62,7 @@ import {
   loadJsonWithValidation,
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
-import { PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
+import { PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, type Period } from '../src/lib/constants.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../src/api/session-detail.js';
 import { agentStatsKey, agentStatsWindow, computeAgentStats, isAgentFinalizeSpan } from '../src/api/aggregates/agent-stats.js';
 import { computeCorrelations } from '../src/api/aggregates/correlations.js';
@@ -75,10 +70,11 @@ import { computePipeline } from '../src/api/aggregates/pipeline.js';
 import { computeCoverage } from '../src/api/aggregates/coverage.js';
 import { projectEvaluationRow } from '../src/api/aggregates/evaluation-rows.js';
 import { computeAllDashboardEntries } from '../src/api/aggregates/dashboard-summary.js';
+import { computeMetricDetailView, metricDetailKey, previousWindow } from '../src/api/aggregates/metric-detail.js';
+import { computeTrend, trendKey, type ScoredBucket } from '../src/api/aggregates/trend.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
 import { BYTES, PERCENT_MULTIPLIER, TIME_MS, SECONDS } from '../../src/lib/core/units.js';
 import {
-  SCORE_ROUND_FACTOR,
   LATENCY_P95,
   RATE_DISPLAY_PRECISION,
   KV_SCHEMA_VERSION,
@@ -86,14 +82,13 @@ import {
   extractFiniteScores,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
-import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
+import { group, max, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 import { incrementIn, pushTo } from './collections.js';
 import { msToNs } from './hrt.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { bigintReplacer } from '../../src/lib/core/file-utils.js';
-import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../../src/lib/quality/bucket-utils.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
@@ -305,10 +300,8 @@ const HIGH_PRIORITY_HEADROOM = 10;
 const RECOMMENDED_MIN_BUDGET = MIN_TRACE_BUDGET + HIGH_PRIORITY_HEADROOM;
 
 const MAX_EVAL_ROWS = 200;
-/** Metric detail compares the last week with the one before it, so the read spans at least two. */
-const METRIC_DETAIL_WEEKS = 2;
-
-const TREND_BUCKETS = 10;
+/** Metric detail baselines each period against the one before it, so the read spans two of the longest. */
+const METRIC_DETAIL_WINDOWS = 2;
 
 /**
  * The home org's `meta:calibration` entry, from the state derive writes (`CALIBRATION_STATE_DIR`).
@@ -655,10 +648,6 @@ function spanSessionId(span: { attributes?: Record<string, unknown> }): string |
   return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.['session_id']) as string | undefined;
 }
 
-function isValidScore(v: number | null | undefined): v is number {
-  return v != null && Number.isFinite(v);
-}
-
 /** Groups by metric with canaries dropped, the input every aggregate is built from. */
 function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {
   return group(filterCanary(evals), ev => ev.evaluationName);
@@ -817,7 +806,6 @@ interface OrgEvaluations {
 }
 
 type EvaluationsByName = Map<string, EvaluationResult[]>;
-type DegradationBucket = { scores: number[]; startTime: string; endTime: string };
 
 /** What `accumulateAgent` reads from one session's detail. */
 type AgentSessionContext = {
@@ -825,20 +813,15 @@ type AgentSessionContext = {
   sessionInfo: { projectName: string } | null;
 };
 
-/** The UTC midnight a read starting at `ms` begins from. */
-function dayStartNs(ms: number): bigint {
-  return queriedDateWindow({ startDate: msToNs(ms) }).startNs ?? 0n;
-}
-
 /**
- * One read serves every window: the periods, both metric-detail weeks and the
+ * One read serves every window: the periods, each metric-detail baseline and the
  * session/trace window. Separate reads fetched the same rows up to 22 times per org.
  * One extra row detects truncation (KV-SESSION-EVALS-TRUNCATION-UNFLAGGED); the server
  * returns the newest ids first, so a truncated read loses the oldest rows.
  */
 async function readOrgEvaluations(backend: OrgReadBackend, nowMs: number): Promise<OrgEvaluations> {
   const fetched = await backend.queryEvaluations({
-    startDate: msToNs(nowMs - Math.max(MAX_DAYS_MS, METRIC_DETAIL_WEEKS * PERIOD_MS['7d'])),
+    startDate: msToNs(nowMs - METRIC_DETAIL_WINDOWS * MAX_DAYS_MS),
     endDate: msToNs(nowMs),
     limit: QUERY_LIMIT + 1,
   });
@@ -895,41 +878,40 @@ function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates:
 }
 
 /**
- * `metric:<name>`: the current week against the one before it. Also returns the
- * trace ids the metric cards link to, which the trace write budget favours.
+ * `metric:<name>:<period>`: each period against the one before it, from the
+ * projection the dev route serves. Also returns the trace ids the metric cards
+ * link to, which the trace write budget favours.
  */
 function computeMetricDetailEntries(
+  groupedByPeriod: Map<Period, EvaluationsByName>,
   orgEvals: OrgEvaluations,
   nowMs: number,
   metricNames: string[],
 ): { entries: KVEntry[]; referencedTraceIds: Set<string> } {
-  const weekMs = PERIOD_MS['7d'];
-  // The current week matches `dashboard:7d`; the previous week is the 7 whole days before
-  // it and ends where it starts, so no evaluation counts in both (METRIC-WEEK-OVERLAP).
-  const currentWeek = groupByMetric(orgEvals.between(nowMs - weekMs));
-  const previousWeek = groupByMetric(orgEvals.inWindow(dayStartNs(nowMs - 2 * weekMs), dayStartNs(nowMs - weekMs)));
   const entries: KVEntry[] = [];
   const referencedTraceIds = new Set<string>();
 
-  for (const name of metricNames) {
-    const config = getQualityMetric(name);
-    const evals = currentWeek.get(name);
-    if (!config || !evals) continue;
+  for (const [period, current] of groupedByPeriod) {
+    // The current window matches `dashboard:<period>`; `between` rounds the baseline's
+    // bounds as the server does for the route's read.
+    const baseline = previousWindow(period, new Date(nowMs));
+    const previous = groupByMetric(orgEvals.between(baseline.start.getTime(), baseline.end.getTime()));
 
-    const prevScores = extractFiniteScores(previousWeek.get(name) ?? []);
-    const previousValues = prevScores.length > 0
-      ? computeAggregations(prevScores, config.aggregations)
-      : undefined;
+    for (const name of metricNames) {
+      const config = getQualityMetric(name);
+      const evals = current.get(name);
+      if (!config || !evals) continue;
 
-    const detail = computeMetricDetail(evals, config, {
-      topN: DEFAULT_TOP_N,
-      bucketCount: DEFAULT_BUCKET_COUNT,
-      previousValues,
-    });
-    for (const w of detail.worstEvaluations) {
-      if (w.traceId) referencedTraceIds.add(w.traceId);
+      const view = computeMetricDetailView(evals, previous.get(name) ?? [], config, {
+        period,
+        topN: DEFAULT_TOP_N,
+        bucketCount: DEFAULT_BUCKET_COUNT,
+      });
+      for (const w of view.worstEvaluations) {
+        if (w.traceId) referencedTraceIds.add(w.traceId);
+      }
+      entries.push({ key: metricDetailKey(name, period), value: toKVValue(view) });
     }
-    entries.push({ key: `metric:${name}`, value: toKVValue(detail) });
   }
   return { entries, referencedTraceIds };
 }
@@ -956,92 +938,32 @@ function computeEvaluationRowEntries(
 }
 
 /**
- * `trend:<name>:<period>`, plus the time buckets per period × metric that the
- * degradation signals are computed from.
+ * `trend:<name>:<period>` from the projection the dev route serves, plus the
+ * scored buckets per period × metric that the degradation signals are computed
+ * from. Those buckets follow the series, so they narrow to concentrated data as
+ * the chart does.
  */
 function computeTrendEntries(
   groupedByPeriod: Map<Period, EvaluationsByName>,
   metricNames: string[],
   now: Date,
-): { entries: KVEntry[]; degradationBuckets: Map<Period, Record<string, DegradationBucket[]>> } {
+): { entries: KVEntry[]; degradationBuckets: Map<Period, Record<string, ScoredBucket[]>> } {
   const entries: KVEntry[] = [];
-  const degradationBuckets = new Map<Period, Record<string, DegradationBucket[]>>();
+  const degradationBuckets = new Map<Period, Record<string, ScoredBucket[]>>();
   for (const [period, cached] of groupedByPeriod) {
-    const ms = PERIOD_MS[period];
-    const startMs = now.getTime() - ms;
-    const bucketMs = ms / TREND_BUCKETS;
-    const bucketWindows = buildEvenBucketBoundaries(startMs, now.getTime(), TREND_BUCKETS).map(b => ({
-      startTime: new Date(b.start).toISOString(),
-      endTime: new Date(b.end).toISOString(),
-    }));
+    const periodBuckets: Record<string, ScoredBucket[]> = {};
+    degradationBuckets.set(period, periodBuckets);
 
     for (const name of metricNames) {
       const config = getQualityMetric(name);
       if (!config) continue;
-      const evaluations = cached.get(name) ?? [];
-
-      const timeBuckets: Array<{ startTime: string; endTime: string; scores: number[]; evals: EvaluationResult[] }> =
-        bucketWindows.map(w => ({ ...w, scores: [], evals: [] }));
-      for (const ev of evaluations) {
-        const idx = getEvenBucketIndex(timestampToMs(ev.timestamp), startMs, bucketMs, TREND_BUCKETS);
-        const tb = idx === null ? undefined : timeBuckets[idx];
-        if (tb && isValidScore(ev.scoreValue)) {
-          tb.scores.push(ev.scoreValue);
-          tb.evals.push(ev);
-        }
-      }
-
-      // Save buckets for degradation signal computation
-      let degradBucket = degradationBuckets.get(period);
-      if (!degradBucket) degradationBuckets.set(period, degradBucket = {});
-      degradBucket[name] = timeBuckets.map(b => ({
-        scores: b.scores,
-        startTime: b.startTime,
-        endTime: b.endTime,
-      }));
-
-      const periodHours = ms / (TREND_BUCKETS * TIME_MS.HOUR);
-      let previousTrend: MetricTrend | undefined;
-      const trendData = timeBuckets.map((bucket, idx) => {
-        const { scores } = bucket;
-        const percentiles = computePercentileDistribution(scores);
-        const avg = mean(scores);
-        const prevBucket = idx > 0 ? timeBuckets[idx - 1] : undefined;
-        const previousValues = (prevBucket && prevBucket.scores.length > 0)
-          ? computeAggregations(prevBucket.scores, config.aggregations)
-          : undefined;
-        const detail = scores.length > 0
-          ? computeMetricDetail(bucket.evals, config, { topN: 0, bucketCount: 0, previousValues })
-          : undefined;
-        let dynamics: MetricDynamics | undefined;
-        if (detail?.trend) {
-          dynamics = computeMetricDynamics(detail.trend, periodHours, { previousTrend });
-          previousTrend = detail.trend;
-        }
-        return {
-          startTime: bucket.startTime,
-          endTime: bucket.endTime,
-          count: scores.length,
-          avg: avg != null ? Math.round(avg * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR : null,
-          percentiles,
-          trend: detail?.trend ?? null,
-          dynamics: dynamics ?? null,
-        };
+      const { view, buckets } = computeTrend(name, cached.get(name) ?? [], config, {
+        period,
+        bucketCount: DEFAULT_TREND_BUCKETS,
+        now,
       });
-
-      const allScores = extractFiniteScores(evaluations);
-
-      entries.push({
-        key: `trend:${name}:${period}`,
-        value: toKVValue({
-          metric: name,
-          period,
-          bucketCount: TREND_BUCKETS,
-          totalEvaluations: allScores.length,
-          overallPercentiles: computePercentileDistribution(allScores),
-          trendData,
-        }),
-      });
+      periodBuckets[name] = buckets;
+      entries.push({ key: trendKey(name, period), value: toKVValue(view) });
     }
   }
   return { entries, degradationBuckets };
@@ -1053,7 +975,7 @@ function computeTrendEntries(
  * non-home orgs compute signals statelessly (no cross-run breach continuity).
  */
 function computeDegradationEntries(
-  degradationBuckets: Map<Period, Record<string, DegradationBucket[]>>,
+  degradationBuckets: Map<Period, Record<string, ScoredBucket[]>>,
   metricNames: string[],
   now: Date,
   isHome: boolean,
@@ -1262,7 +1184,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   entries.push({ key: CODE_QUALITY_KV_KEY, value: toKVValue(await computeCodeQuality(backend, now)) });
 
   const metricNames = Object.keys(QUALITY_METRICS);
-  const metricDetail = computeMetricDetailEntries(orgEvals, nowMs, metricNames);
+  const metricDetail = computeMetricDetailEntries(groupedByPeriod, orgEvals, nowMs, metricNames);
   entries.push(...metricDetail.entries);
   entries.push(...computeEvaluationRowEntries(groupedByPeriod, metricNames));
 
