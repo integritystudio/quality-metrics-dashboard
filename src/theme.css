@@ -172,6 +172,7 @@
   /* Font Weight */
   --bold: 600;
   --light-bold: 500;
+  --bolder: 700;
 
   /* Label typography */
   --label-letter-spacing: 0.5px;
@@ -1342,7 +1343,7 @@ details[open] > .cot-summary::before {
 
 /* Typography */
 .font-medium { font-weight: var(--light-bold); }
-.font-bold   { font-weight: 700; }
+.font-bold   { font-weight: var(--bolder); }
 .italic      { font-style: italic; }
 .nowrap      { white-space: nowrap; }
 .truncate  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
