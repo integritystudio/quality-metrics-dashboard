@@ -1,5 +1,5 @@
 /**
- * API route tests: /api/trends/:name and /api/trends.
+ * API route tests: /api/trends/:name.
  *
  * Approach C — fixture HTTP server. The real data-loader and CloudBackend run,
  * and so do the parent's metric registry, percentile, detail and dynamics
@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
 import { trendRoutes } from '../api/routes/trends.js';
-import type { TrendDetailResponse, TrendSummaryResponse } from './support/api-responses.js';
+import type { TrendDetailResponse } from './support/api-responses.js';
 import { recentEvalNanos } from './support/fixtures.js';
 import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
 
@@ -142,40 +142,6 @@ describe('GET /trends/:name', () => {
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
-    expect(res.status).toBe(500);
-  });
-});
-
-// /trends (summary)
-
-describe('GET /trends', () => {
-  it('returns 400 for invalid period', async () => {
-    const res = await trendRoutes.request('/trends?period=99d');
-    expect(res.status).toBe(400);
-  });
-
-  it('returns one entry per registered metric', async () => {
-    const res = await trendRoutes.request('/trends?period=7d');
-    expect(res.status).toBe(200);
-    const body = await res.json() as TrendSummaryResponse;
-    expect(body.period).toBe('7d');
-    expect(body.metrics.map((m) => m.metric)).toContain(METRIC);
-  });
-
-  it('counts only the scores served for each metric', async () => {
-    const res = await trendRoutes.request('/trends?period=7d');
-    const body = await res.json() as TrendSummaryResponse;
-    const relevance = body.metrics.find((m) => m.metric === METRIC);
-    expect(relevance?.count).toBe(SCORES_BY_DAYS_AGO.length);
-    expect(relevance?.percentiles?.p50).toBeCloseTo(0.7, 3);
-    for (const other of body.metrics.filter((m) => m.metric !== METRIC)) {
-      expect(other).toMatchObject({ count: 0, percentiles: null });
-    }
-  });
-
-  it('returns 500 when backend throws', async () => {
-    fixture.failPath('/v1/evaluations');
-    const res = await trendRoutes.request('/trends?period=7d');
     expect(res.status).toBe(500);
   });
 });
