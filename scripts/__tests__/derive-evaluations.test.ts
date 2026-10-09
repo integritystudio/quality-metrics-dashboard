@@ -26,6 +26,7 @@ import { type EvalRecord } from '../eval-record.js';
 import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
 
 // Test Data Factories
 
@@ -1059,6 +1060,25 @@ describe('deriveAgentHeuristics', () => {
     const early = subagentStop(path, { startTime: [1707399999, 0] });
 
     const records = await deriveAgentHeuristics([early], SINCE_MS, new Map([['sess-abc', path]]));
+
+    expect(records).toEqual([]);
+  });
+
+  it('skips a session whose last span is within the completion-age window', async () => {
+    // A span 1 h before nowMs is inside the 12 h MIN_SESSION_COMPLETION_AGE_MS window.
+    const nowMs = SINCE_MS + 2 * TIME_MS.HOUR;
+    const path = transcript('session.jsonl', [
+      prompt('Fix the build'),
+      reply([{ type: 'text', text: 'Done.' }]),
+    ]);
+    const recentSpan = makeSpan({
+      spanId: 'span-recent',
+      startTime: [Math.floor((SINCE_MS + TIME_MS.HOUR) / TIME_MS.SECOND), 0],
+    });
+
+    const records = await deriveAgentHeuristics(
+      [recentSpan], SINCE_MS, new Map([['sess-abc', path]]), nowMs,
+    );
 
     expect(records).toEqual([]);
   });

@@ -174,6 +174,15 @@ const MAX_RAW_SCORES_PER_METRIC = 500;
 const TRANSCRIPT_READ_CONCURRENCY = 8;
 
 /**
+ * Sessions whose last span started within this window are likely still in
+ * progress. Scoring them now anchors on a transient last-span, so consecutive
+ * derive runs produce different `evaluationId` hashes and D1 accumulates one
+ * duplicate row per run (AGENT-HEURISTIC-INPROGRESS-DUPLICATES). Skip them;
+ * the next scheduled run will score the completed session on a stable span.
+ */
+const MIN_SESSION_COMPLETION_AGE_MS = 12 * TIME_MS.HOUR;
+
+/**
  * The Agent tool's pre- and post-tool hook spans. Derive matched their old
  * names (`hook:agent-pre-tool` / `hook:agent-post-tool`) for six weeks after
  * the hooks renamed them, so agent completion, handoff_correctness and agent
@@ -485,6 +494,7 @@ export async function deriveAgentHeuristics(
   spans: readonly LocalTraceSpan[],
   sinceMs: number,
   sessionTranscripts: ReadonlyMap<string, string>,
+  nowMs: number = Date.now(),
 ): Promise<EvalRecord[]> {
   const limit = pLimit(TRANSCRIPT_READ_CONCURRENCY);
   const jobs: Promise<EvalRecord[]>[] = [];
@@ -512,6 +522,9 @@ export async function deriveAgentHeuristics(
   }
 
   for (const [sessionId, span] of lastSpanBySession) {
+    // Skip sessions that may still be in progress: their last-span changes on the
+    // next derive run, producing a different evaluationId and a duplicate D1 row.
+    if (hrtToSeconds(span.startTime) * TIME_MS.SECOND > nowMs - MIN_SESSION_COMPLETION_AGE_MS) continue;
     const path = sessionTranscripts.get(sessionId);
     if (!path) continue;
     jobs.push(limit(async () => {
