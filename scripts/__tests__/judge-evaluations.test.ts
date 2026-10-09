@@ -768,7 +768,7 @@ function createFailingLLM(failKeyword: string): LLMProvider {
 describe('evaluateTurn', () => {
   beforeEach(() => {
     // Reset failure tracking
-    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+    resetFailureTracking();
   });
 
   it('evaluates relevance and coherence for turns without tool results', async () => {
@@ -859,7 +859,7 @@ describe('evaluateTurn', () => {
 
 describe('evaluateTurn faithfulness and hallucination', () => {
   beforeEach(() => {
-    for (const key of Object.keys(evalFailures)) delete evalFailures[key];
+    resetFailureTracking();
   });
 
   /**

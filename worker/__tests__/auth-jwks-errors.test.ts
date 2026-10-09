@@ -87,8 +87,8 @@ describe('Supabase reads during auth', () => {
   const APP_USER_ID = 'a0000000-0000-4000-8000-000000000051';
   const orgEnv = { ...env, ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: 'a0000000-0000-4000-8000-0000000000aa', STAFF_USER_IDS: '[]' };
 
-  function json(body: unknown, status = 200): Promise<Response> {
-    return Promise.resolve(new Response(JSON.stringify(body), { status }));
+  function json(body: unknown, statusCode = 200): Promise<Response> {
+    return Promise.resolve(new Response(JSON.stringify(body), { status: statusCode }));
   }
 
   async function status(fetchImpl: (url: string) => Promise<Response>, envOverride = orgEnv): Promise<number> {

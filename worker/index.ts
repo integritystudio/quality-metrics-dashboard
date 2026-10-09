@@ -587,7 +587,7 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
 function requirePermission(permission: DashboardPermission) {
   return createMiddleware<AppEnv>(async (c, next) => {
     if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-    await next();
+    return next();
   });
 }
 

@@ -67,6 +67,7 @@ export function classifyJudgeFailure(message: string): JudgeFailureClass {
 }
 
 export function resetFailureTracking(): void {
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- the record is an exported const read by tests and summarizeJudgeRun, so it is cleared in place rather than replaced
   for (const key of Object.keys(evalFailures)) delete evalFailures[key];
   for (const cls of JUDGE_FAILURE_CLASSES) failureClasses[cls] = 0;
 }

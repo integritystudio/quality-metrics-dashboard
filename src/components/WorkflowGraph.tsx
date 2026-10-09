@@ -284,7 +284,7 @@ async function computeLayout(
   return { nodes: rfNodes, edges: rfEdges };
 }
 
-const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps) {
+const AgentNodeComponent = memo(function AgentNode({ data }: NodeProps) {
   if (!isWorkflowNode(data)) return null;
   const d = data;
   const band = getScoreBand(d.evaluationScore);
@@ -326,7 +326,7 @@ const AgentNodeComponent = memo(function AgentNodeComponent({ data }: NodeProps)
   );
 });
 
-const ClusterNodeComponent = memo(function ClusterNodeComponent({ data }: NodeProps) {
+const ClusterNodeComponent = memo(function ClusterNode({ data }: NodeProps) {
   if (!isClusterNodeData(data)) return null;
   const d = data;
   const band = getScoreBand(d.avgScore);

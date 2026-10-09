@@ -27,6 +27,8 @@ const typeSafetyRules = {
   '@typescript-eslint/no-unnecessary-condition': 'error',
   '@typescript-eslint/prefer-promise-reject-errors': 'error',
   '@typescript-eslint/no-invalid-void-type': 'error',
+  '@typescript-eslint/no-shadow': 'error',
+  '@typescript-eslint/no-dynamic-delete': 'error',
 };
 
 // Relative reach-ins to the parent build output, any plausible depth.

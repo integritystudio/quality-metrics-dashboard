@@ -381,6 +381,7 @@ function stampedEvaluationId(record: Record<string, unknown>): string | undefine
 
 /** Top-level record fields excluded from the fingerprint (see `fingerprint`). */
 const FINGERPRINT_EXCLUDED_FIELDS = [SPAN_ID_FIELD, IDENTITY_KEY_REF_FIELD] as const;
+const FINGERPRINT_EXCLUDED_FIELD_SET: ReadonlySet<string> = new Set(FINGERPRINT_EXCLUDED_FIELDS);
 
 function withoutAddedFields(line: string): string {
   if (!FINGERPRINT_EXCLUDED_FIELDS.some((f) => line.includes(`"${f}"`))) return line;
@@ -391,8 +392,9 @@ function withoutAddedFields(line: string): string {
     return line;
   }
   if (typeof parsed !== 'object' || parsed === null) return line;
-  const rest = { ...(parsed as Record<string, unknown>) };
-  for (const field of FINGERPRINT_EXCLUDED_FIELDS) delete rest[field];
+  const rest = Object.fromEntries(
+    Object.entries(parsed as Record<string, unknown>).filter(([key]) => !FINGERPRINT_EXCLUDED_FIELD_SET.has(key)),
+  );
   return JSON.stringify(rest);
 }
 

@@ -726,12 +726,12 @@ export type OrgReadBackend = Pick<CloudBackend, 'queryEvaluations' | 'queryTrace
 
 /**
  * Add one session to an agent's bounded buffer of recent sessions. Once the
- * buffer holds `max`, a dated entry replaces the oldest dated session (the
+ * buffer holds `capacity`, a dated entry replaces the oldest dated session (the
  * first of a tie) if it is newer; when no buffered session has a date, it
  * replaces the last slot. An undated entry is dropped from a full buffer.
  */
-export function addRecentSession<T extends { date: string | null }>(sessions: T[], entry: T, max: number): void {
-  if (sessions.length < max) {
+export function addRecentSession<T extends { date: string | null }>(sessions: T[], entry: T, capacity: number): void {
+  if (sessions.length < capacity) {
     sessions.push(entry);
     return;
   }
