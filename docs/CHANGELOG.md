@@ -4,6 +4,7 @@
 
 | Version | Date | Summary |
 |---------|------|---------|
+| [v3.0.11](changelog/3.0.11/CHANGELOG.md) | 2026-10-09 | Sync-to-kv refactors: single evaluations read per org, optional change-hash basis for dashboard keys, KV write via REST API (no wrangler), and per-concern split of the 430-line `computeOrgEntries`. Judge backfill documented and excluded from evidence; dev Worker secrets path added (10 items). |
 | [v3.0.10](changelog/3.0.10/CHANGELOG.md) | 2026-10-08 | Session detail built once for the API and KV sync; agent step scoring aligned; sync-to-kv and its tests de-duplicated; judge failure classes see a thrown object's JSON |
 | [v3.0.6](changelog/3.0.6/CHANGELOG.md) | 2026-07-13 | Backlog Clearance: Library optimizations, type safety, worker API validation, auth consolidation, workflow filters, degradation signals, admin mutations, test fixtures (28 items) |
 | [v3.0.5](changelog/3.0.5/CHANGELOG.md) | 2026-03-26 | Code Review Follow-ups: Workflow visualization completion, worker API validation hardening, type safety fixes, E2E testing (40+ items) |
