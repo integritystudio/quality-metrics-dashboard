@@ -25,7 +25,9 @@
  */
 
 import { discoverTurns } from './judge-evaluations.js';
-import { type Turn } from './judge-turns.js';
+import { turnKey, type Turn } from './judge-turns.js';
+
+export { turnKey };
 import { resolveDateScope } from './derive-evaluations.js';
 import { parseCli, positiveIntArg, runIfMain } from './cli-args.js';
 import { selectTurns } from './judge-selection.js';
@@ -56,10 +58,6 @@ export interface JudgeParityReport {
   selectedCloud: number;
   sameSelection: boolean;
   clean: boolean;
-}
-
-export function turnKey(t: Turn): string {
-  return `${t.sessionId}|${t.timestamp}`;
 }
 
 function byKey(turns: readonly Turn[]): Map<string, Turn> {

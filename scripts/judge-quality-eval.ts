@@ -39,8 +39,11 @@ import {
   _discoverTranscripts,
   extractTurns,
   fitContextForJudge,
+  turnKey,
   type Turn,
 } from './judge-turns.js';
+
+export { turnKey };
 import { processBatch } from './judge-evaluations.js';
 import { FAITHFULNESS_EVAL_NAME } from './judge-criteria.js';
 import {
@@ -198,10 +201,6 @@ export function readAgreementTurns(path: string): AgreementTurn[] {
 // ---------------------------------------------------------------------------
 // Freezing the turns
 // ---------------------------------------------------------------------------
-
-export function turnKey(turn: { sessionId: string; timestamp: string }): string {
-  return `${turn.sessionId}|${turn.timestamp}`;
-}
 
 /** Re-locate the scored turns through the pipeline's own discovery. Unmatched turns are simply absent. */
 async function locateTurns(wanted: readonly AgreementTurn[]): Promise<Turn[]> {

@@ -67,6 +67,11 @@ export function turnSourceFields(turn: Turn): Pick<EvalRecord, 'identityKeyRef' 
   };
 }
 
+/** A turn's identity across sources and runs: its session and start time. */
+export function turnKey(turn: { sessionId: string; timestamp: string }): string {
+  return `${turn.sessionId}|${turn.timestamp}`;
+}
+
 /**
  * Anchor each turn to its own spans: the session's spans between the turn's
  * start and the next turn's. The first of them gives the turn its trace and
