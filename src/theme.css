@@ -107,6 +107,7 @@
   /* Layout */
   --layout-max-width: 1280px;
   --page-content-max-width: 1100px;
+  --callout-max-width: 480px;
 
   /* Component sizes */
   --metric-grid-min-column: 300px;
@@ -706,7 +707,7 @@ body {
 
 /* Centered constrained text block (e.g. not-yet-available callout) */
 .centered-callout {
-  max-width: var(--callout-max-width, 480px);
+  max-width: var(--callout-max-width);
   margin: 0 auto;
 }
 /* Card with extra vertical padding for hero/empty states */
