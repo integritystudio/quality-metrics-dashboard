@@ -70,7 +70,7 @@ import {
 } from './judge-criteria.js';
 import { judgedByKey, turnKeyOf } from './judge-dedup.js';
 import { trackFailure } from './judge-failures.js';
-import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
+import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
@@ -98,8 +98,6 @@ export const CONSOLIDATED_PRODUCER = 'dashboard:judge-consolidated';
 
 const REASONING_DESCRIPTION = 'Your reasoning for this criterion, written before the score.';
 const SCORE_DESCRIPTION = `Integer score from ${G_EVAL_MIN_SCORE} to ${G_EVAL_MAX_SCORE}.`;
-const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
-const MAX_TOKENS_STOP_REASON = 'max_tokens';
 const VALID_SCORE_SET: ReadonlySet<number> = new Set<number>(G_EVAL_VALID_SCORES);
 /** Tool sub-criteria, judged only alongside tool_correctness — mirrors `evaluateTurn`. */
 const TOOL_SUB_CRITERIA: readonly GEvalConfig[] = [
@@ -543,7 +541,7 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
         max_tokens: schema ? CONSOLIDATED_MAX_TOKENS : JUDGE_MAX_TOKENS,
         temperature: temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
-        ...(schema && { output_config: { format: { type: JSON_SCHEMA_OUTPUT_FORMAT, schema } } }),
+        ...jsonSchemaOutputConfig(schema),
       });
 
       const usage = toJudgeTokenUsage(response.usage);

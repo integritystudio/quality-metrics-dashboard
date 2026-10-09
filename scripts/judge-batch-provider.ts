@@ -23,7 +23,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
-import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey } from './judge-credentials.js';
 import { sleep } from './sleep.js';
 
@@ -158,8 +158,7 @@ export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate'
 
 /** Maps `jsonSchema` onto the request's `output_config.format`; nothing when the option is absent. */
 export function toOutputConfig(options?: BatchGenerateOptions): Pick<MessageParams, 'output_config'> {
-  if (!options?.jsonSchema) return {};
-  return { output_config: { format: { type: 'json_schema', schema: options.jsonSchema } } };
+  return jsonSchemaOutputConfig(options?.jsonSchema);
 }
 
 function toError(value: unknown): Error {

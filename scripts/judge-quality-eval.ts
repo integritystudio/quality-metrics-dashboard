@@ -60,7 +60,7 @@ import {
   listResultsFiles as listAgreementFiles,
   type CriterionAgreement,
 } from './judge-agreement.js';
-import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
+import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, jsonSchemaFormat, responseText } from './judge-anthropic-client.js';
 import { runIfMain } from './cli-args.js';
 import { incrementIn } from './collections.js';
 import {
@@ -123,8 +123,6 @@ export const MARKER_FILENAME = '.judge-quality.started';
 export const RESULTS_PREFIX = 'judge-quality-';
 export const FROZEN_TURNS_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'local', 'judge-quality-turns.json');
 
-const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
-const MAX_TOKENS_STOP_REASON = 'max_tokens';
 const REFUSAL_STOP_REASON = 'refusal';
 const TABLE_CELL_WIDTH = 11;
 /** The verdict column is wider than the rest. */
@@ -355,7 +353,7 @@ export async function createReferenceProvider(
         thinking: { type: 'adaptive' },
         output_config: {
           effort: REFERENCE_EFFORT,
-          ...(options.schema && { format: { type: JSON_SCHEMA_OUTPUT_FORMAT, schema: options.schema } }),
+          ...(options.schema && { format: jsonSchemaFormat(options.schema) }),
         },
         messages: [{ role: 'user', content: prompt }],
       });

@@ -61,7 +61,7 @@ import {
 import { toDateOnly } from '../src/api/api-constants.js';
 import { resolveJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, type AccountIndex } from './account-stamps.js';
-import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
 import { incrementIn } from './collections.js';
 import { discoverFromCloud } from './judge-cloud-source.js';
@@ -179,8 +179,6 @@ function createEvalRecord(
 // response carries `usage`; the provider folds each one into the totals the
 // summary line prints beside the estimate.
 
-/** `output_config.format.type` for a response constrained by a JSON Schema (structured outputs). */
-const JSON_SCHEMA_OUTPUT_FORMAT = 'json_schema';
 
 /** The slice of the SDK client the judge provider calls; a test passes a fake. */
 export type JudgeMessagesClient = {
@@ -189,15 +187,6 @@ export type JudgeMessagesClient = {
   };
 };
 
-/**
- * `output_config` constraining the response to `jsonSchema`, or nothing when
- * the caller gave no schema so the request is unchanged from before.
- */
-function judgeOutputConfig(
-  jsonSchema: ResponseJsonSchema | undefined
-): Pick<AnthropicSdk.MessageCreateParamsNonStreaming, 'output_config'> {
-  return jsonSchema ? { output_config: { format: { type: JSON_SCHEMA_OUTPUT_FORMAT, schema: jsonSchema } } } : {};
-}
 
 /** The judge's synchronous provider; `onUsage` also sees each response's usage, which the one-shot evals total. */
 export async function createAnthropicProvider(
@@ -225,7 +214,7 @@ export function anthropicProviderFor(
         max_tokens: JUDGE_MAX_TOKENS,
         temperature: options?.temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
-        ...judgeOutputConfig(options?.jsonSchema),
+        ...jsonSchemaOutputConfig(options?.jsonSchema),
       });
       if (response.usage) {
         const seen = toJudgeTokenUsage(response.usage);
