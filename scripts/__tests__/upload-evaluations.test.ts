@@ -24,6 +24,7 @@ import { deriveToolCorrectness } from '../derive-evaluations.js';
 import { EVALUATION_RESULT_EVENT, toOTelRecord } from '../eval-record.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;
@@ -290,6 +291,12 @@ describe('evaluationId', () => {
   it('is sent on every mapped payload, so a re-send is dropped by the ingest worker', () => {
     const r = record({ [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations' }) as Record<string, unknown>;
     expect(mapRecord(r, NOW, MAX_AGE_MS).payload?.evaluationId).toBe(evaluationId(r));
+  });
+
+  it('keeps the id the hooks stamped on the record, whatever else changes (HDF12)', () => {
+    const stamped = { ...base, attributes: { ...base.attributes, [INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]: 'f'.repeat(32) } };
+    expect(evaluationId(stamped)).toBe('f'.repeat(32));
+    expect(evaluationId({ ...stamped, spanId: 'span-b', identityKeyRef: 'OBTOOL_API_KEY' })).toBe('f'.repeat(32));
   });
 
   it('uses stableEvaluationKey when present, so session records hash the same across different span anchors', () => {

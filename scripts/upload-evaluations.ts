@@ -84,7 +84,7 @@ import {
   WEBHOOK_SIGNATURE_HEADER,
   WEBHOOK_SIGNATURE_PREFIX,
 } from '../../src/lib/core/obtool-contract.js';
-import { evaluationCohortSchema } from '../../src/lib/core/shared-schemas.js';
+import { evaluationCohortSchema, INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
 import { increment, pushTo } from './collections.js';
@@ -353,13 +353,27 @@ export function fingerprint(line: string): string {
  * evaluations. Only the account stamp is left out — it routes the record, and a
  * cloud-sourced derive stamps records the local one could not, so including it
  * would give the same evaluation two ids.
+ *
+ * A record the hooks stamped with `integritystudio.evaluation.id` (HDF12) keeps
+ * that id verbatim: the same record also ships as a log event, and ingest
+ * projects it into the table under that id, so the webhook copy sent here must
+ * carry the same one for the dedup index to see them as one evaluation.
  */
 export function evaluationId(record: Record<string, unknown>): string {
+  const stampedId = stampedEvaluationId(record);
+  if (stampedId) return stampedId;
   const { [IDENTITY_KEY_REF_FIELD]: _stamp, [STABLE_EVALUATION_KEY_FIELD]: stableKey, ...rest } = record;
   if (typeof stableKey === 'string' && stableKey.length > 0) {
     return createHash('sha256').update(stableKey).digest('hex').slice(0, EVALUATION_ID_LENGTH);
   }
   return createHash('sha256').update(JSON.stringify(rest)).digest('hex').slice(0, EVALUATION_ID_LENGTH);
+}
+
+function stampedEvaluationId(record: Record<string, unknown>): string | undefined {
+  const attrs = record.attributes;
+  if (typeof attrs !== 'object' || attrs === null) return undefined;
+  const id = (attrs as Record<string, unknown>)[INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID];
+  return typeof id === 'string' && id !== '' ? id : undefined;
 }
 
 /** Top-level record fields excluded from the fingerprint (see `fingerprint`). */
