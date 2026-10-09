@@ -16,7 +16,7 @@ import {
   type OrgReadBackend,
 } from '../sync-to-kv.js';
 import { CANARY_COHORT } from '../evaluation-constants.js';
-import { BACKFILL_COHORT, SEED_COHORT } from '../eval-record.js';
+import { BACKFILL_COHORT, RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -374,5 +374,37 @@ describe('addRecentSession', () => {
     addRecentSession(sessions, session('new', '2026-10-04'), MAX);
 
     expect(ids(sessions)).toEqual(['a', 'b', 'new']);
+  });
+});
+
+describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
+  /** Rule evals on trace-rule, LLM judge eval on trace-llm — only trace-llm should appear in the matrix. */
+  const RECENT = '2026-10-07T12:00:00.000Z';
+
+  it('excludes rule-based evaluations and their inputs from the coverage matrix', async () => {
+    const result = await compute([
+      evaluation('rule eval', RECENT, { evaluationName: 'tool_correctness', traceId: 'trace-rule', evaluatorType: RULE_EVALUATOR_TYPE }),
+      evaluation('llm eval', RECENT, { evaluationName: FIXTURE_METRIC, traceId: 'trace-llm', evaluatorType: 'llm' }),
+    ]);
+
+    const kvKey = `coverage:7d:traceId`;
+    const matrix = entryValue<{ metrics: string[]; inputs: string[] }>(result, kvKey);
+    expect(matrix).toBeDefined();
+    expect(matrix!.metrics).not.toContain('tool_correctness');
+    expect(matrix!.inputs).not.toContain('trace-rule');
+    expect(matrix!.metrics).toContain(FIXTURE_METRIC);
+    expect(matrix!.inputs).toContain('trace-llm');
+  });
+
+  it('produces an empty matrix when all evaluations are rule-based', async () => {
+    const result = await compute([
+      evaluation('rule only', RECENT, { evaluationName: 'tool_correctness', traceId: 'trace-rule', evaluatorType: RULE_EVALUATOR_TYPE }),
+    ]);
+
+    const matrix = entryValue<{ metrics: string[]; inputs: string[]; overallCoveragePercent: number }>(result, `coverage:7d:traceId`);
+    expect(matrix).toBeDefined();
+    expect(matrix!.metrics).toHaveLength(0);
+    expect(matrix!.inputs).toHaveLength(0);
+    expect(matrix!.overallCoveragePercent).toBe(0);
   });
 });

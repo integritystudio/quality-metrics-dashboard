@@ -83,6 +83,7 @@ import {
   extractFiniteScores,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
+import { RULE_EVALUATOR_TYPE } from './eval-record.js';
 import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
@@ -808,6 +809,20 @@ interface OrgEvaluations {
 
 type EvaluationsByName = Map<string, EvaluationResult[]>;
 type DegradationBucket = { scores: number[]; startTime: string; endTime: string };
+
+/**
+ * Remove rule-based evaluations before computing the coverage matrix.
+ * Rule evals have per-span traceId granularity that inflates the input universe,
+ * matching the dev API route's filterJudgeEvaluations logic (CVG-RULE-FILTER).
+ */
+function filterRuleEvals(byMetric: EvaluationsByName): EvaluationsByName {
+  const filtered: EvaluationsByName = new Map();
+  for (const [metric, evals] of byMetric) {
+    const judgeEvals = evals.filter(e => e.evaluatorType !== RULE_EVALUATOR_TYPE);
+    if (judgeEvals.length > 0) filtered.set(metric, judgeEvals);
+  }
+  return filtered;
+}
 /** What `accumulateAgent` reads from one session's detail. */
 type AgentSessionContext = {
   timespan: { start: string } | null;
@@ -872,8 +887,9 @@ function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates:
   // KV's 25 MiB value limit and disabled this feature in February 2026 (CVG-1).
   // The columnar matrix measures 4.68 MB for that same case. Sizes and the
   // rejected compression alternatives: `CoverageMatrix` in quality-visualization.ts.
+  const groupedForCoverage = filterRuleEvals(grouped);
   for (const inputKey of COVERAGE_INPUT_KEYS) {
-    const matrix = computeCoverageMatrix(grouped, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
+    const matrix = computeCoverageMatrix(groupedForCoverage, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
     const coverageKey = `coverage:${period}:${inputKey}`;
     const coverageValue = toKVValue({ period, ...matrix });
     const coverageSizeBytes = Buffer.byteLength(coverageValue, 'utf8');
