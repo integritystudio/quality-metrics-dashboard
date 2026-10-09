@@ -881,7 +881,7 @@ function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates:
     if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
       console.warn(
         `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
-        ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV\'s ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
+        ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
         ' — reduce MAX_COVERAGE_COLUMNS',
       );
     }

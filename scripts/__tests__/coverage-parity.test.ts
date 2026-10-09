@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { computeOrgEntries, type OrgComputation, type OrgReadBackend } from '../sync-to-kv.js';
-import { evaluation, isoToNs } from './support/evaluations.js';
+import { evaluation } from './support/evaluations.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -71,7 +71,7 @@ describe('coverage parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
     const res = await coverageRoutes.request(`/coverage?period=${period}&inputKey=${inputKey}`);
     expect(res.status).toBe(200);
-    const fromRoute = await res.json() as unknown;
+    const fromRoute = await res.json();
 
     expect(fromKv).toEqual(fromRoute);
   });

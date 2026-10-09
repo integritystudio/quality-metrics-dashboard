@@ -59,7 +59,7 @@ describe('pipeline parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
     const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
     expect(res.status).toBe(200);
-    const fromRoute = await res.json() as unknown;
+    const fromRoute = await res.json();
 
     expect(fromKv).toEqual(fromRoute);
   });

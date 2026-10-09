@@ -88,7 +88,7 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     expect(fromKv?.rows).toEqual(fromRoute.rows);
   });
 
-  it('includes evaluatorKind and cohort in the KV row', async () => {
+  it('includes evaluatorKind and cohort in the KV row', () => {
     const fromKv = kvValue(synced, 'metric:evaluations:relevance:7d') as
       { rows: Record<string, unknown>[] } | undefined;
     expect(fromKv?.rows[0]).toMatchObject({ evaluatorKind: 'llm', cohort: 'normal' });

@@ -60,12 +60,12 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
     const res = await dashboardRoutes.request(`/dashboard?period=${period}`);
     expect(res.status).toBe(200);
-    const fromRoute = await res.json() as unknown;
+    const fromRoute = await res.json();
 
     expect(fromKv).toEqual(fromRoute);
   });
 
-  it('includes cqi and sparklines in the full payload', async () => {
+  it('includes cqi and sparklines in the full payload', () => {
     const fromKv = kvValue(synced, 'dashboard:7d') as Record<string, unknown> | undefined;
     expect(fromKv).toHaveProperty('cqi');
     expect(fromKv).toHaveProperty('sparklines');
@@ -78,13 +78,13 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
       const res = await dashboardRoutes.request(`/dashboard?period=7d&role=${role}`);
       expect(res.status).toBe(200);
-      const fromRoute = await res.json() as unknown;
+      const fromRoute = await res.json();
 
       expect(fromKv).toEqual(fromRoute);
     }
   );
 
-  it('executive role view includes cqi and sparklines', async () => {
+  it('executive role view includes cqi and sparklines', () => {
     const fromKv = kvValue(synced, 'dashboard:7d:executive') as Record<string, unknown> | undefined;
     expect(fromKv).toHaveProperty('cqi');
     expect(fromKv).toHaveProperty('sparklines');
