@@ -20,7 +20,7 @@
  * Exit: 0 when every record matches, 1 on any difference, 2 on a usage or fetch error.
  */
 
-import { runIfMain } from './cli-args.js';
+import { CHECK_EXIT, runIfMain } from './cli-args.js';
 import { EVAL_SCORE_PRECISION, type EvalRecord } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { deriveAll, loadLocalSpans, resolveDateScope } from './derive-evaluations.js';
@@ -31,10 +31,6 @@ const CLI_PREFIX = '[derive:parity]';
 const DECIMAL_BASE = 10;
 const SCORE_TOLERANCE = DECIMAL_BASE ** -EVAL_SCORE_PRECISION;
 const SAMPLE_LIMIT = 5;
-
-export const EXIT_MATCH = 0;
-export const EXIT_MISMATCH = 1;
-export const EXIT_ERROR = 2;
 
 export interface NameParity {
   evaluationName: string;
@@ -143,7 +139,7 @@ async function main(): Promise<number> {
   const dates = resolveDateScope(argv);
   if (!dates) {
     console.error(`${CLI_PREFIX} pass --date=YYYY-MM-DD or --days=N`);
-    return EXIT_ERROR;
+    return CHECK_EXIT.ERROR;
   }
   console.log(`${CLI_PREFIX} dates: ${[...dates].sort().join(', ')}`);
 
@@ -154,7 +150,7 @@ async function main(): Promise<number> {
   console.table(report.byName);
   for (const s of report.samples) console.log(`  ${s.kind}: ${s.key} local=${s.local ?? '-'} cloud=${s.cloud ?? '-'}`);
   console.log(`${CLI_PREFIX} ${report.clean ? 'parity: every record matches' : 'parity: records differ'}`);
-  return report.clean ? EXIT_MATCH : EXIT_MISMATCH;
+  return report.clean ? CHECK_EXIT.PASS : CHECK_EXIT.FAIL;
 }
 
-runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: EXIT_ERROR });
+runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: CHECK_EXIT.ERROR });

@@ -148,6 +148,9 @@ export function nonNegativeNumberArg(label: string, raw: string | undefined): nu
 
 const FATAL_EXIT_CODE = 1;
 
+/** Exit codes of the read-only check scripts (parity, coverage): pass, fail, or a usage/fetch error. */
+export const CHECK_EXIT = { PASS: 0, FAIL: 1, ERROR: 2 } as const;
+
 export interface RunIfMainOptions {
   /** Exit code when `main` rejects; `FATAL_EXIT_CODE` when absent. */
   fatalExitCode?: number;

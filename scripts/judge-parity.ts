@@ -29,17 +29,13 @@ import { turnKey, type Turn } from './judge-turns.js';
 
 export { turnKey };
 import { resolveDateScope } from './derive-evaluations.js';
-import { parseCli, positiveIntArg, runIfMain } from './cli-args.js';
+import { CHECK_EXIT, parseCli, positiveIntArg, runIfMain } from './cli-args.js';
 import { selectTurns } from './judge-selection.js';
 
 const CLI_PREFIX = '[judge:parity]';
 const LIMIT_ARG = '--limit';
 const DEFAULT_LIMIT = 100;
 const SAMPLE_LIMIT = 5;
-
-export const EXIT_MATCH = 0;
-export const EXIT_MISMATCH = 1;
-export const EXIT_ERROR = 2;
 
 export interface JudgeParityReport {
   local: number;
@@ -126,7 +122,7 @@ async function main(): Promise<number> {
   const dates = resolveDateScope(argv);
   if (!dates) {
     console.error(`${CLI_PREFIX} pass --date=YYYY-MM-DD or --days=N`);
-    return EXIT_ERROR;
+    return CHECK_EXIT.ERROR;
   }
   const limit = parseLimit(argv);
   console.log(`${CLI_PREFIX} dates: ${[...dates].sort().join(', ')} limit=${limit}`);
@@ -144,7 +140,7 @@ async function main(): Promise<number> {
   for (const k of onlyLocal.slice(0, SAMPLE_LIMIT)) console.log(`  onlyLocal: ${k}`);
   for (const k of onlyCloud.slice(0, SAMPLE_LIMIT)) console.log(`  onlyCloud: ${k}`);
   console.log(`${CLI_PREFIX} ${report.clean ? 'parity: same turns discovered and selected' : 'parity: sources differ'}`);
-  return report.clean ? EXIT_MATCH : EXIT_MISMATCH;
+  return report.clean ? CHECK_EXIT.PASS : CHECK_EXIT.FAIL;
 }
 
-runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: EXIT_ERROR });
+runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: CHECK_EXIT.ERROR });

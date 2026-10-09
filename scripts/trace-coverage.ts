@@ -30,7 +30,7 @@ import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
 import { toDateOnly } from '../src/api/api-constants.js';
-import { nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';
+import { CHECK_EXIT, nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_SETTLE_MINUTES = 60;
@@ -43,9 +43,6 @@ const JSON_INDENT = 2;
 const NO_SESSION = '(none)';
 const CLI_PREFIX = '[trace-coverage]';
 
-const EXIT_OK = 0;
-const EXIT_BELOW_THRESHOLD = 1;
-const EXIT_CONFIG = 2;
 
 /** One local span, reduced to what the comparison needs. */
 export interface LocalSpan {
@@ -249,7 +246,7 @@ async function main(): Promise<number> {
   const options = parseArgs(process.argv.slice(2));
   if (!process.env.OBTOOL_API_URL) {
     console.error(`${CLI_PREFIX} OBTOOL_API_URL is not set; run under doppler --config prd`);
-    return EXIT_CONFIG;
+    return CHECK_EXIT.ERROR;
   }
   const nowMs = Date.now();
   const window = coverageWindow(nowMs, options.days, options.settleMinutes);
@@ -272,7 +269,7 @@ async function main(): Promise<number> {
   const missingKeys = [...byRef.keys()].filter((ref) => !asString(process.env[ref]));
   if (missingKeys.length > 0) {
     console.error(`${CLI_PREFIX} no API key in env for: ${missingKeys.join(', ')}`);
-    return EXIT_CONFIG;
+    return CHECK_EXIT.ERROR;
   }
 
   const results: AccountCoverage[] = [];
@@ -291,10 +288,10 @@ async function main(): Promise<number> {
   const below = results.filter((r) => r.coverage < options.minCoverage);
   if (below.length > 0) {
     console.log(`\n${CLI_PREFIX} below ${formatPercent(options.minCoverage)}: ${below.map((r) => r.ref).join(', ')}`);
-    return EXIT_BELOW_THRESHOLD;
+    return CHECK_EXIT.FAIL;
   }
   console.log(`\n${CLI_PREFIX} every account at or above ${formatPercent(options.minCoverage)}`);
-  return EXIT_OK;
+  return CHECK_EXIT.PASS;
 }
 
-runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: EXIT_CONFIG });
+runIfMain(import.meta.url, main, CLI_PREFIX, { fatalExitCode: CHECK_EXIT.ERROR });
