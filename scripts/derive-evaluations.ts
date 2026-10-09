@@ -531,6 +531,7 @@ export async function deriveAgentHeuristics(
       const input = await readMultiTurnInput(path);
       return input
         ? heuristicRecords(span, sessionId, input, `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`)
+            .map(r => ({ ...r, stableEvaluationKey: `session:${r.sessionId}:${r.evaluationName}` }))
         : [];
     }));
   }

@@ -291,6 +291,19 @@ describe('evaluationId', () => {
     const r = record({ [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations' }) as Record<string, unknown>;
     expect(mapRecord(r, NOW, MAX_AGE_MS).payload?.evaluationId).toBe(evaluationId(r));
   });
+
+  it('uses stableEvaluationKey when present, so session records hash the same across different span anchors', () => {
+    const key = 'session:sess-abc:conversation_completeness';
+    const withKeySpanA = { ...base, spanId: 'span-a', traceId: 'trace-1', stableEvaluationKey: key };
+    const withKeySpanB = { ...base, spanId: 'span-b', traceId: 'trace-2', stableEvaluationKey: key };
+    expect(evaluationId(withKeySpanA)).toBe(evaluationId(withKeySpanB));
+  });
+
+  it('excludes stableEvaluationKey from the hash for records without one', () => {
+    // A record without the field must produce the same id regardless of whether
+    // the field was stripped — it was never part of the hash for ordinary records.
+    expect(evaluationId(base)).toBe(evaluationId({ ...base, stableEvaluationKey: undefined }));
+  });
 });
 
 describe('windowFiles', () => {

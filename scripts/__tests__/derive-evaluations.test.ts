@@ -1064,6 +1064,32 @@ describe('deriveAgentHeuristics', () => {
     expect(records).toEqual([]);
   });
 
+  it('attaches a stable evaluation key to session-level records so resumed sessions do not produce duplicate D1 rows', async () => {
+    const path = transcript('session.jsonl', [
+      prompt('Fix the build'),
+      reply([{ type: 'text', text: 'Done.' }]),
+    ]);
+    const spanA = makeSpan({ spanId: 'span-early', startTime: [1707400000, 0] });
+    const spanB = makeSpan({ spanId: 'span-late', startTime: [1707400050, 0] });
+
+    const [recordsA, recordsB] = await Promise.all([
+      deriveAgentHeuristics([spanA], SINCE_MS, new Map([['sess-abc', path]])),
+      deriveAgentHeuristics([spanB], SINCE_MS, new Map([['sess-abc', path]])),
+    ]);
+
+    // Both runs produce session-level records.
+    expect(recordsA.length).toBeGreaterThan(0);
+    expect(recordsB.length).toBeGreaterThan(0);
+    // Every session record carries the same stableEvaluationKey regardless of span anchor.
+    for (let i = 0; i < recordsA.length; i++) {
+      const a = recordsA[i]!;
+      const b = recordsB[i]!;
+      expect(a.stableEvaluationKey).toBeDefined();
+      expect(a.stableEvaluationKey).toBe(b.stableEvaluationKey);
+      expect(a.stableEvaluationKey).toMatch(/^session:sess-abc:/);
+    }
+  });
+
   it('skips a session whose last span is within the completion-age window', async () => {
     // A span 1 h before nowMs is inside the 12 h MIN_SESSION_COMPLETION_AGE_MS window.
     const nowMs = SINCE_MS + 2 * TIME_MS.HOUR;

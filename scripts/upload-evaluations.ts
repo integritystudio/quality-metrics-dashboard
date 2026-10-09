@@ -165,6 +165,13 @@ const EVAL_FILE_PATTERN = /^evaluations-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 /** Top-level span id a record may carry: derive and judge records (TKR8 Phase 2). */
 const SPAN_ID_FIELD = 'spanId';
 /**
+ * Routing-only field emitted by `toOTelRecord` when an `EvalRecord` sets
+ * `stableEvaluationKey`. Never shipped to ingest. When present,
+ * `evaluationId()` hashes only its value so the dedup key is stable across
+ * derive runs that anchor on a changing last-span.
+ */
+const STABLE_EVALUATION_KEY_FIELD = 'stableEvaluationKey';
+/**
  * Top-level schema URL a record carries (AA3 § Migration, stamped since
  * 2026-10-07). Shipped as `metadata.schemaUrl`, the webhook's only slot for
  * it, so a D1 row records the attribute schema it was written under.
@@ -373,7 +380,10 @@ export function fingerprint(line: string): string {
  * would give the same evaluation two ids.
  */
 export function evaluationId(record: Record<string, unknown>): string {
-  const { [IDENTITY_KEY_REF_FIELD]: _stamp, ...rest } = record;
+  const { [IDENTITY_KEY_REF_FIELD]: _stamp, [STABLE_EVALUATION_KEY_FIELD]: stableKey, ...rest } = record;
+  if (typeof stableKey === 'string') {
+    return createHash('sha256').update(stableKey).digest('hex').slice(0, EVALUATION_ID_LENGTH);
+  }
   return createHash('sha256').update(JSON.stringify(rest)).digest('hex').slice(0, EVALUATION_ID_LENGTH);
 }
 

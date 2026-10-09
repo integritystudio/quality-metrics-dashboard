@@ -146,6 +146,14 @@ export interface EvalRecord {
   spanId?: string;
   /** The scored response's id, set only when `spanId` is unknown (semconv fallback). */
   responseId?: string;
+  /**
+   * When set, `evaluationId()` hashes only this string rather than the full
+   * record. Use for session-level records where the span anchor changes between
+   * runs (last-span advances as the session grows), so the server-side dedup
+   * key stays stable across consecutive derive runs
+   * (AGENT-HEURISTIC-INPROGRESS-DUPLICATES).
+   */
+  stableEvaluationKey?: string;
 }
 
 export function toOTelRecord(ev: EvalRecord): object {
@@ -184,5 +192,9 @@ export function toOTelRecord(ev: EvalRecord): object {
     // before either existed (derive rewrites its records every run).
     ...(ev.spanId && { spanId: ev.spanId }),
     ...(ev.identityKeyRef !== undefined && { [IDENTITY_KEY_REF_FIELD]: ev.identityKeyRef }),
+    // Routing field only; not shipped to ingest. evaluationId() hashes this
+    // when present instead of the full record, giving stable dedup keys for
+    // session-level records whose span anchor changes between runs.
+    ...(ev.stableEvaluationKey && { stableEvaluationKey: ev.stableEvaluationKey }),
   };
 }
