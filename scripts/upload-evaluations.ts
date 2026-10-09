@@ -5,7 +5,8 @@
  * `sync-to-kv` reads only the cloud, and the span shipper ships only
  * `(traces|logs|metrics)-*.jsonl`, so without this stage the hooks' records in
  * `evaluations-<date>.jsonl` never leave the disk and every sync computes an
- * empty dashboard (docs/data-pipeline.md § Historical incidents).
+ * empty dashboard, as it did for five months (DASHBOARD-PIPELINE-DEAD;
+ * docs/data-pipeline.md § Stages, `upload-evaluations.ts`).
  *
  * Each record is routed by the account that produced it (`routeRecord`): its
  * own `identityKeyRef` stamp (TKR8 Phase 1), else the stamp of the span it
