@@ -22,7 +22,8 @@
 
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { NANOSECONDS_PER_MILLISECOND, TIME_MS } from '../../src/lib/core/units.js';
+import { TIME_MS } from '../../src/lib/core/units.js';
+import { asHrTime, hrtToMs } from './hrt.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /**
@@ -89,15 +90,6 @@ export function fileInWindow(file: string, pattern: RegExp, windowDays: number, 
   return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
 }
 
-/** OTel `[seconds, nanoseconds]` start time to epoch ms; `UNTIMED_MS` when absent or malformed. */
-function hrTimeToMs(value: unknown): number {
-  if (!Array.isArray(value) || value.length !== 2) return UNTIMED_MS;
-  // Array.isArray narrows `unknown` to `any[]`, so name the element type rather
-  // than destructure `any`; the typeof guards below still do the real checking.
-  const [s, ns] = value as [unknown, unknown];
-  return typeof s === 'number' && typeof ns === 'number' ? s * TIME_MS.SECOND + ns / NANOSECONDS_PER_MILLISECOND : UNTIMED_MS;
-}
-
 function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {
   const values = map.get(key) ?? [];
   values.push(value);
@@ -150,7 +142,9 @@ export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
   for (const parsed of records) {
     if (typeof parsed !== 'object' || parsed === null) continue;
     const span = parsed as Record<string, unknown>;
-    const atMs = hrTimeToMs(span.startTime);
+    const start = asHrTime(span.startTime);
+    // `UNTIMED_MS` when absent or malformed.
+    const atMs = start ? hrtToMs(start) : UNTIMED_MS;
     const spanId = asString(span.spanId);
     const traceId = asString(span.traceId);
     const attrs = (typeof span.attributes === 'object' && span.attributes !== null)

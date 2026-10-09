@@ -24,7 +24,8 @@
 import { readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
-import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
+import { NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
+import { asHrTime, hrtToMs } from './hrt.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
@@ -90,12 +91,6 @@ export function coverageWindow(nowMs: number, days: number, settleMinutes: numbe
   return { fromMs: todayStart - (days - 1) * TIME_MS.DAY, toMs: nowMs - settleMinutes * TIME_MS.MINUTE };
 }
 
-function hrTimeToMs(value: unknown): number | undefined {
-  if (!Array.isArray(value) || value.length !== 2) return undefined;
-  const [s, ns] = value as [unknown, unknown];
-  return typeof s === 'number' && typeof ns === 'number' ? s * TIME_MS.SECOND + ns / NANOSECONDS_PER_MILLISECOND : undefined;
-}
-
 /** Parse one local JSONL line; `undefined` for blank, malformed or out-of-window lines. */
 export function parseLocalSpan(line: string, window: CoverageWindow): LocalSpan | undefined {
   if (!line.trim()) return undefined;
@@ -109,8 +104,9 @@ export function parseLocalSpan(line: string, window: CoverageWindow): LocalSpan 
   const r = record as Record<string, unknown>;
   const traceId = asString(r.traceId);
   const spanId = asString(r.spanId);
-  const startMs = hrTimeToMs(r.startTime);
-  if (!traceId || !spanId || startMs === undefined) return undefined;
+  const start = asHrTime(r.startTime);
+  if (!traceId || !spanId || !start) return undefined;
+  const startMs = hrtToMs(start);
   if (startMs < window.fromMs || startMs > window.toMs) return undefined;
   const attrs = (r.attributes ?? {}) as Record<string, unknown>;
   const rawRef = r[IDENTITY_KEY_REF_FIELD];

@@ -14,7 +14,8 @@ import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { TraceSpan } from '../../src/backends/index.js';
 import { statusCodeSchema } from '../../src/lib/otel/constants-otel.js';
-import { NANOSECONDS_PER_MILLISECOND_BIGINT, NANOSECONDS_PER_SECOND_BIGINT, TIME_MS } from '../../src/lib/core/units.js';
+import { NANOSECONDS_PER_MILLISECOND_BIGINT, TIME_MS } from '../../src/lib/core/units.js';
+import { nanosToHrt } from './hrt.js';
 import { localTraceSpanSchema, type LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { IDENTITY_KEY_REF_PATTERN, asString, type AccountRef } from './account-stamps.js';
 
@@ -28,10 +29,6 @@ export interface LoadedSpans {
   spans: LocalTraceSpan[];
   /** Account stamp by span id. */
   accounts: ReadonlyMap<string, AccountRef>;
-}
-
-function nanosToHrt(ns: bigint): [number, number] {
-  return [Number(ns / NANOSECONDS_PER_SECOND_BIGINT), Number(ns % NANOSECONDS_PER_SECOND_BIGINT)];
 }
 
 /**
