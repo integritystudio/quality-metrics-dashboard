@@ -211,15 +211,6 @@
 
 }
 
-/* Overflow */
-.overflow-x-auto { overflow-x: auto; }
-
-/* Interaction */
-.select-none { user-select: none; }
-
-/* Cursor */
-.cursor-pointer { cursor: pointer; }
-
 * {
   margin: 0;
   padding: 0;
@@ -1328,6 +1319,13 @@ details[open] > .cot-summary::before {
 
 /* Vertical align */
 .valign-middle { vertical-align: middle; }
+
+/* Overflow */
+.overflow-x-auto { overflow-x: auto; }
+
+/* Interaction */
+.select-none { user-select: none; }
+.cursor-pointer { cursor: pointer; }
 
 /* Table */
 .table-collapse { border-collapse: collapse; }
