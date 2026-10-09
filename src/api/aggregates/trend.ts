@@ -1,11 +1,11 @@
 /**
  * Metric trend series (`GET /api/trends/:name`), built once for both the API
- * route (`routes/trends.ts`) and the KV sync (`scripts/sync-to-kv.ts`). The two
- * once bucketed separately: the route auto-narrowed the axis to concentrated
- * data and reported `narrowed`; the sync never did (DASHBOARD-AGGREGATE-DUAL-IMPL).
+ * route (`routes/trends.ts`) and the KV sync (`scripts/sync-to-kv.ts`), one key
+ * per period (DASHBOARD-AGGREGATE-DUAL-IMPL).
  *
  * Callers load the period's evaluations; this module buckets and projects them,
- * and hands back the scored buckets the sync's degradation signals read.
+ * and hands back the scored buckets the sync's degradation signals read, so
+ * those narrow with the chart.
  */
 
 import { extent, mean } from 'd3-array';
