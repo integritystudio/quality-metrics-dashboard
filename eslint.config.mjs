@@ -29,6 +29,14 @@ const typeSafetyRules = {
   '@typescript-eslint/no-invalid-void-type': 'error',
   '@typescript-eslint/no-shadow': 'error',
   '@typescript-eslint/no-dynamic-delete': 'error',
+  'eqeqeq': ['error', 'always', { null: 'ignore' }],
+  'radix': 'error',
+  'no-param-reassign': ['error', { props: false }],
+  'array-callback-return': ['error', { checkForEach: true }],
+  'guard-for-in': 'error',
+  'no-self-compare': 'error',
+  'no-constructor-return': 'error',
+  'default-case-last': 'error',
 };
 
 // Relative reach-ins to the parent build output, any plausible depth.
@@ -60,6 +68,13 @@ export default tseslint.config(
       'react/no-children-prop': 'error',
       'react/no-danger-with-children': 'error',
       'react/no-unescaped-entities': 'error',
+    },
+  },
+  // src/ only: the browser and API server log through warn/error; scripts and the worker log by design.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': ['error', { allow: ['warn', 'error'] }],
     },
   },
   // src/ and worker/ test files - relax type safety and async patterns
