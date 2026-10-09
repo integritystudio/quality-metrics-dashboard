@@ -37,6 +37,11 @@ const typeSafetyRules = {
   'no-self-compare': 'error',
   'no-constructor-return': 'error',
   'default-case-last': 'error',
+  'no-restricted-globals': ['error',
+    { name: 'isNaN', message: 'Global isNaN coerces its argument; use Number.isNaN.' },
+    { name: 'isFinite', message: 'Global isFinite coerces its argument; use Number.isFinite.' },
+    { name: 'event', message: 'Use the handler parameter, not window.event.' },
+  ],
 };
 
 // Relative reach-ins to the parent build output, any plausible depth.

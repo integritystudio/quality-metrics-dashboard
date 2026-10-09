@@ -71,8 +71,8 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
       if (end > maxEnd) maxEnd = end;
     }
-    if (isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
-    if (isFinite(maxEnd)) agentLastEndNs.set(agentId, maxEnd);
+    if (Number.isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
+    if (Number.isFinite(maxEnd)) agentLastEndNs.set(agentId, maxEnd);
   }
 
   const nodes: WorkflowNode[] = [];
@@ -89,7 +89,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     for (const s of spansByAgent.get(agentName) ?? []) {
       if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
       const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && isFinite(v)) {
+      if (typeof v === 'number' && Number.isFinite(v)) {
         tokenSum += v;
         tokenCount++;
       }
@@ -116,14 +116,14 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     const key = `${h.sourceAgent}->${h.targetAgent}`;
     if (seenEdges.has(key)) continue;
     seenEdges.add(key);
-    const score = isFinite(h.score) ? h.score : 0;
+    const score = Number.isFinite(h.score) ? h.score : 0;
 
     // Compute handoff latency: time from source agent's last span end to target's first span start.
     // Use >= to include zero-latency handoffs (target starts exactly when source ends).
     const sourceEnd = agentLastEndNs.get(h.sourceAgent);
     const targetStart = agentFirstStartNs.get(h.targetAgent);
     const gapNs = sourceEnd !== undefined && targetStart !== undefined ? targetStart - sourceEnd : null;
-    const latencyMs = gapNs !== null && gapNs >= 0 && isFinite(gapNs)
+    const latencyMs = gapNs !== null && gapNs >= 0 && Number.isFinite(gapNs)
       ? Math.round(gapNs / NS_TO_MS)
       : null;
 
@@ -162,7 +162,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     for (const s of group) {
       if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
       const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof tv === 'number' && isFinite(tv)) { tokenSum += tv; tokenCount++; }
+      if (typeof tv === 'number' && Number.isFinite(tv)) { tokenSum += tv; tokenCount++; }
       durationMs += s.durationMs ?? 0;
       if (s.status?.code === 'ERROR') hasError = true;
       const start = Number(s.startTimeUnixNano);
@@ -194,7 +194,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
       const key = `${curr.id}->${next.id}`;
       const gapNs = next.minStart - curr.maxEnd;
-      const latencyMs = gapNs >= 0 && isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
+      const latencyMs = gapNs >= 0 && Number.isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
       edges.push({
         id: key,
         source: curr.id,

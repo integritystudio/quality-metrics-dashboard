@@ -27,7 +27,7 @@ function toIsoString(timestamp: string | number | bigint): string {
 export function TimestampCell({ timestamp, className }: TimestampCellProps) {
   const iso = toIsoString(timestamp);
   const d = new Date(iso);
-  const title = isNaN(d.getTime()) ? String(timestamp) : format(d, 'PPp');
+  const title = Number.isNaN(d.getTime()) ? String(timestamp) : format(d, 'PPp');
   return (
     <span className={className} title={title}>
       {formatTimestamp(iso)}

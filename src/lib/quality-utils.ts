@@ -420,7 +420,7 @@ import { format, differenceInMinutes, differenceInHours, differenceInDays } from
 
 export function formatTimestamp(ts: string): string {
   const d = new Date(ts);
-  if (isNaN(d.getTime())) return ts || '-';
+  if (Number.isNaN(d.getTime())) return ts || '-';
   const now = new Date();
   const diffMin = differenceInMinutes(now, d);
   if (diffMin < 1) return 'just now';

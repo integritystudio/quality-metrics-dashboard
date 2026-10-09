@@ -118,7 +118,7 @@ function pagedBody<T>(rows: T[], query?: URLSearchParams): unknown {
   const limit = limitStr ? parseInt(limitStr, CURSOR_RADIX) : undefined;
   const offset = cursorStr ? (parseInt(cursorStr, CURSOR_RADIX) || 0) : 0;
 
-  const validLimit = limit !== undefined && !isNaN(limit) && limit > 0 ? limit : undefined;
+  const validLimit = limit !== undefined && !Number.isNaN(limit) && limit > 0 ? limit : undefined;
   const pageEnd = validLimit !== undefined ? offset + validLimit : rows.length;
   const pageRows = rows.slice(offset, pageEnd);
   const hasMore = pageEnd < rows.length;
