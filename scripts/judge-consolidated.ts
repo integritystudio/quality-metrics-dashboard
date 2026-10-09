@@ -69,10 +69,9 @@ import {
   JUDGE_DEFAULT_TEMPERATURE,
 } from './judge-criteria.js';
 import { judgedByKey, turnKeyOf } from './judge-dedup.js';
-import { evalFailures, failureClasses, classifyJudgeFailure } from './judge-failures.js';
+import { trackFailure } from './judge-failures.js';
 import { createJudgeAnthropicClient, responseText } from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
-import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -430,14 +429,6 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
   };
 }
 
-/** Mirrors the per-criterion path's failure bookkeeping (trackFailure + warn line). */
-function trackFailure(metric: string, sessionPreview: string, err: unknown): void {
-  const message = describeUnknown(err);
-  evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
-  failureClasses[classifyJudgeFailure(message)] += 1;
-  console.warn(`  [${metric}] Error for ${sessionPreview}: ${message}`);
-}
-
 // ---------------------------------------------------------------------------
 // Turn evaluation
 // ---------------------------------------------------------------------------
@@ -469,7 +460,7 @@ export async function evaluateTurnConsolidated(
       prepared.push({ config, steps: result.value });
       return;
     }
-    for (const name of recordNamesFor(config.name)) trackFailure(name, sessionPreview, result.reason);
+    for (const name of recordNamesFor(config.name)) trackFailure(name, result.reason, sessionPreview);
   });
   if (prepared.length === 0) return [];
 
@@ -485,7 +476,7 @@ export async function evaluateTurnConsolidated(
     });
     parsed = parseConsolidatedResponse(response.text, names);
   } catch (err) {
-    for (const name of wanted) trackFailure(name, sessionPreview, err);
+    for (const name of wanted) trackFailure(name, err, sessionPreview);
     return [];
   }
 
@@ -494,7 +485,7 @@ export async function evaluateTurnConsolidated(
     const source = sourceCriterionName(name, options);
     const verdict = parsed.verdicts.get(source);
     if (!verdict) {
-      trackFailure(name, sessionPreview, parsed.failures.get(source) ?? new Error(`Could not parse verdict for ${source}`));
+      trackFailure(name, parsed.failures.get(source) ?? new Error(`Could not parse verdict for ${source}`), sessionPreview);
       continue;
     }
     const normalized = toNormalizedScore(verdict.score);

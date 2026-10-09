@@ -70,9 +70,12 @@ export function resetFailureTracking(): void {
   for (const cls of JUDGE_FAILURE_CLASSES) failureClasses[cls] = 0;
 }
 
-export function trackFailure(metric: string, err: unknown): void {
+/** Count a failed criterion; with `sessionPreview`, also log the per-criterion warning line. */
+export function trackFailure(metric: string, err: unknown, sessionPreview?: string): void {
+  const message = describeUnknown(err);
   evalFailures[metric] = (evalFailures[metric] ?? 0) + 1;
-  failureClasses[classifyJudgeFailure(describeUnknown(err))] += 1;
+  failureClasses[classifyJudgeFailure(message)] += 1;
+  if (sessionPreview !== undefined) console.warn(`  [${metric}] Error for ${sessionPreview}: ${message}`);
 }
 
 /** Failure rate above which a run is flagged as JUDGE_EXIT_HIGH_FAILURE_RATE. */

@@ -368,10 +368,7 @@ export async function evaluateTurn(
   const record = (evalName: string, value: number, reason: string): void => {
     evals.push(createEvalRecord(turn, evalName, value, reason, LLM_EVALUATOR_KIND, NORMAL_COHORT, HAIKU_MODEL));
   };
-  const fail = (evalName: string, err: unknown): void => {
-    trackFailure(evalName, err);
-    console.warn(`  [${evalName}] Error for ${sessionPreview}: ${(err as Error).message}`);
-  };
+  const fail = (evalName: string, err: unknown): void => trackFailure(evalName, err, sessionPreview);
   const fallbackReason = (label: string, value: number): string =>
     `${label}: ${value.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;
   /** One criterion, unless already judged; a failure is tracked and logged, never thrown. */
