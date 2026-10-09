@@ -108,6 +108,7 @@
   --layout-max-width: 1280px;
   --page-content-max-width: 1100px;
   --callout-max-width: 480px;
+  --customer-spinner-size: 20px;
 
   /* Component sizes */
   --metric-grid-min-column: 300px;
@@ -1761,7 +1762,6 @@ summary.section-rail {
    --------------------------------------------------------------------------- */
 .customer-view {
   --customer-view-max-width: 600px;
-  --customer-spinner-size: 20px;
   max-width: var(--customer-view-max-width);
   margin: 0 auto;
   display: flex;
@@ -1877,8 +1877,8 @@ summary.section-rail {
 
 /* Loading indicator (the Flutter CircularProgressIndicator) */
 .customer-spinner {
-  width: var(--customer-spinner-size, 20px);
-  height: var(--customer-spinner-size, 20px);
+  width: var(--customer-spinner-size);
+  height: var(--customer-spinner-size);
   border: var(--border-width-thin) solid var(--border);
   border-top-color: var(--accent);
   border-radius: var(--radius-full);
