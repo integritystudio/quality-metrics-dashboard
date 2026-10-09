@@ -1,34 +1,8 @@
-import { rollup, mean } from 'd3-array';
 import { Hono } from 'hono';
-import { computeDashboardSummary } from '../parent/quality-metrics.js';
-import { computeRoleView } from '../parent/quality-views.js';
-import type { EvaluationResult } from '../../types.js';
-import { computeCQI } from '../parent/qfe-cqi.js';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { NANOS_TO_MS } from '../api-constants.js';
 import { PeriodSchema, RoleSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
 import { parseParam, handleRouteError } from '../route-errors.js';
-
-const SPARKLINE_BUCKET_COUNT = 24;
-
-function computeSparklineData(
-  evaluations: EvaluationResult[],
-  startMs: number,
-  endMs: number,
-  buckets: number,
-): (number | null)[] {
-  const range = endMs - startMs;
-  if (range <= 0 || evaluations.length === 0) return [];
-
-  const bucketWidth = range / buckets;
-  const valid = evaluations.filter(ev => Number.isFinite(ev.scoreValue));
-  const bucketMap = rollup(
-    valid,
-    evals => mean(evals, ev => ev.scoreValue as number) ?? null,
-    ev => Math.min(Math.floor((Number(ev.timestamp) / NANOS_TO_MS - startMs) / bucketWidth), buckets - 1),
-  );
-  return Array.from({ length: buckets }, (_, i) => bucketMap.get(i) ?? null);
-}
+import { computeDashboardFull, computeDashboardRoleView } from '../aggregates/dashboard-summary.js';
 
 export const dashboardRoutes = new Hono();
 dashboardRoutes.onError(handleRouteError);
@@ -40,25 +14,12 @@ dashboardRoutes.get('/dashboard', async (c) => {
 
   const dates = computePeriodDates(period);
   const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);
-  const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
-  const cqi = computeCQI(dashboard.metrics);
-
-  const startMs = new Date(dates.start).getTime();
-  const endMs = new Date(dates.end).getTime();
-  const sparklines: Record<string, (number | null)[]> = {};
-  for (const [metricName, evals] of evaluationsByMetric) {
-    sparklines[metricName] = computeSparklineData(evals, startMs, endMs, SPARKLINE_BUCKET_COUNT);
-  }
 
   if (role) {
-    const view = computeRoleView(dashboard, role);
-    if (role === 'executive') {
-      return c.json({ ...view, cqi, sparklines });
-    }
-    return c.json({ ...view, sparklines });
+    return c.json(computeDashboardRoleView(evaluationsByMetric, dates, role));
   }
 
-  return c.json({ ...dashboard, cqi, sparklines });
+  return c.json(computeDashboardFull(evaluationsByMetric, dates));
 });
 
 dashboardRoutes.get('/health', async (c) => {

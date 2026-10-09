@@ -238,7 +238,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                         <IdListColumn
                           label="Traces"
                           ids={agent.traceIds}
-                          totalCount={agent.traceIdsTotal ?? agent.traceIds.length}
+                          totalCount={agent.traceIdsTotal}
                           isTruncated={agent.traceIdsTruncated}
                           routeFn={routes.trace}
                         />

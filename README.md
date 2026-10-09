@@ -182,7 +182,7 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `GET /api/coverage` | ✓ | Columnar coverage matrix — metrics, inputs, `counts[metric][input]`; the grid derives status and gaps (`?period=7d&inputKey=traceId`) |
 | `GET /api/pipeline` | ✓ | Populate pipeline status (`?period=7d`) |
 | `GET /api/sessions/:sessionId` | ✓ | Session detail |
-| `GET /api/agents` | ✓ | Cross-session agent list (all agents, sorted by invocations) |
+| `GET /api/agents` | ✓ | Agent activity for a period, sorted by invocations (`?period=30d`); the dev route and the synced `meta:agents:<period>` key share `src/api/aggregates/agent-stats.ts` |
 | `GET /api/agents/detail/:agentId` | ✓ | Cross-session agent stats (RED metrics, output quality, last 20 sessions) |
 | `GET /api/agents/:sessionId` | ✓ | Per-session agent activity |
 | `GET /api/agents/:sessionId/graph` | ✓ | Workflow view payload (session graph without evaluations) |

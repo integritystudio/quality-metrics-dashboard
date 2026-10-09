@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
-import { computePipelineView } from '../parent/quality-visualization.js';
-import { computeDashboardSummary } from '../parent/quality-metrics.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
 import { parseParam, handleRouteError } from '../route-errors.js';
+import { computePipeline } from '../aggregates/pipeline.js';
 
 export const pipelineRoutes = new Hono();
 pipelineRoutes.onError(handleRouteError);
@@ -21,9 +20,7 @@ pipelineRoutes.get('/pipeline', async (c) => {
   const { start, end } = computePeriodDates(period);
 
   const evaluationsByMetric = await loadEvaluationsByMetric(start, end);
-
-  const dashboard = computeDashboardSummary(evaluationsByMetric);
-  const pipeline = computePipelineView(evaluationsByMetric, dashboard);
+  const pipeline = computePipeline(evaluationsByMetric);
 
   return c.json({ period, ...pipeline });
 });

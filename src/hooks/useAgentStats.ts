@@ -1,36 +1,15 @@
 import type { Period } from '../types.js';
+import type { AgentStat, EvalMetricSummary } from '../api/aggregates/agent-stats.js';
 import { STALE_TIME, ErrorMessage } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export interface EvalMetricSummary {
-  avg: number;
-  min: number;
-  max: number;
-  count: number;
-}
+export type { AgentStat, EvalMetricSummary };
 
-export interface AgentStat {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  errorRate: number;
-  rateLimitCount: number;
-  avgOutputSize: number;
-  sessionCount: number;
-  sessionIds: string[];
-  sessionIdsTruncated: boolean;
-  traceIdsTotal?: number;
-  traceIds: string[];
-  traceIdsTruncated: boolean;
-  sourceTypes: Record<string, number>;
-  dailyCounts: number[];
-  evalSummary: Record<string, EvalMetricSummary>;
-}
-
+/** The dev route and the synced KV value; the Worker answers null dates when no key is synced. */
 interface AgentStatsResponse {
   period: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   agents: AgentStat[];
 }
 

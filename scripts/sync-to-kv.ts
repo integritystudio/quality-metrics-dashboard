@@ -25,17 +25,15 @@ import { join } from 'path';
 import { CloudBackend, ALL_ORGS_SCOPE, queriedDateWindow } from '../../src/backends/cloud.js';
 import { http1Fetch, describeFetchError } from '../../src/lib/core/http1-fetch.js';
 import {
-  computeDashboardSummary,
   computeAggregations,
   getQualityMetric,
   QUALITY_METRICS,
 } from '../../src/lib/quality/quality-metrics.js';
-import { computeRoleView, computeMetricDetail } from '../../src/lib/quality/quality-views.js';
-import { computePipelineView, computeCoverageMatrix } from '../../src/lib/quality/quality-visualization.js';
+import { computeMetricDetail } from '../../src/lib/quality/quality-views.js';
+
 import type { MetricTrend } from '../../src/lib/quality/quality-constants.js';
 import type { EvaluationResult, TraceSpan } from '../../src/backends/index.js';
 import { computeMetricDynamics, type MetricDynamics } from '../../src/lib/quality/qfe-dynamics.js';
-import { computeCorrelationMatrix } from '../../src/lib/quality/qfe-correlation.js';
 import {
   computeRollingDegradationSignals,
   loadDegradationState,
@@ -69,9 +67,14 @@ import {
   loadJsonWithValidation,
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
-import { PERIOD_MS, ROLES, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
-import { resolveScoreLabelWithSource } from '../../src/lib/quality/qfe-label-ordinals.js';
+import { PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, type Period } from '../src/lib/constants.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../src/api/session-detail.js';
+import { agentStatsKey, agentStatsWindow, computeAgentStats, isAgentFinalizeSpan } from '../src/api/aggregates/agent-stats.js';
+import { computeCorrelations } from '../src/api/aggregates/correlations.js';
+import { computePipeline } from '../src/api/aggregates/pipeline.js';
+import { computeCoverage } from '../src/api/aggregates/coverage.js';
+import { projectEvaluationRow } from '../src/api/aggregates/evaluation-rows.js';
+import { computeAllDashboardEntries } from '../src/api/aggregates/dashboard-summary.js';
 import type { CalibrationResponse } from '../src/lib/validation/dashboard-schemas.js';
 import { BYTES, PERCENT_MULTIPLIER, TIME_MS, SECONDS } from '../../src/lib/core/units.js';
 import {
@@ -83,7 +86,6 @@ import {
   extractFiniteScores,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
-import { RULE_EVALUATOR_TYPE } from './eval-record.js';
 import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
@@ -182,7 +184,6 @@ const MAX_RECENT_SESSIONS = 20;
 const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
 const META_CALIBRATION_KEY = 'meta:calibration';
-const META_AGENTS_KEY = 'meta:agents';
 const TRACE_KEY_PREFIX = 'trace:';
 const TRACE_EVALS_KEY_PREFIX = 'evaluations:trace:';
 /** Hex chars of the sha256 kept as the delta-sync content hash. */
@@ -423,17 +424,25 @@ function recordWritten(state: SyncState, entries: KVEntry[], writtenKeys: Set<st
 const DASHBOARD_RUN_STAMP_FIELD = 'timestamp';
 /** Each metric's query window, built from the run's `now`, at any depth. */
 const DASHBOARD_PERIOD_FIELD = 'period';
+/**
+ * Sparkline bucket indices shift with the exact `now` — two runs on the same UTC
+ * day over the same data disagree on which bucket holds an evaluation unless the
+ * boundaries are day-aligned. Exclude from the hash so the key is not rewritten
+ * solely because the run time moved within the same day (SYNC-DASHBOARD-TIMESTAMP-WRITES).
+ */
+const DASHBOARD_SPARKLINES_FIELD = 'sparklines';
 
 /**
- * A dashboard summary or role view as a KV entry. The view's top-level `timestamp` and
- * each metric's `period` (copied into the auditor and operator views) come from the
- * run's clock, so the change hash leaves them out and a sync over unchanged data
- * rewrites no `dashboard:*` key (SYNC-DASHBOARD-TIMESTAMP-WRITES). The stored value
- * keeps them, so they show the run that last changed the data, not the latest run.
+ * A dashboard summary or role view as a KV entry. The view's top-level `timestamp`,
+ * each metric's `period`, and `sparklines` come from the run's clock, so the change
+ * hash leaves them out and a sync over unchanged data rewrites no `dashboard:*` key
+ * (SYNC-DASHBOARD-TIMESTAMP-WRITES). The stored value keeps them, so they show the
+ * run that last changed the data, not the latest run.
  */
 export function dashboardEntry(key: string, view: object): KVEntry {
   const hashBasis = JSON.stringify(view, function (this: unknown, field: string, v: unknown) {
     if (field === DASHBOARD_PERIOD_FIELD) return undefined;
+    if (field === DASHBOARD_SPARKLINES_FIELD) return undefined;
     if (field === DASHBOARD_RUN_STAMP_FIELD && this === view) return undefined;
     return bigintReplacer(field, v);
   });
@@ -810,19 +819,6 @@ interface OrgEvaluations {
 type EvaluationsByName = Map<string, EvaluationResult[]>;
 type DegradationBucket = { scores: number[]; startTime: string; endTime: string };
 
-/**
- * Remove rule-based evaluations before computing the coverage matrix.
- * Rule evals have per-span traceId granularity that inflates the input universe,
- * matching the dev API route's filterJudgeEvaluations logic (CVG-RULE-FILTER).
- */
-function filterRuleEvals(byMetric: EvaluationsByName): EvaluationsByName {
-  const filtered: EvaluationsByName = new Map();
-  for (const [metric, evals] of byMetric) {
-    const judgeEvals = evals.filter(e => e.evaluatorType !== RULE_EVALUATOR_TYPE);
-    if (judgeEvals.length > 0) filtered.set(metric, judgeEvals);
-  }
-  return filtered;
-}
 /** What `accumulateAgent` reads from one session's detail. */
 type AgentSessionContext = {
   timespan: { start: string } | null;
@@ -865,49 +861,36 @@ async function readOrgEvaluations(backend: OrgReadBackend, nowMs: number): Promi
 /** `dashboard:`, role views, `correlations:`, `coverage:` and `pipeline:` for one period. */
 function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates: { start: string; end: string }): KVEntry[] {
   const entries: KVEntry[] = [];
-  // `dates` is already `{ start, end }` ISO — a `TimeRange`.
-  const dashboard = computeDashboardSummary(grouped, { period: dates });
-  entries.push(dashboardEntry(`dashboard:${period}`, dashboard));
 
-  for (const role of ROLES) {
-    const view = computeRoleView(dashboard, role);
+  // Dashboard: one projection shared with the dev route — now includes `cqi` and `sparklines`.
+  const { full, roleViews } = computeAllDashboardEntries(grouped, dates);
+  entries.push(dashboardEntry(`dashboard:${period}`, full));
+  for (const [role, view] of Object.entries(roleViews)) {
     entries.push(dashboardEntry(`dashboard:${period}:${role}`, view));
   }
 
-  const metricTimeSeries = new Map([...grouped].map(([name, metricEvals]) => [name, extractFiniteScores(metricEvals)]));
-  const correlations = computeCorrelationMatrix(metricTimeSeries);
-  entries.push({
-    key: `correlations:${period}`,
-    value: toKVValue({ correlations, metrics: [...grouped.keys()] }),
-  });
+  // Correlations: shared with the dev route.
+  entries.push({ key: `correlations:${period}`, value: toKVValue(computeCorrelations(grouped)) });
 
-  // Columnar, never the dense metric x input cell list: that shape repeats the
-  // metric name and a 32-36 char input id in every cell (and the ids again in
-  // `gaps`), reaching 112 MB at the ~85,000-input cardinality that breached
-  // KV's 25 MiB value limit and disabled this feature in February 2026 (CVG-1).
-  // The columnar matrix measures 4.68 MB for that same case. Sizes and the
-  // rejected compression alternatives: `CoverageMatrix` in quality-visualization.ts.
-  const groupedForCoverage = filterRuleEvals(grouped);
+  // Coverage: shared filter + matrix, one KV key per (period, inputKey).
   for (const inputKey of COVERAGE_INPUT_KEYS) {
-    const matrix = computeCoverageMatrix(groupedForCoverage, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
+    const matrix = computeCoverage(grouped, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
     const coverageKey = `coverage:${period}:${inputKey}`;
     const coverageValue = toKVValue({ period, ...matrix });
     const coverageSizeBytes = Buffer.byteLength(coverageValue, 'utf8');
     if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
       console.warn(
         `[sync-to-kv] ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
-        ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
+        ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV\'s ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
         ' — reduce MAX_COVERAGE_COLUMNS',
       );
     }
     entries.push({ key: coverageKey, value: coverageValue });
   }
 
-  const pipeline = computePipelineView(grouped, dashboard);
-  entries.push({
-    key: `pipeline:${period}`,
-    value: toKVValue({ period, ...pipeline }),
-  });
+  // Pipeline: shared with the dev route.
+  entries.push({ key: `pipeline:${period}`, value: toKVValue({ period, ...computePipeline(grouped) }) });
+
   return entries;
 }
 
@@ -962,27 +945,7 @@ function computeEvaluationRowEntries(
       const evals = grouped.get(name);
       if (!evals || evals.length === 0) continue;
       const sorted = [...evals].sort((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0));
-      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => {
-        const { label, derived } = resolveScoreLabelWithSource(e);
-        return {
-          score: e.scoreValue ?? 0,
-          explanation: e.explanation,
-          traceId: e.traceId,
-          timestamp: e.timestamp,
-          evaluator: e.evaluator,
-          label,
-          labelDerived: derived,
-          evaluatorType: e.evaluatorType,
-          evaluatorKind: e.evaluatorKind,
-          cohort: e.cohort,
-          spanId: e.spanId,
-          sessionId: e.sessionId,
-          agentName: e.agentName,
-          trajectoryLength: e.trajectoryLength,
-          stepScores: e.stepScores,
-          toolVerifications: e.toolVerifications,
-        };
-      });
+      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(projectEvaluationRow);
       entries.push({
         key: `metric:evaluations:${name}:${period}`,
         value: toKVValue({ rows }),
@@ -1166,13 +1129,9 @@ function accumulateAgent(
   addRecentSession(acc.sessions, entry, MAX_AGENT_SESSIONS);
 }
 
-/** `agent:<name>` per agent, and `meta:agents` ordered by invocations. */
+/** `agent:<name>` per agent. */
 function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KVEntry[] {
   const agentEntries: KVEntry[] = [];
-  const agentSummaryList: Array<{
-    agentName: string; totalSessions: number; totalInvocations: number;
-    errorRate: number; lastSeen: string | null;
-  }> = [];
   const computedAt = now.toISOString();
 
   for (const [agentName, acc] of agents) {
@@ -1205,18 +1164,26 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
     };
 
     agentEntries.push({ key: `agent:${agentName}`, value: toKVValue(detail) });
-    agentSummaryList.push({
-      agentName,
-      totalSessions,
-      totalInvocations: acc.totalInvocations,
-      errorRate: detail.errorRate,
-      lastSeen,
-    });
   }
-
-  agentSummaryList.sort((a, b) => b.totalInvocations - a.totalInvocations);
-  agentEntries.push({ key: META_AGENTS_KEY, value: toKVValue(agentSummaryList) });
   return agentEntries;
+}
+
+/**
+ * `meta:agents:<period>`: the agents page, from the projection the dev route
+ * uses on its live read. The spans are the agent-finalize spans of the span
+ * read, cut to the period; the evaluations are the period's rows (the
+ * projection keeps only those on an agent's trace).
+ */
+function computeAgentStatsEntries(allSpans: TraceSpan[], orgEvals: OrgEvaluations, now: Date): KVEntry[] {
+  const agentSpans = allSpans.filter(isAgentFinalizeSpan);
+  const entries: KVEntry[] = [];
+  for (const period of PERIODS.filter(p => PERIOD_MS[p] <= MAX_DAYS_MS)) {
+    const { windowStart } = agentStatsWindow(period, now);
+    const spans = agentSpans.filter(span => timestampToMs(span.startTimeUnixNano) >= windowStart.getTime());
+    const stats = computeAgentStats(spans, orgEvals.between(windowStart.getTime()), period, now);
+    entries.push({ key: agentStatsKey(period), value: toKVValue(stats) });
+  }
+  return entries;
 }
 
 /** `session:<id>` per session with spans, then the `agent:` entries accumulated across them. */
@@ -1325,6 +1292,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   const traceEntries = buildTraceEntries(traceIds, evalsByTrace, spansByTrace);
 
   const { sessionEntries, agentEntries } = computeSessionAndAgentEntries(allSpans, allEvals, orgEvals.truncated, now);
+  entries.push(...computeAgentStatsEntries(allSpans, orgEvals, now));
 
   return {
     allEntries: [...entries, ...sessionEntries, ...traceEntries, ...agentEntries],

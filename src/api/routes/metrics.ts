@@ -7,11 +7,12 @@ import {
 } from '../parent/quality-metrics.js';
 import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
-import { resolveScoreLabel, resolveScoreLabelWithSource } from '../parent/qfe-label-ordinals.js';
+import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, extractFiniteScores, isValidParam, jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus, type Period } from '../../lib/constants.js';
 import { parseParam, handleRouteError } from '../route-errors.js';
+import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
 
 const DYNAMICS_BUCKET_HOURS_HOURLY = 1;
 const DYNAMICS_BUCKET_HOURS_DAILY = 24;
@@ -104,25 +105,7 @@ metricsRoutes.get('/metrics/:name/evaluations', async (c) => {
   const total = evaluations.length;
   const page = evaluations.slice(offset, offset + limit);
 
-  const rows = page.map(e => {
-    const { label, derived } = resolveScoreLabelWithSource(e);
-    return {
-      score: e.scoreValue ?? 0,
-      explanation: e.explanation,
-      traceId: e.traceId,
-      timestamp: e.timestamp,
-      evaluator: e.evaluator,
-      label,
-      labelDerived: derived,
-      evaluatorType: e.evaluatorType,
-      spanId: e.spanId,
-      sessionId: e.sessionId,
-      agentName: e.agentName,
-      trajectoryLength: e.trajectoryLength,
-      stepScores: e.stepScores,
-      toolVerifications: e.toolVerifications,
-    };
-  });
+  const rows = page.map(projectEvaluationRow);
 
   return c.json(jsonSafe({ rows, total, limit, offset, hasMore: offset + limit < total }));
 });

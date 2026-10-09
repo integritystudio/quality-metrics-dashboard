@@ -1,64 +1,32 @@
 import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
-import { VALID_PERIODS, MAX_IDS, KNOWN_SOURCE_TYPES, HttpStatus, SCORE_DISPLAY_PRECISION, TIME_MS, ErrorMessage } from '../../lib/constants.js';
-import { HOOK_NAME, incrementCount, PARAM_ID_RE, attrStr, attrNum, spanAttr, toDateOnly, isValidParam, timestampToMs, jsonSafe } from '../api-constants.js';
+import { VALID_PERIODS, HttpStatus, ErrorMessage, type Period } from '../../lib/constants.js';
+import { HOOK_NAME, PARAM_ID_RE, isValidParam, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
-import { mean } from 'd3-array';
 import { handleRouteError } from '../route-errors.js';
-import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
+import { HOOK_NAME_ATTRIBUTE, agentStatsWindow, computeAgentStats } from '../aggregates/agent-stats.js';
 
 const LIMIT_AGENT_SPANS = 1000;
-
-type AgentAcc = {
-  invocations: number;
-  errors: number;
-  rateLimitCount: number;
-  totalOutputSize: number;
-  sessions: Set<string>;
-  traceIds: Set<string>;
-  sourceTypes: Record<string, number>;
-  dailyCounts: number[];
-};
-
-function computeEvalMetricSummary(scores: number[]): { avg: number; min: number; max: number; count: number } {
-  const sorted = [...scores].sort((a, b) => a - b);
-  return {
-    avg: +(mean(sorted) ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +(sorted[0] ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    max: +(sorted[sorted.length - 1] ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    count: sorted.length,
-  };
-}
-
-function createAgentAccumulator(periodDays: number): AgentAcc {
-  return {
-    invocations: 0,
-    errors: 0,
-    rateLimitCount: 0,
-    totalOutputSize: 0,
-    sessions: new Set(),
-    traceIds: new Set(),
-    sourceTypes: Object.create(null) as Record<string, number>,
-    dailyCounts: new Array<number>(periodDays).fill(0),
-  };
-}
+const DEFAULT_AGENTS_PERIOD: Period = '30d';
 
 export const agentRoutes = new Hono();
 agentRoutes.onError(handleRouteError);
 
+/**
+ * GET /api/agents
+ * Dev-server route: a live query projected by `computeAgentStats`. Production
+ * serves the `meta:agents:<period>` KV key the sync writes from the same function.
+ */
 agentRoutes.get('/agents', async (c) => {
-  const periodParam = c.req.query('period') ?? '30d';
-  const periodDays = VALID_PERIODS[periodParam];
-  if (periodDays === undefined) {
+  const periodParam = c.req.query('period') ?? DEFAULT_AGENTS_PERIOD;
+  if (VALID_PERIODS[periodParam] === undefined) {
     return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
   }
+  const period = periodParam as Period;
   const now = new Date();
-  const windowStart = new Date(now.getTime() - periodDays * TIME_MS.DAY);
-  // Date-only: the response contract and the daily bucket keys.
-  const endDate = toDateOnly(now);
-  const startDate = toDateOnly(windowStart);
+  const { windowStart, startDate, endDate } = agentStatsWindow(period, now);
 
   // OBP7b: CloudBackend canonicalizes attribute keys on read (legacy pre-cutover
   // D1 rows included) and applies non-sessionId attributeFilter entries
@@ -67,95 +35,18 @@ agentRoutes.get('/agents', async (c) => {
   // queryTraces types startDate/endDate as `string | bigint` but validates the
   // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks
   // and then fails Zod at runtime, which made this route a guaranteed 500.
-  // Pass the datetimes; the date-only values above stay for buckets/response.
+  // Pass the datetimes; the date-only values stay for the evaluations read.
   const agentSpans = await loadTracesByFilter(
-    { 'integritystudio.hook.name': HOOK_NAME.AGENT_FINALIZE },
+    { [HOOK_NAME_ATTRIBUTE]: HOOK_NAME.AGENT_FINALIZE },
     windowStart.toISOString(),
     now.toISOString(),
     LIMIT_AGENT_SPANS,
   );
 
-  const dateBuckets: string[] = [];
-  const bucketIndex = new Map<string, number>();
-  for (let d = 0; d < periodDays; d++) {
-    const day = toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY));
-    dateBuckets.push(day);
-    bucketIndex.set(day, d);
-  }
+  const traceIds = [...new Set(agentSpans.flatMap(span => (span.traceId ? [span.traceId] : [])))];
+  const evaluations = await loadEvaluationsByTraceIds(traceIds, startDate, endDate);
 
-  const acc = Object.create(null) as Record<string, AgentAcc>;
-
-  const traceToAgents = new Map<string, Set<string>>();
-
-  for (const span of agentSpans) {
-    const name = attrStr(span, GENAI_AGENT_ATTRIBUTES.AGENT_NAME);
-    const entry = (acc[name] ??= createAgentAccumulator(periodDays));
-    entry.invocations++;
-    if (span.startTimeUnixNano) {
-      const dayKey = toDateOnly(new Date(timestampToMs(span.startTimeUnixNano)));
-      const idx = bucketIndex.get(dayKey);
-      if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
-    }
-    if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
-    if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-    entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
-    const sid = attrStr(span, SESSION_ATTRIBUTES.ID, '');
-    if (sid) entry.sessions.add(sid);
-    if (span.traceId) {
-      entry.traceIds.add(span.traceId);
-      let agentSet = traceToAgents.get(span.traceId);
-      if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
-      agentSet.add(name);
-    }
-    const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
-    const src = KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other';
-    incrementCount(entry.sourceTypes, src);
-  }
-
-  const allTraceIds = [...traceToAgents.keys()];
-  const evaluations = await loadEvaluationsByTraceIds(allTraceIds, startDate, endDate);
-
-  const agentEvalAcc = Object.create(null) as Record<string, Record<string, number[]>>;
-  for (const ev of evaluations) {
-    if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
-    const agentNames = traceToAgents.get(ev.traceId);
-    if (!agentNames) continue;
-    for (const agent of agentNames) {
-      const metrics = (agentEvalAcc[agent] ??= Object.create(null));
-      (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
-    }
-  }
-
-  const agents = Object.entries(acc).map(([agentName, d]) => {
-    const evalMetrics = agentEvalAcc[agentName] ?? {};
-    const evalSummary: Record<string, { avg: number; min: number; max: number; count: number }> = {};
-    for (const [metric, scores] of Object.entries(evalMetrics)) {
-      evalSummary[metric] = computeEvalMetricSummary(scores);
-    }
-
-    const sessionIdList = [...d.sessions];
-    const traceIdList = [...d.traceIds];
-
-    return {
-      agentName,
-      invocations: d.invocations,
-      errors: d.errors,
-      errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-      rateLimitCount: d.rateLimitCount,
-      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-      sessionCount: d.sessions.size,  // total unique sessions (invariant: >= sessionIds.length)
-      sessionIds: sessionIdList.slice(0, MAX_IDS),
-      sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-      traceIdsTotal: traceIdList.length,
-      traceIds: traceIdList.slice(0, MAX_IDS),
-      traceIdsTruncated: traceIdList.length > MAX_IDS,
-      sourceTypes: d.sourceTypes,
-      dailyCounts: d.dailyCounts,
-      evalSummary,
-    };
-  }).sort((a, b) => b.invocations - a.invocations);
-
-  return c.json({ period: periodParam, startDate, endDate, agents });
+  return c.json(computeAgentStats(agentSpans, evaluations, period, now));
 });
 
 type SessionSpans = Awaited<ReturnType<typeof loadTracesBySessionId>>;

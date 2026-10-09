@@ -851,9 +851,16 @@ app.get('/api/sessions/:sessionId', requirePermission('dashboard.sessions.read')
   return c.json(data);
 });
 
-app.get('/api/agents', requirePermission('dashboard.agents.read'), async (c) => {
-  const data = await getSessionKv<unknown>(c,'meta:agents');
-  if (!data) return c.json([]);
+// Written by scripts/sync-to-kv.ts (AGENT_STATS_KEY_PREFIX in src/api/aggregates/agent-stats.ts).
+// The Worker cannot import that module, so the prefix is restated here.
+const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
+const AGENTS_DEFAULT_PERIOD: PeriodKey = '30d';
+
+app.get('/api/agents', requirePermission('dashboard.agents.read'), validQuery(z.object({ period: periodField(AGENTS_DEFAULT_PERIOD) })), async (c) => {
+  const { period } = c.req.valid('query');
+  const data = await getSessionKv<unknown>(c, `${AGENT_STATS_KEY_PREFIX}${period}`);
+  // The page requires `period` and `agents`; the dates are absent until a sync writes the key.
+  if (!data) return c.json({ period, startDate: null, endDate: null, agents: [] });
   return c.json(data);
 });
 
