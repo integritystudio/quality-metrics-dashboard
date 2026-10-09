@@ -23,7 +23,7 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { TIME_MS } from '../../src/lib/core/units.js';
-import { asHrTime, hrtToMs } from './hrt.js';
+import { asHrTime, hrtToMs, type HrTime } from './hrt.js';
 import { pushTo } from './collections.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
@@ -91,13 +91,18 @@ export function fileInWindow(file: string, pattern: RegExp, windowDays: number, 
   return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
 }
 
-/** Every parseable line of the trace files `files` (names under `dir`). */
-function* traceFileRecords(dir: string, files: readonly string[]): Generator<unknown> {
+/** Every parseable line of the trace files `files` (names under `dir`); an unreadable file is reported to `onReadError` and skipped. */
+export function* traceFileRecords(
+  dir: string,
+  files: readonly string[],
+  onReadError?: (file: string, err: unknown) => void,
+): Generator<unknown> {
   for (const file of files) {
     let text: string;
     try {
       text = readFileSync(join(dir, file), 'utf8');
-    } catch {
+    } catch (err) {
+      onReadError?.(file, err);
       continue;
     }
     for (const line of text.split('\n')) {
@@ -120,6 +125,37 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
   return indexSpanRecords(traceFileRecords(dir, files));
 }
 
+/** What the pipeline reads off a raw span record. */
+export interface SpanRecordFields {
+  spanId?: string;
+  traceId?: string;
+  startTime?: HrTime;
+  sessionId?: string;
+  /** The stamp as written: a secret name, `null` for an unmapped account, `undefined` when absent (pre-TKR6). */
+  stamp: AccountRef | undefined;
+}
+
+/** The fields of one parsed span line in the file exporters' shape; `undefined` when it is not an object. */
+export function readSpanRecord(parsed: unknown): SpanRecordFields | undefined {
+  if (typeof parsed !== 'object' || parsed === null) return undefined;
+  const span = parsed as Record<string, unknown>;
+  const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
+    ? span.attributes as Record<string, unknown>
+    : {};
+  let stamp: AccountRef | undefined;
+  if (IDENTITY_KEY_REF_FIELD in span) {
+    const raw = span[IDENTITY_KEY_REF_FIELD];
+    stamp = typeof raw === 'string' ? raw : null;
+  }
+  return {
+    spanId: asString(span.spanId),
+    traceId: asString(span.traceId),
+    startTime: asHrTime(span.startTime),
+    sessionId: asString(attrs[SESSION_ATTRIBUTES.ID]),
+    stamp,
+  };
+}
+
 /**
  * Index span records in the file exporters' shape: HRT `startTime`, and the
  * `identityKeyRef` stamp as a record field. Unstamped spans (written before
@@ -135,24 +171,12 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
 export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
   const index: AccountIndex = { sessionSpans: new Map(), bySpan: new Map() };
   for (const parsed of records) {
-    if (typeof parsed !== 'object' || parsed === null) continue;
-    const span = parsed as Record<string, unknown>;
-    const start = asHrTime(span.startTime);
-    // `UNTIMED_MS` when absent or malformed.
-    const atMs = start ? hrtToMs(start) : UNTIMED_MS;
-    const spanId = asString(span.spanId);
-    const traceId = asString(span.traceId);
-    const attrs = (typeof span.attributes === 'object' && span.attributes !== null)
-      ? span.attributes as Record<string, unknown>
-      : {};
-    const sessionId = asString(attrs[SESSION_ATTRIBUTES.ID]);
-
-    let ref: AccountRef | undefined;
-    if (IDENTITY_KEY_REF_FIELD in span) {
-      const raw = span[IDENTITY_KEY_REF_FIELD];
-      ref = typeof raw === 'string' ? raw : null;
-      if (spanId) index.bySpan.set(spanId, ref);
-    }
+    const span = readSpanRecord(parsed);
+    if (!span) continue;
+    const { spanId, traceId, sessionId, stamp: ref } = span;
+    // `UNTIMED_MS` when the start time is absent or malformed.
+    const atMs = span.startTime ? hrtToMs(span.startTime) : UNTIMED_MS;
+    if (ref !== undefined && spanId) index.bySpan.set(spanId, ref);
     if (sessionId) pushTo(index.sessionSpans, sessionId, { atMs, spanId, traceId, ref });
   }
   for (const spans of index.sessionSpans.values()) spans.sort((a, b) => a.atMs - b.atMs);

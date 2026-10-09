@@ -21,14 +21,12 @@
  * configuration problem (missing URL or no key for any stamped account).
  */
 
-import { readdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
+import { readdirSync, writeFileSync } from 'fs';
 import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
-import { asHrTime, hrtToMs, nsToMs } from './hrt.js';
+import { hrtToMs, nsToMs } from './hrt.js';
 import { incrementIn, pushTo } from './collections.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
-import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
+import { TRACE_FILE_PATTERN, fileInWindow, asString, readSpanRecord, traceFileRecords, type AccountRef } from './account-stamps.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CHECK_EXIT, nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';
@@ -98,21 +96,20 @@ export function parseLocalSpan(line: string, window: CoverageWindow): LocalSpan 
   } catch {
     return undefined;
   }
-  if (!record || typeof record !== 'object') return undefined;
-  const r = record as Record<string, unknown>;
-  const traceId = asString(r.traceId);
-  const spanId = asString(r.spanId);
-  const start = asHrTime(r.startTime);
-  if (!traceId || !spanId || !start) return undefined;
-  const startMs = hrtToMs(start);
+  return localSpanOf(record, window);
+}
+
+/** One parsed trace record reduced to what the comparison needs; `undefined` when malformed or outside `window`. */
+function localSpanOf(record: unknown, window: CoverageWindow): LocalSpan | undefined {
+  const span = readSpanRecord(record);
+  if (!span?.traceId || !span.spanId || !span.startTime) return undefined;
+  const startMs = hrtToMs(span.startTime);
   if (startMs < window.fromMs || startMs > window.toMs) return undefined;
-  const attrs = (r.attributes ?? {}) as Record<string, unknown>;
-  const rawRef = r[IDENTITY_KEY_REF_FIELD];
   return {
-    key: spanKey(traceId, spanId),
-    ref: typeof rawRef === 'string' ? rawRef : null,
+    key: spanKey(span.traceId, span.spanId),
+    ref: span.stamp ?? null,
     startMs,
-    sessionId: asString(attrs[SESSION_ATTRIBUTES.ID]) ?? NO_SESSION,
+    sessionId: span.sessionId ?? NO_SESSION,
   };
 }
 
@@ -168,18 +165,10 @@ function readLocalSpans(dir: string, window: CoverageWindow, windowDays: number,
   // One extra day of files: a span near midnight can sit in the neighbouring day's file.
   const files = readdirSync(dir).filter((f) => fileInWindow(f, TRACE_FILE_PATTERN, windowDays + 1, nowMs)).sort();
   const spans: LocalSpan[] = [];
-  for (const file of files) {
-    let text: string;
-    try {
-      text = readFileSync(join(dir, file), 'utf8');
-    } catch (err) {
-      console.warn(`${CLI_PREFIX} skipping ${file}: ${String(err)}`);
-      continue;
-    }
-    for (const line of text.split('\n')) {
-      const span = parseLocalSpan(line, window);
-      if (span) spans.push(span);
-    }
+  const warnUnreadable = (file: string, err: unknown): void => console.warn(`${CLI_PREFIX} skipping ${file}: ${String(err)}`);
+  for (const record of traceFileRecords(dir, files, warnUnreadable)) {
+    const span = localSpanOf(record, window);
+    if (span) spans.push(span);
   }
   return spans;
 }
