@@ -66,6 +66,58 @@ export function accountRefsFromEnv(env: NodeJS.ProcessEnv): string[] {
   return Object.keys(env).filter((name) => IDENTITY_KEY_REF_PATTERN.test(name) && asString(env[name])).sort();
 }
 
+/** Epoch ms as the nanosecond bigint the backend's query bounds take. */
+export function msToNs(ms: number): bigint {
+  return BigInt(ms) * NANOSECONDS_PER_MILLISECOND_BIGINT;
+}
+
+/** A backend reading as one account. HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
+export function accountBackend(apiKey: string | undefined): CloudBackend {
+  return new CloudBackend({ apiKey, fetch: http1Fetch });
+}
+
+/** `/v1/traces` over `[fromMs, toMs]` for one account, at most `limit` spans. */
+export function queryAccountTraces(
+  backend: CloudBackend,
+  fromMs: number,
+  toMs: number,
+  limit: number = CLOUD_SPAN_LIMIT,
+): Promise<TraceSpan[]> {
+  return backend.queryTraces({ startDate: msToNs(fromMs), endDate: msToNs(toMs), limit });
+}
+
+/** What a per-account query returns, for its log line and its truncation error. */
+export interface AccountQueryLabel {
+  /** The rows, e.g. `spans`. */
+  rows: string;
+  /** What a truncated read would cut, e.g. `the scope`. */
+  truncates: string;
+}
+
+/**
+ * `query` once per identity-map account key in `env`, in ref order. Throws when
+ * an account returned `limit` rows, since the read may then be truncated; logs
+ * each account's count under `logPrefix`.
+ */
+export async function queryEachAccount<T>(
+  env: NodeJS.ProcessEnv,
+  limit: number,
+  label: AccountQueryLabel,
+  logPrefix: string,
+  query: (backend: CloudBackend) => Promise<T[]>,
+): Promise<{ ref: string; rows: T[] }[]> {
+  const perAccount: { ref: string; rows: T[] }[] = [];
+  for (const ref of accountRefsFromEnv(env)) {
+    const rows = await query(accountBackend(env[ref]));
+    if (rows.length >= limit) {
+      throw new Error(`${ref}: cloud returned ${limit} ${label.rows}, so ${label.truncates} may be truncated; narrow --days`);
+    }
+    console.log(`${logPrefix} ${ref}: ${rows.length} ${label.rows}`);
+    perAccount.push({ ref, rows });
+  }
+  return perAccount;
+}
+
 /** The `[from, to]` epoch-ms bounds covering every UTC date in `dates`. */
 export function dateScopeBounds(dates: ReadonlySet<string>): { fromMs: number; toMs: number } {
   const sorted = [...dates].sort();
@@ -123,24 +175,16 @@ export async function loadCloudSpans(
   env: NodeJS.ProcessEnv = process.env,
   logPrefix: string = CLI_PREFIX,
 ): Promise<LoadedSpans> {
-  const refs = accountRefsFromEnv(env);
-  if (refs.length === 0) throw new Error('no OBTOOL_API_KEY* account key in the environment');
+  if (accountRefsFromEnv(env).length === 0) throw new Error('no OBTOOL_API_KEY* account key in the environment');
   const { fromMs, toMs } = dateScopeBounds(dates);
-  const perAccount: { ref: string; spans: TraceSpan[] }[] = [];
-  for (const ref of refs) {
-    const backend = new CloudBackend({ apiKey: env[ref], fetch: http1Fetch });
-    const spans = await backend.queryTraces({
-      startDate: BigInt(fromMs) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-      endDate: BigInt(toMs) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-      limit: CLOUD_SPAN_LIMIT,
-    });
-    if (spans.length >= CLOUD_SPAN_LIMIT) {
-      throw new Error(`${ref}: cloud returned ${CLOUD_SPAN_LIMIT} spans, so the scope may be truncated; narrow --days`);
-    }
-    console.log(`${logPrefix} ${ref}: ${spans.length} spans`);
-    perAccount.push({ ref, spans });
-  }
-  const merged = mergeAccountSpans(perAccount, dates);
+  const perAccount = await queryEachAccount(
+    env,
+    CLOUD_SPAN_LIMIT,
+    { rows: 'spans', truncates: 'the scope' },
+    logPrefix,
+    (backend) => queryAccountTraces(backend, fromMs, toMs),
+  );
+  const merged = mergeAccountSpans(perAccount.map(({ ref, rows }) => ({ ref, spans: rows })), dates);
   if (merged.duplicates > 0) console.warn(`${logPrefix} ${merged.duplicates} spans readable by more than one key; kept the first`);
   if (merged.rejected > 0) console.warn(`${logPrefix} ${merged.rejected} spans failed localTraceSpanSchema and were skipped`);
   return { spans: merged.spans, accounts: merged.accounts };

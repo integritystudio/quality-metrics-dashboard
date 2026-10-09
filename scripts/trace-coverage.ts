@@ -23,12 +23,11 @@
 
 import { readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { CloudBackend } from '../../src/backends/cloud.js';
-import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_MILLISECOND_BIGINT, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, IDENTITY_KEY_REF_FIELD, fileInWindow, asString, type AccountRef } from './account-stamps.js';
+import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';
 
@@ -37,8 +36,6 @@ const DEFAULT_SETTLE_MINUTES = 60;
 const DEFAULT_MIN_COVERAGE = 0.99;
 /** `--min-coverage` is a ratio; a percentage like 99 is clamped rather than failing every run. */
 const MAX_COVERAGE = 1;
-/** Upper bound on cloud rows held in memory per account; ~10k spans/day locally. */
-const CLOUD_SPAN_LIMIT = 500_000;
 const TOP_MISSING_SESSIONS = 10;
 const COVERAGE_DECIMALS = 2;
 const JSON_INDENT = 2;
@@ -194,12 +191,7 @@ function readLocalSpans(dir: string, window: CoverageWindow, windowDays: number,
 }
 
 async function fetchCloudSpans(apiKey: string, window: CoverageWindow): Promise<Map<string, number>> {
-  const backend = new CloudBackend({ apiKey, fetch: http1Fetch });
-  const spans = await backend.queryTraces({
-    startDate: BigInt(window.fromMs) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-    endDate: BigInt(Math.floor(window.toMs)) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-    limit: CLOUD_SPAN_LIMIT,
-  });
+  const spans = await queryAccountTraces(accountBackend(apiKey), window.fromMs, Math.floor(window.toMs));
   if (spans.length >= CLOUD_SPAN_LIMIT) {
     console.warn(`${CLI_PREFIX} cloud returned ${CLOUD_SPAN_LIMIT} spans — raise CLOUD_SPAN_LIMIT or narrow --days`);
   }

@@ -18,12 +18,10 @@
  *   locally but never delivered is judged again, and this time posted.
  */
 
-import { CloudBackend } from '../../src/backends/cloud.js';
-import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { EvaluationResult } from '../../src/backends/index.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-stamps.js';
-import { accountRefsFromEnv, dateScopeBounds, loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
+import { dateScopeBounds, loadCloudSpans, msToNs, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
 import { turnKeyOf, addJudgedKeys } from './judge-dedup.js';
@@ -107,22 +105,16 @@ export function transcriptsForSessions(
 /** Judge rows from every account in `env` whose event time can fall on or after `fromMs`. */
 async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<EvaluationResult[]> {
   const rows: EvaluationResult[] = [];
-  for (const ref of accountRefsFromEnv(env)) {
-    const backend = new CloudBackend({ apiKey: env[ref], fetch: http1Fetch });
-    for (const evaluator of JUDGE_PRODUCERS) {
+  for (const evaluator of JUDGE_PRODUCERS) {
+    const perAccount = await queryEachAccount(
+      env,
+      CLOUD_EVALUATION_LIMIT,
+      { rows: `${evaluator} rows`, truncates: 'the dedup set' },
+      CLI_PREFIX,
       // No end bound: a receipt-time row is dated after its turn, never before.
-      const found = await backend.queryEvaluations({
-        source: 'table',
-        evaluator,
-        startDate: BigInt(fromMs) * NANOSECONDS_PER_MILLISECOND_BIGINT,
-        limit: CLOUD_EVALUATION_LIMIT,
-      });
-      if (found.length >= CLOUD_EVALUATION_LIMIT) {
-        throw new Error(`${ref}: cloud returned ${CLOUD_EVALUATION_LIMIT} ${evaluator} rows, so the dedup set may be truncated; narrow --days`);
-      }
-      console.log(`${CLI_PREFIX} ${ref}: ${found.length} ${evaluator} rows`);
-      rows.push(...found);
-    }
+      (backend) => backend.queryEvaluations({ source: 'table', evaluator, startDate: msToNs(fromMs), limit: CLOUD_EVALUATION_LIMIT }),
+    );
+    for (const { rows: found } of perAccount) rows.push(...found);
   }
   return rows;
 }
