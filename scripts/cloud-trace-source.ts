@@ -16,6 +16,7 @@ import type { TraceSpan } from '../../src/backends/index.js';
 import { statusCodeSchema } from '../../src/lib/otel/constants-otel.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT, TIME_MS } from '../../src/lib/core/units.js';
 import { nanosToHrt } from './hrt.js';
+import { toDateOnly } from '../src/api/api-constants.js';
 import { localTraceSpanSchema, type LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { IDENTITY_KEY_REF_PATTERN, asString, type AccountRef } from './account-stamps.js';
 
@@ -125,7 +126,7 @@ export function dateScopeBounds(dates: ReadonlySet<string>): { fromMs: number; t
 }
 
 function utcDateOfNanos(ns: bigint): string {
-  return new Date(Number(ns / NANOSECONDS_PER_MILLISECOND_BIGINT)).toISOString().slice(0, 'YYYY-MM-DD'.length);
+  return toDateOnly(new Date(Number(ns / NANOSECONDS_PER_MILLISECOND_BIGINT)));
 }
 
 /**

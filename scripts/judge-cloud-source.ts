@@ -22,6 +22,7 @@ import type { EvaluationResult } from '../../src/backends/index.js';
 import { NANOSECONDS_PER_MILLISECOND_BIGINT } from '../../src/lib/core/units.js';
 import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-stamps.js';
 import { dateScopeBounds, loadCloudSpans, msToNs, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
+import { toDateOnly } from '../src/api/api-constants.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
 import { turnKeyOf, addJudgedKeys } from './judge-dedup.js';
@@ -33,7 +34,6 @@ const JUDGE_PRODUCERS = [PRODUCER, CONSOLIDATED_PRODUCER] as const;
 /** Upper bound on evaluation rows held per account and producer; a run writes ~500. */
 const CLOUD_EVALUATION_LIMIT = 200_000;
 
-const DATE_ONLY_LEN = 'YYYY-MM-DD'.length;
 const CLI_PREFIX = '[judge:cloud]';
 /** Pre-EVAL-WEBHOOK-EVENT-TIME rows kept the client's event time here; their timestamp is receipt time. */
 const LEGACY_EVENT_TIME_ATTR = 'evaluatedAtMs';
@@ -57,7 +57,7 @@ export function spanScopeDates(dates: ReadonlySet<string>, nowMs: number): Set<s
   const { toMs } = dateScopeBounds(dates);
   const nextDayMs = toMs + 1;
   const spanDates = new Set(dates);
-  if (nextDayMs <= nowMs) spanDates.add(new Date(nextDayMs).toISOString().slice(0, DATE_ONLY_LEN));
+  if (nextDayMs <= nowMs) spanDates.add(toDateOnly(new Date(nextDayMs)));
   return spanDates;
 }
 

@@ -53,7 +53,7 @@ import { TELEMETRY_DIR, CALIBRATION_STATE_DIR } from './evaluation-constants.js'
 import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
-import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
+import { ACCOUNT_INDEX_WINDOW_DAYS, TRACE_FILE_PATTERN, buildAccountIndex, indexTraceFiles, type AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_DEFAULT_SOURCE, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, SOURCE_FLAG as SOURCE_ARG, TRACE_SOURCES, type TraceSource } from './pipeline-stages.js';
@@ -526,9 +526,6 @@ export async function deriveAgentHeuristics(
   return (await Promise.all(jobs)).flat();
 }
 
-/** `traces-YYYY-MM-DD.jsonl` */
-const TRACE_FILE_PREFIX = 'traces-';
-const DATE_ONLY_LEN = 10; // YYYY-MM-DD
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
 /** Every flag derive reads; judge-evaluations and the parity scripts reuse the readers below. */
@@ -593,9 +590,10 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
 /** Every span in the in-scope `traces-<date>.jsonl` files, in file then line order. */
 export function loadLocalSpans(dir: string, dateScope: Set<string> | null): LoadedSpans {
   const traceFiles = readdirSync(dir)
-    .filter(f => f.startsWith(TRACE_FILE_PREFIX) && f.endsWith('.jsonl'))
-    .filter(f => !dateScope
-      || dateScope.has(f.slice(TRACE_FILE_PREFIX.length, TRACE_FILE_PREFIX.length + DATE_ONLY_LEN)))
+    .filter(f => {
+      const date = TRACE_FILE_PATTERN.exec(f)?.[1];
+      return date !== undefined && (!dateScope || dateScope.has(date));
+    })
     .sort();
   const accounts = indexTraceFiles(dir, traceFiles).bySpan;
   const spans = traceFiles.flatMap(file => readJsonlWithValidationSync(join(dir, file), localTraceSpanSchema));
