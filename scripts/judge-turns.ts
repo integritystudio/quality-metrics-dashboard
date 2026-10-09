@@ -1,22 +1,19 @@
 /**
- * Turns: discovered from transcripts (or trace files, for --backfill),
- * extracted, anchored to their spans and fitted to the judge's input caps.
+ * Turns: discovered from transcripts, extracted, anchored to their spans and fitted to the judge's input caps.
  */
 
 import { existsSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import { localTraceSpanSchema, otelLogEntrySchema, transcriptEntrySchema } from '../../src/lib/validation/dashboard-schemas.js';
+import { otelLogEntrySchema, transcriptEntrySchema } from '../../src/lib/validation/dashboard-schemas.js';
 import { streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
 import type { EvalRecord } from './eval-record.js';
 import { pushTo } from './collections.js';
-import { LOGS_FILE_PREFIX, TRACES_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
+import { LOGS_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
 import { HOME } from './evaluation-constants.js';
-import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 
 /** Maximum characters per turn to prevent oversized LLM prompts and token explosion */
@@ -216,57 +213,6 @@ export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, se
     }
   }
   return transcripts;
-}
-
-export interface TraceSession {
-  sessionId: string;
-  traceId: string;
-  earliestTime: number; // epoch seconds
-  spanCount: number;
-}
-
-/** Discover sessions from traces-*.jsonl when transcripts are unavailable */
-export async function discoverSessionsFromTraces(): Promise<Turn[]> {
-  const sessions = new Map<string, TraceSession>();
-
-  for (const filepath of listTelemetryJsonl(TRACES_FILE_PREFIX)) {
-    for await (const span of streamJsonlWithValidation(filepath, localTraceSpanSchema)) {
-      const attrs = span.attributes;
-
-      const recordedSessionId = attrs[SESSION_ATTRIBUTES.ID];
-      const sessionId = typeof recordedSessionId === 'string' ? recordedSessionId : '';
-      if (!sessionId) continue;
-
-      const startTime = Array.isArray(span.startTime) ? span.startTime[0] : 0;
-      const traceId = span.traceId || '';
-
-      const existing = sessions.get(sessionId);
-      if (!existing) {
-        sessions.set(sessionId, { sessionId, traceId, earliestTime: startTime, spanCount: 1 });
-      } else {
-        existing.spanCount++;
-        if (startTime < existing.earliestTime) {
-          existing.earliestTime = startTime;
-          existing.traceId = traceId;
-        }
-      }
-    }
-  }
-
-  const turns: Turn[] = [];
-  for (const s of sessions.values()) {
-    const timestamp = new Date(s.earliestTime * TIME_MS.SECOND).toISOString();
-    turns.push({
-      sessionId: s.sessionId,
-      traceId: s.traceId,
-      timestamp,
-      userText: '[trace-backfill]',
-      assistantText: '[trace-backfill]',
-      toolResults: [],
-    });
-  }
-
-  return turns;
 }
 
 export interface TextBlock { type: 'text'; text: string }

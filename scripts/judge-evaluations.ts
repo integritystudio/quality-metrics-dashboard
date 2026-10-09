@@ -24,13 +24,6 @@
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --batch   # Message Batches API: half price, unattended
  *   ANTHROPIC_API_KEY=sk-... npx tsx dashboard/scripts/judge-evaluations.ts --per-criterion   # one call per criterion (~10x cost)
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run --source=local   # the rollback: local discovery, every log file
- *   npx tsx dashboard/scripts/judge-evaluations.ts --backfill   # synthetic scores for trace-only sessions; see below
- *
- * `--backfill` (run by hand, no other flag applies) seeds hashed scores for
- * sessions with traces but no transcript, into the local ledger only, under
- * cohort `backfill` (canary draws stay `canary`). That cohort is not evidence
- * (`isEvidenceCohort`), but a row young enough for upload's age guard still
- * reaches sync's `metric:*` keys, which drop only canaries.
  *
  * Scoring is consolidated by default, one call per turn carrying every
  * criterion (judge-consolidated.ts); `--batch` applies to either mode.
@@ -71,7 +64,6 @@ import { readScope, resolveDateScope, resolveSource } from './derive-evaluations
 import { selectTurns, formatTurnSelection } from './judge-selection.js';
 import { formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import {
-  BACKFILL_COHORT,
   LLM_EVALUATOR_KIND,
   NORMAL_COHORT,
   PRODUCER,
@@ -79,7 +71,6 @@ import {
   SEED_COHORT,
   SESSION_ID_PREVIEW_LEN,
   SYNTHETIC_EVALUATOR_KIND,
-  TRACE_BACKFILL_EVALUATOR_TYPE,
   EVAL_SCORE_PRECISION,
   legacyEvaluatorType,
   normalizeScore,
@@ -103,7 +94,6 @@ import { _loadExistingKeys, judgedByKey, turnKeyOf, turnScoreKey } from './judge
 import {
   _discoverTranscripts,
   anchorTurns,
-  discoverSessionsFromTraces,
   extractTurns,
   fitContextForJudge,
   turnSourceFields,
@@ -573,52 +563,6 @@ export async function processBatch<T, R>(
   return settled.filter(r => r.status === 'fulfilled').map(r => r.value);
 }
 
-/** --backfill: seed evaluations from trace data for sessions with no transcript (see the file header). */
-async function runBackfill(): Promise<void> {
-  const traceTurns = await discoverSessionsFromTraces();
-  anchorTurns(traceTurns, buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, Date.now()));
-  console.log(`[backfill] Discovered ${traceTurns.length} sessions from trace files`);
-
-  acquireLockOrExit();
-
-  try {
-    const existingKeys = _loadExistingKeys();
-
-    // Checking only hallucination would skip sessions with partial coverage.
-    const newTurns = traceTurns.filter(t => {
-      const turnKey = turnKeyOf(t.timestamp);
-      return SEED_METRICS.some(m => !m.needsTools && !existingKeys.has(turnScoreKey(t.sessionId, m.evalName, turnKey)));
-    });
-    console.log(`[backfill] ${newTurns.length} sessions need evaluations (${traceTurns.length - newTurns.length} already covered)`);
-
-    if (newTurns.length === 0) return;
-
-    const seedResult = seedEvaluations(newTurns, existingKeys);
-    // Backfilled data is not organic seed, so re-cohort it; the cohort axis
-    // owns this (OBP16).
-    for (const ev of seedResult.evals) {
-      if (ev.cohort === SEED_COHORT) {
-        ev.cohort = BACKFILL_COHORT;
-        ev.evaluatorType = TRACE_BACKFILL_EVALUATOR_TYPE;
-      }
-    }
-
-    if (seedResult.evals.length > 0) {
-      writeEvaluations(seedResult.evals);
-      const byCat = new Map<string, number>();
-      for (const ev of seedResult.evals) {
-        incrementIn(byCat, ev.evaluationName);
-      }
-      console.log(`[backfill] Wrote ${seedResult.evals.length} evaluations:`);
-      for (const [name, count] of byCat) {
-        console.log(`  ${name}: ${count}`);
-      }
-    }
-  } finally {
-    releaseLock();
-  }
-}
-
 /** --dry-run: what a run over `allTurns` would cost, and where its turns come from. */
 function printDryRun(allTurns: Turn[], batch: boolean, consolidated: boolean): void {
   const est = estimateJudgeRun(allTurns, batch, consolidated);
@@ -697,12 +641,10 @@ async function judgeTurns(
   return flatEvals;
 }
 
-/** Generate seed evaluations from trace data for sessions with no transcript. */
-const BACKFILL_FLAG = '--backfill';
 /** Flags judge-evaluations reads itself; --source=/--days=/--date= are read by derive's resolvers. */
 const JUDGE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG],
-  switches: [DRY_RUN_FLAG, JUDGE_SEED_FLAG, BACKFILL_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
+  switches: [DRY_RUN_FLAG, JUDGE_SEED_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
 };
 
 async function main() {
@@ -713,16 +655,10 @@ async function main() {
   });
   const dryRun = cli.has(DRY_RUN_FLAG);
   const seed = cli.has(JUDGE_SEED_FLAG);
-  const backfill = cli.has(BACKFILL_FLAG);
   const batch = cli.has(JUDGE_BATCH_FLAG);
   // Consolidated is the default (JCP4); --per-criterion opts out.
   const consolidated = !cli.has(JUDGE_PER_CRITERION_FLAG);
   const limit = requestedLimit === undefined ? Infinity : Math.min(requestedLimit, MAX_TURN_LIMIT);
-
-  if (backfill) {
-    await runBackfill();
-    return;
-  }
 
   const source = resolveSource(args, JUDGE_DEFAULT_SOURCE);
   const dateScope = readScope(source, resolveDateScope(args), JUDGE_DEFAULT_DAYS);
