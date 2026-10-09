@@ -79,12 +79,14 @@ import {
   RATE_DISPLAY_PRECISION,
   KV_SCHEMA_VERSION,
   timestampToMs,
+  extractFiniteScores,
 } from '../src/api/api-constants.js';
 import { CANARY_EVALUATOR_TYPE, CANARY_COHORT, CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { group, max, mean, min, minIndex, quantileSorted } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG } from './pipeline-stages.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
+import { bigintReplacer } from '../../src/lib/core/file-utils.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
@@ -213,11 +215,15 @@ export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
  * keeps working unchanged until the env lands.
  */
 const HOME_ORG_ID = process.env.HOME_ORG_ID ?? '';
+const ORG_KEY_PREFIX = 'org:';
 export const ORG_KEY_PREFIX_RE = /^org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
 
 export function orgPrefixedKey(orgId: string, key: string): string {
-  return `org:${orgId}:${key}`;
+  return `${ORG_KEY_PREFIX}${orgId}:${key}`;
 }
+
+/** Write-counter scopes for keys that carry no `org:<uuid>:` prefix. */
+const WRITE_SCOPE = { SYSTEM: 'system', LEGACY: 'legacy' } as const;
 
 /** Strip an `org:<uuid>:` prefix so key-class checks see the logical key. */
 export function stripOrgPrefix(key: string): string {
@@ -226,11 +232,6 @@ export function stripOrgPrefix(key: string): string {
 
 /** `hashBasis`, when set, is what change detection hashes instead of `value`. */
 export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
-
-/** Writes a `bigint` in its decimal-string wire form; `JSON.stringify` throws on it. */
-function bigintToString(v: unknown): unknown {
-  return typeof v === 'bigint' ? v.toString() : v;
-}
 
 /**
  * Serialize a KV entry value. Backend spans and evaluations carry `bigint`
@@ -247,7 +248,7 @@ function bigintToString(v: unknown): unknown {
  * (KV-VALUE-NOT-JSON-UNGUARDED).
  */
 export function toKVValue(value: unknown): string {
-  const json: string | undefined = JSON.stringify(value, (_key, v: unknown) => bigintToString(v));
+  const json: string | undefined = JSON.stringify(value, bigintReplacer);
   if (typeof json !== 'string') throw new TypeError(`[sync-to-kv] KV value has no JSON form (${typeof value})`);
   return json;
 }
@@ -433,7 +434,7 @@ export function dashboardEntry(key: string, view: object): KVEntry {
   const hashBasis = JSON.stringify(view, function (this: unknown, field: string, v: unknown) {
     if (field === DASHBOARD_PERIOD_FIELD) return undefined;
     if (field === DASHBOARD_RUN_STAMP_FIELD && this === view) return undefined;
-    return bigintToString(v);
+    return bigintReplacer(field, v);
   });
   return { key, value: toKVValue(view), hashBasis };
 }
@@ -602,7 +603,7 @@ function extractTraceId(key: string): string | null {
 
 /** Weighted sum of how bad, how recent, and whether a metric card links to the trace. */
 function tracePriority(evals: EvaluationResult[], isReferencedByWorst: boolean, now: number): number {
-  const worstScore = min(validScores(evals)) ?? UNEVALUATED_TRACE_SCORE;
+  const worstScore = min(extractFiniteScores(evals)) ?? UNEVALUATED_TRACE_SCORE;
   const latestTimestamp = max(evals.map(e => timestampToMs(e.timestamp)).filter(Number.isFinite)) ?? 0;
   const recency = latestTimestamp > 0 ? Math.max(0, 1 - (now - latestTimestamp) / PERIOD_MS['30d']) : 0;
   return (1 - worstScore) * TRACE_PRIORITY_WEIGHTS.worstScore
@@ -646,10 +647,6 @@ function spanSessionId(span: { attributes?: Record<string, unknown> }): string |
 
 function isValidScore(v: number | null | undefined): v is number {
   return v != null && Number.isFinite(v);
-}
-
-function validScores(evals: Array<{ scoreValue?: number | null }>): number[] {
-  return evals.map(e => e.scoreValue).filter(isValidScore);
 }
 
 /** Groups by metric with canaries dropped, the input every aggregate is built from. */
@@ -868,16 +865,11 @@ function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates:
     entries.push(dashboardEntry(`dashboard:${period}:${role}`, view));
   }
 
-  const metricTimeSeries = new Map<string, number[]>();
-  const corrMetricNames: string[] = [];
-  for (const [name, metricEvals] of grouped) {
-    metricTimeSeries.set(name, validScores(metricEvals));
-    corrMetricNames.push(name);
-  }
+  const metricTimeSeries = new Map([...grouped].map(([name, metricEvals]) => [name, extractFiniteScores(metricEvals)]));
   const correlations = computeCorrelationMatrix(metricTimeSeries);
   entries.push({
     key: `correlations:${period}`,
-    value: toKVValue({ correlations, metrics: corrMetricNames }),
+    value: toKVValue({ correlations, metrics: [...grouped.keys()] }),
   });
 
   // Columnar, never the dense metric x input cell list: that shape repeats the
@@ -931,7 +923,7 @@ function computeMetricDetailEntries(
     const evals = currentWeek.get(name);
     if (!config || !evals) continue;
 
-    const prevScores = validScores(previousWeek.get(name) ?? []);
+    const prevScores = extractFiniteScores(previousWeek.get(name) ?? []);
     const previousValues = prevScores.length > 0
       ? computeAggregations(prevScores, config.aggregations)
       : undefined;
@@ -1061,7 +1053,7 @@ function computeTrendEntries(
         };
       });
 
-      const allScores = validScores(evaluations);
+      const allScores = extractFiniteScores(evaluations);
 
       entries.push({
         key: `trend:${name}:${period}`,
@@ -1191,7 +1183,7 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
       rateLimitEvents: acc.rateLimitEvents,
       avgOutputSize: Math.round(perInvocation(acc.totalOutputSize)),
       avgDurationMs: Math.round(perInvocation(acc.weightedDurationSum)),
-      p95DurationMs: sortedSessionDurations.length > 0 ? Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0) : 0,
+      p95DurationMs: Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0),
       truncatedRate: rate(acc.truncatedCount),
       emptyOutputRate: rate(acc.emptyCount),
       lastSeen,
@@ -1312,7 +1304,8 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
     endDate: msToNs(nowMs),
     limit: SPAN_QUERY_LIMIT,
   });
-  if (allSpans.length === SPAN_QUERY_LIMIT) {
+  const spansHitCap = allSpans.length >= SPAN_QUERY_LIMIT;
+  if (spansHitCap) {
     console.warn(`[sync-to-kv] Span query returned ${SPAN_QUERY_LIMIT} results — data may be truncated`);
   }
   const spansByTrace: Map<string, TraceSpan[]> = group(allSpans.filter(hasTraceId), span => span.traceId);
@@ -1328,8 +1321,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
     evalCount: allEvals.length,
     spanCount: allSpans.length,
     periodCounts: periodCounts.join(' '),
-    hitCap: orgEvals.truncated ||
-      allSpans.length >= SPAN_QUERY_LIMIT,
+    hitCap: orgEvals.truncated || spansHitCap,
   };
 }
 
@@ -1378,9 +1370,7 @@ async function main(): Promise<void> {
       if (isHome) allEntries.push(e);
     }
     for (const [traceId, evals] of res.evalsByTrace) {
-      const existing = evalsByTrace.get(traceId);
-      if (existing) existing.push(...evals);
-      else evalsByTrace.set(traceId, evals);
+      for (const ev of evals) pushToGroup(evalsByTrace, traceId, ev);
     }
     for (const id of res.referencedTraceIds) referencedTraceIds.add(id);
   }
@@ -1441,7 +1431,6 @@ async function main(): Promise<void> {
   recordWritten(newState, toWrite, writtenKeys);
   const computedKeys = new Set(allEntries.map(e => e.key));
   for (const e of metaEntries) computedKeys.add(e.key);
-  computedKeys.add(META_LAST_SYNC_KEY);
   computedKeys.add(META_SYNC_COVERAGE_KEY);
 
   // Delete KV keys that were tracked in local state but are no longer computed.
@@ -1511,8 +1500,8 @@ async function main(): Promise<void> {
   for (const key of writtenKeys) {
     const orgMatch = ORG_KEY_PREFIX_RE.exec(key);
     const scope = orgMatch
-      ? `org:${orgMatch[0].slice('org:'.length, -1)}`
-      : (key === SYSTEM_LAST_SYNC_KEY ? 'system' : 'legacy');
+      ? orgMatch[0].slice(0, -1)
+      : (key === SYSTEM_LAST_SYNC_KEY ? WRITE_SCOPE.SYSTEM : WRITE_SCOPE.LEGACY);
     writesByScope.set(scope, (writesByScope.get(scope) ?? 0) + 1);
   }
   const writeCounter = [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
