@@ -10,7 +10,7 @@ import { HealthBanner } from '../HealthBanner.js';
 import { plural } from '../../lib/quality-utils.js';
 
 interface ExtendedExecutiveView extends ExecutiveViewType {
-  cqi?: CompositeQualityIndex;
+  cqi?: CompositeQualityIndex | undefined;
 }
 
 export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {

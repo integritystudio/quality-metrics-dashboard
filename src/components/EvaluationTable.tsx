@@ -39,18 +39,18 @@ import { ScoreBadge } from './ScoreBadge.js';
 
 export interface EvalRow {
   score: number | null;
-  explanation?: string;
-  traceId?: string;
-  timestamp?: string;
-  evaluator?: string;
-  label?: string;
+  explanation?: string | undefined;
+  traceId?: string | undefined;
+  timestamp?: string | undefined;
+  evaluator?: string | undefined;
+  label?: string | undefined;
   /** The label was derived from the score by the dashboard; the producer assigned none. */
-  labelDerived?: boolean;
-  evaluatorType?: string;
-  spanId?: string;
-  sessionId?: string;
-  agentName?: string;
-  trajectoryLength?: number;
+  labelDerived?: boolean | undefined;
+  evaluatorType?: string | undefined;
+  spanId?: string | undefined;
+  sessionId?: string | undefined;
+  agentName?: string | undefined;
+  trajectoryLength?: number | undefined;
   stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
   toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
 }

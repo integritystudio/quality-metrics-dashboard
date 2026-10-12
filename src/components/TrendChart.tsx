@@ -20,10 +20,10 @@ import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
 interface TrendChartProps {
-  trend?: MetricTrend;
-  dynamics?: MetricDynamics;
-  warningThreshold?: number;
-  criticalThreshold?: number;
+  trend?: MetricTrend | undefined;
+  dynamics?: MetricDynamics | undefined;
+  warningThreshold?: number | undefined;
+  criticalThreshold?: number | undefined;
   metricName: string;
 }
 

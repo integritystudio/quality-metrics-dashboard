@@ -3,8 +3,8 @@ import type { QualityMetricResult } from '../types.js';
 import { MetricCard } from './MetricCard.js';
 
 export function MetricGrid({ metrics, sparklines, children }: {
-  metrics?: QualityMetricResult[];
-  sparklines?: Record<string, (number | null)[]>;
+  metrics?: QualityMetricResult[] | undefined;
+  sparklines?: Record<string, (number | null)[]> | undefined;
   children?: ReactNode;
 }) {
   return (

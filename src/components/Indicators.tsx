@@ -11,7 +11,7 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function TrendIndicator({ trend }: { trend?: MetricTrend }) {
+export function TrendIndicator({ trend }: { trend?: MetricTrend | undefined }) {
   if (!trend) return null;
   const arrow = trend.direction === 'improving' ? '\u2191' : trend.direction === 'degrading' ? '\u2193' : '\u2192';
   const pct = trend.percentChange ?? 0;
@@ -24,7 +24,7 @@ export function TrendIndicator({ trend }: { trend?: MetricTrend }) {
   );
 }
 
-export function ConfidenceBadge({ confidence }: { confidence?: ConfidenceIndicator }) {
+export function ConfidenceBadge({ confidence }: { confidence?: ConfidenceIndicator | undefined }) {
   if (!confidence) return null;
   const symbol = CONFIDENCE_SYMBOLS[confidence.level] ?? '\u25CB';
   return (

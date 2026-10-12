@@ -151,12 +151,12 @@ function snapshotToEvalRow(s: {
   // which could never have run against real KV data.
   timestamp: string;
   scoreValue: number;
-  scoreLabel?: string;
-  labelDerived?: boolean;
-  evaluator?: string;
-  sessionId?: string;
-  traceId?: string;
-  explanation?: string;
+  scoreLabel?: string | undefined;
+  labelDerived?: boolean | undefined;
+  evaluator?: string | undefined;
+  sessionId?: string | undefined;
+  traceId?: string | undefined;
+  explanation?: string | undefined;
 }): EvalRow {
   return {
     score: s.scoreValue,

@@ -91,11 +91,11 @@ export function useApiQuery<TRaw, T = TRaw>(
       }
       return res.json();
     },
-    select,
     enabled,
     staleTime,
     retry: retry ?? defaultRetry,
-    refetchInterval,
-    retryDelay,
+    ...(select !== undefined ? { select } : {}),
+    ...(refetchInterval !== undefined ? { refetchInterval } : {}),
+    ...(retryDelay !== undefined ? { retryDelay } : {}),
   });
 }
