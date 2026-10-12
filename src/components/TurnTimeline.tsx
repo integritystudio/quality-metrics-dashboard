@@ -12,7 +12,7 @@ interface TurnTimelineProps {
   turns: TurnLevelResult[];
   agentNames: string[];
   /** Highlights this agent's turns and scrolls the first one into view. */
-  focusedAgent?: string;
+  focusedAgent: string | undefined;
 }
 
 export function TurnTimeline({ turns, agentNames, focusedAgent }: TurnTimelineProps) {

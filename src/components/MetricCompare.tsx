@@ -4,7 +4,7 @@ import { useMetricDetail } from '../hooks/useMetricDetail.js';
 import type { Period, MetricDynamics } from '../types.js';
 
 interface MetricCompareProps {
-  metricName?: string;
+  metricName: string | undefined;
   period: Period;
   availableMetrics: string[];
   onMetricChange: (name: string) => void;

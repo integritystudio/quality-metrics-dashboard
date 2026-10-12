@@ -23,20 +23,20 @@ interface EvaluatorTypeCounts {
 
 interface ProvenancePanelProps {
   evaluationName: string;
-  scoreValue?: number;
-  scoreLabel?: string;
-  traceId?: string;
-  spanId?: string;
-  sessionId?: string;
+  scoreValue?: number | undefined;
+  scoreLabel?: string | undefined;
+  traceId?: string | undefined;
+  spanId?: string | undefined;
+  sessionId?: string | undefined;
   timestamp: string | number | bigint;
-  evaluator?: string;
-  evaluatorType?: string;
-  scoreUnit?: string;
-  agentName?: string;
+  evaluator?: string | undefined;
+  evaluatorType?: string | undefined;
+  scoreUnit?: string | undefined;
+  agentName?: string | undefined;
   /** Raw evaluation object for JSON export */
-  rawData?: Record<string, unknown>;
+  rawData?: Record<string, unknown> | undefined;
   /** Evaluator type breakdown counts */
-  evaluatorTypeCounts?: EvaluatorTypeCounts;
+  evaluatorTypeCounts?: EvaluatorTypeCounts | undefined;
 }
 
 export function ProvenancePanel(props: ProvenancePanelProps) {

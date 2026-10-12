@@ -62,7 +62,7 @@ export function TraceDetailPage({ traceId }: { traceId: string }) {
   );
 }
 
-function buildEvalsBySpan(evaluations: Array<{ spanId?: string }>): Map<string, number> {
+function buildEvalsBySpan(evaluations: Array<{ spanId?: string | undefined }>): Map<string, number> {
   const map = new Map<string, number>();
   for (const ev of evaluations) {
     if (ev.spanId) {

@@ -19,13 +19,13 @@ function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode;
 interface ScoreBadgeProps {
   score: number | null;
   metricName: string;
-  direction?: ScoreDirection;
-  label?: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
-  calibration?: { distribution: PercentileDistribution; sampleSize: number };
+  direction?: ScoreDirection | undefined;
+  label?: string | undefined;
+  evaluator?: string | undefined;
+  evaluatorType?: string | undefined;
+  explanation?: string | undefined;
+  traceId?: string | undefined;
+  calibration?: { distribution: PercentileDistribution; sampleSize: number } | undefined;
 }
 
 function Tooltip({ id, score, label, evaluator, evaluatorType, explanation, traceId }: {

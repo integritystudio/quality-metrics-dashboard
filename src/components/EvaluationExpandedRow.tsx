@@ -10,7 +10,7 @@ import type { EvalRow } from './EvaluationTable.js';
 export function StepScoreChip({ step, score, explanation }: {
   step: string | number;
   score: number;
-  explanation?: string;
+  explanation?: string | undefined;
 }) {
   return (
     <ScoreChip score={score} direction="maximize" title={explanation ?? `Step ${step}: ${score.toFixed(SCORE_CHIP_PRECISION)}`}>
