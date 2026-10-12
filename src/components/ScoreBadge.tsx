@@ -31,11 +31,11 @@ interface ScoreBadgeProps {
 function Tooltip({ id, score, label, evaluator, evaluatorType, explanation, traceId }: {
   id: string;
   score: number;
-  label?: string;
-  evaluator?: string;
-  evaluatorType?: string;
-  explanation?: string;
-  traceId?: string;
+  label?: string | undefined;
+  evaluator?: string | undefined;
+  evaluatorType?: string | undefined;
+  explanation?: string | undefined;
+  traceId?: string | undefined;
 }) {
   return (
     <div id={id} className="score-badge-tooltip surface-elevated" role="tooltip">

@@ -51,8 +51,8 @@ export interface EvalRow {
   sessionId?: string | undefined;
   agentName?: string | undefined;
   trajectoryLength?: number | undefined;
-  stepScores?: Array<{ step: string | number; score: number; explanation?: string }>;
-  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }>;
+  stepScores?: Array<{ step: string | number; score: number; explanation?: string | undefined }> | undefined;
+  toolVerifications?: Array<{ toolName: string; toolCorrect: boolean; argsCorrect: boolean; score: number }> | undefined;
 }
 
 const DERIVED_LABEL_TITLE = 'Derived from the score by the dashboard; the producer assigned no label';

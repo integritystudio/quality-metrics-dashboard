@@ -1,4 +1,4 @@
-export function MetaItem({ label, value }: { label: string; value?: string | number }) {
+export function MetaItem({ label, value }: { label: string; value: string | number | undefined }) {
   if (value == null) return null;
   return (
     <div className="min-w-120">

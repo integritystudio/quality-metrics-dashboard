@@ -4,9 +4,9 @@ import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 interface ColoredChipProps {
   color: string;
-  title?: string;
-  className?: string;
-  style?: CSSProperties;
+  title?: string | undefined;
+  className?: string | undefined;
+  style?: CSSProperties | undefined;
   children: ReactNode;
 }
 
