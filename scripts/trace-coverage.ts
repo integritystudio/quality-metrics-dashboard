@@ -212,7 +212,7 @@ interface CliOptions {
   days: number;
   settleMinutes: number;
   minCoverage: number;
-  jsonPath?: string;
+  jsonPath: string | undefined;
 }
 
 const DAYS_FLAG = '--days';
