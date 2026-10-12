@@ -41,7 +41,7 @@ export function postgrestFetch(
   config: SupabaseConfig,
   path: string,
   idToken: string,
-  init?: { signal?: AbortSignal },
+  signal: AbortSignal,
 ): Promise<Response> {
   return fetch(`${config.url}${SUPABASE_REST_PATH}/${path}`, {
     method: 'GET',
@@ -50,6 +50,6 @@ export function postgrestFetch(
       Authorization: `Bearer ${idToken}`,
       Accept: 'application/json',
     },
-    signal: init?.signal,
+    signal,
   });
 }

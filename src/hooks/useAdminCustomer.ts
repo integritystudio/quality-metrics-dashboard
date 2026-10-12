@@ -83,7 +83,7 @@ function useGatewayQuery<T>(
       const timed = withTimeout(signal, GATEWAY_TIMEOUT_MS);
       let res: Response;
       try {
-        res = await gatewayFetch(path, token, { signal: timed.signal });
+        res = await gatewayFetch(path, token, timed.signal);
       } catch (error) {
         throw gatewayErrorForException(error, timed.signal);
       } finally {
@@ -100,8 +100,8 @@ function useGatewayQuery<T>(
     retry: gatewayRetry,
     retryDelay: gatewayRetryDelay,
     staleTime: STALE_TIME.DETAIL,
-    refetchInterval: options.refetchInterval,
-    refetchOnWindowFocus: options.refetchOnWindowFocus,
+    ...(options.refetchInterval !== undefined ? { refetchInterval: options.refetchInterval } : {}),
+    ...(options.refetchOnWindowFocus !== undefined ? { refetchOnWindowFocus: options.refetchOnWindowFocus } : {}),
   });
 }
 

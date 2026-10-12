@@ -29,7 +29,7 @@ export function useOwnUserRow() {
       if (!config) throw new Error(ERR_SUPABASE_UNCONFIGURED);
       const idToken = (await getIdTokenClaims())?.__raw;
       if (!idToken) throw new Error(ERR_NO_ID_TOKEN);
-      const res = await postgrestFetch(config, OWN_USER_PATH, idToken, { signal });
+      const res = await postgrestFetch(config, OWN_USER_PATH, idToken, signal);
       if (!res.ok) throw new Error(`PostgREST error: ${res.status}`);
       const rows = OwnUserRowsSchema.parse(await res.json());
       return rows[0] ?? null;

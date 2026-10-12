@@ -43,7 +43,7 @@ describe('postgrestFetch', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const controller = new AbortController();
 
-    await postgrestFetch({ url: URL, anonKey: ANON_KEY }, OWN_USER_PATH, ID_TOKEN, { signal: controller.signal });
+    await postgrestFetch({ url: URL, anonKey: ANON_KEY }, OWN_USER_PATH, ID_TOKEN, controller.signal);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
