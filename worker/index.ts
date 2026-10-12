@@ -13,7 +13,7 @@ import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRAT
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 import { queryValidator } from '../src/lib/query-validator.js';
-import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PeriodEnum, type Period } from '../src/lib/periods.js';
+import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PERIOD_KEYS, PeriodEnum, type Period } from '../src/lib/periods.js';
 import { ROLES, RoleSchema } from '../src/lib/roles.js';
 
 export type { DashboardPermission, AppSession };
@@ -84,7 +84,9 @@ function isTokenRejection(err: unknown): boolean {
 }
 const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
 
-const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
+/** Joins allowed values as "a, b, or c" for the 400 messages, so they follow the shared lists. */
+const OR_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
+const ERR_INVALID_PERIOD = `Invalid period. Must be ${OR_LIST.format(PERIOD_KEYS)}.`;
 
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = 'Invalid sortBy. Must be timestamp_desc, score_asc, or score_desc.';
@@ -103,7 +105,7 @@ const ERR_INVALID_TRACE_ID = 'Invalid traceId';
 const ERR_INVALID_SESSION_ID = 'Invalid sessionId';
 const ERR_INVALID_AGENT_ID = 'Invalid agentId';
 
-const ERR_INVALID_ROLE = 'Invalid role. Must be executive, operator, or auditor.';
+const ERR_INVALID_ROLE = `Invalid role. Must be ${OR_LIST.format(ROLES)}.`;
 
 const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
