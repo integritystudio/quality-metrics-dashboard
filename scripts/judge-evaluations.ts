@@ -29,7 +29,7 @@
  * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, openSync, closeSync, statSync, constants } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, openSync, closeSync, constants } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
 import type AnthropicSdk from '@anthropic-ai/sdk';
@@ -469,9 +469,9 @@ const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 const LOCK_FILE_MODE = 0o600;
 
 /** Create the lock file holding this pid, atomically (O_CREAT | O_EXCL); false when it already exists. */
-function tryCreateLock(): boolean {
+function tryCreateLock(lockFile: string): boolean {
   try {
-    const fd = openSync(LOCK_FILE, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, LOCK_FILE_MODE);
+    const fd = openSync(lockFile, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, LOCK_FILE_MODE);
     writeFileSync(fd, String(process.pid));
     closeSync(fd);
     return true;
@@ -481,8 +481,8 @@ function tryCreateLock(): boolean {
 }
 
 /** Whether the pid in the lock file belongs to a live process (EPERM: alive, not ours to signal). */
-function lockOwnerAlive(): boolean {
-  const lockPid = parseInt(readFileSync(LOCK_FILE, 'utf-8').trim(), 10);
+function lockOwnerAlive(lockFile: string): boolean {
+  const lockPid = parseInt(readFileSync(lockFile, 'utf-8').trim(), 10);
   if (Number.isNaN(lockPid) || lockPid <= 0) return false;
   try {
     process.kill(lockPid, 0);
@@ -492,29 +492,21 @@ function lockOwnerAlive(): boolean {
   }
 }
 
-/** Stale if older than {@link TIME_MS.HOUR}, whatever its pid says. */
-function lockExpired(): boolean {
+/**
+ * Take the lock, reclaiming one whose owner is dead or whose pid is malformed. A live
+ * owner keeps it however old it is: a --batch run legitimately holds it for hours.
+ */
+export function acquireLock(lockFile: string = LOCK_FILE): boolean {
+  if (tryCreateLock(lockFile)) return true;
   try {
-    const lockAgeMs = Date.now() - statSync(LOCK_FILE).mtimeMs;
-    if (lockAgeMs <= TIME_MS.HOUR) return false;
-    console.warn(`[judge] Lock file is ${Math.round(lockAgeMs / TIME_MS.MINUTE)}min old, treating as stale`);
-    return true;
+    if (!existsSync(lockFile) || lockOwnerAlive(lockFile)) return false;
   } catch {
     return false;
   }
-}
-
-function acquireLock(): boolean {
-  if (tryCreateLock()) return true;
-  try {
-    if (!existsSync(LOCK_FILE) || lockOwnerAlive()) return false;
-  } catch {
-    return false;
-  }
-  if (!lockExpired()) return false;
+  console.warn(`[judge] Lock file ${lockFile} has no live owner, reclaiming it`);
   // Remove the stale lock and re-acquire atomically; losing the race means another process holds it.
-  try { unlinkSync(LOCK_FILE); } catch { /* another process may have removed it */ }
-  return tryCreateLock();
+  try { unlinkSync(lockFile); } catch { /* another process may have removed it */ }
+  return tryCreateLock(lockFile);
 }
 
 /** Take the lock or exit 1: two runs must not append to the ledger at once. */

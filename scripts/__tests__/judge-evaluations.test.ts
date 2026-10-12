@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -23,6 +24,7 @@ import {
   processBatch,
   anthropicProviderFor,
   rejectRemovedFlags,
+  acquireLock,
   type JudgeMessagesClient,
 } from '../judge-evaluations.js';
 import { CliArgError } from '../cli-args.js';
@@ -1391,5 +1393,43 @@ describe('rejectRemovedFlags', () => {
 
   it('accepts the flags the judge still reads', () => {
     expect(() => rejectRemovedFlags(['--dry-run', '--batch', '--source=cloud', '--days=7'])).not.toThrow();
+  });
+});
+
+describe('acquireLock', () => {
+  let dir: string;
+  let lockFile: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'judge-lock-'));
+    lockFile = join(dir, '.judge-evaluations.lock');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    vi.restoreAllMocks();
+  });
+
+  const exitedPid = (): number => spawnSync(process.execPath, ['-e', '']).pid;
+
+  it('takes a free lock and records this pid', () => {
+    expect(acquireLock(lockFile)).toBe(true);
+    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
+  });
+
+  it('refuses a lock held by a live process', () => {
+    writeFileSync(lockFile, String(process.ppid));
+    expect(acquireLock(lockFile)).toBe(false);
+    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.ppid));
+  });
+
+  it.each([
+    ['an exited process', () => String(exitedPid())],
+    ['a malformed pid', () => 'not-a-pid'],
+  ])('reclaims a fresh lock left by %s', (_label, owner) => {
+    writeFileSync(lockFile, owner());
+    expect(acquireLock(lockFile)).toBe(true);
+    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
   });
 });
