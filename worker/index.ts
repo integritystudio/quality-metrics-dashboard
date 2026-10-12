@@ -14,6 +14,7 @@ import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/
 import { SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 import { queryValidator } from '../src/lib/query-validator.js';
 import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PeriodEnum, type Period } from '../src/lib/periods.js';
+import { ROLES, RoleSchema } from '../src/lib/roles.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -102,7 +103,6 @@ const ERR_INVALID_TRACE_ID = 'Invalid traceId';
 const ERR_INVALID_SESSION_ID = 'Invalid sessionId';
 const ERR_INVALID_AGENT_ID = 'Invalid agentId';
 
-const VALID_ROLES = ['executive', 'operator', 'auditor'] as const;
 const ERR_INVALID_ROLE = 'Invalid role. Must be executive, operator, or auditor.';
 
 const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
@@ -114,7 +114,7 @@ const PeriodQuery = z.object({ period: periodField(DEFAULT_PERIOD) });
 const DashboardQuery = z.object({
   period: periodField(DEFAULT_PERIOD),
   // An empty ?role= means "no role", as it did before validation moved here.
-  role: z.enum(VALID_ROLES).or(z.literal('')).optional(),
+  role: RoleSchema.or(z.literal('')).optional(),
 });
 const MetricEvaluationsQuery = z.object({
   period: periodField(DEFAULT_PERIOD),
@@ -396,7 +396,7 @@ app.use('/api/*', async (c, next) => {
       email: 'test@example.com',
       roles: ['test'],
       permissions: ['dashboard.admin'],
-      allowedViews: [...VALID_ROLES],
+      allowedViews: [...ROLES],
       // Org context (P5): the bypass session carries the org-scoped shape so
       // e2e fixtures and the session contract change in the same phase.
       activeOrgId: bypassOrgId,
@@ -543,7 +543,7 @@ app.use('/api/*', async (c, next) => {
 
   const permissions = [...permissionSet];
   const allowedViews: DashboardView[] = permissionSet.has('dashboard.admin')
-    ? [...VALID_ROLES]
+    ? [...ROLES]
     : VIEW_PERMISSION_MAP
         .filter(([perm]) => permissionSet.has(perm))
         .map(([, view]: [DashboardPermission, DashboardView]) => view);
