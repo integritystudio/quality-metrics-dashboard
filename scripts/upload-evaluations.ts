@@ -56,6 +56,7 @@
 import { createHash, createHmac } from 'crypto';
 import { readdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { z } from 'zod';
 
 import {
   EVALUATION_ATTRS,
@@ -443,12 +444,12 @@ export function windowFiles(dir: string, windowDays: number, nowMs: number): str
 }
 
 /** One manifest entry: which record to re-ship, and under which account's key. */
-interface ManifestEntry {
-  ref: string;
-  evaluationName: string;
-  traceId: string;
-  evaluatedAtMs: number;
-}
+const manifestEntrySchema = z.object({
+  ref: z.string().regex(IDENTITY_KEY_REF_PATTERN),
+  evaluationName: z.string().min(1),
+  traceId: z.string(),
+  evaluatedAtMs: z.number().int(),
+});
 
 /** A record's identity for `--only-keys`: name, trace and event time, which a D1 row also carries. */
 export function manifestKey(evaluationName: string, traceId: string, evaluatedAtMs: number): string {
@@ -464,13 +465,11 @@ export function parseKeyManifest(text: string): Map<string, string> {
   const manifest = new Map<string, string>();
   text.split('\n').forEach((line, i) => {
     if (!line.trim()) return;
-    const e = JSON.parse(line) as Partial<ManifestEntry>;
-    if (typeof e.ref !== 'string' || !IDENTITY_KEY_REF_PATTERN.test(e.ref)
-      || typeof e.evaluationName !== 'string' || !e.evaluationName
-      || typeof e.traceId !== 'string'
-      || typeof e.evaluatedAtMs !== 'number' || !Number.isInteger(e.evaluatedAtMs)) {
+    const parsed = manifestEntrySchema.safeParse(JSON.parse(line));
+    if (!parsed.success) {
       throw new Error(`manifest line ${i + 1} is not {ref, evaluationName, traceId, evaluatedAtMs}`);
     }
+    const e = parsed.data;
     manifest.set(manifestKey(e.evaluationName, e.traceId, e.evaluatedAtMs), e.ref);
   });
   return manifest;
