@@ -18,6 +18,7 @@ import { createContext, use, useState, useCallback, useMemo, type ReactNode } fr
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './AuthContext.js';
 import { apiFetch, getStoredOrgId, setStoredOrgId } from '../lib/api-client.js';
+import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 import type { OrgMembershipSummary } from '../types/auth.js';
 
 interface OrgContextValue {
@@ -67,7 +68,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       // id, so the re-render moves each mounted query to a new-org key, which
       // fetches once. invalidateQueries() would first refetch the old keys with
       // the old X-Org-Id, one wasted round trip per mounted query.
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== orgId });
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== orgId && query.queryKey[0] !== APP_SESSION_QUERY_KEY[0],
+      });
       return true;
     } catch {
       return false;

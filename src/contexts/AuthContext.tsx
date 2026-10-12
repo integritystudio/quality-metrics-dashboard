@@ -1,9 +1,11 @@
-import { createContext, use, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { createContext, use, useCallback, useMemo, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth0, AUTH0_AUDIENCE } from '../lib/auth0.js';
 import type { AppSession } from '../types/auth.js';
 import { MeResponseSchema } from '../lib/validation/auth-schemas.js';
 import { postActivityEvent } from '../lib/activity-logger.js';
 import { apiFetch } from '../lib/api-client.js';
+import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 
 /** sessionStorage key used to prevent duplicate login events on page refresh. */
 const SESSION_LOGIN_KEY = 'obs:login_recorded';
@@ -19,6 +21,20 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * Record login once per browser tab session — guards against duplicate rows on page
+ * refresh while still capturing the event on the initial sign-in redirect.
+ */
+function recordLoginOncePerTab(jwt: string): void {
+  try {
+    if (sessionStorage.getItem(SESSION_LOGIN_KEY)) return;
+    sessionStorage.setItem(SESSION_LOGIN_KEY, '1');
+    void postActivityEvent('login', jwt);
+  } catch {
+    // sessionStorage unavailable (private browsing, blocked) — skip silently.
+  }
+}
 
 async function fetchAppSession(jwt: string, signal: AbortSignal): Promise<AppSession | null> {
   try {
@@ -47,78 +63,37 @@ async function fetchAppSession(jwt: string, signal: AbortSignal): Promise<AppSes
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { isLoading: auth0Loading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
-  const [session, setSession] = useState<AppSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
   const getAccessToken = useCallback(async (): Promise<string> => {
     const token = await getAccessTokenSilently({ authorizationParams: { audience: AUTH0_AUDIENCE } });
     if (!token) throw new Error(MISSING_ACCESS_TOKEN_ERROR);
     return token;
   }, [getAccessTokenSilently]);
 
-  useEffect(() => {
-    if (auth0Loading) return;
+  const sessionQuery = useQuery({
+    queryKey: APP_SESSION_QUERY_KEY,
+    enabled: !auth0Loading && isAuthenticated,
+    queryFn: async ({ signal }) => {
+      const jwt = await getAccessToken();
+      const appSession = await fetchAppSession(jwt, signal);
+      if (appSession) recordLoginOncePerTab(jwt);
+      return appSession;
+    },
+    // One read per sign-in: a failed /api/me means no session, never a retry loop,
+    // and an offline load settles to no session instead of pausing on the loading screen.
+    retry: false,
+    staleTime: Infinity,
+    networkMode: 'always',
+  });
 
-    const controller = new AbortController();
-    let cancelled = false;
-
-    if (!isAuthenticated) {
-      void Promise.resolve().then(() => {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    let capturedJwt: string | null = null;
-
-    getAccessToken()
-      .then((jwt) => {
-        capturedJwt = jwt;
-        return cancelled ? null : fetchAppSession(jwt, controller.signal);
-      })
-      .then((appSession) => {
-        if (!cancelled) {
-          if (appSession && capturedJwt) {
-            // Record login once per browser tab session — guards against
-            // duplicate rows on page refresh while still capturing the event on
-            // the initial sign-in redirect.
-            try {
-              if (!sessionStorage.getItem(SESSION_LOGIN_KEY)) {
-                sessionStorage.setItem(SESSION_LOGIN_KEY, '1');
-                void postActivityEvent('login', capturedJwt);
-              }
-            } catch {
-              // sessionStorage unavailable (private browsing, blocked) — skip silently.
-            }
-          }
-          setSession(appSession);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSession(null);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [auth0Loading, isAuthenticated, getAccessToken]);
+  const session = isAuthenticated ? sessionQuery.data ?? null : null;
+  const isLoading = auth0Loading || (isAuthenticated && sessionQuery.isPending);
 
   const handleSignOut = useCallback(async () => {
     if (session) {
       const jwt = await getAccessToken().catch(() => null);
       if (jwt) void apiFetch(`/api/logout`, jwt, null, { method: 'POST' }).catch(() => undefined);
     }
-    // Deliberately NO setSession(null) here. logout() resolves after CALLING
+    // Deliberately no session clear here. logout() resolves after CALLING
     // window.location.assign, while the page is still alive — clearing the
     // session at that point re-renders RequireAuth → /login, whose auto
     // loginWithRedirect issues a second navigation that stomps the pending

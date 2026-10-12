@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 import { OrgProvider, useOrg } from '../contexts/OrgContext.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
+import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 import type { AppSession, OrgMembershipSummary } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf } from './support/query-harness.js';
 
@@ -76,6 +77,7 @@ function useTwoQueriesAndOrg() {
 async function renderAndSwitch() {
   const fetchSpy = stubOrgEchoFetch();
   const queryClient = new QueryClient();
+  queryClient.setQueryData(APP_SESSION_QUERY_KEY, SESSION);
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -122,11 +124,11 @@ describe('OrgContext.switchOrg', () => {
     queryClient.clear();
   });
 
-  it("drops the previous org's cached queries", async () => {
+  it("drops the previous org's cached queries and keeps the session", async () => {
     const { queryClient } = await renderAndSwitch();
 
-    const cachedOrgs = queryClient.getQueryCache().findAll().map((query) => query.queryKey[0]);
-    expect(cachedOrgs).toEqual([ORG_B, ORG_B]);
+    const cachedKeys = queryClient.getQueryCache().findAll().map((query) => query.queryKey[0]);
+    expect(cachedKeys).toEqual([APP_SESSION_QUERY_KEY[0], ORG_B, ORG_B]);
     queryClient.clear();
   });
 });
