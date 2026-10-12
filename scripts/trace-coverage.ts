@@ -22,7 +22,7 @@
  */
 
 import { readdirSync, writeFileSync } from 'fs';
-import { ascending } from 'd3-array';
+import { ascending, sum } from 'd3-array';
 import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToMs, nsToMs } from './hrt.js';
 import { incrementIn, pushTo } from './collections.js';
@@ -148,7 +148,7 @@ export function compareAccount(
   }
   const days = [...byDay.values()].sort((a, b) => ascending(a.day, b.day));
   const totalLocal = localKeys.size;
-  const matched = days.reduce((sum, d) => sum + d.matched, 0);
+  const matched = sum(days, d => d.matched);
   return {
     ref,
     days,

@@ -29,6 +29,7 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-hallucination-eval.ts --yes
  */
 
+import { sum } from 'd3-array';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
@@ -168,7 +169,7 @@ export function estimateRunSpend(
   // The candidate is the consolidated call plus one criterion, so price it as a second consolidated run.
   const haikuUsd = haiku.perCriterionUsd + 2 * haiku.consolidatedUsd;
   const toolTurns = turns.filter(t => t.toolResults.length > 0);
-  const inputTokens = toolTurns.reduce((sum, t) => sum + estimateCallInputTokens(t, HALLUCINATION_CRITERIA), 0);
+  const inputTokens = sum(toolTurns, t => estimateCallInputTokens(t, HALLUCINATION_CRITERIA));
   const referenceUsd = listCostUsd(inputTokens, toolTurns.length * REFERENCE_OUTPUT_TOKENS_PER_CALL, referencePricing);
   return { haikuUsd, referenceCalls: toolTurns.length, referenceUsd, totalUsd: haikuUsd + referenceUsd };
 }
@@ -286,7 +287,7 @@ async function main(): Promise<void> {
     reference: new Map(),
   };
 
-  const spentUsd = (): number => CONFIGURATIONS.reduce((sum, c) => sum + tokenUsageCostUsd(totals[c], haikuPricing), 0)
+  const spentUsd = (): number => sum(CONFIGURATIONS, c => tokenUsageCostUsd(totals[c], haikuPricing))
     + tokenUsageCostUsd(totals.reference, referencePricing);
   const canSpend = (): boolean => spentUsd() < MAX_MEASURED_SPEND_USD;
   const turnErrors: TurnErrors[] = [];

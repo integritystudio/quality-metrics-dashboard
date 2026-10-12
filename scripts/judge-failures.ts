@@ -1,5 +1,6 @@
 /** Judge failure classification, the run summary and its exit verdict, and run state. */
 
+import { sum } from 'd3-array';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { z } from 'zod';
@@ -143,7 +144,7 @@ export function summarizeJudgeRun(
   spend: JudgeSpend,
   prev?: JudgeRunState,
 ): JudgeRunSummary {
-  const failed = Object.values(byMetric).reduce((sum, n) => sum + n, 0);
+  const failed = sum(Object.values(byMetric));
   const attempted = succeeded + failed;
   const successRate = attempted > 0 ? succeeded / attempted : 0;
   const prevRate = prev && prev.attempted > 0 ? prev.succeeded / prev.attempted : undefined;

@@ -53,6 +53,7 @@
  * `OBTOOL_API_KEY*` per mapped account (all present under `doppler run … prd`).
  */
 
+import { sum } from 'd3-array';
 import { createHash, createHmac } from 'crypto';
 import { readdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
@@ -736,7 +737,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         if (!opts.dryRun) await sleep(INTER_BATCH_DELAY_MS);
         return true;
       };
-      const pendingCount = (): number => [...batches.values()].reduce((n, b) => n + b.length, 0);
+      const pendingCount = (): number => sum(batches.values(), b => b.length);
 
       let ok = true;
       for (const line of readFileSync(join(TELEMETRY_DIR, file), 'utf8').split('\n')) {

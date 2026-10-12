@@ -1,5 +1,6 @@
 /** Token accounting, list pricing and pre-run cost estimates for the judge. */
 
+import { sum } from 'd3-array';
 import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
 import { fitContextForJudge, type Turn } from './judge-turns.js';
@@ -98,7 +99,7 @@ export function charsToTokens(chars: number): number {
 
 /** Combined length of `texts`. */
 export function totalChars(texts: readonly string[]): number {
-  return texts.reduce((sum, text) => sum + text.length, 0);
+  return sum(texts, text => text.length);
 }
 
 /** Tokens the judge sees for one turn (tool context fitted as the judge fits it), by chars-per-token. */

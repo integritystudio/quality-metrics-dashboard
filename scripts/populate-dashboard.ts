@@ -45,6 +45,7 @@
  * network failures with the bounded schedule in pipeline-stages.ts.
  */
 
+import { sum } from 'd3-array';
 import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -260,7 +261,7 @@ async function main(): Promise<void> {
     if (!sync.ok) abort('sync-to-kv', sync);
   }
 
-  const total = results.reduce((sum, r) => sum + r.ms, 0);
+  const total = sum(results, r => r.ms);
   console.log(`[populate] steps: ${results.map(r => `${r.name}=${r.ms}ms`).join(' ')} total=${total}ms exit=${pipelineExitCode}`);
   if (pipelineExitCode !== 0) process.exit(pipelineExitCode);
 }
