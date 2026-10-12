@@ -9,15 +9,12 @@ const ACTIVITY_TIMEOUT_MS = 3000;
  * 3s timeout prevents hung fetch from blocking on slow networks.
  */
 export async function postActivityEvent(activityType: FrontendActivityEvent, jwt: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ACTIVITY_TIMEOUT_MS);
-
   try {
     await apiFetch(`/api/activity`, jwt, null, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activity_type: activityType }),
-      signal: controller.signal,
+      signal: AbortSignal.timeout(ACTIVITY_TIMEOUT_MS),
     });
   } catch (err) {
     // Warn in development so audit trail failures are visible during debugging.
@@ -25,7 +22,5 @@ export async function postActivityEvent(activityType: FrontendActivityEvent, jwt
     if (import.meta.env.DEV) {
       console.warn('[activity-logger] Failed to post activity event:', activityType, err);
     }
-  } finally {
-    clearTimeout(timeout);
   }
 }
