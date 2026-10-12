@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { format } from 'date-fns';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
@@ -41,10 +41,13 @@ const MEMBER_TABLE_COLUMNS = [
 
 const MEMBERSHIP_ROLES: OrgMembershipRoleValue[] = ['owner', 'admin', 'billing_admin', 'member', 'viewer'];
 
-/** One key per list, so a reload after a mutation refetches in place (see onMutationEnd). */
+/** One key per list, so a reload after a mutation refetches in place (see useRowMutation). */
 const USERS_QUERY_KEY = ['admin', 'users'] as const;
 const MEMBERS_QUERY_KEY = ['admin', 'members'] as const;
 const KEYS_QUERY_KEY = ['admin', 'keys'] as const;
+const ADMIN_LIST_QUERY_KEYS = [USERS_QUERY_KEY, MEMBERS_QUERY_KEY, KEYS_QUERY_KEY];
+/** Shared by every admin row's mutation, so the lists reload once the last in-flight one settles. */
+const ADMIN_MUTATION_KEY = ['admin', 'mutation'] as const;
 
 const KEY_TABLE_COLUMNS = [
   { label: 'Prefix', align: 'left' as const },
@@ -102,63 +105,65 @@ interface RowMutation {
   body?: unknown;
   /** Shown when the response is not ok and carries no text. */
   failureMessage: string;
+  /** Throw to show the thrown message as the row's error. */
   onOk?: (res: Response) => Promise<void> | void;
 }
 
 /**
  * One row's busy/error state and the mutation lifecycle every admin row shares:
- * clear the error, bracket the request with onMutationStart/End, and surface the
- * response text, the fallback message, or a network error.
+ * surface the response text, the fallback message, or a network error, and
+ * reload the lists once no admin mutation is still in flight.
  */
-function useRowMutation(onMutationStart: () => string, onMutationEnd: (id: string) => void) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function useRowMutation() {
+  const queryClient = useQueryClient();
+  const activeOrgId = useOrgOptional()?.activeOrgId ?? null;
   const adminFetch = useAdminFetch();
 
-  async function run({ path, method, body, failureMessage, onOk }: RowMutation) {
-    setBusy(true);
-    setError(null);
-    const mutationId = onMutationStart();
-    try {
-      const res = await adminFetch(path, method, body);
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        setError(text || failureMessage);
-      } else {
-        await onOk?.(res);
+  const mutation = useMutation({
+    mutationKey: ADMIN_MUTATION_KEY,
+    mutationFn: async ({ path, method, body, failureMessage, onOk }: RowMutation) => {
+      let res: Response;
+      try {
+        res = await adminFetch(path, method, body);
+      } catch {
+        throw new Error(ERR_NETWORK);
       }
-    } catch {
-      setError(ERR_NETWORK);
-    } finally {
-      setBusy(false);
-      onMutationEnd(mutationId);
-    }
-  }
+      if (!res.ok) throw new Error((await res.text().catch(() => '')) || failureMessage);
+      await onOk?.(res);
+    },
+    onSettled: () => {
+      // onSettled runs while this mutation still counts as pending, so 1 means it is the last.
+      if (queryClient.isMutating({ mutationKey: ADMIN_MUTATION_KEY }) > 1) return;
+      // Refetch in place, not under a new key: a new key has no data yet, so
+      // PageShell would swap the table for a skeleton and unmount every row,
+      // discarding the error a failed mutation just set. useApiQuery leads
+      // every key with the active org.
+      for (const key of ADMIN_LIST_QUERY_KEYS) {
+        void queryClient.invalidateQueries({ queryKey: [activeOrgId, ...key] });
+      }
+    },
+  });
 
-  return { busy, error, setError, run };
+  return { busy: mutation.isPending, error: mutation.error?.message ?? null, run: mutation.mutate };
 }
 
 function UserRow({
   user,
   availableRoles,
-  onMutationStart,
-  onMutationEnd,
 }: {
   user: AdminUser;
   availableRoles: AdminRole[];
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
 }) {
   const [selectedRoleId, setSelectedRoleId] = useState('');
-  const { busy, error, run } = useRowMutation(onMutationStart, onMutationEnd);
+  const { busy, error, run } = useRowMutation();
 
   const assignableRoles = availableRoles.filter(
     (r) => !user.roles.some((ur) => ur.id === r.id),
   );
 
-  async function handleAssign() {
+  function handleAssign() {
     if (!selectedRoleId) return;
-    await run({
+    run({
       path: `/api/admin/users/${user.id}/roles`,
       method: 'POST',
       body: { role_id: selectedRoleId },
@@ -167,9 +172,9 @@ function UserRow({
     });
   }
 
-  async function handleRevoke(roleId: string, roleName: string) {
+  function handleRevoke(roleId: string, roleName: string) {
     if (!window.confirm(`Remove role "${roleName}" from this user?`)) return;
-    await run({ path: `/api/admin/users/${user.id}/roles/${roleId}`, method: 'DELETE', failureMessage: 'Failed to revoke role' });
+    run({ path: `/api/admin/users/${user.id}/roles/${roleId}`, method: 'DELETE', failureMessage: 'Failed to revoke role' });
   }
 
   return (
@@ -181,7 +186,7 @@ function UserRow({
         <div className="chip-list">
           {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
           {user.roles.map((r) => (
-            <RoleChip key={r.id} role={r} onRevoke={(id, name) => void handleRevoke(id, name)} revoking={busy} />
+            <RoleChip key={r.id} role={r} onRevoke={(id, name) => handleRevoke(id, name)} revoking={busy} />
           ))}
         </div>
         {error && <div className="text-xs text-error mt-1">{error}</div>}
@@ -202,7 +207,7 @@ function UserRow({
           </select>
           <button
             className="btn-sm"
-            onClick={() => void handleAssign()}
+            onClick={() => handleAssign()}
             disabled={busy || !selectedRoleId}
           >
             Assign
@@ -219,22 +224,18 @@ function UserRow({
 function MemberRow({
   member,
   canTouchOwner,
-  onMutationStart,
-  onMutationEnd,
 }: {
   member: AdminMember;
   canTouchOwner: boolean;
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
 }) {
   const [selectedRole, setSelectedRole] = useState<OrgMembershipRoleValue>(member.membershipRole);
-  const { busy, error, run } = useRowMutation(onMutationStart, onMutationEnd);
+  const { busy, error, run } = useRowMutation();
 
   const ownerLocked = (member.membershipRole === 'owner' || selectedRole === 'owner') && !canTouchOwner;
 
-  async function handleRoleChange() {
+  function handleRoleChange() {
     if (selectedRole === member.membershipRole) return;
-    await run({
+    run({
       path: `/api/admin/members/${member.userId}/role`,
       method: 'POST',
       body: { membershipRole: selectedRole },
@@ -242,9 +243,9 @@ function MemberRow({
     });
   }
 
-  async function handleRemove() {
+  function handleRemove() {
     if (!window.confirm(`Remove ${member.email ?? member.userId} from this organization?`)) return;
-    await run({ path: `/api/admin/members/${member.userId}`, method: 'DELETE', failureMessage: 'Failed to remove member' });
+    run({ path: `/api/admin/members/${member.userId}`, method: 'DELETE', failureMessage: 'Failed to remove member' });
   }
 
   return (
@@ -273,14 +274,14 @@ function MemberRow({
         <div className="inline-flex-center gap-4">
           <button
             className="btn-sm"
-            onClick={() => void handleRoleChange()}
+            onClick={() => handleRoleChange()}
             disabled={busy || ownerLocked || selectedRole === member.membershipRole}
           >
             Update
           </button>
           <button
             className="btn-sm"
-            onClick={() => void handleRemove()}
+            onClick={() => handleRemove()}
             disabled={busy || (member.membershipRole === 'owner' && !canTouchOwner)}
           >
             Remove
@@ -324,29 +325,25 @@ function NewKeyPanel({ rotated, onDismiss }: { rotated: RotatedKey; onDismiss: (
 
 function KeyRow({
   apiKey,
-  onMutationStart,
-  onMutationEnd,
   onRotated,
 }: {
   apiKey: ApiKey;
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
   onRotated: (rotated: RotatedKey) => void;
 }) {
-  const { busy, error, setError, run } = useRowMutation(onMutationStart, onMutationEnd);
+  const { busy, error, run } = useRowMutation();
 
-  async function handleRotate() {
+  function handleRotate() {
     if (!window.confirm(
       `Rotate key ${apiKey.prefix}…? The old key stops working immediately — update OBTOOL_API_KEY wherever the hooks read it.`,
     )) return;
-    await run({
+    run({
       path: `/api/admin/keys/${apiKey.id}/rotate`,
       method: 'POST',
       failureMessage: 'Failed to rotate key',
       onOk: async (res) => {
         const parsed = RotateKeyResponseSchema.safeParse(await res.json().catch(() => null));
-        if (parsed.success) onRotated({ previousPrefix: apiKey.prefix, token: parsed.data.token });
-        else setError(ERR_ROTATE_NO_TOKEN);
+        if (!parsed.success) throw new Error(ERR_ROTATE_NO_TOKEN);
+        onRotated({ previousPrefix: apiKey.prefix, token: parsed.data.token });
       },
     });
   }
@@ -369,7 +366,7 @@ function KeyRow({
         {apiKey.last_used_at ? format(new Date(apiKey.last_used_at), 'PP') : '—'}
       </td>
       <td className="cell-pad text-right">
-        <button className="btn-sm" onClick={() => void handleRotate()} disabled={busy}>
+        <button className="btn-sm" onClick={() => handleRotate()} disabled={busy}>
           Rotate
         </button>
         {error && <div className="text-xs text-error mt-1">{error}</div>}
@@ -385,13 +382,7 @@ function KeyRow({
  * page is left. It lives here, not in its row, because the list refetches after
  * a rotation and the revoked key's row leaves it.
  */
-function ApiKeysSection({
-  onMutationStart,
-  onMutationEnd,
-}: {
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
-}) {
+function ApiKeysSection() {
   const { data: keys, isLoading, error } = useApiQuery<ApiKey[]>(
     KEYS_QUERY_KEY,
     () => `/api/admin/keys`,
@@ -414,8 +405,6 @@ function ApiKeysSection({
                   <KeyRow
                     key={k.id}
                     apiKey={k}
-                    onMutationStart={onMutationStart}
-                    onMutationEnd={onMutationEnd}
                     onRotated={setRotated}
                   />
                 ))}
@@ -432,13 +421,7 @@ function ApiKeysSection({
  * Org-scoped member management (P6): bound server-side to the session's active
  * org — this page can never read or mutate another org's memberships.
  */
-function OrgMembersSection({
-  onMutationStart,
-  onMutationEnd,
-}: {
-  onMutationStart: () => string;
-  onMutationEnd: (id: string) => void;
-}) {
+function OrgMembersSection() {
   const { session } = useAuth();
   const canTouchOwner = session?.isStaff === true || session?.role === 'owner';
 
@@ -463,8 +446,6 @@ function OrgMembersSection({
                     key={member.userId}
                     member={member}
                     canTouchOwner={canTouchOwner}
-                    onMutationStart={onMutationStart}
-                    onMutationEnd={onMutationEnd}
                   />
                 ))}
               </tbody>
@@ -477,37 +458,11 @@ function OrgMembersSection({
 }
 
 export function AdminPage() {
-  const queryClient = useQueryClient();
   // Org-scoped sessions (P6) manage the ACTIVE ORG's members; the legacy
   // global user_roles table below remains for pre-cutover and staff use.
   const org = useOrgOptional();
   const activeOrgId = org?.activeOrgId ?? null;
   const orgScoped = !!activeOrgId && (org?.memberships.length ?? 0) > 0;
-  // Replaced numeric counter with a Set of in-flight request IDs.
-  // A numeric counter gets stuck if a mutation throws before onMutationEnd;
-  // a Set is self-correcting — duplicate remove() calls are safe no-ops.
-  const pendingMutationsRef = useRef<Set<string>>(new Set());
-  const mutationIdRef = useRef(0);
-
-  const onMutationStart = useCallback((): string => {
-    const id = String(++mutationIdRef.current);
-    pendingMutationsRef.current.add(id);
-    return id;
-  }, []);
-
-  const onMutationEnd = useCallback((id: string) => {
-    pendingMutationsRef.current.delete(id);
-    if (pendingMutationsRef.current.size === 0) {
-      // Refetch in place, not under a new key: a new key has no data yet, so
-      // PageShell would swap the table for a skeleton and unmount every row,
-      // discarding the error a failed mutation just set. useApiQuery leads
-      // every key with the active org.
-      for (const key of [USERS_QUERY_KEY, MEMBERS_QUERY_KEY, KEYS_QUERY_KEY]) {
-        void queryClient.invalidateQueries({ queryKey: [activeOrgId, ...key] });
-      }
-    }
-  }, [queryClient, activeOrgId]);
-
   const { data: users, isLoading: usersLoading, error: usersError } = useApiQuery<AdminUser[]>(
     USERS_QUERY_KEY,
     () => `/api/admin/users`,
@@ -523,14 +478,8 @@ export function AdminPage() {
   if (orgScoped) {
     return (
       <>
-        <OrgMembersSection
-          onMutationStart={onMutationStart}
-          onMutationEnd={onMutationEnd}
-        />
-        <ApiKeysSection
-          onMutationStart={onMutationStart}
-          onMutationEnd={onMutationEnd}
-        />
+        <OrgMembersSection />
+        <ApiKeysSection />
       </>
     );
   }
@@ -554,8 +503,6 @@ export function AdminPage() {
                     key={user.id}
                     user={user}
                     availableRoles={roles ?? []}
-                    onMutationStart={onMutationStart}
-                    onMutationEnd={onMutationEnd}
                   />
                 ))}
               </tbody>

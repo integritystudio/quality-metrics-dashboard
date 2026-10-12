@@ -177,9 +177,10 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
  */
 async function renderAdminPage(mode: { orgRole: DashboardRole } | 'legacy') {
   currentSession = mode === 'legacy' ? null : orgSession(mode.orgRole);
-  const { wrapper } = makeQueryWrapper();
+  const { wrapper, queryClient } = makeQueryWrapper();
   render(mode === 'legacy' ? <AdminPage /> : <OrgProvider><AdminPage /></OrgProvider>, { wrapper });
   await screen.findByText(mode === 'legacy' ? ANN.email! : BOB.email!);
+  return { queryClient };
 }
 
 function assignRole(roleId: string) {
@@ -347,6 +348,34 @@ describe('AdminPage — organization members (active org)', () => {
     const olgaRow = screen.getByText(OLGA.email!).closest('tr')!;
     expect(within(olgaRow).getByRole('combobox')).toBeEnabled();
     expect(within(olgaRow).getByRole('button', { name: 'Remove' })).toBeEnabled();
+  });
+
+  it('reloads the list only once every row\'s mutation has settled', async () => {
+    const worker = startFakeWorker({ members: [BOB, OLGA] });
+    const workerFetch = globalThis.fetch;
+    let releaseRoleChange = (): void => undefined;
+    const roleChangeHeld = new Promise<undefined>((resolve) => { releaseRoleChange = () => resolve(undefined); });
+    vi.stubGlobal('fetch', vi.fn((path: string, init?: RequestInit) =>
+      path === `/api/admin/members/${BOB.userId}/role`
+        ? roleChangeHeld.then(() => workerFetch(path, init))
+        : workerFetch(path, init)));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { queryClient } = await renderAdminPage({ orgRole: 'owner' });
+    const memberReads = () => worker.requestedPaths().filter((path) => path === '/api/admin/members').length;
+    const readsBefore = memberReads();
+
+    const bobRow = within(screen.getByText(BOB.email!).closest('tr')!);
+    fireEvent.change(bobRow.getByRole('combobox'), { target: { value: 'viewer' } });
+    fireEvent.click(bobRow.getByRole('button', { name: 'Update' }));
+    fireEvent.click(within(screen.getByText(OLGA.email!).closest('tr')!).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => { expect(queryClient.isMutating()).toBe(1); });
+
+    expect(memberReads()).toBe(readsBefore);
+
+    releaseRoleChange();
+
+    await waitFor(() => { expect(screen.queryByText(OLGA.email!)).toBeNull(); });
+    expect(memberReads()).toBe(readsBefore + 1);
   });
 });
 
