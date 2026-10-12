@@ -12,7 +12,6 @@ import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestS
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
-import { supabasePost } from '../src/lib/supabase-rest.js';
 import { SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 
 export type { DashboardPermission, AppSession };
@@ -230,11 +229,22 @@ type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'membe
 type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
 type WaitUntilFn = (promise: Promise<unknown>) => void;
 
+const FIRE_AND_FORGET_TIMEOUT_MS = 3000;
+
+// Inserts one row for a non-critical write. Every failure, the timeout included, is
+// swallowed: postgrest-js answers { error } rather than rejecting, and the final
+// handler catches anything else.
+function insertAndForget(env: SupabaseEnv, table: string, row: Record<string, unknown>): Promise<void> {
+  return Promise.resolve(
+    db(env).from(table).insert(row).abortSignal(AbortSignal.timeout(FIRE_AND_FORGET_TIMEOUT_MS)),
+  ).then(() => undefined, () => undefined);
+}
+
 // Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
 // No-ops when actorUserId is absent; otherwise only fires on success (not on upstream Supabase failure).
 // organizationId (P6): org-admin mutations always record session.activeOrgId, so an
 // audit row can never claim a scope the mutation did not have. organization_id exists
-// since 20260320020000_create_phase2_ledger_tables.sql; supabasePost is fire-and-forget by design.
+// since 20260320020000_create_phase2_ledger_tables.sql; insertAndForget is fire-and-forget by design.
 function logAuditEvent(
   actorUserId: string | undefined,
   action: AuditAction,
@@ -245,20 +255,16 @@ function logAuditEvent(
   organizationId?: string,
 ): void {
   if (!actorUserId) return;
-  waitUntil(supabasePost(
-    `${env.SUPABASE_URL}/rest/v1/audit_log`,
-    {
-      actor_user_id: actorUserId,
-      action,
-      // target_type and target_id are NOT NULL columns; role_id is not a column —
-      // carry it in metadata for role.assign / role.revoke actions.
-      target_type: 'user',
-      target_id: targetUserId,
-      ...(roleId !== undefined && { metadata: { role_id: roleId } }),
-      ...(organizationId !== undefined && { organization_id: organizationId }),
-    },
-    env.SUPABASE_SERVICE_ROLE_KEY,
-  ));
+  waitUntil(insertAndForget(env, 'audit_log', {
+    actor_user_id: actorUserId,
+    action,
+    // target_type and target_id are NOT NULL columns; role_id is not a column —
+    // carry it in metadata for role.assign / role.revoke actions.
+    target_type: 'user',
+    target_id: targetUserId,
+    ...(roleId !== undefined && { metadata: { role_id: roleId } }),
+    ...(organizationId !== undefined && { organization_id: organizationId }),
+  }));
 }
 
 // Fire-and-forget: logs activity to user_activity table without blocking the response.
@@ -273,11 +279,7 @@ function logActivity(
   waitUntil: WaitUntilFn,
 ): void {
   if (!appUserId) return;
-  waitUntil(supabasePost(
-    `${env.SUPABASE_URL}/rest/v1/user_activity`,
-    { user_id: appUserId, activity_type: activityType },
-    env.SUPABASE_SERVICE_ROLE_KEY,
-  ));
+  waitUntil(insertAndForget(env, 'user_activity', { user_id: appUserId, activity_type: activityType }));
 }
 
 const VIEW_PERMISSION_MAP: Array<[DashboardPermission, DashboardView]> = [

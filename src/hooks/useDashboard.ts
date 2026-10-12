@@ -1,5 +1,5 @@
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
-import { POLL_INTERVAL_MS, STALE_TIME, RETRY_DELAY_BASE, RETRY_DELAY_CAP } from '../lib/constants.js';
+import { POLL_INTERVAL_MS, STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 import { isWorkerNoData, WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 
@@ -39,7 +39,6 @@ export function useDashboard(period: Period, role?: RoleViewType) {
       refetchInterval: POLL_INTERVAL_MS,
       staleTime: STALE_TIME.DEFAULT,
       retry: 3,
-      retryDelay: (i) => Math.min(RETRY_DELAY_BASE * 2 ** i, RETRY_DELAY_CAP),
       onNotFound: dashboardNotFound,
     },
   );

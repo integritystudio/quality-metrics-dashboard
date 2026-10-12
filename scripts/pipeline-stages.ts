@@ -251,8 +251,8 @@ export interface RetryOptions<T> {
   attempt: (attemptNumber: number) => Promise<T> | T;
   /** Whether this outcome is worth another attempt. */
   shouldRetry: (outcome: T) => boolean;
-  /** Called before each wait with the wait length, the attempt that just failed, and the total attempts. */
-  onRetry?: (waitMs: number, failedAttempt: number, totalAttempts: number) => void;
+  /** Called before each wait with the wait length, the attempt that just failed, the total attempts, and that attempt's outcome. */
+  onRetry?: (waitMs: number, failedAttempt: number, totalAttempts: number, outcome: T) => void;
   /** Waits before retry 1, retry 2, … Defaults to SYNC_RETRY_DELAYS_MS. */
   delaysMs?: readonly number[];
   /** Injectable for tests. */
@@ -273,7 +273,7 @@ export async function runWithRetry<T>(options: RetryOptions<T>): Promise<T> {
   let outcome = await options.attempt(1);
   for (let retry = 0; retry < delays.length && options.shouldRetry(outcome); retry++) {
     const waitMs = delays[retry]!;
-    options.onRetry?.(waitMs, retry + 1, totalAttempts);
+    options.onRetry?.(waitMs, retry + 1, totalAttempts, outcome);
     await wait(waitMs);
     outcome = await options.attempt(retry + 2);
   }

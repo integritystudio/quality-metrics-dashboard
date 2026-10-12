@@ -89,8 +89,10 @@ export function gatewayErrorForStatus(status: number): GatewayError {
 /** The `DioException` branch: a timeout, a failed connection, or something else. */
 export function gatewayErrorForException(error: unknown, signal: AbortSignal): GatewayError {
   if (signal.aborted) {
+    // Matched by name: the runtime's `AbortSignal.timeout` may build its DOMException in
+    // another realm (jsdom does), where `instanceof DOMException` is false.
     const reason: unknown = signal.reason;
-    if (reason instanceof DOMException && reason.name === TIMEOUT_ERROR_NAME) return new GatewayError('timeout');
+    if (typeof reason === 'object' && reason !== null && 'name' in reason && reason.name === TIMEOUT_ERROR_NAME) return new GatewayError('timeout');
     // The query was cancelled (its key moved on); react-query discards the result either way.
     return new GatewayError('unexpected');
   }
@@ -107,16 +109,7 @@ export function isRetryableGatewayError(error: unknown): boolean {
  * A signal that aborts when `outer` does or when `ms` elapses, whichever is first. The
  * timeout reason is a `TimeoutError` so the caller can tell it from a cancellation.
  */
-export function withTimeout(outer: AbortSignal | undefined, ms: number): { signal: AbortSignal; clear: () => void } {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new DOMException('The request timed out', TIMEOUT_ERROR_NAME)), ms);
-  const onOuterAbort = () => controller.abort(outer?.reason);
-  outer?.addEventListener('abort', onOuterAbort, { once: true });
-  return {
-    signal: controller.signal,
-    clear: () => {
-      clearTimeout(timer);
-      outer?.removeEventListener('abort', onOuterAbort);
-    },
-  };
+export function withTimeout(outer: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  return outer ? AbortSignal.any([outer, timeout]) : timeout;
 }

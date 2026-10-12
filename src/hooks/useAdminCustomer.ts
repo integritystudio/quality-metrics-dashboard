@@ -9,7 +9,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { ZodType } from 'zod';
 import { useAuth } from '../contexts/AuthContext.js';
-import { RETRY_DELAY_BASE, STALE_TIME } from '../lib/constants.js';
+import { STALE_TIME } from '../lib/constants.js';
 import { GATEWAY_MAX_RETRIES, GATEWAY_TIMEOUT_MS, USAGE_POLL_INTERVAL_MS } from '../lib/admin-customer-constants.js';
 import {
   GatewayError,
@@ -38,11 +38,6 @@ export const ADMIN_CUSTOMER_QUERY_SCOPE = 'admin-customer';
 
 function gatewayRetry(failureCount: number, error: unknown): boolean {
   return isRetryableGatewayError(error) && failureCount < GATEWAY_MAX_RETRIES;
-}
-
-/** `DashboardService`'s backoff: 1 s, then 2 s. */
-function gatewayRetryDelay(attempt: number): number {
-  return RETRY_DELAY_BASE * 2 ** attempt;
 }
 
 interface GatewayQueryOptions<T> {
@@ -83,11 +78,9 @@ function useGatewayQuery<T>(
       const timed = withTimeout(signal, GATEWAY_TIMEOUT_MS);
       let res: Response;
       try {
-        res = await gatewayFetch(path, token, timed.signal);
+        res = await gatewayFetch(path, token, timed);
       } catch (error) {
-        throw gatewayErrorForException(error, timed.signal);
-      } finally {
-        timed.clear();
+        throw gatewayErrorForException(error, timed);
       }
       if (!res.ok) throw gatewayErrorForStatus(res.status);
       // A 200 that is not JSON reads as an empty map, which parses to the Dart defaults.
@@ -97,8 +90,8 @@ function useGatewayQuery<T>(
       if (options.accept && !options.accept(parsed.data)) throw new GatewayError('unexpected');
       return parsed.data;
     },
+    // react-query's default backoff (1 s, then 2 s) is `DashboardService`'s.
     retry: gatewayRetry,
-    retryDelay: gatewayRetryDelay,
     staleTime: STALE_TIME.DETAIL,
     ...(options.refetchInterval !== undefined ? { refetchInterval: options.refetchInterval } : {}),
     ...(options.refetchOnWindowFocus !== undefined ? { refetchOnWindowFocus: options.refetchOnWindowFocus } : {}),

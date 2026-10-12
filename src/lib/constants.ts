@@ -107,9 +107,6 @@ export const MAX_FAILED_EVAL_ROWS = 6;
 export const LIVE_WINDOW_MS = TIME_MS.DAY;
 export const QUERY_RETRY_COUNT = 2;
 export const POLL_INTERVAL_MS = 30_000;
-/** Exponential backoff base and cap for retry delays (ms). */
-export const RETRY_DELAY_BASE = 1_000;
-export const RETRY_DELAY_CAP = 30_000;
 export const MAX_IDS = 50;
 export const EVAL_LIMIT = 100;
 /** Decimal places for displayed score values in API responses. */

@@ -74,7 +74,7 @@ import {
   type AccountIndex,
   type AccountRef,
 } from './account-stamps.js';
-import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED } from './pipeline-stages.js';
+import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED, runWithRetry } from './pipeline-stages.js';
 import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, runIfMain, type CliSpec } from './cli-args.js';
 import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import {
@@ -121,9 +121,9 @@ export const INTER_BATCH_DELAY_MS = 250;
 /** Response body kept in a failed send's log line. */
 const RESPONSE_SNIPPET_CHARS = 300;
 
-/** Transient-failure retry budget per batch (429, 5xx, and transport errors). */
-const MAX_SEND_ATTEMPTS = 4;
-const RETRY_BASE_DELAY_MS = 500;
+/** Transient-failure backoff per batch (429, 5xx, and transport errors): the wait before each retry. */
+const SEND_RETRY_DELAYS_MS: readonly number[] = [500, 1_000, 2_000];
+const MAX_SEND_ATTEMPTS = SEND_RETRY_DELAYS_MS.length + 1;
 /** Per-request ceiling; a hung connection would otherwise stall the whole run. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -624,17 +624,17 @@ export function sendBatch(
 
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
 export async function postBatch(request: SendRequest): Promise<SendResult> {
-  let last: SendResult = { ok: false, detail: 'no attempt made', retryable: false };
-  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
-    last = await postBatchOnce(request);
-    if (last.ok || !last.retryable) return last;
-    if (attempt < MAX_SEND_ATTEMPTS) {
-      const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
-      console.warn(`[upload-evaluations] attempt ${attempt}/${MAX_SEND_ATTEMPTS} failed (${last.detail}) — retrying in ${delay}ms`);
-      await sleep(delay);
-    }
+  const last = await runWithRetry<SendResult>({
+    attempt: () => postBatchOnce(request),
+    shouldRetry: (result) => !result.ok && result.retryable,
+    delaysMs: SEND_RETRY_DELAYS_MS,
+    onRetry: (waitMs, failedAttempt, totalAttempts, result) => {
+      console.warn(`[upload-evaluations] attempt ${failedAttempt}/${totalAttempts} failed (${result.detail}) — retrying in ${waitMs}ms`);
+    },
+  });
+  if (!last.ok && last.retryable) {
+    console.error(`[upload-evaluations] giving up after ${MAX_SEND_ATTEMPTS} attempts: ${last.detail}`);
   }
-  console.error(`[upload-evaluations] giving up after ${MAX_SEND_ATTEMPTS} attempts: ${last.detail}`);
   return last;
 }
 

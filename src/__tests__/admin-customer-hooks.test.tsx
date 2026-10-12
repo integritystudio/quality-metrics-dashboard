@@ -17,7 +17,15 @@ import {
   useAdminUsageQuota,
   useAdminUsageSummary,
 } from '../hooks/useAdminCustomer.js';
-import { API_GATEWAY_URL, GatewayError, gatewayErrorForStatus, isRetryableGatewayError, isSafeOrgId } from '../lib/gateway.js';
+import {
+  API_GATEWAY_URL,
+  GatewayError,
+  gatewayErrorForException,
+  gatewayErrorForStatus,
+  isRetryableGatewayError,
+  isSafeOrgId,
+  withTimeout,
+} from '../lib/gateway.js';
 import { CUSTOMER_VIEW } from '../lib/admin-customer-strings.js';
 import { GATEWAY_MAX_RETRIES, USAGE_POLL_INTERVAL_MS } from '../lib/admin-customer-constants.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
@@ -50,6 +58,8 @@ const HTTP_NOT_FOUND = 404;
 const HTTP_SERVER_ERROR = 500;
 const HTTP_GATEWAY_TIMEOUT = 504;
 const RETRY_WAIT_MS = 6_000;
+const SHORT_TIMEOUT_MS = 1;
+const LONG_TIMEOUT_MS = 60_000;
 
 function makeWrapper() {
   const { wrapper: QueryWrapper, queryClient } = makeQueryWrapper();
@@ -235,5 +245,30 @@ describe('the Usage page quota reader', () => {
     await waitFor(() => { expect(result.current.data).toBeDefined(); });
 
     expect(result.current.data?.uninitialized).toBe(true);
+  });
+});
+
+describe('the request deadline', () => {
+  async function aborted(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
+    await new Promise((resolve) => { signal.addEventListener('abort', resolve, { once: true }); });
+  }
+
+  it('maps an elapsed deadline to a timeout, which is retried', async () => {
+    const signal = withTimeout(undefined, SHORT_TIMEOUT_MS);
+    await aborted(signal);
+
+    const error = gatewayErrorForException(new Error('aborted'), signal);
+    expect(error.kind).toBe('timeout');
+    expect(isRetryableGatewayError(error)).toBe(true);
+  });
+
+  it('maps a cancelled query to unexpected, not a timeout', async () => {
+    const query = new AbortController();
+    const signal = withTimeout(query.signal, LONG_TIMEOUT_MS);
+    query.abort();
+    await aborted(signal);
+
+    expect(gatewayErrorForException(new Error('aborted'), signal).kind).toBe('unexpected');
   });
 });

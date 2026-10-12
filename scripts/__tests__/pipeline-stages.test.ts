@@ -92,18 +92,18 @@ describe('runWithRetry', () => {
     expect(calls).toBe(3);
   });
 
-  it('announces each retry with the wait and the attempt numbers', async () => {
-    const announced: Array<[number, number, number]> = [];
+  it('announces each retry with the wait, the attempt numbers and the failed outcome', async () => {
+    const announced: Array<[number, number, number, string]> = [];
 
     await runWithRetry({
-      attempt: () => 'fail',
+      attempt: (n) => `fail-${n}`,
       shouldRetry: () => true,
       delaysMs: [5, 6],
       sleep: noSleep,
-      onRetry: (waitMs, failedAttempt, total) => { announced.push([waitMs, failedAttempt, total]); },
+      onRetry: (waitMs, failedAttempt, total, outcome) => { announced.push([waitMs, failedAttempt, total, outcome]); },
     });
 
-    expect(announced).toEqual([[5, 1, 3], [6, 2, 3]]);
+    expect(announced).toEqual([[5, 1, 3, 'fail-1'], [6, 2, 3, 'fail-2']]);
   });
 });
 
