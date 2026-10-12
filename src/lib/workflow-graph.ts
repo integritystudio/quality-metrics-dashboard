@@ -1,3 +1,4 @@
+import { mean } from 'd3-array';
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
 import { SCORE_CHIP_PRECISION } from './constants.js';
@@ -77,10 +78,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
 
   const nodes: WorkflowNode[] = [];
   for (const [agentName, turns] of agentTurns) {
-    const relevances = turns.map(t => t.relevance);
-    const evaluationScore = relevances.length > 0
-      ? relevances.reduce((a, b) => a + b, 0) / relevances.length
-      : null;
+    const evaluationScore = mean(turns, t => t.relevance) ?? null;
 
     let toolCallCount = 0;
     let tokenSum = 0;

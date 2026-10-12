@@ -14,6 +14,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
+import { mean, sum } from 'd3-array';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
 import { fmtDuration, groupBy } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION, COMPACT_UNIT_PRECISION } from '../lib/constants.js';
@@ -163,16 +164,14 @@ export function applyClusterCollapse(
 
   const syntheticNodes: WorkflowNode[] = [];
   for (const [cId, members] of clusterMembers) {
-    const scores = members.map(m => m.evaluationScore).filter((s): s is number => s !== null);
-    const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
     syntheticNodes.push({
       id: clusterNodeId(cId),
       label: `[Cluster] ${cId}`,
-      evaluationScore: avgScore,
-      toolCallCount: members.reduce((s, m) => s + m.toolCallCount, 0),
-      totalTokens: members.reduce((s, m) => s + (m.totalTokens ?? 0), 0),
-      durationMs: members.reduce((s, m) => s + m.durationMs, 0),
-      turnCount: members.reduce((s, m) => s + m.turnCount, 0),
+      evaluationScore: mean(members, m => m.evaluationScore) ?? null,
+      toolCallCount: sum(members, m => m.toolCallCount),
+      totalTokens: sum(members, m => m.totalTokens),
+      durationMs: sum(members, m => m.durationMs),
+      turnCount: sum(members, m => m.turnCount),
       hasError: members.some(m => m.hasError),
       clusterId: cId,
       clusterMemberCount: members.length,

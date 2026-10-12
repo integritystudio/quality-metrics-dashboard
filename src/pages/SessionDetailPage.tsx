@@ -13,7 +13,7 @@ import { FreqBar } from '../components/FreqBar.js';
 import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
 import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, fmtBytes, truncateText, plural, formatScore, isFailedEvaluation, isHallucinationIndicator } from '../lib/quality-utils.js';
+import { scoreColorBand, shortPath, formatCompactCount, truncateText, plural, formatScore, isFailedEvaluation, isHallucinationIndicator } from '../lib/quality-utils.js';
 import {
   MAX_ERROR_ROWS,
   MAX_HALLUCINATION_ROWS,
@@ -157,7 +157,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
             <div className="vitals-divider" />
             <StatDisplay label="Messages" value={maxTokenSnapshot.messages} />
             <div className="vitals-divider" />
-            <StatDisplay label="Output tokens" value={fmtBytes(maxTokenSnapshot.outputTokens)} />
+            <StatDisplay label="Output tokens" value={formatCompactCount(maxTokenSnapshot.outputTokens)} />
           </>
         )}
       </div>
@@ -275,7 +275,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
       <Section
         title="Token Journey"
-        badge={maxTokenSnapshot ? `${maxTokenSnapshot.messages} msg · ${fmtBytes(maxTokenSnapshot.outputTokens)} out` : 'no data'}
+        badge={maxTokenSnapshot ? `${maxTokenSnapshot.messages} msg · ${formatCompactCount(maxTokenSnapshot.outputTokens)} out` : 'no data'}
         health="neutral"
       >
         {tokenProgression.length === 0 ? (
@@ -291,10 +291,10 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                 {tokenProgression.map((t) => (
                   <tr key={`${t.messages}-${t.model}`} className="border-b-subtle">
                     <td className="cell-pad-wide text-right">{t.messages}</td>
-                    <td className="cell-pad-wide text-right text-secondary">{fmtBytes(t.inputTokens)}</td>
-                    <td className="cell-pad-wide text-right text-accent-hover">{fmtBytes(t.outputTokens)}</td>
-                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheRead)}</td>
-                    <td className="cell-pad-wide text-right text-muted">{fmtBytes(t.cacheCreation)}</td>
+                    <td className="cell-pad-wide text-right text-secondary">{formatCompactCount(t.inputTokens)}</td>
+                    <td className="cell-pad-wide text-right text-accent-hover">{formatCompactCount(t.outputTokens)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{formatCompactCount(t.cacheRead)}</td>
+                    <td className="cell-pad-wide text-right text-muted">{formatCompactCount(t.cacheCreation)}</td>
                     <td className="cell-pad-wide text-right text-muted">{t.model}</td>
                   </tr>
                 ))}
@@ -345,7 +345,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     </div>
                   )}
                   <div>
-                    <div className="mono text-md font-bold">{fmtBytes(a.avgOutputSize)}</div>
+                    <div className="mono text-md font-bold">{formatCompactCount(a.avgOutputSize)}</div>
                     <div className="stat-label">avg output</div>
                   </div>
                 </div>

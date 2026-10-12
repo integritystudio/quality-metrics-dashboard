@@ -3,6 +3,7 @@
  * named after (IntegrityLandingPage lib/pages/*.dart), so the parity tests can check the
  * port against the original case by case.
  */
+import { ascending, rollups, sum } from 'd3-array';
 import { format } from 'date-fns';
 import {
   DAYS_PER_MONTH_FOR_DAILY_QUOTA,
@@ -27,12 +28,8 @@ export interface DailyUsage {
 
 /** `aggregateUsageByDate` + the chart's `sortedDates`: one total per date, ascending. */
 export function aggregateUsageByDate(buckets: readonly UsageBucket[]): DailyUsage[] {
-  const daily = new Map<string, number>();
-  for (const bucket of buckets) {
-    daily.set(bucket.bucketDate, (daily.get(bucket.bucketDate) ?? 0) + bucket.totalQuantity);
-  }
-  return [...daily.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return rollups(buckets, group => sum(group, b => b.totalQuantity), b => b.bucketDate)
+    .sort(([a], [b]) => ascending(a, b))
     .map(([date, total]) => ({ date, total }));
 }
 
@@ -44,21 +41,21 @@ export interface MetricTotal {
 
 /** `_aggregateBuckets` + `_MetricTable`'s sort: per-metric totals, most units first. */
 export function aggregateUsageByMetric(buckets: readonly UsageBucket[]): MetricTotal[] {
-  const totals = new Map<string, MetricTotal>();
-  for (const bucket of buckets) {
-    const existing = totals.get(bucket.metricKey);
-    totals.set(bucket.metricKey, {
-      metricKey: bucket.metricKey,
-      totalQuantity: (existing?.totalQuantity ?? 0) + bucket.totalQuantity,
-      requestCount: (existing?.requestCount ?? 0) + bucket.requestCount,
-    });
-  }
-  return [...totals.values()].sort((a, b) => b.totalQuantity - a.totalQuantity);
+  return rollups(
+    buckets,
+    (group): Omit<MetricTotal, 'metricKey'> => ({
+      totalQuantity: sum(group, b => b.totalQuantity),
+      requestCount: sum(group, b => b.requestCount),
+    }),
+    b => b.metricKey,
+  )
+    .map(([metricKey, totals]) => ({ metricKey, ...totals }))
+    .sort((a, b) => b.totalQuantity - a.totalQuantity);
 }
 
 /** `_grandTotalQuantity`. */
 export function grandTotalQuantity(totals: readonly MetricTotal[]): number {
-  return totals.reduce((sum, t) => sum + t.totalQuantity, 0);
+  return sum(totals, t => t.totalQuantity);
 }
 
 const DAY_OF_MONTH = /^\d+$/;
@@ -92,15 +89,12 @@ export function formatRenewalDate(date: Date): string {
   return format(date, 'MMMM d, yyyy');
 }
 
-const UTC_MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-] as const;
+const UTC_MONTH_NAME = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' });
 
 /** `monthlyResetLabel` (usage_summary_page.dart): the first of the next UTC month. */
 export function monthlyResetLabel(now: Date): string {
   const reset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-  return CUSTOMER_VIEW.usage.resets(UTC_MONTH_NAMES[reset.getUTCMonth()]!, reset.getUTCDate());
+  return CUSTOMER_VIEW.usage.resets(UTC_MONTH_NAME.format(reset), reset.getUTCDate());
 }
 
 /** `_QuotaLevel` on the usage page. */
@@ -175,5 +169,5 @@ export function formatEntitlementValue(value: unknown): string {
 
 /** `_EntitlementsGrid`'s rows: sorted by key, ascending. */
 export function sortedEntitlements(entitlements: Record<string, unknown>): Array<[string, unknown]> {
-  return Object.entries(entitlements).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return Object.entries(entitlements).sort(([a], [b]) => ascending(a, b));
 }

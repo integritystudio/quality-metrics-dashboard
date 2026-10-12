@@ -5,6 +5,7 @@
  * disagree on grouping, defaults or number parsing.
  */
 
+import { mean } from 'd3-array';
 import { CONTENT_KIND, SURVIVAL_COHORT, type ContentKind, type SurvivalCohort } from '../lib/constants.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { attrStr, timestampToMs, type SpanLike } from './api-constants.js';
@@ -103,11 +104,6 @@ type VersionAcc = {
 
 type CodeQualitySpan = SpanLike & { startTimeUnixNano?: string | number | bigint | null | undefined };
 
-function avg(nums: number[]): number {
-  if (nums.length === 0) return 0;
-  return nums.reduce((s, n) => s + n, 0) / nums.length;
-}
-
 export function summarizeCodeQuality(
   checkpointSpans: readonly CodeQualitySpan[],
   invocationSpans: readonly CodeQualitySpan[],
@@ -150,9 +146,9 @@ export function summarizeCodeQuality(
       window,
       cohort: entry.cohort,
       contentKind: entry.contentKind,
-      avgSurvivalRate: avg(entry.survivalRates),
-      avgChurnRate: avg(entry.churnRates),
-      avgDeletionRate: avg(entry.deletionRates),
+      avgSurvivalRate: mean(entry.survivalRates) ?? 0,
+      avgChurnRate: mean(entry.churnRates) ?? 0,
+      avgDeletionRate: mean(entry.deletionRates) ?? 0,
       checkpointCount: entry.survivalRates.length,
       latestTimestamp: entry.latestMs > 0 ? new Date(entry.latestMs).toISOString() : '',
     });

@@ -333,10 +333,11 @@ export function groupBy<T, K extends PropertyKey = string>(
   return map;
 }
 
-export function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(COMPACT_UNIT_PRECISION)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(COMPACT_UNIT_PRECISION)}K`;
-  return String(n);
+const COMPACT_COUNT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: COMPACT_UNIT_PRECISION });
+
+/** A count as `950`, `1.5K`, `2.3M`. */
+export function formatCompactCount(n: number): string {
+  return COMPACT_COUNT.format(n);
 }
 
 export interface PercentileDistribution {

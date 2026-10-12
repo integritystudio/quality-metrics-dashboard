@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { max } from 'd3-array';
+import { max, sum } from 'd3-array';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import { scoreColor, scoreColorBand, formatCompactCount, formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
@@ -180,7 +180,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                   <td>
                     <span className="mono-xs text-secondary">
-                      {fmtBytes(agent.avgOutputSize)}
+                      {formatCompactCount(agent.avgOutputSize)}
                     </span>
                   </td>
 
@@ -299,9 +299,9 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
 }
 
 export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
-  const totalInvocations = agents.reduce((s, a) => s + a.invocations, 0);
-  const totalErrors = agents.reduce((s, a) => s + a.errors, 0);
-  const totalRateLimits = agents.reduce((s, a) => s + a.rateLimitCount, 0);
+  const totalInvocations = sum(agents, a => a.invocations);
+  const totalErrors = sum(agents, a => a.errors);
+  const totalRateLimits = sum(agents, a => a.rateLimitCount);
   const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
   const overallErrorRate = rawErrorRate * 100;
 

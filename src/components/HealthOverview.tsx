@@ -1,5 +1,5 @@
 import type { QualityDashboardSummary } from '../types.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
+import { formatCompactCount, formatTimestamp } from '../lib/quality-utils.js';
 import { TIME_MS, PERIOD_MS, COMPACT_UNIT_PRECISION } from '../lib/constants.js';
 import { HealthBanner } from './HealthBanner.js';
 import { StatDisplay } from './StatDisplay.js';
@@ -36,11 +36,6 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
   return { evalVolume: totalSamples, lastEvalAge, evalRate };
 }
 
-function formatVolume(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(COMPACT_UNIT_PRECISION)}k`;
-  return String(n);
-}
-
 export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSummary }) {
   const { overallStatus, summary } = dashboard;
   const pipeline = computePipelineHealth(dashboard);
@@ -54,7 +49,7 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
     </span>
     <div className="pipeline-stats d-flex gap-6">
       <div className="pipeline-stat flex-center">
-        Eval Volume: <span className="stat-value">{formatVolume(pipeline.evalVolume)}</span>
+        Eval Volume: <span className="stat-value">{formatCompactCount(pipeline.evalVolume)}</span>
       </div>
       <div className="pipeline-stat flex-center">
         Rate: <span className="stat-value">{pipeline.evalRate}</span>

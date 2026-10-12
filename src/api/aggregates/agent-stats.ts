@@ -8,7 +8,7 @@
  * one fixture through both paths yields the same value.
  */
 
-import { mean } from 'd3-array';
+import { extent, mean } from 'd3-array';
 import {
   KNOWN_SOURCE_TYPES,
   MAX_IDS,
@@ -128,12 +128,12 @@ function createAgentAccumulator(periodDays: number): AgentAcc {
 }
 
 function computeEvalMetricSummary(scores: number[]): EvalMetricSummary {
-  const sorted = [...scores].sort((a, b) => a - b);
+  const [min = 0, max = 0] = extent(scores);
   return {
-    avg: +(mean(sorted) ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    min: +(sorted[0] ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    max: +(sorted[sorted.length - 1] ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
-    count: sorted.length,
+    avg: +(mean(scores) ?? 0).toFixed(SCORE_DISPLAY_PRECISION),
+    min: +min.toFixed(SCORE_DISPLAY_PRECISION),
+    max: +max.toFixed(SCORE_DISPLAY_PRECISION),
+    count: scores.length,
   };
 }
 
