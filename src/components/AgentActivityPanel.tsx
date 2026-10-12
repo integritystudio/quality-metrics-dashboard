@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { max, sum } from 'd3-array';
+import { greatest, max, sum } from 'd3-array';
 import {
   createColumnHelper,
   createSortedRowModel,
@@ -12,7 +12,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, scoreColorBand, formatCompactCount, formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import { scoreColor, scoreColorBand, formatCompactCount, formatPercent } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
@@ -152,7 +152,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
             const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
             const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
             const invPct = (agent.invocations / maxInvocations) * 100;
-            const topSource = Object.entries(agent.sourceTypes).sort(byValueDesc)[0]?.[0];
+            const topSource = greatest(Object.entries(agent.sourceTypes), ([, count]) => count)?.[0];
             const isExpanded = expanded === agent.agentName;
             const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
 

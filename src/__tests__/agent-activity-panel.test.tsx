@@ -68,3 +68,12 @@ describe('AgentActivityPanel sorting', () => {
     expect(screen.getByRole('columnheader', { name: 'Agent' })).not.toHaveAttribute('aria-sort');
   });
 });
+
+describe('AgentActivityPanel source column', () => {
+  it('shows the most frequent source type', () => {
+    const withSources = { ...agent('alpha', 1, 0), sourceTypes: { hook: 1, transcript: 3, other: 2 } };
+    render(<AgentActivityPanel agents={[withSources]} />);
+
+    expect(screen.getByText('transcript')).toBeInTheDocument();
+  });
+});

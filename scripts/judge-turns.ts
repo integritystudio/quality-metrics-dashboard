@@ -3,6 +3,7 @@
  */
 
 import { existsSync, readdirSync } from 'fs';
+import { group } from 'd3-array';
 import { join, basename } from 'path';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import { otelLogEntrySchema, transcriptEntrySchema } from '../../src/lib/validation/dashboard-schemas.js';
@@ -11,7 +12,6 @@ import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judg
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
 import type { EvalRecord } from './eval-record.js';
-import { pushTo } from './collections.js';
 import { LOGS_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
 import { HOME } from './evaluation-constants.js';
 
@@ -82,10 +82,8 @@ export function turnKey(turn: { sessionId: string; timestamp: string }): string 
  * after the turn, often under another account.
  */
 export function anchorTurns(turns: Turn[], index: AccountIndex): void {
-  const bySession = new Map<string, Turn[]>();
-  for (const turn of turns) pushTo(bySession, turn.sessionId, turn);
-  for (const [sessionId, group] of bySession) {
-    const timed = group
+  for (const [sessionId, sessionTurns] of group(turns, turn => turn.sessionId)) {
+    const timed = sessionTurns
       .map((turn) => ({ turn, atMs: Date.parse(turn.timestamp) }))
       .sort((a, b) => a.atMs - b.atMs);
     timed.forEach(({ turn, atMs }, i) => {

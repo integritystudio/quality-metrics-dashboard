@@ -1,15 +1,10 @@
+import { groups } from 'd3-array';
 import { useKeyboardNav } from '../contexts/KeyboardNavContext.js';
 
 export function ShortcutOverlay() {
   const { shortcuts, overlayOpen, toggleOverlay } = useKeyboardNav();
 
   if (!overlayOpen) return null;
-
-  const grouped = new Map<string, Array<{ key: string; description: string }>>();
-  for (const s of shortcuts) {
-    if (!grouped.has(s.scope)) grouped.set(s.scope, []);
-    grouped.get(s.scope)!.push({ key: s.key, description: s.description });
-  }
 
   return (
     <div className="shortcut-overlay-backdrop" role="presentation" onClick={e => { if (e.target === e.currentTarget) toggleOverlay(); }}>
@@ -20,7 +15,7 @@ export function ShortcutOverlay() {
             &times;
           </button>
         </div>
-        {[...grouped.entries()].map(([scope, items]) => (
+        {groups(shortcuts, s => s.scope).map(([scope, items]) => (
           <div key={scope} className="mb-3">
             <div className="text-secondary mb-1-5 text-xs uppercase font-semibold">
               {scope}
