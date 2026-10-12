@@ -128,7 +128,7 @@ export function computeTrend(
       : undefined;
     let dynamics: MetricDynamics | undefined;
     if (detail?.trend) {
-      dynamics = computeMetricDynamics(detail.trend, bucketHours, { previousTrend });
+      dynamics = computeMetricDynamics(detail.trend, bucketHours, previousTrend ? { previousTrend } : {});
       previousTrend = detail.trend;
     }
     const avg = mean(scores);

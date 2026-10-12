@@ -252,7 +252,7 @@ export function gitRepositoryLabel(span: SpanLike): string {
   return [spanAttr(span, 'vcs.owner.name', 'string'), name].filter(Boolean).join('/');
 }
 
-export function extractFiniteScores(evals: Array<{ scoreValue?: number | null }>): number[] {
+export function extractFiniteScores(evals: Array<{ scoreValue?: number | null | undefined }>): number[] {
   return evals
     .filter(e => e.scoreValue != null && Number.isFinite(e.scoreValue))
     .map(e => e.scoreValue as number);
