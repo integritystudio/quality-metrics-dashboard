@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { computeDashboardSummary } from '../parent/quality-metrics.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
-import { PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
-import { parseParam, handleRouteError } from '../route-errors.js';
+import { computePeriodDates } from '../../lib/constants.js';
+import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
 
 export const complianceRoutes = new Hono();
 complianceRoutes.onError(handleRouteError);
@@ -11,8 +11,8 @@ complianceRoutes.onError(handleRouteError);
  * GET /api/compliance/sla
  * Returns SLA compliance from the dashboard summary.
  */
-complianceRoutes.get('/compliance/sla', async (c) => {
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+complianceRoutes.get('/compliance/sla', validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
 
   const dates = computePeriodDates(period);
 
@@ -30,8 +30,8 @@ complianceRoutes.get('/compliance/sla', async (c) => {
  * GET /api/compliance/verifications
  * Returns human verification events for the given period.
  */
-complianceRoutes.get('/compliance/verifications', async (c) => {
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+complianceRoutes.get('/compliance/verifications', validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
 
   const { start, end } = computePeriodDates(period);
 

@@ -1,15 +1,18 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
-import { VALID_PERIODS, HttpStatus, ErrorMessage, type Period } from '../../lib/constants.js';
+import { PeriodEnum, HttpStatus, ErrorMessage, type Period } from '../../lib/constants.js';
 import { HOOK_NAME, PARAM_ID_RE, isValidParam, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
-import { handleRouteError } from '../route-errors.js';
+import { handleRouteError, validQuery } from '../route-errors.js';
 import { HOOK_NAME_ATTRIBUTE, agentStatsWindow, computeAgentStats } from '../aggregates/agent-stats.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 const DEFAULT_AGENTS_PERIOD: Period = '30d';
+
+const AgentsQuery = z.object({ period: PeriodEnum.default(DEFAULT_AGENTS_PERIOD) });
 
 export const agentRoutes = new Hono();
 agentRoutes.onError(handleRouteError);
@@ -19,12 +22,8 @@ agentRoutes.onError(handleRouteError);
  * Dev-server route: a live query projected by `computeAgentStats`. Production
  * serves the `meta:agents:<period>` KV key the sync writes from the same function.
  */
-agentRoutes.get('/agents', async (c) => {
-  const periodParam = c.req.query('period') ?? DEFAULT_AGENTS_PERIOD;
-  if (VALID_PERIODS[periodParam] === undefined) {
-    return c.json({ error: `Invalid period value. Must be one of: ${Object.keys(VALID_PERIODS).join(', ')}` }, HttpStatus.BadRequest);
-  }
-  const period = periodParam as Period;
+agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
+  const period = c.req.valid('query').period as Period;
   const now = new Date();
   const { windowStart, startDate, endDate } = agentStatsWindow(period, now);
 

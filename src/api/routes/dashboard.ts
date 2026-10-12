@@ -1,16 +1,17 @@
 import { Hono } from 'hono';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
-import { PeriodSchema, RoleSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
-import { parseParam, handleRouteError } from '../route-errors.js';
+import { z } from 'zod';
+import { PeriodSchema, RoleSchema, computePeriodDates } from '../../lib/constants.js';
+import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
 import { computeDashboardFull, computeDashboardRoleView } from '../aggregates/dashboard-summary.js';
 
 export const dashboardRoutes = new Hono();
 dashboardRoutes.onError(handleRouteError);
 
-dashboardRoutes.get('/dashboard', async (c) => {
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must map to undefined for optional schema
-  const role = parseParam(RoleSchema.optional(), c.req.query('role') || undefined, ErrorMessage.InvalidRole);
+const DashboardQuery = z.object({ period: PeriodSchema, role: blankAsAbsent(RoleSchema.optional()) });
+
+dashboardRoutes.get('/dashboard', validQuery(DashboardQuery), async (c) => {
+  const { period, role } = c.req.valid('query');
 
   const dates = computePeriodDates(period);
   const evaluationsByMetric = await loadEvaluationsByMetric(dates.start, dates.end);

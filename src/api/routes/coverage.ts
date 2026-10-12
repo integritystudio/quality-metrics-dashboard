@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, InputKeySchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
-import { parseParam, handleRouteError } from '../route-errors.js';
+import { z } from 'zod';
+import { PeriodSchema, InputKeySchema, computePeriodDates } from '../../lib/constants.js';
+import { validQuery, handleRouteError } from '../route-errors.js';
 import { computeCoverage } from '../aggregates/coverage.js';
 
 export const coverageRoutes = new Hono();
@@ -16,9 +17,10 @@ coverageRoutes.onError(handleRouteError);
  *   period: '24h' | '7d' | '30d' (default: '7d')
  *   inputKey: 'traceId' | 'sessionId' (default: 'traceId')
  */
-coverageRoutes.get('/coverage', async (c) => {
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
-  const inputKey = parseParam(InputKeySchema, c.req.query('inputKey'), ErrorMessage.InvalidInputKey);
+const CoverageQuery = z.object({ period: PeriodSchema, inputKey: InputKeySchema });
+
+coverageRoutes.get('/coverage', validQuery(CoverageQuery), async (c) => {
+  const { period, inputKey } = c.req.valid('query');
 
   const { start, end } = computePeriodDates(period);
 

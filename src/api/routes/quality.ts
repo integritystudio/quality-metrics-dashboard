@@ -11,9 +11,9 @@ import {
   getEvenBucketIndex,
 } from '../parent/bucket-utils.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
+import { LIVE_WINDOW_MS, EVAL_LIMIT, computePeriodDates } from '../../lib/constants.js';
 import type { LiveMetric, QualityLiveData } from '../../types.js';
-import { parseParam, handleRouteError } from '../route-errors.js';
+import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
 
 export const qualityRoutes = new Hono();
 qualityRoutes.onError(handleRouteError);
@@ -79,8 +79,8 @@ qualityRoutes.get('/quality/live', async (c) => {
  * Query params:
  *   period: '24h' | '7d' | '30d' (default: '7d')
  */
-qualityRoutes.get('/degradation-signals', async (c) => {
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+qualityRoutes.get('/degradation-signals', validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
 
   const { start: startDate, end: endDate } = computePeriodDates(period);
   const startMs = new Date(startDate).getTime();

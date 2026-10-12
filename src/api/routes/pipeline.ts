@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { PeriodSchema, ErrorMessage, computePeriodDates } from '../../lib/constants.js';
-import { parseParam, handleRouteError } from '../route-errors.js';
+import { computePeriodDates } from '../../lib/constants.js';
+import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
 import { computePipeline } from '../aggregates/pipeline.js';
 
 export const pipelineRoutes = new Hono();
@@ -14,8 +14,8 @@ pipelineRoutes.onError(handleRouteError);
  * Query params:
  *   period: '24h' | '7d' | '30d' (default: '7d')
  */
-pipelineRoutes.get('/pipeline', async (c) => {
-  const period = parseParam(PeriodSchema, c.req.query('period'), ErrorMessage.InvalidPeriod);
+pipelineRoutes.get('/pipeline', validQuery(PeriodQuery), async (c) => {
+  const { period } = c.req.valid('query');
 
   const { start, end } = computePeriodDates(period);
 

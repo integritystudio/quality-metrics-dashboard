@@ -1,20 +1,39 @@
 import type { Context } from 'hono';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { sanitizeErrorForResponse } from './parent/error-sanitizer.js';
-import { HttpStatus } from '../lib/constants.js';
+import { ErrorMessage, HttpStatus, PeriodSchema } from '../lib/constants.js';
+import { queryValidator } from '../lib/query-validator.js';
 
-/** A rejected request parameter; `handleRouteError` answers it with 400 and the message. */
-export class BadRequestError extends Error {}
+/** The 400 message for each query field a route validates. */
+const QUERY_FIELD_ERRORS: Readonly<Record<string, string>> = {
+  period: ErrorMessage.InvalidPeriod,
+  role: ErrorMessage.InvalidRole,
+  topN: ErrorMessage.InvalidTopN,
+  bucketCount: ErrorMessage.InvalidBucketCount,
+  buckets: ErrorMessage.InvalidBuckets,
+  limit: ErrorMessage.InvalidLimit,
+  offset: ErrorMessage.InvalidOffset,
+  sortBy: ErrorMessage.InvalidSortBy,
+  scoreLabel: ErrorMessage.InvalidScoreLabel,
+  inputKey: ErrorMessage.InvalidInputKey,
+  startDate: ErrorMessage.InvalidDateBound,
+  endDate: ErrorMessage.InvalidDateBound,
+};
 
-/** Parses one request parameter, or throws `BadRequestError` with `message`. */
-export function parseParam<T extends z.ZodType>(schema: T, value: unknown, message: string): z.output<T> {
-  const result = schema.safeParse(value);
-  if (!result.success) throw new BadRequestError(message);
-  return result.data;
+/** Route middleware validating the query string; `c.req.valid('query')` reads the result. */
+export function validQuery<T extends z.ZodType>(schema: T) {
+  return queryValidator(schema, QUERY_FIELD_ERRORS, ErrorMessage.InvalidQuery);
 }
 
-/** Every route app's `onError`: a parameter error is 400, anything else a sanitized 500. */
+/** The query of a route that reads only `period`. */
+export const PeriodQuery = z.object({ period: PeriodSchema });
+
+/** An empty `?field=` reads as absent, so an optional field takes its default. */
+export function blankAsAbsent<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema);
+}
+
+/** Every route app's `onError`: a sanitized 500. */
 export function handleRouteError(err: Error, c: Context): Response {
-  if (err instanceof BadRequestError) return c.json({ error: err.message }, HttpStatus.BadRequest);
   return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
 }

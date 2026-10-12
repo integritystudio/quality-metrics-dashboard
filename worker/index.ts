@@ -2,7 +2,6 @@ import { Hono, type HonoRequest } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
-import { validator } from 'hono/validator';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
 import { PostgrestClient } from '@supabase/postgrest-js';
@@ -13,6 +12,7 @@ import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPe
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
+import { queryValidator } from '../src/lib/query-validator.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -595,22 +595,8 @@ function requirePermission(permission: DashboardPermission) {
   });
 }
 
-/**
- * Query validator answering 400 with the failing field's error string. A repeated key
- * reads its first value, matching `c.req.query(name)`.
- */
 function validQuery<T extends z.ZodType>(schema: T) {
-  return validator('query', (value, c) => {
-    const firstValues = Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
-    );
-    const result = schema.safeParse(firstValues);
-    if (!result.success) {
-      const field = String(result.error.issues[0]?.path[0] ?? '');
-      return c.json({ error: QUERY_FIELD_ERRORS[field] ?? ERR_INVALID_QUERY }, Http.BadRequest);
-    }
-    return result.data;
-  });
+  return queryValidator(schema, QUERY_FIELD_ERRORS, ERR_INVALID_QUERY);
 }
 
 /**
