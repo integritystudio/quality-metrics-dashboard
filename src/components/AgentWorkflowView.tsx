@@ -5,6 +5,7 @@ import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
 import { agentColor, fmtDuration } from '../lib/quality-utils.js';
+import { criticalPath } from '../lib/workflow-graph.js';
 import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';
@@ -58,34 +59,8 @@ export function AgentWorkflowView({
   // Critical path: longest chain from root to leaf by cumulative durationMs
   const criticalPathSet = useMemo((): ReadonlySet<string> | undefined => {
     if (!showCriticalPath || graph.nodes.length === 0 || graph.rootNodeId === null) return undefined;
-
-    const adj = new Map<string, string[]>();
-    for (const n of graph.nodes) adj.set(n.id, []);
-    for (const edge of graph.edges) {
-      adj.get(edge.source)?.push(edge.target);
-    }
-    const dur = new Map<string, number>();
-    for (const n of graph.nodes) dur.set(n.id, n.durationMs);
-
-    function dfs(nodeId: string, visiting: Set<string>): [string[], number] {
-      if (visiting.has(nodeId)) return [[], 0]; // cycle guard
-      visiting.add(nodeId);
-      let bestPath: string[] = [];
-      let bestCost = 0;
-      for (const child of adj.get(nodeId) ?? []) {
-        const [childPath, childCost] = dfs(child, visiting);
-        if (childCost > bestCost) {
-          bestCost = childCost;
-          bestPath = childPath;
-        }
-      }
-      visiting.delete(nodeId);
-      return [[nodeId, ...bestPath], (dur.get(nodeId) ?? 0) + bestCost];
-    }
-
-    const [path] = dfs(graph.rootNodeId, new Set());
-    return new Set(path);
-  }, [showCriticalPath, graph.nodes, graph.edges, graph.rootNodeId]);
+    return new Set(criticalPath(graph));
+  }, [showCriticalPath, graph]);
 
   // Unified filter set passed to the graph: combines agent name, duration, and error filters.
   // Returns undefined when no filters are active (no dimming).

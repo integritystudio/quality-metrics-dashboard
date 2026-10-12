@@ -261,3 +261,46 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
 
   return 'linear';
 }
+
+/**
+ * The root-to-leaf chain with the largest summed `durationMs`, root first; empty when the
+ * graph has no root. Each node's best continuation is computed once, so the cost is
+ * O(V + E) however many paths the graph holds. A cycle is cut where the search re-enters
+ * a node still on its stack, so a cyclic graph's chain never repeats a node.
+ */
+export function criticalPath(graph: WorkflowGraph): string[] {
+  const root = graph.rootNodeId;
+  if (root === null) return [];
+
+  const outEdges = groupBy(graph.edges, e => e.source);
+  const durationOf = new Map(graph.nodes.map(n => [n.id, n.durationMs]));
+  const best = new Map<string, { cost: number; next: string | undefined }>();
+  const onStack = new Set<string>();
+
+  function costFrom(nodeId: string): number {
+    const known = best.get(nodeId);
+    if (known) return known.cost;
+    if (onStack.has(nodeId)) return 0;
+    onStack.add(nodeId);
+    let next: string | undefined;
+    let nextCost = 0;
+    for (const { target } of outEdges.get(nodeId) ?? []) {
+      const childCost = costFrom(target);
+      if (childCost > nextCost) {
+        nextCost = childCost;
+        next = target;
+      }
+    }
+    onStack.delete(nodeId);
+    const cost = (durationOf.get(nodeId) ?? 0) + nextCost;
+    best.set(nodeId, { cost, next });
+    return cost;
+  }
+
+  costFrom(root);
+  const path = new Set<string>();
+  for (let nodeId: string | undefined = root; nodeId !== undefined && !path.has(nodeId); nodeId = best.get(nodeId)?.next) {
+    path.add(nodeId);
+  }
+  return [...path];
+}

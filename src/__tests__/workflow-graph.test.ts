@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import { buildWorkflowGraph, criticalPath } from '../lib/workflow-graph.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { TraceSpan } from '../types.js';
-import { makeHandoff, makeTurn, makeEvaluation, makeSpan } from './workflow-fixtures.js';
+import { makeHandoff, makeTurn, makeEvaluation, makeSpan, makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 // 1. 3-agent linear workflow
@@ -438,5 +438,50 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
     const node = graph.nodes.find(n => n.id === 'agentA');
     expect(node?.toolCallCount).toBe(2);
+  });
+});
+
+describe('criticalPath', () => {
+  const node = (id: string, durationMs: number) => makeNode({ id, label: id, durationMs });
+  const edge = (source: string, target: string) => makeEdge({ id: `${source}->${target}`, source, target });
+
+  it('is empty for a graph without a root', () => {
+    expect(criticalPath(makeGraph({ rootNodeId: null }))).toEqual([]);
+  });
+
+  it('follows a linear chain from the root to its leaf', () => {
+    expect(criticalPath(makeChainGraph(3, 'n', 'linear'))).toEqual(['n-0', 'n-1', 'n-2']);
+  });
+
+  it('chooses the branch with the larger total duration, not the larger first step', () => {
+    const graph = makeGraph({
+      nodes: [node('root', 1), node('short-then-long', 10), node('long', 100), node('one-step', 50)],
+      edges: [edge('root', 'short-then-long'), edge('short-then-long', 'long'), edge('root', 'one-step')],
+      rootNodeId: 'root',
+    });
+    expect(criticalPath(graph)).toEqual(['root', 'short-then-long', 'long']);
+  });
+
+  it('cuts a cycle instead of revisiting a node', () => {
+    const graph = makeGraph({
+      nodes: [node('a', 1), node('b', 1)],
+      edges: [edge('a', 'b'), edge('b', 'a')],
+      rootNodeId: 'a',
+      workflowShape: 'cyclic',
+    });
+    expect(criticalPath(graph)).toEqual(['a', 'b']);
+  });
+
+  it('handles stacked diamonds without enumerating every path', () => {
+    const DIAMONDS = 40;
+    const nodes = [node('j0', 1)];
+    const edges = [];
+    for (let i = 0; i < DIAMONDS; i++) {
+      nodes.push(node(`heavy${i}`, 2), node(`light${i}`, 1), node(`j${i + 1}`, 1));
+      edges.push(edge(`j${i}`, `heavy${i}`), edge(`j${i}`, `light${i}`), edge(`heavy${i}`, `j${i + 1}`), edge(`light${i}`, `j${i + 1}`));
+    }
+    const path = criticalPath(makeGraph({ nodes, edges, rootNodeId: 'j0', workflowShape: 'branching' }));
+    expect(path).toHaveLength(1 + DIAMONDS * 2);
+    expect(path.filter(id => id.startsWith('light'))).toEqual([]);
   });
 });
