@@ -44,9 +44,11 @@ function getBackend(): CloudBackend {
   // Pass baseUrl explicitly so tests can override it via process.env before
   // the first call (the parent's constants.js captures OBTOOL_API_URL at
   // module-load time, which would bypass a beforeAll override otherwise).
+  const orgId = process.env.DEV_ORG_ID;
+  const baseUrl = process.env.OBTOOL_API_URL;
   backend ??= new CloudBackend({
-    orgId: process.env.DEV_ORG_ID,
-    baseUrl: process.env.OBTOOL_API_URL,
+    ...(orgId !== undefined ? { orgId } : {}),
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
   });
   return backend;
 }
