@@ -15,6 +15,8 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import type { PostgrestClient } from '@supabase/postgrest-js';
+import { serviceClient } from './supabase-service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -81,83 +83,29 @@ async function getAuth0Jwt(
   return data.access_token;
 }
 
-async function upsertPublicUser(
-  supabaseUrl: string,
-  serviceHeaders: Record<string, string>,
-  auth0Id: string,
-  email: string,
-): Promise<string> {
-  // Check if user already exists
-  const lookupRes = await fetch(
-    `${supabaseUrl}/rest/v1/users?select=id&auth0_id=eq.${encodeURIComponent(auth0Id)}&limit=1`,
-    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
-  );
-  if (lookupRes.ok) {
-    const rows = await lookupRes.json() as Array<{ id: string }>;
-    if (rows[0]?.id) return rows[0].id;
-  }
+/** The test user's `public.users` id, inserting the row when it is absent. */
+async function upsertPublicUser(db: PostgrestClient, auth0Id: string, email: string): Promise<string> {
+  const { error: insertError } = await db.from('users')
+    .upsert({ id: randomUUID(), email, auth0_id: auth0Id }, { onConflict: 'auth0_id', ignoreDuplicates: true });
+  if (insertError) throw new Error(`public.users upsert failed: ${insertError.message}`);
 
-  // Insert new row
-  const id = randomUUID();
-  const insertRes = await fetch(`${supabaseUrl}/rest/v1/users`, {
-    method: 'POST',
-    headers: { ...serviceHeaders, 'Prefer': 'return=minimal' },
-    body: JSON.stringify({ id, email, auth0_id: auth0Id }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!insertRes.ok) {
-    const errText = await insertRes.text();
-    throw new Error(`public.users insert failed: ${insertRes.status} ${errText}`);
-  }
-  return id;
+  const { data, error } = await db.from('users').select('id').eq('auth0_id', auth0Id).single<{ id: string }>();
+  if (error) throw new Error(`public.users lookup failed: ${error.message}`);
+  return data.id;
 }
 
-async function ensureE2eRole(
-  supabaseUrl: string,
-  serviceHeaders: Record<string, string>,
-  userId: string,
-): Promise<void> {
-  // Find or create e2e role
-  const rolesRes = await fetch(
-    `${supabaseUrl}/rest/v1/roles?select=id&name=eq.${E2E_ROLE_NAME}`,
-    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
-  );
-  const roles = await rolesRes.json() as Array<{ id: string }>;
+/** Create the e2e role when absent and assign it to `userId`; an existing role keeps its permissions. */
+async function ensureE2eRole(db: PostgrestClient, userId: string): Promise<void> {
+  const { error: createError } = await db.from('roles')
+    .upsert({ name: E2E_ROLE_NAME, permissions: E2E_PERMISSIONS }, { onConflict: 'name', ignoreDuplicates: true });
+  if (createError) throw new Error(`role create failed: ${createError.message}`);
 
-  if (!roles.length) {
-    const createRes = await fetch(`${supabaseUrl}/rest/v1/roles`, {
-      method: 'POST',
-      headers: { ...serviceHeaders, 'Prefer': 'return=representation' },
-      body: JSON.stringify({ name: E2E_ROLE_NAME, permissions: E2E_PERMISSIONS }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!createRes.ok) {
-      const errText = await createRes.text();
-      throw new Error(`role create failed: ${createRes.status} ${errText}`);
-    }
-    roles = await createRes.json() as Array<{ id: string }>;
-  }
+  const { data: role, error: roleError } = await db.from('roles').select('id').eq('name', E2E_ROLE_NAME).single<{ id: string }>();
+  if (roleError) throw new Error(`role lookup failed: ${roleError.message}`);
 
-  const roleId = roles[0].id;
-
-  // Assign only if not already assigned
-  const checkRes = await fetch(
-    `${supabaseUrl}/rest/v1/user_roles?select=id&user_id=eq.${userId}&role_id=eq.${roleId}&limit=1`,
-    { headers: serviceHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
-  );
-  const existing = checkRes.ok ? await checkRes.json() as Array<{ id: string }> : [];
-  if (existing.length) return;
-
-  const assignRes = await fetch(`${supabaseUrl}/rest/v1/user_roles`, {
-    method: 'POST',
-    headers: { ...serviceHeaders, 'Prefer': 'return=minimal' },
-    body: JSON.stringify({ user_id: userId, role_id: roleId }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!assignRes.ok) {
-    const errText = await assignRes.text();
-    throw new Error(`role assignment failed: ${assignRes.status} ${errText}`);
-  }
+  const { error: assignError } = await db.from('user_roles')
+    .upsert({ user_id: userId, role_id: role.id }, { onConflict: 'user_id,role_id', ignoreDuplicates: true });
+  if (assignError) throw new Error(`role assignment failed: ${assignError.message}`);
 }
 
 async function setup(): Promise<void> {
@@ -171,20 +119,16 @@ async function setup(): Promise<void> {
   const serviceKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
   const workerUrl = requireEnv('METRICS_API_URL');
 
-  const serviceHeaders = {
-    'apikey': serviceKey,
-    'Authorization': `Bearer ${serviceKey}`,
-    'Content-Type': 'application/json',
-  };
+  const db = serviceClient(supabaseUrl, serviceKey, REQUEST_TIMEOUT_MS);
 
   // 1. Get real Auth0 JWT via ROPC
   const jwt = await getAuth0Jwt(auth0Domain, auth0ClientId, auth0Audience, testEmail, testPassword);
 
   // 2. Upsert test user into public.users
-  const userId = await upsertPublicUser(supabaseUrl, serviceHeaders, testAuth0Id, testEmail);
+  const userId = await upsertPublicUser(db, testAuth0Id, testEmail);
 
   // 3. Ensure e2e role is assigned
-  await ensureE2eRole(supabaseUrl, serviceHeaders, userId);
+  await ensureE2eRole(db, userId);
 
   // Write state for tests and teardown
   const state: IntegrationState = { jwt, userId, email: testEmail, workerUrl };

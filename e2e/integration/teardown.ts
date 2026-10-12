@@ -7,6 +7,7 @@
 import { readFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { serviceClient } from './supabase-service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,27 +39,20 @@ async function teardown(): Promise<void> {
     return;
   }
 
-  const headers = {
-    'apikey': serviceKey,
-    'Authorization': `Bearer ${serviceKey}`,
-    'Content-Type': 'application/json',
-  };
-
+  const db = serviceClient(supabaseUrl, serviceKey, TEARDOWN_TIMEOUT_MS);
   const { userId } = state;
 
-  // Best-effort cleanup in dependency order (Auth0 user is permanent — DB rows only)
+  // Best-effort cleanup in dependency order (Auth0 user is permanent — DB rows only).
+  // The client returns failures as `error` rather than throwing, so one miss does not stop the rest.
   const deletions = [
-    ['user_roles', `user_id=eq.${userId}`],
-    ['user_activity', `user_id=eq.${userId}`],
-    ['users', `id=eq.${userId}`],
+    ['user_roles', 'user_id'],
+    ['user_activity', 'user_id'],
+    ['users', 'id'],
   ] as const;
 
-  for (const [table, filter] of deletions) {
-    await fetch(`${supabaseUrl}/rest/v1/${table}?${filter}`, {
-      method: 'DELETE',
-      headers,
-      signal: AbortSignal.timeout(TEARDOWN_TIMEOUT_MS),
-    }).catch(() => undefined);
+  for (const [table, column] of deletions) {
+    const { error } = await db.from(table).delete().eq(column, userId);
+    if (error) console.warn(`[integration teardown] ${table} cleanup failed: ${error.message}`);
   }
 
   // Clean up state file
