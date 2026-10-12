@@ -65,7 +65,7 @@ export function accountRefsFromEnv(env: NodeJS.ProcessEnv): string[] {
 }
 
 /** HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
-export function accountBackend(apiKey: string | undefined): CloudBackend {
+export function accountBackend(apiKey: string): CloudBackend {
   return new CloudBackend({ apiKey, fetch: http1Fetch });
 }
 
@@ -94,7 +94,9 @@ export async function queryEachAccount<T>(
 ): Promise<{ ref: string; rows: T[] }[]> {
   const perAccount: { ref: string; rows: T[] }[] = [];
   for (const ref of accountRefsFromEnv(env)) {
-    const rows = await query(accountBackend(env[ref]));
+    const apiKey = asString(env[ref]);
+    if (apiKey === undefined) continue;
+    const rows = await query(accountBackend(apiKey));
     if (rows.length >= limit) {
       throw new Error(`${ref}: cloud returned ${limit} ${label.rows}, so ${label.truncates} may be truncated; narrow --days`);
     }
