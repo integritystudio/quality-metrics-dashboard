@@ -5,7 +5,7 @@ import type { EvaluationResult, HumanVerificationEvent } from '../types.js';
 import { queryVerifications as queryVerificationsLib } from './parent/verification-events.js';
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
-import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
+import { TIME_MS, PERIOD_MS, lookbackRange } from '../lib/constants.js';
 import { isoToNs, toIsoWindowBound } from './api-constants.js';
 import { SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 
@@ -53,14 +53,6 @@ function getBackend(): CloudBackend {
   return backend;
 }
 
-function defaultRange(lookbackMs: number): { start: string; end: string } {
-  const now = new Date();
-  return {
-    start: new Date(now.getTime() - lookbackMs).toISOString(),
-    end: now.toISOString(),
-  };
-}
-
 export async function loadEvaluationsByMetric(
   start: string,
   end: string
@@ -90,7 +82,7 @@ export async function loadEvaluationsByTraceId(
   endDate?: string,
 ): Promise<EvaluationResult[]> {
   const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const { start, end } = lookbackRange(DEFAULT_LOOKBACK_90D);
   return be.queryEvaluations({
     traceId,
     startDate: isoToNs(startDate ?? start),
@@ -114,7 +106,7 @@ export async function loadEvaluationsByTraceIds(
   const uniqueIds = [...new Set(traceIds)];
   if (uniqueIds.length === 0) return [];
   const be = getBackend();
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const { start: defStart, end: defEnd } = lookbackRange(DEFAULT_LOOKBACK_90D);
   const start = startDate ?? defStart;
   const end = endDate ?? defEnd;
   const limiter = pLimit(TRACE_QUERY_CONCURRENCY);
@@ -131,7 +123,7 @@ export async function loadEvaluationsByTraceIds(
 }
 
 function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const { start: defStart, end: defEnd } = lookbackRange(DEFAULT_LOOKBACK_30D);
   // queryTracesTool validates startDate/endDate as ISO 8601 datetime (not date-only).
   // toIsoWindowBound expands 'YYYY-MM-DD' → 'YYYY-MM-DDT00:00:00.000Z'; ISO strings pass through.
   return {
@@ -169,7 +161,7 @@ async function queryLogsWithDefaultRange(
   startDate?: string,
   endDate?: string,
 ): Promise<Awaited<ReturnType<typeof queryLogs>>['logs']> {
-  const { start: defStart, end: defEnd } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const { start: defStart, end: defEnd } = lookbackRange(DEFAULT_LOOKBACK_30D);
   // queryLogs validates startDate/endDate as ISO 8601 datetime (not date-only).
   // toIsoWindowBound expands 'YYYY-MM-DD' → 'YYYY-MM-DDT00:00:00.000Z'; ISO strings pass through.
   const start = toIsoWindowBound(startDate ?? defStart, 'start');
@@ -192,7 +184,7 @@ export async function loadVerifications(opts: {
   sessionId?: string;
   limit?: number;
 }): Promise<HumanVerificationEvent[]> {
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_90D);
+  const { start, end } = lookbackRange(DEFAULT_LOOKBACK_90D);
   return queryVerificationsLib({
     startDate: isoToNs(opts.startDate ?? start),
     endDate: isoToNs(opts.endDate ?? end),
@@ -222,7 +214,7 @@ export async function loadEvaluationsBySessionId(
   endDate?: string,
 ): Promise<SessionEvaluations> {
   const be = getBackend();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_30D);
+  const { start, end } = lookbackRange(DEFAULT_LOOKBACK_30D);
   const rows = await be.queryEvaluations({
     sessionId,
     startDate: isoToNs(startDate ?? start),
@@ -238,7 +230,7 @@ export async function loadEvaluationsBySessionId(
 export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
   const be = getBackend();
   const health = await be.healthCheck();
-  const { start, end } = defaultRange(DEFAULT_LOOKBACK_7D);
+  const { start, end } = lookbackRange(DEFAULT_LOOKBACK_7D);
   const evals = await be.queryEvaluations({
     startDate: isoToNs(start),
     endDate: isoToNs(end),

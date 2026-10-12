@@ -1,3 +1,4 @@
+import { subMilliseconds } from 'date-fns';
 import { z } from 'zod';
 
 /** HTTP status codes used in API error responses. */
@@ -74,9 +75,13 @@ export const PERIOD_MS = {
 /** Compute { start, end } ISO strings for a validated period key (e.g. '7d').
  *  Callers must have already validated `period` through `PeriodSchema`. */
 export function computePeriodDates(period: string): { start: string; end: string } {
+  return lookbackRange(PERIOD_MS[period as Period]);
+}
+
+/** { start, end } ISO strings spanning the `lookbackMs` up to now. */
+export function lookbackRange(lookbackMs: number): { start: string; end: string } {
   const now = new Date();
-  const start = new Date(now.getTime() - PERIOD_MS[period as Period]);
-  return { start: start.toISOString(), end: now.toISOString() };
+  return { start: subMilliseconds(now, lookbackMs).toISOString(), end: now.toISOString() };
 }
 
 /** Percentage of events sampled for T2 LLM evaluation. */
