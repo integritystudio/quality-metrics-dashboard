@@ -70,8 +70,8 @@ export function truncateId(id: string, max = 10): string {
 /** The fields of an evaluation that decide whether it is a failure or a hallucination indicator. */
 export type ScoredEvaluation = {
   evaluationName: string;
-  scoreValue?: number | null;
-  scoreLabel?: string | null;
+  scoreValue?: number | null | undefined;
+  scoreLabel?: string | null | undefined;
 };
 
 /** Whether an evaluation carries the failing label. */

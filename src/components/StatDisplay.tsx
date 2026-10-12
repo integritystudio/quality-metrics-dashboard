@@ -3,9 +3,9 @@ import type { CSSProperties, ReactNode } from 'react';
 interface StatDisplayProps {
   value: ReactNode;
   label: string;
-  valueClassName?: string;
-  valueColor?: string;
-  variant?: 'inline' | 'card';
+  valueClassName?: string | undefined;
+  valueColor?: string | undefined;
+  variant?: 'inline' | 'card' | undefined;
 }
 
 export function StatDisplay({ value, label, valueClassName, valueColor, variant = 'inline' }: StatDisplayProps) {
