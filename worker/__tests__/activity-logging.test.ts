@@ -153,3 +153,23 @@ describe('logActivity: failure resilience', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('POST /api/activity: request body', () => {
+  it.each([
+    ['malformed JSON', '{"activity_type":'],
+    ['a body the schema rejects', JSON.stringify({ activity_type: 'not-an-activity' })],
+  ])('answers 400 with the JSON error for %s, and logs nothing', async (_label, body) => {
+    mockAuthSequence(fetchMock);
+
+    const res = await app.request(
+      '/api/activity',
+      { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body },
+      makeEnv(),
+      makeCtx(),
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Invalid request body' });
+    expect(findActivityCall(fetchMock.mock.calls as unknown[][])).toBeUndefined();
+  });
+});

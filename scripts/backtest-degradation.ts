@@ -157,14 +157,15 @@ export function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
   let coverageGapCount = 0;
 
   return buckets.map((bucket, i) => {
-    cumulativeScores.push(...bucket.scores);
+    // Element by element: a busy day's scores spread into push() can overflow the call stack.
+    for (const score of bucket.scores) cumulativeScores.push(score);
     if (bucket.scores.length === 0) coverageGapCount++;
 
     // Extend baseline incrementally: baseline covers first 70% of [0..i]
     const newBaselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
     while (baselineEnd < newBaselineEnd) {
       const bb = buckets[baselineEnd];
-      if (bb) baselineScores.push(...bb.scores);
+      if (bb) for (const score of bb.scores) baselineScores.push(score);
       baselineEnd++;
     }
 

@@ -21,12 +21,12 @@ import {
   HOOK_NAME,
   attrNum,
   attrStr,
-  incrementCount,
   spanAttr,
   timestampToMs,
   toDateOnly,
   type SpanLike,
 } from '../api-constants.js';
+import { increment } from '../../lib/collections.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 
 /** One KV key per period; the Worker restates the prefix because it cannot import this module. */
@@ -178,7 +178,7 @@ export function computeAgentStats(
       agentSet.add(name);
     }
     const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
-    incrementCount(entry.sourceTypes, KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other');
+    increment(entry.sourceTypes, KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other');
   }
 
   const agentEvalAcc = Object.create(null) as Record<string, Record<string, number[]>>;

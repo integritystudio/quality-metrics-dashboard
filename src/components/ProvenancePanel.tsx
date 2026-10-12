@@ -2,17 +2,7 @@ import { useCallback } from 'react';
 import { Link } from 'wouter';
 import { formatScore } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
-
-const NS_THRESHOLD = 1e15;
-const NS_PER_MS = 1_000_000n;
-
-function timestampToMs(ts: string | number | bigint): number {
-  if (typeof ts === 'bigint') return Number(ts / NS_PER_MS);
-  if (typeof ts === 'number') return ts >= NS_THRESHOLD ? ts / 1_000_000 : ts;
-  const asNum = Number(ts);
-  if (Number.isFinite(asNum) && asNum >= NS_THRESHOLD) return asNum / 1_000_000;
-  return new Date(ts).getTime();
-}
+import { timestampToMs } from '../lib/timestamps.js';
 
 interface EvaluatorTypeCounts {
   rule: number;

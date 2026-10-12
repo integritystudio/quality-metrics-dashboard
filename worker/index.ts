@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type HonoRequest } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
@@ -613,6 +613,16 @@ function validQuery<T extends z.ZodType>(schema: T) {
   });
 }
 
+/**
+ * The request's JSON body parsed by `schema`, or null when it is absent, malformed or
+ * invalid. Called inside the handler, after its permission and path checks, so a caller
+ * without access is refused before its body is read.
+ */
+async function readJsonBody<T extends z.ZodType>(req: HonoRequest, schema: T): Promise<z.output<T> | null> {
+  const result = schema.safeParse(await req.json().catch(() => null));
+  return result.success ? result.data : null;
+}
+
 type AppContext = {
   env: Bindings;
   get: (key: 'session') => AppSession;
@@ -684,10 +694,9 @@ app.get('/api/me', (c) => {
 // naturally 403s — the route is inert until cutover.
 app.post('/api/org/switch', async (c) => {
   const session = c.get('session');
-  const body: unknown = await c.req.json().catch(() => null);
-  const result = OrgSwitchRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  const { orgId } = result.data;
+  const body = await readJsonBody(c.req, OrgSwitchRequestSchema);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  const { orgId } = body;
 
   if (!session.isStaff && !session.memberships?.some(m => m.orgId === orgId)) {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
@@ -726,10 +735,9 @@ app.post('/api/logout', (c) => {
 });
 
 app.post('/api/activity', async (c) => {
-  const body: unknown = await c.req.json().catch(() => null);
-  const result = ActivityRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  logActivity(c.get('session').appUserId, result.data.activity_type, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  const body = await readJsonBody(c.req, ActivityRequestSchema);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  logActivity(c.get('session').appUserId, body.activity_type, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 
@@ -1035,10 +1043,9 @@ app.post('/api/admin/members/:userId/role', async (c) => {
   const userId = c.req.param('userId');
   if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
 
-  const body: unknown = await c.req.json().catch(() => null);
-  const result = UpdateMemberRoleRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
-  const newRole = result.data.membershipRole;
+  const body = await readJsonBody(c.req, UpdateMemberRoleRequestSchema);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  const newRole = body.membershipRole;
 
   // Read the target's current role first — both granting owner and demoting an
   // existing owner are owner-only operations.
@@ -1170,14 +1177,13 @@ app.post('/api/admin/users/:userId/roles', async (c) => {
   const userId = c.req.param('userId');
   if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
 
-  const body: unknown = await c.req.json().catch(() => null);
-  const result = AssignRoleRequestSchema.safeParse(body);
-  if (!result.success) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  const body = await readJsonBody(c.req, AssignRoleRequestSchema);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
 
   const { error } = await db(c.env).from('user_roles')
-    .insert({ user_id: userId, role_id: result.data.role_id });
+    .insert({ user_id: userId, role_id: body.role_id });
   if (error) return c.json({ error: 'Failed to assign role' }, Http.InternalServerError);
-  logAuditEvent(c.get('session').appUserId, 'role.assign', userId, result.data.role_id, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
+  logAuditEvent(c.get('session').appUserId, 'role.assign', userId, body.role_id, c.env, c.executionCtx.waitUntil.bind(c.executionCtx));
   return c.body(null, Http.NoContent);
 });
 
@@ -1266,6 +1272,7 @@ app.post('/api/admin/keys/:keyId/rotate', async (c) => {
       method: 'POST',
       headers: serviceRoleHeaders(c.env),
       body: JSON.stringify({ keyId, userId: appUserId }),
+      signal: AbortSignal.timeout(SUPABASE_REST_TIMEOUT_MS),
     },
   ).catch(() => null);
 

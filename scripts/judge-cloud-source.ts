@@ -114,7 +114,8 @@ async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<E
       // No end bound: a receipt-time row is dated after its turn, never before.
       (backend) => backend.queryEvaluations({ source: 'table', evaluator, startDate: msToNs(fromMs), limit: CLOUD_EVALUATION_LIMIT }),
     );
-    for (const { rows: found } of perAccount) rows.push(...found);
+    // Element by element: spreading a 200k-row page into push() overflows the call stack.
+    for (const { rows: found } of perAccount) for (const row of found) rows.push(row);
   }
   return rows;
 }

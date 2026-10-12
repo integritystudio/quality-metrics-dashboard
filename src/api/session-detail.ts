@@ -20,13 +20,13 @@ import {
   OTEL_STATUS_ERROR_CODE,
   PERCENT_BASE,
   gitRepositoryLabel,
-  incrementCount,
   logSummaryFieldSchema,
   renamedAttr,
   spanAttr,
   timestampToMs,
   type SafeLogEntry,
 } from './api-constants.js';
+import { increment } from '../lib/collections.js';
 import { SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
 import type { StepScore } from '../types.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attributes.js';
@@ -225,7 +225,7 @@ function computeTokenMetrics(spans: SessionSpan[]) {
     tokenTotals.cacheRead += t.cacheRead;
     tokenTotals.cacheCreation += t.cacheCreation;
     tokenTotals.messages += t.messages;
-    if (t.model) incrementCount(tokenTotals.models, t.model);
+    if (t.model) increment(tokenTotals.models, t.model);
   }
   return { tokenProgression, tokenTotals };
 }
@@ -237,9 +237,9 @@ function computeUsageCounts(spans: SessionSpan[]) {
     if (spanAttr(s, 'integritystudio.hook.trigger', 'string') !== 'PostToolUse') continue;
     const type = spanAttr(s, 'integritystudio.hook.type', 'string');
     if (type === 'builtin') {
-      incrementCount(toolUsage, spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? 'unknown');
+      increment(toolUsage, spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? 'unknown');
     } else if (type === 'mcp') {
-      incrementCount(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
+      increment(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
     }
   }
   return { toolUsage, mcpUsage };
@@ -272,7 +272,7 @@ function computeErrorSummary(spans: SessionSpan[]) {
     if (!isSpanError(s)) continue;
     const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
     const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
-    incrementCount(byCategory, `${tool} -> ${errType}`);
+    increment(byCategory, `${tool} -> ${errType}`);
     details.push({
       spanName: s.name,
       tool,
@@ -348,7 +348,7 @@ function computeFileAccess(spans: SessionSpan[]) {
   const fileCount: Record<string, number> = {};
   for (const s of spans) {
     const fp = spanAttr(s, 'file.path', 'string');
-    if (fp) incrementCount(fileCount, fp);
+    if (fp) increment(fileCount, fp);
   }
   return Object.entries(fileCount)
     .map(([path, count]) => ({ path, count }))
@@ -378,7 +378,7 @@ function computeCodeStructure(spans: SessionSpan[]) {
 
 function computeLogSummary(logs: SessionLog[]) {
   const bySeverity: Record<string, number> = {};
-  for (const l of logs) incrementCount(bySeverity, l.severity);
+  for (const l of logs) increment(bySeverity, l.severity);
   return {
     bySeverity,
     logs: logs.slice(-LOG_SUMMARY_MAX_ENTRIES).map(l => {

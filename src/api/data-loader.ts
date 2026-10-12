@@ -6,7 +6,7 @@ import { queryVerifications as queryVerificationsLib } from './parent/verificati
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
 import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
-import { toIsoWindowBound, NANOS_TO_MS } from './api-constants.js';
+import { isoToNs, toIsoWindowBound } from './api-constants.js';
 import { SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
@@ -59,10 +59,6 @@ function defaultRange(lookbackMs: number): { start: string; end: string } {
     start: new Date(now.getTime() - lookbackMs).toISOString(),
     end: now.toISOString(),
   };
-}
-
-function isoToNs(iso: string): bigint {
-  return BigInt(new Date(iso).getTime()) * BigInt(NANOS_TO_MS);
 }
 
 export async function loadEvaluationsByMetric(

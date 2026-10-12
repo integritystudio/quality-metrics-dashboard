@@ -1,5 +1,6 @@
 import type { LogRecord } from '../types.js';
 import { z } from 'zod';
+import { NANOS_TO_MS } from '../lib/timestamps.js';
 
 export const PERCENT_BASE = 100;
 
@@ -47,8 +48,7 @@ export type LogSummaryField = z.infer<typeof logSummaryFieldSchema>;
 
 export type SafeLogEntry = Partial<Pick<LogRecord, LogSummaryField>>;
 
-/** Divisor to convert nanosecond timestamps (OTel UnixNano) to milliseconds. */
-export const NANOS_TO_MS = 1_000_000;
+export { NANOS_TO_MS, timestampToMs } from '../lib/timestamps.js';
 
 /** `JSON.stringify` replacer writing a bigint (span and evaluation epoch-ns timestamps) as its decimal string. */
 export function bigintReplacer(_key: string, value: unknown): unknown {
@@ -60,21 +60,9 @@ export function msToNs(ms: number): bigint {
   return BigInt(ms) * BigInt(NANOS_TO_MS);
 }
 
-const NS_THRESHOLD = 1e15;
-const NS_PER_MS_BIG = 1_000_000n;
-
-/**
- * Normalize a timestamp to milliseconds. Accepts bigint nanoseconds (OTel UnixNano),
- * numeric ns/ms (auto-detected via magnitude), or ISO 8601 strings.
- * Returns NaN for unparseable inputs.
- */
-export function timestampToMs(ts: string | number | bigint | null | undefined): number {
-  if (ts == null) return NaN;
-  if (typeof ts === 'bigint') return Number(ts / NS_PER_MS_BIG);
-  if (typeof ts === 'number') return ts >= NS_THRESHOLD ? ts / NANOS_TO_MS : ts;
-  const asNum = Number(ts);
-  if (Number.isFinite(asNum) && asNum >= NS_THRESHOLD) return asNum / NANOS_TO_MS;
-  return new Date(ts).getTime();
+/** An ISO 8601 instant as the epoch-nanosecond bigint the cloud backend queries take. */
+export function isoToNs(iso: string): bigint {
+  return msToNs(Date.parse(iso));
 }
 
 /** Structural result of {@link jsonSafe}: every `bigint` becomes a decimal `string`. */
@@ -122,10 +110,6 @@ function convert(value: unknown): unknown {
  */
 export function jsonSafe<T>(value: T): JsonSafe<T> {
   return convert(value) as JsonSafe<T>;
-}
-
-export function incrementCount(map: Record<string, number>, key: string): void {
-  map[key] = (map[key] ?? 0) + 1;
 }
 
 /** A hook span's name is this prefix plus its `integritystudio.hook.name`. */
