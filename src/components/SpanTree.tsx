@@ -6,9 +6,9 @@ import { EmptyState } from './EmptyState.js';
 interface SpanNode {
   spanId: string;
   name: string;
-  durationMs?: number;
-  status?: { code: number; message?: string };
-  attributes?: Record<string, unknown>;
+  durationMs: number | undefined;
+  status: { code: number; message?: string | undefined } | undefined;
+  attributes: Record<string, unknown> | undefined;
   children: SpanNode[];
   evalCount: number;
 }

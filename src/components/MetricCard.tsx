@@ -9,7 +9,7 @@ import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 function MetricCardInner({ metric, sparklineData }: {
   metric: QualityMetricResult;
-  sparklineData?: (number | null)[];
+  sparklineData: (number | null)[] | undefined;
 }) {
   const { name, displayName, sampleCount, status, values, trend, confidence, alerts } = metric;
   const worst = (metric as QualityMetricResult & { worstExplanation?: WorstExplanation }).worstExplanation;

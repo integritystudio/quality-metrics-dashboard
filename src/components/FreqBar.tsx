@@ -1,6 +1,6 @@
 import { BarIndicator } from './BarIndicator.js';
 
-export function FreqBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string }) {
+export function FreqBar({ label, count, max, color }: { label: string; count: number; max: number; color: string | undefined }) {
   const pct = max > 0 ? (count / max) * 100 : 0;
   return (
     <div className="freq-bar-row">
