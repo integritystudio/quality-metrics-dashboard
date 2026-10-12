@@ -1,3 +1,4 @@
+import { sum } from 'd3-array';
 import { useCodeQuality } from '../hooks/useCodeQuality.js';
 import { PageShell } from '../components/PageShell.js';
 import { CODE_QUALITY_WARN_THRESHOLD, CONTENT_KIND, SKELETON_HEIGHT_MD, SURVIVAL_COHORT, type SurvivalCohort } from '../lib/constants.js';
@@ -70,9 +71,7 @@ function SurvivalTable({ title, note, rows, warnBelowThreshold }: SurvivalTableP
 
 function SurvivalSections({ rows }: { rows: AgentWindowStats[] }) {
   const scoredWindow = rows.filter(r => r.window === SCORED_WINDOW);
-  const earlyCheckpoints = rows
-    .filter(r => r.window !== SCORED_WINDOW)
-    .reduce((sum, r) => sum + r.checkpointCount, 0);
+  const earlyCheckpoints = sum(rows.filter(r => r.window !== SCORED_WINDOW), r => r.checkpointCount);
   const code = scoredWindow.filter(r => r.contentKind === CONTENT_KIND.CODE);
 
   return (

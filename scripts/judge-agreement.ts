@@ -21,6 +21,7 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-agreement.ts --limit 30 --yes
  */
 
+import { ascending } from 'd3-array';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
@@ -300,7 +301,7 @@ export function computeAgreement(turns: readonly TurnScores[]): AgreementSummary
   }
 
   const byCriterion = Object.fromEntries(
-    [...sums.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([name, entry]) => [name, finishAgreement(entry)]),
+    [...sums.entries()].sort(([x], [y]) => ascending(x, y)).map(([name, entry]) => [name, finishAgreement(entry)]),
   );
   return { byCriterion, overall: finishAgreement(overall) };
 }

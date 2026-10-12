@@ -20,7 +20,7 @@
  *   tsx scripts/derive-evaluations.ts --days=3
  */
 
-import { mean, rollup } from 'd3-array';
+import { ascending, mean, rollup } from 'd3-array';
 import pLimit from 'p-limit';
 import {
   computeCalibrationDistributions,
@@ -572,7 +572,7 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
 function byStartThenSpanId(a: LocalTraceSpan, b: LocalTraceSpan): number {
   return a.startTime[0] - b.startTime[0]
     || a.startTime[1] - b.startTime[1]
-    || a.spanId.localeCompare(b.spanId);
+    || ascending(a.spanId, b.spanId);
 }
 
 /**
@@ -668,7 +668,7 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
   }
 
   const warnings: string[] = [];
-  for (const [date, day] of [...days].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [date, day] of [...days].sort(([a], [b]) => ascending(a, b))) {
     if (day.agentEvidence > 0 && day.agentMatched === 0) {
       warnings.push(`${date}: ${day.agentEvidence} spans record agent invocations, but none is named ${AGENT_PREPARE_SPAN} or ${AGENT_FINALIZE_SPAN}, so the agent metrics are empty. Were the hook spans renamed?`);
     }
@@ -799,7 +799,7 @@ async function main(): Promise<void> {
   updateCalibration(allEvals, dryRun);
 
   const byName = rollup(inScope, evs => evs.length, ev => ev.evaluationName);
-  const counts = [...byName].sort(([a], [b]) => a.localeCompare(b)).map(([name, n]) => `${name}=${n}`);
+  const counts = [...byName].sort(([a], [b]) => ascending(a, b)).map(([name, n]) => `${name}=${n}`);
   console.log(`[derive] records: ${counts.join(' ') || 'none'}`);
 
   const drift = detectInputDrift(loaded.spans, scope);

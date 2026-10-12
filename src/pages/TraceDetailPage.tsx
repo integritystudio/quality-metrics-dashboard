@@ -6,6 +6,7 @@ import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { plural } from '../lib/quality-utils.js';
+import { incrementIn } from '../lib/collections.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function TraceDetailPage({ traceId }: { traceId: string }) {
@@ -66,7 +67,7 @@ function buildEvalsBySpan(evaluations: Array<{ spanId?: string | undefined }>): 
   const map = new Map<string, number>();
   for (const ev of evaluations) {
     if (ev.spanId) {
-      map.set(ev.spanId, (map.get(ev.spanId) ?? 0) + 1);
+      incrementIn(map, ev.spanId);
     }
   }
   return map;

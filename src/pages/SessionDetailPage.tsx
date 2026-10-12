@@ -1,6 +1,6 @@
 import { Link } from 'wouter';
 import { format } from 'date-fns';
-import { max } from 'd3-array';
+import { max, sum } from 'd3-array';
 import { useSessionDetail } from '../hooks/useSessionDetail.js';
 import { EvaluationTable, evalToRow, type EvalRow } from '../components/EvaluationTable.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
@@ -67,8 +67,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
   const toolUsageValues = Object.values(toolUsage);
   const mcpUsageValues = Object.values(mcpUsage);
   const spanBreakdownValues = Object.values(spanBreakdown);
-  const totalToolCalls = toolUsageValues.reduce((a, b) => a + b, 0);
-  const totalMcpCalls = mcpUsageValues.reduce((a, b) => a + b, 0);
+  const totalToolCalls = sum(toolUsageValues);
+  const totalMcpCalls = sum(mcpUsageValues);
   const maxTokenSnapshot = tokenProgression.at(-1);
   const maxToolCount = Math.max(max(toolUsageValues) ?? 0, 1);
   const maxMcpCount = Math.max(max(mcpUsageValues) ?? 0, 1);

@@ -8,7 +8,7 @@
  * or `process.argv`.
  */
 
-import { group, minIndex, quantileSorted } from 'd3-array';
+import { descending, group, minIndex, quantile } from 'd3-array';
 import type { CloudBackend } from '../parent/backends.js';
 import { queriedDateWindow } from '../parent/backends.js';
 import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js';
@@ -574,11 +574,10 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
     // ISO 8601 sorts lexicographically — take most recent sessions first
     const sessions = acc.sessions
       .slice()
-      .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+      .sort((a, b) => descending(a.date ?? '', b.date ?? ''))
       .slice(0, MAX_RECENT_SESSIONS);
     const lastSeen = acc.lastSeenDate;
     const totalSessions = acc.totalSessionCount;
-    const sortedSessionDurations = acc.sessionDurations.slice().sort((a, b) => a - b);
     const perInvocation = (total: number) => (acc.totalInvocations > 0 ? total / acc.totalInvocations : 0);
     const rate = (count: number) => +perInvocation(count).toFixed(RATE_DISPLAY_PRECISION);
 
@@ -591,7 +590,7 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
       rateLimitEvents: acc.rateLimitEvents,
       avgOutputSize: Math.round(perInvocation(acc.totalOutputSize)),
       avgDurationMs: Math.round(perInvocation(acc.weightedDurationSum)),
-      p95DurationMs: Math.round(quantileSorted(sortedSessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0),
+      p95DurationMs: Math.round(quantile(acc.sessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0),
       truncatedRate: rate(acc.truncatedCount),
       emptyOutputRate: rate(acc.emptyCount),
       lastSeen,

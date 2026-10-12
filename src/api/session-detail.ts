@@ -7,7 +7,7 @@
  * Adding a field: add it to `computeSessionDetail`, and both paths carry it.
  */
 
-import { ascending, mean, quantileSorted, rollup } from 'd3-array';
+import { ascending, mean, quantileSorted, rollup, sum } from 'd3-array';
 import {
   COMMIT_BODY_START_LINE_INDEX,
   COMMIT_SUBJECT_FALLBACK_MAX_CHARS,
@@ -359,7 +359,7 @@ function computeFileAccess(spans: SessionSpan[]) {
 function computeAlertSummary(spans: SessionSpan[]) {
   const alertSpans = hookSpans(spans, HOOK_NAME.ALERT_EVALUATION);
   return {
-    totalFired: alertSpans.reduce((sum, s) => sum + (renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number') ?? 0), 0),
+    totalFired: sum(alertSpans, s => renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number')),
     stopEvents: alertSpans.length,
   };
 }

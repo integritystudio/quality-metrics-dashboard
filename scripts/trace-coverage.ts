@@ -22,6 +22,7 @@
  */
 
 import { readdirSync, writeFileSync } from 'fs';
+import { ascending } from 'd3-array';
 import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToMs, nsToMs } from './hrt.js';
 import { incrementIn, pushTo } from './collections.js';
@@ -145,7 +146,7 @@ export function compareAccount(
   for (const [key, startMs] of cloud) {
     if (!localKeys.has(key)) dayOf(utcDay(startMs)).cloudOnly++;
   }
-  const days = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+  const days = [...byDay.values()].sort((a, b) => ascending(a.day, b.day));
   const totalLocal = localKeys.size;
   const matched = days.reduce((sum, d) => sum + d.matched, 0);
   return {
@@ -261,7 +262,7 @@ async function main(): Promise<number> {
   }
 
   const results: AccountCoverage[] = [];
-  for (const [ref, spans] of [...byRef].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [ref, spans] of [...byRef].sort(([a], [b]) => ascending(a, b))) {
     const cloud = await fetchCloudSpans(process.env[ref]!, window);
     const result = compareAccount(ref, spans, cloud);
     printAccount(result);

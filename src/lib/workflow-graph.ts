@@ -4,6 +4,7 @@ import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '.
 import { SCORE_CHIP_PRECISION } from './constants.js';
 import { GENAI_AGENT_ATTRIBUTES } from './otel-attributes.js';
 import { groupBy } from './quality-utils.js';
+import { incrementIn } from './collections.js';
 
 const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
 const SPAN_NAME_TOOL_CALL = 'tool_call';
@@ -253,7 +254,7 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
 
   const outDegree = new Map<string, number>();
   for (const e of edges) {
-    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1);
+    incrementIn(outDegree, e.source);
   }
   for (const count of outDegree.values()) {
     if (count > 1) return 'branching';

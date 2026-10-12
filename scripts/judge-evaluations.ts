@@ -451,7 +451,7 @@ export async function discoverTurns(dateScope: ReadonlySet<string>): Promise<Tur
   const cloud = await discoverFromCloud(dateScope);
 
   const concurrencyLimit = pLimit(CONCURRENCY);
-  const turnArrays = await Promise.all(cloud.transcripts.map(info => concurrencyLimit(() => extractTurns(info))));
+  const turnArrays = await concurrencyLimit.map(cloud.transcripts, info => extractTurns(info));
   // Anchored before the scope and the limit cut, so each turn's window is
   // bounded by the real next turn rather than by whichever turns survived.
   const extracted = turnArrays.flat();

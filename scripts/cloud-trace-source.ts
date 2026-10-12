@@ -10,6 +10,7 @@
  * account's.
  */
 
+import { ascending, extent } from 'd3-array';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { TraceSpan } from '../../src/backends/index.js';
@@ -108,10 +109,8 @@ export async function queryEachAccount<T>(
 
 /** The `[from, to]` epoch-ms bounds covering every UTC date in `dates`. */
 export function dateScopeBounds(dates: ReadonlySet<string>): { fromMs: number; toMs: number } {
-  const sorted = [...dates].sort();
-  const first = sorted[0];
-  const last = sorted[sorted.length - 1];
-  if (first === undefined || last === undefined) throw new Error('empty date scope');
+  const [first, last] = extent(dates);
+  if (first === undefined) throw new Error('empty date scope');
   return { fromMs: Date.parse(`${first}T00:00:00.000Z`), toMs: Date.parse(`${last}T00:00:00.000Z`) + TIME_MS.DAY - 1 };
 }
 
@@ -152,7 +151,7 @@ export function mergeAccountSpans(
   const ordered = [...seen.values()].sort((a, b) => {
     const byTime = a.span.startTimeUnixNano - b.span.startTimeUnixNano;
     if (byTime !== 0n) return byTime < 0n ? -1 : 1;
-    return a.span.spanId.localeCompare(b.span.spanId);
+    return ascending(a.span.spanId, b.span.spanId);
   });
   return { spans: ordered.map((entry) => entry.local), accounts, duplicates, rejected };
 }

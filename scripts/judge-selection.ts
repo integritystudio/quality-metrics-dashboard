@@ -22,6 +22,7 @@
  * writes its file and posts nothing.
  */
 
+import { ascending } from 'd3-array';
 import { asString } from './account-stamps.js';
 import { selectCriteria } from './judge-consolidated.js';
 import type { Turn } from './judge-turns.js';
@@ -72,7 +73,7 @@ export function turnSkip(
 
 /** Oldest first, session id breaking ties: the same order whichever source found the turns. */
 function byTurnTime(a: Turn, b: Turn): number {
-  return Date.parse(a.timestamp) - Date.parse(b.timestamp) || a.sessionId.localeCompare(b.sessionId);
+  return Date.parse(a.timestamp) - Date.parse(b.timestamp) || ascending(a.sessionId, b.sessionId);
 }
 
 /**
