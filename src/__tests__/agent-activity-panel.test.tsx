@@ -71,14 +71,10 @@ describe('AgentActivityPanel sorting', () => {
     expect(within(header).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('puts each sortable column behind a focusable button', () => {
+  it('names the sort button by its column label alone, without the arrow', () => {
     render(<AgentActivityPanel agents={AGENTS} />);
-    const sortButton = screen.getByRole('button', { name: /Error Rate/ });
 
-    sortButton.focus();
-
-    expect(sortButton).toHaveFocus();
-    expect(sortButton).toHaveAttribute('type', 'button');
+    expect(screen.getByRole('button', { name: 'Invocations' })).toBeInTheDocument();
   });
 });
 

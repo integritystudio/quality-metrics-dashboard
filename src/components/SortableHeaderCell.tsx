@@ -29,7 +29,7 @@ export function SortableHeaderCell({ column, className, children }: SortableHead
     <th className={className} aria-sort={sorted ? ARIA_SORT[sorted] : 'none'}>
       <button type="button" className="btn-reset th-sort-btn select-none" onClick={column.getToggleSortingHandler()}>
         {children}
-        {sorted && <span className="ml-1 text-2xs">{SORT_INDICATOR[sorted]}</span>}
+        <span className="ml-1 text-2xs" aria-hidden="true">{sorted ? SORT_INDICATOR[sorted] : ''}</span>
       </button>
     </th>
   );
