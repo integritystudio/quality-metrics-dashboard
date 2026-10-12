@@ -142,6 +142,7 @@ function createEvalRecord(
   cohort: EvaluationCohort,
   judgeModel?: string,
 ): EvalRecord {
+  const evaluatorType = legacyEvaluatorType(kind);
   return {
     timestamp: turn.timestamp,
     evaluationName,
@@ -150,7 +151,7 @@ function createEvalRecord(
     explanation,
     evaluator: PRODUCER,
     // Narrowed to the kind axis; the cohort has its own field now.
-    ...(legacyEvaluatorType(kind) && { evaluatorType: legacyEvaluatorType(kind) }),
+    ...(evaluatorType && { evaluatorType }),
     evaluatorKind: kind,
     cohort,
     ...(judgeModel && { judgeModel }),
@@ -353,7 +354,7 @@ export async function evaluateTurn(
   const scoreCriterion = (
     evalName: string,
     label: string,
-    run: () => Promise<{ score: number; reason?: string }>,
+    run: () => Promise<{ score: number; reason?: string | undefined }>,
   ): Promise<void> => {
     if (isJudged(evalName)) return Promise.resolve();
     return score(async () => {

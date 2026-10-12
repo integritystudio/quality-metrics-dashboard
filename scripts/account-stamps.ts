@@ -60,8 +60,8 @@ export type AccountRef = string | null;
  */
 export interface SessionSpan {
   atMs: number;
-  spanId?: string;
-  traceId?: string;
+  spanId: string | undefined;
+  traceId: string | undefined;
   ref: AccountRef | undefined;
 }
 
@@ -126,10 +126,10 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
 }
 
 export interface SpanRecordFields {
-  spanId?: string;
-  traceId?: string;
-  startTime?: HrTime;
-  sessionId?: string;
+  spanId: string | undefined;
+  traceId: string | undefined;
+  startTime: HrTime | undefined;
+  sessionId: string | undefined;
   /** As written: a secret name, `null` for an unmapped account, `undefined` when absent (pre-TKR6). */
   stamp: AccountRef | undefined;
 }
