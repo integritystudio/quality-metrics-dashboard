@@ -71,7 +71,7 @@ interface WorkflowNodeWithMeta extends WorkflowNode {
   /** True when this node is on the highlighted critical path. */
   critical?: boolean;
   /** Present when the node is interactive; invoked on click-equivalent keyboard activation. */
-  onActivate?: () => void;
+  onActivate?: (() => void) | undefined;
 }
 
 /** Data shape for a collapsed cluster node. */
@@ -80,7 +80,7 @@ interface ClusterNodeData {
   memberCount: number;
   hasError: boolean;
   avgScore: number | null;
-  onActivate?: () => void;
+  onActivate?: (() => void) | undefined;
 }
 
 /**
