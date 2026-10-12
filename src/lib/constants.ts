@@ -1,5 +1,6 @@
 import { subMilliseconds } from 'date-fns';
 import { z } from 'zod';
+import { DEFAULT_PERIOD, PeriodEnum, type Period } from './periods.js';
 
 /** HTTP status codes used in API error responses. */
 export const enum HttpStatus {
@@ -49,17 +50,11 @@ export const TIME_MS = {
   HOUR: 60 * 60 * 1000,
   DAY: 24 * 60 * 60 * 1000,
 } as const;
-/** The valid period keys; a literal tuple so `PeriodEnum` parses to `Period`, not `string`. */
-export const PERIOD_KEYS = ['24h', '7d', '30d'] as const;
-/** Zod enum for period values. */
-export const PeriodEnum = z.enum(PERIOD_KEYS);
-export type Period = z.infer<typeof PeriodEnum>;
+// Periods live in the worker-safe `periods.ts` module, re-exported here like the roles.
+export { PERIOD_KEYS, PeriodEnum, DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from './periods.js';
+export type { Period } from './periods.js';
 /** Period string → day count. */
 export const VALID_PERIODS = { '24h': 1, '7d': 7, '30d': 30 } satisfies Record<Period, number>;
-/** Default client-side period for list/evaluation queries. */
-export const DEFAULT_PERIOD = '7d' satisfies Period;
-/** Default client-side period for metric detail views (wider window). */
-export const DEFAULT_PERIOD_DETAIL = '30d' satisfies Period;
 /** Shared Zod schema for period query param validation (default: '7d'). */
 export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
 /**

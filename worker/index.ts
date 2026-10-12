@@ -13,6 +13,7 @@ import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRAT
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 import { queryValidator } from '../src/lib/query-validator.js';
+import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PeriodEnum, type Period } from '../src/lib/periods.js';
 
 export type { DashboardPermission, AppSession };
 
@@ -82,7 +83,6 @@ function isTokenRejection(err: unknown): boolean {
 }
 const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
 
-const VALID_PERIOD_KEYS = ['24h', '7d', '30d'] as const;
 const ERR_INVALID_PERIOD = 'Invalid period. Must be 24h, 7d, or 30d.';
 
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
@@ -108,10 +108,8 @@ const ERR_INVALID_ROLE = 'Invalid role. Must be executive, operator, or auditor.
 const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 const ERR_INVALID_INPUT_KEY = 'Invalid inputKey. Must be traceId or sessionId.';
 
-type PeriodKey = typeof VALID_PERIOD_KEYS[number];
-const DEFAULT_PERIOD: PeriodKey = '7d';
-const CORRELATIONS_DEFAULT_PERIOD: PeriodKey = '30d';
-const periodField = (fallback: PeriodKey) => z.enum(VALID_PERIOD_KEYS).default(fallback);
+const CORRELATIONS_DEFAULT_PERIOD: Period = '30d';
+const periodField = (fallback: Period) => PeriodEnum.default(fallback);
 const PeriodQuery = z.object({ period: periodField(DEFAULT_PERIOD) });
 const DashboardQuery = z.object({
   period: periodField(DEFAULT_PERIOD),
@@ -762,10 +760,8 @@ app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), v
 // Written by scripts/sync-to-kv.ts (METRIC_DETAIL_KEY_PREFIX in src/api/aggregates/metric-detail.ts).
 // The Worker cannot import that module, so the prefix is restated here.
 const METRIC_DETAIL_KEY_PREFIX = 'metric:';
-// The page's DEFAULT_PERIOD_DETAIL (src/lib/constants.ts), restated for the same reason.
-const METRIC_DETAIL_DEFAULT_PERIOD: PeriodKey = '30d';
 
-app.get('/api/metrics/:name', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(METRIC_DETAIL_DEFAULT_PERIOD) })), async (c) => {
+app.get('/api/metrics/:name', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(DEFAULT_PERIOD_DETAIL) })), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const { period } = c.req.valid('query');
@@ -865,7 +861,7 @@ app.get('/api/sessions/:sessionId', requirePermission('dashboard.sessions.read')
 // Written by scripts/sync-to-kv.ts (AGENT_STATS_KEY_PREFIX in src/api/aggregates/agent-stats.ts).
 // The Worker cannot import that module, so the prefix is restated here.
 const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
-const AGENTS_DEFAULT_PERIOD: PeriodKey = '30d';
+const AGENTS_DEFAULT_PERIOD: Period = '30d';
 
 app.get('/api/agents', requirePermission('dashboard.agents.read'), validQuery(z.object({ period: periodField(AGENTS_DEFAULT_PERIOD) })), async (c) => {
   const { period } = c.req.valid('query');
