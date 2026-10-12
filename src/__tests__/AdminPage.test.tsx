@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { onlineManager } from '@tanstack/react-query';
 import { AdminPage } from '../pages/AdminPage.js';
 import { OrgProvider } from '../contexts/OrgContext.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
@@ -445,6 +446,19 @@ describe('AdminPage — refused and failed mutations', () => {
     mutation.perform();
 
     expect(await screen.findByText('Network error')).toBeTruthy();
+  });
+
+  it.each(MUTATIONS)('shows a network error for $name while the browser reports offline, instead of holding it for later', async (mutation) => {
+    await renderWithRefusal(mutation, 'network-error');
+    onlineManager.setOnline(false);
+
+    try {
+      mutation.perform();
+
+      expect(await screen.findByText('Network error')).toBeTruthy();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });
 

@@ -121,6 +121,9 @@ function useRowMutation() {
 
   const mutation = useMutation({
     mutationKey: ADMIN_MUTATION_KEY,
+    // The default 'online' mode pauses a mutation while the browser reports offline and
+    // sends it on reconnect; a confirmed removal must fail with ERR_NETWORK instead.
+    networkMode: 'always',
     mutationFn: async ({ path, method, body, failureMessage, onOk }: RowMutation) => {
       let res: Response;
       try {
