@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, readFileSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { writeFileSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -1431,5 +1431,18 @@ describe('acquireLock', () => {
     writeFileSync(lockFile, owner());
     expect(acquireLock(lockFile)).toBe(true);
     expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
+    expect(readdirSync(dir)).toEqual(['.judge-evaluations.lock']);
+  });
+
+  it('reclaims an empty lock file, which no current writer leaves behind', () => {
+    writeFileSync(lockFile, '');
+    expect(acquireLock(lockFile)).toBe(true);
+    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
+  });
+
+  it('refuses a second acquire once this process holds the lock', () => {
+    expect(acquireLock(lockFile)).toBe(true);
+    expect(acquireLock(lockFile)).toBe(false);
+    expect(readdirSync(dir)).toEqual(['.judge-evaluations.lock']);
   });
 });

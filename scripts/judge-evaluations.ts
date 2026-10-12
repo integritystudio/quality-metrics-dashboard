@@ -29,7 +29,7 @@
  * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, existsSync, openSync, closeSync, constants } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, linkSync, renameSync } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
 import type AnthropicSdk from '@anthropic-ai/sdk';
@@ -467,22 +467,31 @@ const LOCK_FILE = join(TELEMETRY_DIR, '.judge-evaluations.lock');
 
 /** Lock file mode: owner read/write only. */
 const LOCK_FILE_MODE = 0o600;
+/** Per-process names beside the lock: the pid file before it is linked in, and a lock moved aside to be reclaimed. */
+const LOCK_STAGED_SUFFIX = '.staged';
+const LOCK_STALE_SUFFIX = '.stale';
 
-/** Create the lock file holding this pid, atomically (O_CREAT | O_EXCL); false when it already exists. */
+/**
+ * Create the lock file holding this pid; false when it already exists. The pid is written
+ * to a private file first and linked into place (link fails on an existing name), so the
+ * lock never exists empty and a concurrent reader cannot mistake it for a dead owner's.
+ */
 function tryCreateLock(lockFile: string): boolean {
+  const staged = `${lockFile}.${process.pid}${LOCK_STAGED_SUFFIX}`;
   try {
-    const fd = openSync(lockFile, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, LOCK_FILE_MODE);
-    writeFileSync(fd, String(process.pid));
-    closeSync(fd);
+    writeFileSync(staged, String(process.pid), { mode: LOCK_FILE_MODE });
+    linkSync(staged, lockFile);
     return true;
   } catch {
     return false;
+  } finally {
+    try { unlinkSync(staged); } catch { /* never written */ }
   }
 }
 
-/** Whether the pid in the lock file belongs to a live process (EPERM: alive, not ours to signal). */
-function lockOwnerAlive(lockFile: string): boolean {
-  const lockPid = parseInt(readFileSync(lockFile, 'utf-8').trim(), 10);
+/** Whether `owner` (a lock file's contents) is the pid of a live process (EPERM: alive, not ours to signal). */
+function lockOwnerAlive(owner: string): boolean {
+  const lockPid = parseInt(owner.trim(), 10);
   if (Number.isNaN(lockPid) || lockPid <= 0) return false;
   try {
     process.kill(lockPid, 0);
@@ -493,20 +502,42 @@ function lockOwnerAlive(lockFile: string): boolean {
 }
 
 /**
+ * Remove a lock whose contents were `staleOwner`, then take it. The file is renamed aside
+ * before it is deleted, so of two reclaimers only one gets it; if what was moved is no
+ * longer the stale lock (another process reclaimed it first), it is put back untouched.
+ */
+function reclaimLock(lockFile: string, staleOwner: string): boolean {
+  const aside = `${lockFile}.${process.pid}${LOCK_STALE_SUFFIX}`;
+  try {
+    renameSync(lockFile, aside);
+  } catch {
+    return false;
+  }
+  try {
+    if (readFileSync(aside, 'utf-8') !== staleOwner) {
+      try { linkSync(aside, lockFile); } catch { /* a third process has taken the name */ }
+      return false;
+    }
+  } finally {
+    unlinkSync(aside);
+  }
+  console.warn(`[judge] Lock file ${lockFile} had no live owner (${staleOwner.trim() || 'empty'}), reclaimed it`);
+  return tryCreateLock(lockFile);
+}
+
+/**
  * Take the lock, reclaiming one whose owner is dead or whose pid is malformed. A live
  * owner keeps it however old it is: a --batch run legitimately holds it for hours.
  */
 export function acquireLock(lockFile: string = LOCK_FILE): boolean {
   if (tryCreateLock(lockFile)) return true;
+  let owner: string;
   try {
-    if (!existsSync(lockFile) || lockOwnerAlive(lockFile)) return false;
+    owner = readFileSync(lockFile, 'utf-8');
   } catch {
     return false;
   }
-  console.warn(`[judge] Lock file ${lockFile} has no live owner, reclaiming it`);
-  // Remove the stale lock and re-acquire atomically; losing the race means another process holds it.
-  try { unlinkSync(lockFile); } catch { /* another process may have removed it */ }
-  return tryCreateLock(lockFile);
+  return lockOwnerAlive(owner) ? false : reclaimLock(lockFile, owner);
 }
 
 /** Take the lock or exit 1: two runs must not append to the ledger at once. */
