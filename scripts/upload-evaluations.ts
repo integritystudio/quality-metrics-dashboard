@@ -645,7 +645,7 @@ interface Options {
   windowDays: number;
   maxAgeMs: number;
   limit: number;
-  onlyKeysPath?: string;
+  onlyKeysPath: string | undefined;
 }
 
 const DAYS_ARG = '--days';
