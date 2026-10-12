@@ -101,7 +101,7 @@ type VersionAcc = {
   latestMs: number;
 };
 
-type CodeQualitySpan = SpanLike & { startTimeUnixNano?: string | number | bigint | null };
+type CodeQualitySpan = SpanLike & { startTimeUnixNano?: string | number | bigint | null | undefined };
 
 function avg(nums: number[]): number {
   if (nums.length === 0) return 0;

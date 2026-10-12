@@ -34,8 +34,8 @@ import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attri
 /** Minimal shape required by the span-extraction helpers. */
 export type ExtractableSpan = {
   name: string;
-  status?: { code?: number | string };
-  attributes?: Record<string, unknown>;
+  status?: { code?: number | string } | undefined;
+  attributes?: Record<string, unknown> | undefined;
 };
 
 /**
@@ -76,12 +76,12 @@ export function extractGitCommit(span: ExtractableSpan): GitCommit | null {
 }
 
 /** The span fields the session detail reads. */
-export type SessionSpan = ExtractableSpan & { traceId?: string; durationMs?: number };
+export type SessionSpan = ExtractableSpan & { traceId?: string | undefined; durationMs?: number | undefined };
 
 /** The evaluation fields the session detail reads; the rows are returned as given. */
 export type SessionEvaluation = {
   evaluationName: string;
-  scoreValue?: number | null;
+  scoreValue?: number | null | undefined;
   timestamp: Parameters<typeof timestampToMs>[0];
 };
 
@@ -89,7 +89,7 @@ export type SessionEvaluation = {
 export type SessionLog = {
   timestamp: Parameters<typeof timestampToMs>[0];
   severity: string;
-  traceId?: string;
+  traceId?: string | undefined;
 };
 
 /**

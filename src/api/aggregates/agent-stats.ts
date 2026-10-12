@@ -40,14 +40,14 @@ export function agentStatsKey(period: Period): string {
 export const HOOK_NAME_ATTRIBUTE = 'integritystudio.hook.name';
 
 export type AgentStatsSpan = SpanLike & {
-  traceId?: string;
-  startTimeUnixNano?: string | number | bigint | null;
+  traceId?: string | undefined;
+  startTimeUnixNano?: string | number | bigint | null | undefined;
 };
 
 export type AgentStatsEvaluation = {
-  traceId?: string;
+  traceId?: string | undefined;
   evaluationName: string;
-  scoreValue?: number | null;
+  scoreValue?: number | null | undefined;
 };
 
 export interface EvalMetricSummary {

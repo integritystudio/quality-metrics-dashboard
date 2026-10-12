@@ -184,7 +184,7 @@ export function dashboardEntry(key: string, view: object): KVEntry {
   return { key, value: toKVValue(view), hashBasis };
 }
 
-function spanSessionId(span: { attributes?: Record<string, unknown> }): string | undefined {
+function spanSessionId(span: { attributes?: Record<string, unknown> | undefined }): string | undefined {
   return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.['session_id']) as string | undefined;
 }
 
@@ -194,7 +194,7 @@ function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {
 }
 
 /** Narrows to rows with a non-empty `traceId`, so `group` keys them by `string`. */
-function hasTraceId<T extends { traceId?: string }>(row: T): row is T & { traceId: string } {
+function hasTraceId<T extends { traceId?: string | undefined }>(row: T): row is T & { traceId: string } {
   return Boolean(row.traceId);
 }
 

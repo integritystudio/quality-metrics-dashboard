@@ -188,7 +188,7 @@ export function toIsoWindowBound(value: string, bound: 'start' | 'end'): string 
  */
 export const DateBoundParamSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).optional();
 
-export type SpanLike = { attributes?: Record<string, unknown> };
+export type SpanLike = { attributes?: Record<string, unknown> | undefined };
 
 export function attrStr(span: SpanLike, key: string, fallback = 'unknown'): string {
   const v = span.attributes?.[key];
