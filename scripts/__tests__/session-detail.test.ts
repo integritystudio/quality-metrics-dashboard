@@ -12,7 +12,10 @@ import { evaluation } from './support/evaluations.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 
 function detailOf(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated?: boolean) {
-  return computeSessionDetail({ sessionId: 's1', spans, evaluations, evaluationsTruncated }, computeMultiAgentEvaluation);
+  return computeSessionDetail(
+    { sessionId: 's1', spans, evaluations, ...(evaluationsTruncated !== undefined ? { evaluationsTruncated } : {}) },
+    computeMultiAgentEvaluation,
+  );
 }
 
 describe('computeSessionDetail multi-agent attribution', () => {

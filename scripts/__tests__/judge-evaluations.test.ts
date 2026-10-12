@@ -685,7 +685,7 @@ describe('toOTelRecord', () => {
   });
 
   it('omits the judge model for a score no model produced', () => {
-    const canary = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule', judgeModel: undefined });
+    const { judgeModel: _noModel, ...canary } = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule' });
     const record = toOTelRecord(canary) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
     expect(attrs['integritystudio.evaluation.cohort']).toBe('canary');

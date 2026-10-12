@@ -73,7 +73,7 @@ describe('turnSkip', () => {
   });
 
   it('holds an unstamped turn when the webhook secret is missing, since the webhook is its route', () => {
-    const t = turn('1', { identityKeyRef: undefined });
+    const { identityKeyRef: _unstamped, ...t } = turn('1');
 
     expect(selectTurns([t], new Set(), { ...opts, env: {} }).heldForKey).toEqual({ [WEBHOOK_SECRET_ENV]: 1 });
     expect(turnSkip(t, new Set(), opts)).toBeUndefined();
@@ -81,9 +81,10 @@ describe('turnSkip', () => {
 
   it('judges undeliverable turns when the run posts nothing', () => {
     const local = { deliverableOnly: false, env: {} };
+    const { identityKeyRef: _unstamped, ...unstamped } = turn('2');
 
     expect(turnSkip(turn('1', { identityKeyRef: null }), new Set(), local)).toBeUndefined();
-    expect(turnSkip(turn('2', { identityKeyRef: undefined }), new Set(), local)).toBeUndefined();
+    expect(turnSkip(unstamped, new Set(), local)).toBeUndefined();
   });
 
   it('reports a judged turn as judged even when it is also undeliverable', () => {
