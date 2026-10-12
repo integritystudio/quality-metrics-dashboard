@@ -536,7 +536,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   const result = await computeOrgKvEntries(backend, now, {
     maxDays,
     calibrationEntry: isHome ? loadCalibrationEntry() : null,
-    degradationState,
+    ...(degradationState ? { degradationState } : {}),
   });
   if (degradationState && !dryRun) saveDegradationState(stateDir, degradationState);
   return result;
