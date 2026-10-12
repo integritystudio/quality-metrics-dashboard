@@ -78,7 +78,7 @@ export function computeDashboardRoleView(
   evaluationsByMetric: Map<string, EvaluationResult[]>,
   dates: { start: string; end: string },
   role: Role,
-): ReturnType<typeof computeRoleView> & { sparklines: DashboardSparklines; cqi?: CompositeQualityIndex } {
+): ReturnType<typeof computeRoleView> & { sparklines: DashboardSparklines; cqi?: CompositeQualityIndex | undefined } {
   const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
   const cqi = computeCQI(dashboard.metrics);
   const startMs = new Date(dates.start).getTime();
