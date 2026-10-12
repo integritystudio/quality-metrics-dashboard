@@ -453,7 +453,7 @@ function heuristicRecords(
     ruleRecord(span, sessionId, {
       evaluationName: ev.evaluationName,
       scoreValue: normalizeScore(ev.scoreValue),
-      scoreUnit: ev.scoreUnit,
+      ...(ev.scoreUnit && { scoreUnit: ev.scoreUnit }),
       explanation: ev.explanation ?? fallbackExplanation,
       ...(ev.scoreLabel && { scoreLabel: knownLabelSchema.parse(ev.scoreLabel) }),
     }),
