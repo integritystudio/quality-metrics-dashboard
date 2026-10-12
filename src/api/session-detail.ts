@@ -267,7 +267,7 @@ function computeSpanLatency(spans: SessionSpan[]) {
 
 function computeErrorSummary(spans: SessionSpan[]) {
   const byCategory: Record<string, number> = {};
-  const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string }> = [];
+  const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string | undefined }> = [];
   for (const s of spans) {
     if (!isSpanError(s)) continue;
     const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
