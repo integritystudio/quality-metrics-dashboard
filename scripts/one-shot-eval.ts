@@ -55,7 +55,7 @@ export function parseOneShotArgs<T extends object>(
 ): T & OneShotArgs {
   let parsed: T & OneShotArgs = { ...defaults, yes: false };
   try {
-    const cli = parseCli(argv, { values: spec.values, switches: [...(spec.switches ?? []), YES_FLAG] }, { allowUnknown: false });
+    const cli = parseCli(argv, { ...spec, switches: [...(spec.switches ?? []), YES_FLAG] }, { allowUnknown: false });
     parsed = { ...read(cli), yes: cli.has(YES_FLAG) };
   } catch (err) {
     return { ...parsed, error: oneShotArgError(err) };
