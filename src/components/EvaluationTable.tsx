@@ -77,6 +77,9 @@ const features = tableFeatures({
 
 type Features = typeof features;
 
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
+const SORT_INDICATOR = { asc: ' ^', desc: ' v' } as const;
+
 const labelSortFn: SortFn<Features, EvalRow> = (rowA, rowB) => {
   const a = labelToOrdinal(rowA.original.label ?? 'unknown').ordinal;
   const b = labelToOrdinal(rowB.original.label ?? 'unknown').ordinal;
@@ -236,12 +239,6 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
     setColumnFilters(next.length > 0 ? [{ id: 'label', value: next }] : []);
   };
 
-  const sortDir = (colId: string): 'ascending' | 'descending' | 'none' => {
-    const s = sorting.find((entry) => entry.id === colId);
-    if (!s) return 'none';
-    return s.desc ? 'descending' : 'ascending';
-  };
-
   return (
     <div>
       <div className="d-flex mb-3 gap-1-5">
@@ -267,17 +264,18 @@ export function EvaluationTable({ evaluations }: { evaluations: EvalRow[] }) {
             <tr key={hg.id}>
               {hg.headers.map((header) => {
                 const canSort = header.column.getCanSort();
+                const sorted = header.column.getIsSorted();
                 return (
                   <th
                     key={header.id}
                     onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                     className={`select-none${canSort ? ' cursor-pointer' : ''}`}
-                    aria-sort={canSort ? sortDir(header.id) : undefined}
+                    aria-sort={canSort ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {canSort && (
                       <span className="ml-1 text-2xs">
-                        {{ asc: ' ^', desc: ' v' }[header.column.getIsSorted() as string] ?? ''}
+                        {sorted ? SORT_INDICATOR[sorted] : ''}
                       </span>
                     )}
                   </th>

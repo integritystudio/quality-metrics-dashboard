@@ -139,6 +139,20 @@ describe('EvaluationTable', () => {
     expect(sortableHeaders.length).toBeGreaterThan(0);
   });
 
+  it('reports a clicked column\'s sort direction in aria-sort and its indicator', () => {
+    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const header = [...container.querySelectorAll('th[aria-sort]')].find((th) => th.textContent.startsWith('Label'))!;
+    expect(header.getAttribute('aria-sort')).toBe('none');
+
+    fireEvent.click(header);
+    const first = header.getAttribute('aria-sort');
+    fireEvent.click(header);
+    const second = header.getAttribute('aria-sort');
+
+    expect([first, second].sort()).toEqual(['ascending', 'descending']);
+    expect(header.textContent).toContain(second === 'ascending' ? '^' : 'v');
+  });
+
   it('renders expand toggle on each row', () => {
     render(<EvaluationTable evaluations={makeEvalRows()} />);
     const expandBtns = screen.getAllByLabelText('Expand row');
