@@ -264,9 +264,10 @@ function classifyShape(nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowSh
 
 /**
  * The root-to-leaf chain with the largest summed `durationMs`, root first; empty when the
- * graph has no root. Each node's best continuation is computed once, so the cost is
- * O(V + E) however many paths the graph holds. A cycle is cut where the search re-enters
- * a node still on its stack, so a cyclic graph's chain never repeats a node.
+ * graph has no root. A node whose search never re-entered a node on the stack has the same
+ * best chain from every caller, so it is computed once: an acyclic graph costs O(V + E)
+ * however many paths it holds. A node that did re-enter one sits on a cycle and is searched
+ * again per caller, which keeps the chain the longest one that repeats no node.
  */
 export function criticalPath(graph: WorkflowGraph): string[] {
   const root = graph.rootNodeId;
@@ -274,33 +275,30 @@ export function criticalPath(graph: WorkflowGraph): string[] {
 
   const outEdges = groupBy(graph.edges, e => e.source);
   const durationOf = new Map(graph.nodes.map(n => [n.id, n.durationMs]));
-  const best = new Map<string, { cost: number; next: string | undefined }>();
+  const settled = new Map<string, { cost: number; path: string[] }>();
   const onStack = new Set<string>();
 
-  function costFrom(nodeId: string): number {
-    const known = best.get(nodeId);
-    if (known) return known.cost;
-    if (onStack.has(nodeId)) return 0;
+  function search(nodeId: string): { cost: number; path: string[]; reenteredStack: boolean } {
+    const known = settled.get(nodeId);
+    if (known) return { ...known, reenteredStack: false };
+    if (onStack.has(nodeId)) return { cost: 0, path: [], reenteredStack: true };
     onStack.add(nodeId);
-    let next: string | undefined;
-    let nextCost = 0;
+    let bestTail: string[] = [];
+    let bestTailCost = 0;
+    let reenteredStack = false;
     for (const { target } of outEdges.get(nodeId) ?? []) {
-      const childCost = costFrom(target);
-      if (childCost > nextCost) {
-        nextCost = childCost;
-        next = target;
+      const tail = search(target);
+      reenteredStack ||= tail.reenteredStack;
+      if (tail.cost > bestTailCost) {
+        bestTailCost = tail.cost;
+        bestTail = tail.path;
       }
     }
     onStack.delete(nodeId);
-    const cost = (durationOf.get(nodeId) ?? 0) + nextCost;
-    best.set(nodeId, { cost, next });
-    return cost;
+    const result = { cost: (durationOf.get(nodeId) ?? 0) + bestTailCost, path: [nodeId, ...bestTail] };
+    if (!reenteredStack) settled.set(nodeId, result);
+    return { ...result, reenteredStack };
   }
 
-  costFrom(root);
-  const path = new Set<string>();
-  for (let nodeId: string | undefined = root; nodeId !== undefined && !path.has(nodeId); nodeId = best.get(nodeId)?.next) {
-    path.add(nodeId);
-  }
-  return [...path];
+  return search(root).path;
 }

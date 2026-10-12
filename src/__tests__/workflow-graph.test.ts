@@ -472,6 +472,16 @@ describe('criticalPath', () => {
     expect(criticalPath(graph)).toEqual(['a', 'b']);
   });
 
+  it('finds the longest chain through a cycle shared by two branches', () => {
+    const graph = makeGraph({
+      nodes: [node('root', 0), node('x', 0), node('y', 50), node('tail', 100)],
+      edges: [edge('root', 'x'), edge('root', 'y'), edge('x', 'y'), edge('y', 'x'), edge('x', 'tail')],
+      rootNodeId: 'root',
+      workflowShape: 'cyclic',
+    });
+    expect(criticalPath(graph)).toEqual(['root', 'y', 'x', 'tail']);
+  });
+
   it('handles stacked diamonds without enumerating every path', () => {
     const DIAMONDS = 40;
     const nodes = [node('j0', 1)];
