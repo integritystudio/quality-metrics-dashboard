@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { max } from 'd3-array';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColor, scoreColorBand, fmtBytes, formatPercent, byValueDesc } from '../lib/quality-utils.js';
@@ -13,7 +13,7 @@ import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import { ExpandChevron } from './ExpandChevron.js';
 import { Sparkline } from './Sparkline.js';
-import { StatDisplay } from './StatDisplay.js';
+import { StatDisplay, type StatTone } from './StatDisplay.js';
 
 const COLUMN_COUNT = 7;
 type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
@@ -49,10 +49,10 @@ function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListCo
   );
 }
 
-function errorRateClassName(rate: number): string {
-  if (rate === 0) return 'text-healthy';
-  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'text-warning';
-  return 'text-critical';
+function errorRateTone(rate: number): StatTone {
+  if (rate === 0) return 'healthy';
+  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'warning';
+  return 'critical';
 }
 
 interface AgentActivityPanelProps {
@@ -305,23 +305,25 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
   const overallErrorRate = rawErrorRate * 100;
 
+  const stats: Array<{ label: string; value: ReactNode; tone?: StatTone | undefined }> = [
+    { label: 'Agents', value: agents.length },
+    { label: 'Invocations', value: totalInvocations.toLocaleString() },
+    {
+      label: 'Error Rate',
+      value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
+      tone: errorRateTone(rawErrorRate),
+    },
+    {
+      label: 'Rate Limits',
+      value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
+      tone: totalRateLimits > 0 ? 'warning' : undefined,
+    },
+  ];
+
   return (
     <div className="d-flex flex-wrap gap-8 surface-elevated mb-5 p-4-5">
-      {[
-        { label: 'Agents', value: agents.length },
-        { label: 'Invocations', value: totalInvocations.toLocaleString() },
-        {
-          label: 'Error Rate',
-          value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
-          className: errorRateClassName(rawErrorRate),
-        },
-        {
-          label: 'Rate Limits',
-          value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
-          className: totalRateLimits > 0 ? 'text-warning' : undefined,
-        },
-      ].map(({ label, value, className }) => (
-        <StatDisplay key={label} value={value} label={label} valueClassName={className} />
+      {stats.map(({ label, value, tone }) => (
+        <StatDisplay key={label} value={value} label={label} tone={tone} />
       ))}
     </div>
   );

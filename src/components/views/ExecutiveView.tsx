@@ -18,7 +18,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
     <div>
       <HealthBanner status={data.overallStatus} message="Executive Summary">
         <StatDisplay value={data.summary.totalMetrics} label="Total" />
-        <StatDisplay value={data.summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
+        <StatDisplay value={data.summary.healthyMetrics} label="Healthy" tone="healthy" />
         {data.slaCompliantCount !== undefined && (
           <StatDisplay value={`${data.slaCompliantCount}/${data.slaTotalCount}`} label="SLAs Met" />
         )}

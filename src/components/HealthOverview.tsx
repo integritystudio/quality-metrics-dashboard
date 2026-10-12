@@ -70,9 +70,9 @@ export function HealthOverview({ dashboard }: { dashboard: QualityDashboardSumma
   return (
     <HealthBanner status={overallStatus} message={statusMessage}>
       <StatDisplay value={summary.totalMetrics} label="Total" />
-      <StatDisplay value={summary.healthyMetrics} label="Healthy" valueClassName="text-healthy" />
-      <StatDisplay value={summary.warningMetrics} label="Warning" valueClassName="text-warning" />
-      <StatDisplay value={summary.criticalMetrics} label="Critical" valueClassName="text-critical" />
+      <StatDisplay value={summary.healthyMetrics} label="Healthy" tone="healthy" />
+      <StatDisplay value={summary.warningMetrics} label="Warning" tone="warning" />
+      <StatDisplay value={summary.criticalMetrics} label="Critical" tone="critical" />
     </HealthBanner>
   );
 }
