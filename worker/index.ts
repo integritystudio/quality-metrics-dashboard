@@ -232,12 +232,14 @@ type WaitUntilFn = (promise: Promise<unknown>) => void;
 const FIRE_AND_FORGET_TIMEOUT_MS = 3000;
 
 // Inserts one row for a non-critical write. Every failure, the timeout included, is
-// swallowed: postgrest-js answers { error } rather than rejecting, and the final
-// handler catches anything else.
-function insertAndForget(env: SupabaseEnv, table: string, row: Record<string, unknown>): Promise<void> {
-  return Promise.resolve(
-    db(env).from(table).insert(row).abortSignal(AbortSignal.timeout(FIRE_AND_FORGET_TIMEOUT_MS)),
-  ).then(() => undefined, () => undefined);
+// swallowed: postgrest-js answers { error } rather than rejecting, and the catch takes
+// the rest — including a malformed SUPABASE_URL, which `.from()` throws synchronously.
+async function insertAndForget(env: SupabaseEnv, table: string, row: Record<string, unknown>): Promise<void> {
+  try {
+    await db(env).from(table).insert(row).abortSignal(AbortSignal.timeout(FIRE_AND_FORGET_TIMEOUT_MS));
+  } catch {
+    // Fire-and-forget: a failed audit or activity write must not fail the request.
+  }
 }
 
 // Fire-and-forget: logs sensitive admin mutations to audit_log without blocking the response.
