@@ -4,24 +4,27 @@
  * POST /api/org/switch and drops the prior org's cached queries through OrgContext.
  */
 
-import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useOrg } from '../contexts/OrgContext.js';
+
+const SWITCH_FAILED_MESSAGE = 'Failed to switch organization';
 
 export function OrgSwitcher() {
   const { activeOrgId, memberships, isStaff, switchOrg } = useOrg();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { mutate, isPending, isError } = useMutation({
+    // Fail at once while offline rather than pausing the select until reconnect.
+    networkMode: 'always',
+    mutationFn: async (orgId: string) => {
+      if (!(await switchOrg(orgId))) throw new Error(SWITCH_FAILED_MESSAGE);
+    },
+  });
 
   // Single-org users (and pre-cutover sessions with no memberships) see nothing.
   if (memberships.length < 2 && !(isStaff && memberships.length > 0)) return null;
 
-  async function handleChange(orgId: string) {
+  function handleChange(orgId: string) {
     if (!orgId || orgId === activeOrgId) return;
-    setBusy(true);
-    setError(null);
-    const ok = await switchOrg(orgId);
-    if (!ok) setError('Failed to switch organization');
-    setBusy(false);
+    mutate(orgId);
   }
 
   return (
@@ -29,15 +32,15 @@ export function OrgSwitcher() {
       <select
         className="select-sm"
         value={activeOrgId ?? ''}
-        onChange={(e) => void handleChange(e.target.value)}
-        disabled={busy}
+        onChange={(e) => handleChange(e.target.value)}
+        disabled={isPending}
         aria-label="Switch organization"
       >
         {memberships.map((m) => (
           <option key={m.orgId} value={m.orgId}>{m.name}</option>
         ))}
       </select>
-      {error && <span className="text-xs text-error">{error}</span>}
+      {isError && <span className="text-xs text-error">{SWITCH_FAILED_MESSAGE}</span>}
     </div>
   );
 }
