@@ -43,7 +43,7 @@ describe('AgentActivityPanel sorting', () => {
   it('sorts a newly chosen column descending first', () => {
     render(<AgentActivityPanel agents={AGENTS} />);
 
-    fireEvent.click(screen.getByRole('columnheader', { name: /Error Rate/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Error Rate/ }));
 
     expect(renderedAgentOrder()).toEqual(['alpha', 'charlie', 'bravo']);
     expect(screen.getByRole('columnheader', { name: /Invocations/ })).toHaveAttribute('aria-sort', 'none');
@@ -52,20 +52,33 @@ describe('AgentActivityPanel sorting', () => {
   it('flips direction on a second click and never clears the sort', () => {
     render(<AgentActivityPanel agents={AGENTS} />);
     const header = screen.getByRole('columnheader', { name: /Invocations/ });
+    const sortButton = within(header).getByRole('button');
 
-    fireEvent.click(header);
+    fireEvent.click(sortButton);
     expect(renderedAgentOrder()).toEqual(['alpha', 'charlie', 'bravo']);
     expect(header).toHaveAttribute('aria-sort', 'ascending');
 
-    fireEvent.click(header);
+    fireEvent.click(sortButton);
     expect(renderedAgentOrder()).toEqual(['bravo', 'charlie', 'alpha']);
     expect(header).toHaveAttribute('aria-sort', 'descending');
   });
 
   it('leaves the agent column unsortable', () => {
     render(<AgentActivityPanel agents={AGENTS} />);
+    const header = screen.getByRole('columnheader', { name: 'Agent' });
 
-    expect(screen.getByRole('columnheader', { name: 'Agent' })).not.toHaveAttribute('aria-sort');
+    expect(header).not.toHaveAttribute('aria-sort');
+    expect(within(header).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('puts each sortable column behind a focusable button', () => {
+    render(<AgentActivityPanel agents={AGENTS} />);
+    const sortButton = screen.getByRole('button', { name: /Error Rate/ });
+
+    sortButton.focus();
+
+    expect(sortButton).toHaveFocus();
+    expect(sortButton).toHaveAttribute('type', 'button');
   });
 });
 

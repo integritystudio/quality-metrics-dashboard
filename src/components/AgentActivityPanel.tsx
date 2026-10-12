@@ -22,6 +22,7 @@ import { routes } from '../lib/routes.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import { ExpandChevron } from './ExpandChevron.js';
+import { SortableHeaderCell } from './SortableHeaderCell.js';
 import { Sparkline } from './Sparkline.js';
 import { StatDisplay, type StatTone } from './StatDisplay.js';
 
@@ -31,8 +32,6 @@ const features = tableFeatures({
   sortFns: { basic: sortFn_basic },
 });
 
-const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
-const SORT_INDICATOR = { asc: ' \u2191', desc: ' \u2193' } as const;
 const AGENT_COLUMN_ID = 'agentName';
 const DEFAULT_SORTING: SortingState = [{ id: 'invocations', desc: true }];
 
@@ -129,21 +128,15 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
         <thead>
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id}>
-              {hg.headers.map((header) => {
-                const canSort = header.column.getCanSort();
-                const sorted = header.column.getIsSorted();
-                return (
-                  <th
-                    key={header.id}
-                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                    className={header.column.id === AGENT_COLUMN_ID ? 'col-agent' : canSort ? 'cursor-pointer select-none' : undefined}
-                    aria-sort={canSort ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined}
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {sorted ? SORT_INDICATOR[sorted] : ''}
-                  </th>
-                );
-              })}
+              {hg.headers.map((header) => (
+                <SortableHeaderCell
+                  key={header.id}
+                  column={header.column}
+                  className={header.column.id === AGENT_COLUMN_ID ? 'col-agent' : undefined}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </SortableHeaderCell>
+              ))}
             </tr>
           ))}
         </thead>

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act, within } from '@testing-library/react';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { CQIHero } from '../components/CQIHero.js';
 import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js';
@@ -144,13 +144,14 @@ describe('EvaluationTable', () => {
     const header = [...container.querySelectorAll('th[aria-sort]')].find((th) => th.textContent.startsWith('Label'))!;
     expect(header.getAttribute('aria-sort')).toBe('none');
 
-    fireEvent.click(header);
+    const sortButton = within(header as HTMLElement).getByRole('button');
+    fireEvent.click(sortButton);
     const first = header.getAttribute('aria-sort');
-    fireEvent.click(header);
+    fireEvent.click(sortButton);
     const second = header.getAttribute('aria-sort');
 
     expect([first, second].sort()).toEqual(['ascending', 'descending']);
-    expect(header.textContent).toContain(second === 'ascending' ? '^' : 'v');
+    expect(header.textContent).toContain(second === 'ascending' ? '\u2191' : '\u2193');
   });
 
   it('renders expand toggle on each row', () => {
