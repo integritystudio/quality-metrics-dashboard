@@ -94,7 +94,6 @@ export interface AgentStatsWindow {
 
 export function agentStatsWindow(period: Period, now: Date): AgentStatsWindow {
   const periodDays = VALID_PERIODS[period];
-  if (periodDays === undefined) throw new Error(`Unknown period: ${period}`);
   const windowStart = new Date(now.getTime() - periodDays * TIME_MS.DAY);
   return { periodDays, windowStart, startDate: toDateOnly(windowStart), endDate: toDateOnly(now) };
 }

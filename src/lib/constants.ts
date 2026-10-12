@@ -49,19 +49,17 @@ export const TIME_MS = {
   HOUR: 60 * 60 * 1000,
   DAY: 24 * 60 * 60 * 1000,
 } as const;
-/** Period string → day count for API route validation. */
-export const VALID_PERIODS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30 };
-/** Zod-compatible tuple of valid period keys, derived from VALID_PERIODS. */
-export const PERIOD_KEYS = Object.keys(VALID_PERIODS) as [string, ...string[]];
-/** Zod enum for period values, derived from VALID_PERIODS keys. */
+/** The valid period keys; a literal tuple so `PeriodEnum` parses to `Period`, not `string`. */
+export const PERIOD_KEYS = ['24h', '7d', '30d'] as const;
+/** Zod enum for period values. */
 export const PeriodEnum = z.enum(PERIOD_KEYS);
-/** Union of the three valid period strings. Hardcoded to avoid the `[string, ...string[]]`
- *  widening that `z.infer<typeof PeriodEnum>` produces when `PERIOD_KEYS` carries no literals. */
-export type Period = '24h' | '7d' | '30d';
+export type Period = z.infer<typeof PeriodEnum>;
+/** Period string → day count. */
+export const VALID_PERIODS = { '24h': 1, '7d': 7, '30d': 30 } satisfies Record<Period, number>;
 /** Default client-side period for list/evaluation queries. */
-export const DEFAULT_PERIOD = PeriodEnum.parse('7d') as '7d';
+export const DEFAULT_PERIOD = '7d' satisfies Period;
 /** Default client-side period for metric detail views (wider window). */
-export const DEFAULT_PERIOD_DETAIL = PeriodEnum.parse('30d') as '30d';
+export const DEFAULT_PERIOD_DETAIL = '30d' satisfies Period;
 /** Shared Zod schema for period query param validation (default: '7d'). */
 export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
 /**
@@ -73,10 +71,9 @@ export const PERIOD_MS = {
   '7d': 7 * TIME_MS.DAY,
   '30d': 30 * TIME_MS.DAY,
 } satisfies Record<Period, number>;
-/** Compute { start, end } ISO strings for a validated period key (e.g. '7d').
- *  Callers must have already validated `period` through `PeriodSchema`. */
-export function computePeriodDates(period: string): { start: string; end: string } {
-  return lookbackRange(PERIOD_MS[period as Period]);
+/** Compute { start, end } ISO strings for a period key (e.g. '7d'). */
+export function computePeriodDates(period: Period): { start: string; end: string } {
+  return lookbackRange(PERIOD_MS[period]);
 }
 
 /** { start, end } ISO strings spanning the `lookbackMs` up to now. */

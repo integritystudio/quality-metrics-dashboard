@@ -23,7 +23,7 @@ agentRoutes.onError(handleRouteError);
  * serves the `meta:agents:<period>` KV key the sync writes from the same function.
  */
 agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
-  const period = c.req.valid('query').period as Period;
+  const { period } = c.req.valid('query');
   const now = new Date();
   const { windowStart, startDate, endDate } = agentStatsWindow(period, now);
 

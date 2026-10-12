@@ -5,7 +5,7 @@ import { getQualityMetric } from '../parent/quality-metrics.js';
 import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, isValidParam, jsonSafe } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus, type Period } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
 import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
 import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
 import { computeMetricDetailView, previousWindow } from '../aggregates/metric-detail.js';
@@ -38,8 +38,7 @@ metricsRoutes.get('/metrics/:name', validQuery(MetricDetailQuery), async (c) => 
     return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
   }
 
-  const { period: periodParam, topN, bucketCount } = c.req.valid('query');
-  const period = periodParam as Period;
+  const { period, topN, bucketCount } = c.req.valid('query');
 
   const now = new Date();
   const start = subMilliseconds(now, PERIOD_MS[period]);
@@ -66,7 +65,7 @@ metricsRoutes.get('/metrics/:name/evaluations', validQuery(MetricEvaluationsQuer
   const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
 
   const now = new Date();
-  const periodMs = PERIOD_MS[period as Period];
+  const periodMs = PERIOD_MS[period];
   const start = subMilliseconds(now, periodMs);
 
   const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
