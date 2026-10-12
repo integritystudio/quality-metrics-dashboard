@@ -20,7 +20,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchAppSession(jwt: string, signal?: AbortSignal): Promise<AppSession | null> {
+async function fetchAppSession(jwt: string, signal: AbortSignal): Promise<AppSession | null> {
   try {
     const res = await apiFetch(`/api/me`, jwt, null, { method: 'GET', signal });
     if (!res.ok) return null;
