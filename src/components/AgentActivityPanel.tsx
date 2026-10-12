@@ -1,6 +1,16 @@
-import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { max, sum } from 'd3-array';
+import {
+  createColumnHelper,
+  createSortedRowModel,
+  flexRender,
+  rowSortingFeature,
+  sortFn_basic,
+  tableFeatures,
+  useTable,
+  type SortingState,
+} from '@tanstack/react-table';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
 import { scoreColor, scoreColorBand, formatCompactCount, formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
@@ -15,8 +25,28 @@ import { ExpandChevron } from './ExpandChevron.js';
 import { Sparkline } from './Sparkline.js';
 import { StatDisplay, type StatTone } from './StatDisplay.js';
 
-const COLUMN_COUNT = 7;
-type SortKey = 'invocations' | 'errorRate' | 'sessionCount' | 'avgOutputSize';
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns: { basic: sortFn_basic },
+});
+
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
+const SORT_INDICATOR = { asc: ' \u2191', desc: ' \u2193' } as const;
+const AGENT_COLUMN_ID = 'agentName';
+const DEFAULT_SORTING: SortingState = [{ id: 'invocations', desc: true }];
+
+const columnHelper = createColumnHelper<typeof features, AgentStat>();
+
+const columns = columnHelper.columns([
+  columnHelper.accessor('agentName', { header: 'Agent', enableSorting: false }),
+  columnHelper.accessor('invocations', { header: 'Invocations', sortFn: 'basic' }),
+  columnHelper.accessor('errorRate', { header: 'Error Rate', sortFn: 'basic' }),
+  columnHelper.accessor('sessionCount', { header: 'Sessions', sortFn: 'basic' }),
+  columnHelper.accessor('avgOutputSize', { header: 'Avg Output', sortFn: 'basic' }),
+  columnHelper.display({ id: 'rateLimits', header: 'Rate Limits' }),
+  columnHelper.display({ id: 'source', header: 'Source' }),
+]);
 
 interface IdListColumnProps {
   label: string;
@@ -60,8 +90,7 @@ interface AgentActivityPanelProps {
 }
 
 export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
-  const [sort, setSort] = useState<SortKey>('invocations');
-  const [asc, setAsc] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const colorIndex = useMemo(
@@ -77,14 +106,16 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
     [agents],
   );
 
-  const toggleSort = useCallback((key: SortKey) => {
-    if (key === sort) {
-      setAsc(v => !v);
-    } else {
-      setSort(key);
-      setAsc(false);
-    }
-  }, [sort]);
+  const table = useTable({
+    features,
+    data: agents,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    sortDescFirst: true,
+    enableSortingRemoval: false,
+    enableMultiSort: false,
+  });
 
   if (agents.length === 0) {
     return <EmptyState message="No agent activity recorded for this period." />;
@@ -92,38 +123,32 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   const maxInvocations = Math.max(max(agents, a => a.invocations) ?? 0, 1);
 
-  const sorted = [...agents].sort((a, b) => {
-    const diff = a[sort] < b[sort] ? -1 : a[sort] > b[sort] ? 1 : 0;
-    return asc ? diff : -diff;
-  });
-
-  const sortIndicator = (key: SortKey) =>
-    sort === key ? (asc ? ' \u2191' : ' \u2193') : '';
-
   return (
     <div className="overflow-x-auto">
       <table className="data-table sla-table agent-activity-table">
         <thead>
-          <tr>
-            <th className="col-agent">Agent</th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('invocations')}>
-              Invocations{sortIndicator('invocations')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('errorRate')}>
-              Error Rate{sortIndicator('errorRate')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('sessionCount')}>
-              Sessions{sortIndicator('sessionCount')}
-            </th>
-            <th className="cursor-pointer select-none" onClick={() => toggleSort('avgOutputSize')}>
-              Avg Output{sortIndicator('avgOutputSize')}
-            </th>
-            <th>Rate Limits</th>
-            <th>Source</th>
-          </tr>
+          {table.getHeaderGroups().map((hg) => (
+            <tr key={hg.id}>
+              {hg.headers.map((header) => {
+                const canSort = header.column.getCanSort();
+                const sorted = header.column.getIsSorted();
+                return (
+                  <th
+                    key={header.id}
+                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                    className={header.column.id === AGENT_COLUMN_ID ? 'col-agent' : canSort ? 'cursor-pointer select-none' : undefined}
+                    aria-sort={canSort ? (sorted ? ARIA_SORT[sorted] : 'none') : undefined}
+                  >
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {sorted ? SORT_INDICATOR[sorted] : ''}
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
         </thead>
         <tbody>
-          {sorted.map((agent) => {
+          {table.getRowModel().rows.map(({ original: agent }) => {
             const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
             const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
             const invPct = (agent.invocations / maxInvocations) * 100;
@@ -205,7 +230,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
                 {isExpanded && (
                   <tr className="eval-expanded-panel">
-                    <td colSpan={COLUMN_COUNT} className="border-b">
+                    <td colSpan={columns.length} className="border-b">
                       <EvalSummaryRow evalSummary={agent.evalSummary} />
 
                       {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
