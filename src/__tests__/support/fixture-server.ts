@@ -226,18 +226,18 @@ const ABSENT_EVAL_ID = '';
  */
 export function evalToWire(
   e: {
-    evaluationName?: string;
-    scoreValue?: number;
-    timestamp?: bigint;
-    traceId?: string;
-    spanId?: string;
-    sessionId?: string;
-    evaluator?: string;
-    evaluatorType?: string;
-    scoreLabel?: string;
-    explanation?: string;
-    agentName?: string;
-    trajectoryLength?: number;
+    evaluationName?: string | undefined;
+    scoreValue?: number | undefined;
+    timestamp?: bigint | undefined;
+    traceId?: string | undefined;
+    spanId?: string | undefined;
+    sessionId?: string | undefined;
+    evaluator?: string | undefined;
+    evaluatorType?: string | undefined;
+    scoreLabel?: string | undefined;
+    explanation?: string | undefined;
+    agentName?: string | undefined;
+    trajectoryLength?: number | undefined;
   },
   id = 1,
 ): EvalWireRow {

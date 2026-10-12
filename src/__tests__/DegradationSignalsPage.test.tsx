@@ -144,7 +144,7 @@ describe('DegradationSignalsPage — signal display', () => {
     // The pipeline overwrites these entries on its next run; until then the
     // page must not blow up on the fields it has not got.
     mockLoaded(makeResponse({
-      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: true, ewmaDriftPValue: undefined, ewmaDriftFdrSignificant: undefined }) })],
+      reports: [makeReport({ signal: makeSignal({ ewmaDriftDetected: true }) })],
     }));
     render(<DegradationSignalsPage period="7d" />);
     expect(screen.getByText('Yes')).toBeInTheDocument();

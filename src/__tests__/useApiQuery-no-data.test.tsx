@@ -37,7 +37,7 @@ function useTestQuery(
   return useApiQuery<{ status: string }>(
     ['test'],
     () => `/api/test`,
-    { onNotFound, retry: 0 },
+    { ...(onNotFound ? { onNotFound } : {}), retry: 0 },
   );
 }
 
