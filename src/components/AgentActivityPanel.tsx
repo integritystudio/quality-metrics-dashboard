@@ -49,10 +49,10 @@ function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListCo
   );
 }
 
-function errorRateColor(rate: number): string {
-  if (rate === 0) return 'var(--status-healthy)';
-  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'var(--status-warning)';
-  return 'var(--status-critical)';
+function errorRateClassName(rate: number): string {
+  if (rate === 0) return 'text-healthy';
+  if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'text-warning';
+  return 'text-critical';
 }
 
 interface AgentActivityPanelProps {
@@ -313,15 +313,15 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
         {
           label: 'Error Rate',
           value: totalInvocations > 0 ? formatPercent(overallErrorRate) : '\u2014',
-          color: errorRateColor(rawErrorRate),
+          className: errorRateClassName(rawErrorRate),
         },
         {
           label: 'Rate Limits',
           value: totalRateLimits > 0 ? totalRateLimits : '\u2014',
-          color: totalRateLimits > 0 ? 'var(--status-warning)' : undefined,
+          className: totalRateLimits > 0 ? 'text-warning' : undefined,
         },
-      ].map(({ label, value, color }) => (
-        <StatDisplay key={label} value={value} label={label} valueColor={color} />
+      ].map(({ label, value, className }) => (
+        <StatDisplay key={label} value={value} label={label} valueClassName={className} />
       ))}
     </div>
   );

@@ -15,7 +15,7 @@ export function AuditorView({ data }: { data: AuditorViewType }) {
         <StatDisplay variant="card"
           value={new Date(data.timestamp).toLocaleString()}
           label="Computed At"
-          valueColor="var(--text-secondary)"
+          valueClassName="text-secondary"
         />
       </div>
 

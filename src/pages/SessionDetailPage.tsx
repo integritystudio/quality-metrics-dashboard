@@ -147,11 +147,11 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
         <div className="vitals-divider" />
         <StatDisplay label="MCP calls" value={totalMcpCalls} />
         <div className="vitals-divider" />
-        <StatDisplay label="Commits" value={gitCommits.length} valueColor={gitCommits.length > 0 ? 'var(--status-healthy)' : undefined} />
+        <StatDisplay label="Commits" value={gitCommits.length} valueClassName={gitCommits.length > 0 ? 'text-healthy' : undefined} />
         <div className="vitals-divider" />
-        <StatDisplay label="Alerts fired" value={alertSummary.totalFired} valueColor={alertSummary.totalFired > 0 ? 'var(--status-warning)' : undefined} />
+        <StatDisplay label="Alerts fired" value={alertSummary.totalFired} valueClassName={alertSummary.totalFired > 0 ? 'text-warning' : undefined} />
         <div className="vitals-divider" />
-        <StatDisplay label="Errors" value={errorCount} valueColor={errorCount > 0 ? 'var(--status-critical)' : undefined} />
+        <StatDisplay label="Errors" value={errorCount} valueClassName={errorCount > 0 ? 'text-critical' : undefined} />
         {maxTokenSnapshot && (
           <>
             <div className="vitals-divider" />

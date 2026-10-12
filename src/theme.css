@@ -317,7 +317,6 @@ body {
 
 
 .summary-count .value {
-  color: var(--stat-value-color, inherit);
   font-size: var(--font-size-2xl);
   font-weight: var(--bold);
   font-family: var(--font-mono);
