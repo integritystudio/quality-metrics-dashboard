@@ -363,14 +363,14 @@ const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComp
 
 interface WorkflowGraphProps {
   graph: WorkflowGraph;
-  onNodeClick?: (nodeId: string) => void;
-  height?: number;
+  onNodeClick?: ((nodeId: string) => void) | undefined;
+  height?: number | undefined;
   /** When provided, nodes not in this set are rendered dimmed (topology preserved). */
-  selectedAgents?: ReadonlySet<string>;
+  selectedAgents?: ReadonlySet<string> | undefined;
   /** When provided, nodes in this set are highlighted as the critical path. */
-  criticalPath?: ReadonlySet<string>;
+  criticalPath?: ReadonlySet<string> | undefined;
   /** Forwarded ref applied to the graph container div, used for PNG export. */
-  containerRef?: React.RefObject<HTMLDivElement | null>;
+  containerRef?: React.RefObject<HTMLDivElement | null> | undefined;
 }
 
 export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {

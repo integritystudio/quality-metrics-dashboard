@@ -108,10 +108,10 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
 
 export interface WorkflowTimelineProps {
   turns: TurnLevelResult[];
-  handoffs?: HandoffEvaluation[];
+  handoffs?: HandoffEvaluation[] | undefined;
   agentNames: string[];
   /** When provided, only lanes for agents in this set are rendered. */
-  selectedAgents?: ReadonlySet<string>;
+  selectedAgents?: ReadonlySet<string> | undefined;
 }
 
 const NO_HANDOFFS: HandoffEvaluation[] = [];
