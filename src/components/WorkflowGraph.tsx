@@ -16,8 +16,8 @@ import '@xyflow/react/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { mean, sum } from 'd3-array';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration, groupBy } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION, COMPACT_UNIT_PRECISION } from '../lib/constants.js';
+import { fmtDuration, formatCompactCount, groupBy } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
@@ -313,7 +313,7 @@ const AgentNodeComponent = memo(function AgentNode({ data }: NodeProps) {
       )}
       <div className="workflow-node__meta">
         <span>{d.toolCallCount} tools</span> | <span>{d.turnCount} turns</span>
-        {d.totalTokens != null && <span> | {(d.totalTokens / 1000).toFixed(COMPACT_UNIT_PRECISION)}K tok</span>}
+        {d.totalTokens != null && <span> | {formatCompactCount(d.totalTokens)} tok</span>}
       </div>
       <div className="workflow-node__duration">
         {fmtDuration(d.durationMs)}

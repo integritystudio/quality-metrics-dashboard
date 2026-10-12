@@ -1,6 +1,6 @@
 import type { QualityDashboardSummary } from '../types.js';
 import { formatCompactCount, formatTimestamp } from '../lib/quality-utils.js';
-import { TIME_MS, PERIOD_MS, COMPACT_UNIT_PRECISION } from '../lib/constants.js';
+import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { HealthBanner } from './HealthBanner.js';
 import { StatDisplay } from './StatDisplay.js';
 
@@ -29,9 +29,8 @@ function computePipelineHealth(dashboard: QualityDashboardSummary): PipelineHeal
     periodHours = Math.max(1, diffMs / TIME_MS.HOUR);
   }
   const perHour = totalSamples / periodHours;
-  const evalRate = perHour >= 100 ? `${(perHour / 1000).toFixed(COMPACT_UNIT_PRECISION)}k/hr`
-    : perHour >= 1 ? `${Math.round(perHour)}/hr`
-    : `${(perHour * 24).toFixed(COMPACT_UNIT_PRECISION)}/day`;
+  const evalRate = perHour >= 1 ? `${formatCompactCount(Math.round(perHour))}/hr`
+    : `${formatCompactCount(perHour * (TIME_MS.DAY / TIME_MS.HOUR))}/day`;
 
   return { evalVolume: totalSamples, lastEvalAge, evalRate };
 }

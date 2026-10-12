@@ -11,6 +11,8 @@ import type {
   MetricTrend,
   ConfidenceIndicator,
 } from '../types.js';
+import { makeMetricResult } from './support/fixtures.js';
+import { TIME_MS } from '../lib/constants.js';
 
 
 function makeDashboard(overrides: Partial<QualityDashboardSummary> = {}): QualityDashboardSummary {
@@ -178,6 +180,18 @@ describe('HealthOverview', () => {
     expect(within(counts[1] as HTMLElement).getByText('3')).toBeInTheDocument();
     expect(within(counts[2] as HTMLElement).getByText('2')).toBeInTheDocument();
     expect(within(counts[3] as HTMLElement).getByText('1')).toBeInTheDocument();
+  });
+
+  it.each([
+    { sampleCount: 500, hours: 1, rate: '500/hr' },
+    { sampleCount: 1500, hours: 1, rate: '1.5K/hr' },
+    { sampleCount: 12, hours: 24, rate: '12/day' },
+  ])('shows $sampleCount evaluations over $hours h as $rate', ({ sampleCount, hours, rate }) => {
+    const start = new Date('2026-02-10T00:00:00Z');
+    const end = new Date(start.getTime() + hours * TIME_MS.HOUR);
+    const metric = makeMetricResult({ sampleCount, period: { start: start.toISOString(), end: end.toISOString() } });
+    render(<HealthOverview dashboard={makeDashboard({ metrics: [metric] })} />);
+    expect(screen.getByText(rate)).toBeInTheDocument();
   });
 });
 
