@@ -7,11 +7,12 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { queriedDateWindow } from '../../../src/backends/cloud.js';
-import { computeOrgEntries, type OrgComputation, type OrgReadBackend } from '../sync-to-kv.js';
+import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { trendKey } from '../../src/api/aggregates/trend.js';
+import { trendRoutes } from '../../src/api/routes/trends.js';
 import { DEFAULT_TREND_BUCKETS } from '../../src/lib/constants.js';
-import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
+import { evaluation, FIXTURE_METRIC } from './support/evaluations.js';
+import { serveParityFixture } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -23,23 +24,7 @@ const evaluations: EvaluationResult[] = [
   evaluation('unscored', '2026-10-07T10:00:00.000Z', { scoreValue: undefined }),
 ];
 
-function serverRead(name: string, start: string, end: string): EvaluationResult[] {
-  const { startNs = 0n, endNs } = queriedDateWindow({ startDate: isoToNs(start), endDate: isoToNs(end) });
-  return evaluations.filter(e =>
-    e.evaluationName === name && e.timestamp >= startNs && (endNs === undefined || e.timestamp < endNs));
-}
-
-vi.mock('../../src/api/data-loader.js', () => ({
-  loadEvaluationsForMetric: (name: string, start: string, end: string) => Promise.resolve(serverRead(name, start, end)),
-  checkHealth: () => Promise.resolve({ hasData: true }),
-}));
-
-const { trendRoutes } = await import('../../src/api/routes/trends.js');
-
-const backend: OrgReadBackend = {
-  queryEvaluations: ({ limit }) => Promise.resolve(evaluations.slice(0, limit)),
-  queryTraces: () => Promise.resolve([]),
-};
+const fixture = serveParityFixture({ evaluations });
 
 type TrendValue = { bucketCount: number; totalEvaluations: number; narrowed: boolean; trendData: Array<{ count: number }> };
 
@@ -53,7 +38,7 @@ describe('trend parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(backend, NOW, false);
+    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
   });
 
   afterEach(() => {

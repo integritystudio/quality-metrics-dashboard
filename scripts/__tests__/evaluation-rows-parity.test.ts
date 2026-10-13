@@ -11,8 +11,10 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation, type OrgReadBackend } from '../sync-to-kv.js';
+import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
+import { metricsRoutes } from '../../src/api/routes/metrics.js';
 import { evaluation } from './support/evaluations.js';
+import { serveParityFixture } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -34,26 +36,7 @@ const coherenceEval: EvaluationResult = evaluation('e-coherence', '2026-10-07T08
   traceId: 'trace-b',
 });
 
-const allEvals = [relevanceEval, coherenceEval];
-
-vi.mock('../../src/api/data-loader.js', () => ({
-  loadEvaluationsForMetric: (name: string, _start: string, _end: string) =>
-    Promise.resolve(allEvals.filter(e => e.evaluationName === name)),
-  loadEvaluationsByMetric: (_start: string, _end: string) => Promise.resolve(
-    new Map([
-      ['relevance', [relevanceEval]],
-      ['coherence', [coherenceEval]],
-    ])
-  ),
-  checkHealth: () => Promise.resolve({ hasData: true }),
-}));
-
-const { metricsRoutes } = await import('../../src/api/routes/metrics.js');
-
-const backend: OrgReadBackend = {
-  queryEvaluations: ({ limit }) => Promise.resolve(allEvals.slice(0, limit)),
-  queryTraces: () => Promise.resolve([]),
-};
+const fixture = serveParityFixture({ evaluations: [relevanceEval, coherenceEval] });
 
 function kvValue(result: OrgComputation, key: string): unknown {
   const entry = result.allEntries.find(e => e.key === key);
@@ -65,7 +48,7 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(backend, NOW, false);
+    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
   });
 
   afterEach(() => {
