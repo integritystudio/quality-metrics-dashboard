@@ -16,7 +16,8 @@ import { CoverageGrid } from '../components/CoverageGrid.js';
 import { RoleSelector } from '../components/RoleSelector.js';
 import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
 import {
-  PAGE_SHELL_ERROR_HEADING, PAGE_SHELL_SKELETON_SELECTOR, apiErrorMessage, renderPage, stubPendingFetch,
+  PAGE_SHELL_ERROR_HEADING, PAGE_SHELL_SKELETON_SELECTOR, SERVER_ERROR_BODY, SERVER_ERROR_STATUS, apiErrorMessage,
+  renderPage, stubPendingFetch,
 } from './support/page-harness.js';
 
 // jsdom + React cold-start can exceed the default 5000ms on the first render test.
@@ -33,9 +34,6 @@ const HOME_PATH = '/';
 const COVERAGE_PATH = '/coverage';
 const PERIOD = '7d';
 const PAGE_HEADING = 'Evaluation Coverage';
-/** `useApiQuery` never retries a 401, so the error state renders on the first response. */
-const HTTP_UNAUTHORIZED = 401;
-const UNAUTHORIZED_BODY = { error: 'Unauthorized' };
 const TRACE_COVERAGE_URL = '/api/coverage?period=7d&inputKey=traceId';
 const SESSION_COVERAGE_URL = '/api/coverage?period=7d&inputKey=sessionId';
 
@@ -174,12 +172,12 @@ describe('CoveragePage', () => {
   });
 
   it('surfaces the error message when the query fails', async () => {
-    stubFetch(UNAUTHORIZED_BODY, { status: HTTP_UNAUTHORIZED });
+    stubFetch(SERVER_ERROR_BODY, { status: SERVER_ERROR_STATUS });
 
     renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
     expect(await screen.findByRole('heading', { name: PAGE_SHELL_ERROR_HEADING })).toBeTruthy();
-    expect(screen.getByText(apiErrorMessage(HTTP_UNAUTHORIZED, UNAUTHORIZED_BODY))).toBeTruthy();
+    expect(screen.getByText(apiErrorMessage(SERVER_ERROR_STATUS, SERVER_ERROR_BODY))).toBeTruthy();
     expect(screen.queryByRole('heading', { name: PAGE_HEADING })).toBeNull();
   });
 });

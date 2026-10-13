@@ -8,7 +8,7 @@ import { routes } from '../lib/routes.js';
 import type { TriggeredAlert } from '../types.js';
 import type { TraceEvaluationsResponse, WireEvaluation } from './support/api-responses.js';
 import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
-import { makeRoutedQueryWrapper } from './support/memory-router.js';
+import { renderPage } from './support/page-harness.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
@@ -189,8 +189,7 @@ const WIRE_EVALUATIONS: WireEvaluation[] = [
 /** Mount the page at `path` under the real query stack and a memory router. */
 function renderDetailPage(body: TraceEvaluationsResponse, path = routes.evaluationDetail(TRACE_ID)) {
   const fetchSpy = stubFetch(body);
-  const { wrapper } = makeRoutedQueryWrapper(path);
-  const view = render(<EvaluationDetailPage traceId={TRACE_ID} />, { wrapper });
+  const view = renderPage(<EvaluationDetailPage traceId={TRACE_ID} />, path);
   return { ...view, fetchSpy };
 }
 

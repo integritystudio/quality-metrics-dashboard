@@ -4,9 +4,9 @@
  * the `?agent=` search param. `useAuth` and `fetch` are the substituted boundaries.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { screen, cleanup, within } from '@testing-library/react';
 import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
-import { makeRoutedQueryWrapper } from './support/memory-router.js';
+import { renderPage } from './support/page-harness.js';
 import type { AgentDetailResponse } from './support/api-responses.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
@@ -48,8 +48,7 @@ const SESSION_RESPONSE: AgentDetailResponse = {
 /** Mount the page at `path` once the session has loaded. */
 async function renderAt(path: string) {
   const fetchSpy = stubFetch(SESSION_RESPONSE);
-  const { wrapper } = makeRoutedQueryWrapper(path);
-  const view = render(<AgentSessionPage sessionId={SESSION_ID} />, { wrapper });
+  const view = renderPage(<AgentSessionPage sessionId={SESSION_ID} />, path);
   await screen.findByRole('heading', { name: 'Agent Session' });
   return { ...view, fetchSpy };
 }
