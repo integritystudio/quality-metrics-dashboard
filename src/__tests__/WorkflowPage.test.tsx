@@ -1,38 +1,22 @@
-import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
+/**
+ * WorkflowPage against the real `useAgentWorkflow` → `useApiQuery` → `apiFetch`
+ * stack, the real `PageShell` and `DetailPageHeader`, and a memory router.
+ * `useAuth` and `fetch` are the substituted boundaries.
+ */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import type { ComponentProps } from 'react';
-import type { LinkProps, DetailPageHeaderProps, PageShellProps } from './test-types.js';
 import type { AgentWorkflowView } from '../components/AgentWorkflowView.js';
+import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
+import { currentPath, makeRoutedQueryWrapper } from './support/memory-router.js';
+import type { AgentGraphResponse } from './support/api-responses.js';
 
-/**
- * Only the three fields WorkflowPage destructures off the query result —
- * typed so the mock cannot hand the page a `data` shape the real
- * `useAgentWorkflow` could never return.
- */
-interface AgentWorkflowQueryResult {
-  data: AgentWorkflowResponse | undefined;
-  isLoading: boolean;
-  error: Error | null;
-}
-
-const mockUseAgentWorkflow = vi.fn<(sessionId: string) => AgentWorkflowQueryResult>();
-vi.mock('../hooks/useAgentSession.js', () => ({
-  useAgentWorkflow: (sessionId: string) => mockUseAgentWorkflow(sessionId),
+vi.mock('../contexts/AuthContext.js', () => ({
+  useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
 }));
 
-// Mock wouter — capture navigate calls
-
-const mockNavigate = vi.fn();
-vi.mock('wouter', () => ({
-  useLocation: () => ['/', mockNavigate],
-  Link: ({ href, children, ...rest }: LinkProps) => (
-    <a href={href} {...rest}>{children}</a>
-  ),
-}));
-
-// Mock AgentWorkflowView, the page's direct child — stub renders testid, fires onNodeClick.
-// Its own forwarding to the graph is covered in WorkflowTimeline.test.tsx.
-
+// The real view always mounts the @xyflow/react graph and an elkjs layout, neither of which
+// runs under jsdom; its forwarding to the graph is covered in WorkflowTimeline.test.tsx.
 vi.mock('../components/AgentWorkflowView.js', () => ({
   AgentWorkflowView: ({ graph, onNodeClick }: ComponentProps<typeof AgentWorkflowView>) => (
     <div data-testid="agent-workflow-view">
@@ -49,142 +33,135 @@ vi.mock('../components/AgentWorkflowView.js', () => ({
   ),
 }));
 
-// Mock DetailPageHeader — renders title and children
-
-vi.mock('../components/DetailPageHeader.js', () => ({
-  DetailPageHeader: ({ title, children }: DetailPageHeaderProps) => (
-    <div data-testid="detail-page-header">
-      <h2>{title}</h2>
-      {children}
-    </div>
-  ),
-}));
-
-// Mock PageShell — loading/error placeholders, otherwise renders children
-
-vi.mock('../components/PageShell.js', () => ({
-  PageShell: ({ isLoading, error, children }: PageShellProps) => {
-    if (isLoading) return <div data-testid="page-shell-loading" />;
-    if (error) return <div data-testid="page-shell-error">{error.message}</div>;
-    return <div data-testid="page-shell">{children}</div>;
-  },
-}));
-
-// Imports (after mocks)
-
 import { WorkflowPage } from '../pages/WorkflowPage.js';
+import { routes } from '../lib/routes.js';
 import { makeNode, makeGraph, makeEvaluation } from './workflow-fixtures.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
-import type { AgentWorkflowResponse } from '../hooks/useAgentSession.js';
+
+/** The route's payload, plus the null graph a session key synced before graphs were precomputed carries. */
+type GraphPayload = Omit<AgentGraphResponse, 'graph'> & { graph: AgentGraphResponse['graph'] | null };
+
+const SESSION_ID = 'session-abc';
+/** `useApiQuery` never retries a 401, so the error renders without retry backoff. */
+const HTTP_UNAUTHORIZED = 401;
+const WORKFLOW_VIEW = 'agent-workflow-view';
+const NO_GRAPH_TITLE = 'No workflow graph for this session';
+
+function graphResponse(graph: WorkflowGraph | null = makeGraph(), sessionId = SESSION_ID): GraphPayload {
+  return { sessionId, evaluation: makeEvaluation(), graph };
+}
+
+/** Mount the page at its own route; returns the memory router for navigation assertions. */
+function renderPage(sessionId = SESSION_ID) {
+  const { wrapper, location } = makeRoutedQueryWrapper(routes.workflow(sessionId));
+  render(<WorkflowPage sessionId={sessionId} />, { wrapper });
+  return location;
+}
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
-function mockLoaded(graph: WorkflowGraph | null = makeGraph()) {
-  mockUseAgentWorkflow.mockReturnValue({
-    data: {
-      sessionId: 'session-abc',
-      evaluation: makeEvaluation(),
-      graph,
-    },
-    isLoading: false,
-    error: null,
-  });
-}
-
 describe('WorkflowPage', () => {
-  describe('when data has a valid graph', () => {
-    beforeEach(() => mockLoaded());
-
-    it('renders AgentWorkflowView when graph is present', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByTestId('agent-workflow-view')).toBeInTheDocument();
+  describe('when the session has a graph', () => {
+    it('renders the workflow view', async () => {
+      stubFetch(graphResponse());
+      renderPage();
+      expect(await screen.findByTestId(WORKFLOW_VIEW)).toBeInTheDocument();
     });
 
-    it('renders DetailPageHeader with title "Workflow"', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByRole('heading', { name: 'Workflow' })).toBeInTheDocument();
+    it('titles the header "Workflow" and shows the session id', async () => {
+      stubFetch(graphResponse());
+      renderPage();
+      expect(await screen.findByRole('heading', { name: 'Workflow' })).toBeInTheDocument();
+      expect(screen.getByText(SESSION_ID)).toBeInTheDocument();
     });
 
-    it('displays the workflow shape in the header', () => {
-      mockLoaded(makeGraph({ workflowShape: 'branching' }));
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByText(/branching/)).toBeInTheDocument();
+    it('displays the workflow shape in the header', async () => {
+      stubFetch(graphResponse(makeGraph({ workflowShape: 'branching' })));
+      renderPage();
+      expect(await screen.findByText(/branching/)).toBeInTheDocument();
     });
 
-    it('displays agent count in the header', () => {
-      mockLoaded(makeGraph({
-        nodes: [
-          makeNode({ id: 'n1' }),
-          makeNode({ id: 'n2' }),
-          makeNode({ id: 'n3' }),
-        ],
-      }));
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByText(/3 agents/)).toBeInTheDocument();
+    it('displays agent count in the header', async () => {
+      stubFetch(graphResponse(makeGraph({
+        nodes: [makeNode({ id: 'n1' }), makeNode({ id: 'n2' }), makeNode({ id: 'n3' })],
+      })));
+      renderPage();
+      expect(await screen.findByText(/3 agents/)).toBeInTheDocument();
     });
 
-    it('uses the singular for a one-agent graph', () => {
-      mockLoaded(makeGraph({ nodes: [makeNode({ id: 'n1' })] }));
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByText(/1 agent$/)).toBeInTheDocument();
+    it('uses the singular for a one-agent graph', async () => {
+      stubFetch(graphResponse(makeGraph({ nodes: [makeNode({ id: 'n1' })] })));
+      renderPage();
+      expect(await screen.findByText(/1 agent$/)).toBeInTheDocument();
+    });
+  });
+
+  describe('the request', () => {
+    it('fetches the graph endpoint for the session with the bearer token', async () => {
+      const fetchSpy = stubFetch(graphResponse(makeGraph(), 'my-session-id'));
+      renderPage('my-session-id');
+      await screen.findByTestId(WORKFLOW_VIEW);
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(url).toBe('/api/agents/my-session-id/graph');
+      expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
     });
 
-    it('calls useAgentWorkflow with the provided sessionId', () => {
-      render(<WorkflowPage sessionId="my-session-id" />);
-      expect(mockUseAgentWorkflow).toHaveBeenCalledWith('my-session-id');
+    it('URL-encodes the session id in the request path', async () => {
+      const fetchSpy = stubFetch(graphResponse(makeGraph(), 'session/with/slashes'));
+      renderPage('session/with/slashes');
+      await screen.findByTestId(WORKFLOW_VIEW);
+      expect(fetchSpy.mock.calls[0]![0]).toBe('/api/agents/session%2Fwith%2Fslashes/graph');
     });
   });
 
   describe('when the session has no precomputed graph', () => {
-    beforeEach(() => mockLoaded(null));
-
-    it('renders an empty state instead of the graph', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByText('No workflow graph for this session')).toBeInTheDocument();
-      expect(screen.queryByTestId('agent-workflow-view')).not.toBeInTheDocument();
+    it('renders an empty state instead of the graph', async () => {
+      stubFetch(graphResponse(null));
+      renderPage();
+      expect(await screen.findByText(NO_GRAPH_TITLE)).toBeInTheDocument();
+      expect(screen.queryByTestId(WORKFLOW_VIEW)).not.toBeInTheDocument();
     });
   });
 
-  describe('when data is undefined (initial/loading state)', () => {
-    beforeEach(() => {
-      mockUseAgentWorkflow.mockReturnValue({
-        data: undefined,
-        isLoading: true,
-        error: null,
-      });
+  describe('while the request is in flight', () => {
+    it('shows the page skeleton and no workflow view', async () => {
+      stubFetch(graphResponse());
+      renderPage();
+      expect(document.querySelector('.page-skeleton')).toBeInTheDocument();
+      expect(screen.queryByTestId(WORKFLOW_VIEW)).not.toBeInTheDocument();
+      await screen.findByTestId(WORKFLOW_VIEW);
     });
+  });
 
-    it('does not render AgentWorkflowView while loading', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.queryByTestId('agent-workflow-view')).not.toBeInTheDocument();
-    });
-
-    it('renders loading state via PageShell', () => {
-      render(<WorkflowPage sessionId="session-abc" />);
-      expect(screen.getByTestId('page-shell-loading')).toBeInTheDocument();
+  describe('when the request fails', () => {
+    it('shows the API error instead of the graph', async () => {
+      stubFetch({ error: 'unauthorized' }, { status: HTTP_UNAUTHORIZED });
+      renderPage();
+      expect(await screen.findByRole('heading', { name: 'Failed to load' })).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(`API error: ${HTTP_UNAUTHORIZED}`))).toBeInTheDocument();
+      expect(screen.queryByTestId(WORKFLOW_VIEW)).not.toBeInTheDocument();
     });
   });
 
   describe('onNodeClick navigation', () => {
-    it('navigates to /agents/{sessionId}?agent={nodeId} when a node is clicked', () => {
-      mockLoaded(makeGraph({ nodes: [makeNode({ id: 'agent-node-42', label: 'executor' })] }));
-      render(<WorkflowPage sessionId="session-abc" />);
-      fireEvent.click(screen.getByTestId('graph-node-agent-node-42'));
-      expect(mockNavigate).toHaveBeenCalledWith(
-        '/agents/session-abc?agent=agent-node-42'
-      );
+    it('navigates to /agents/{sessionId}?agent={nodeId} when a node is clicked', async () => {
+      stubFetch(graphResponse(makeGraph({ nodes: [makeNode({ id: 'agent-node-42', label: 'executor' })] })));
+      const location = renderPage();
+      fireEvent.click(await screen.findByTestId('graph-node-agent-node-42'));
+      expect(currentPath(location)).toBe('/agents/session-abc?agent=agent-node-42');
     });
 
-    it('URL-encodes sessionId and nodeId in the navigation path', () => {
-      mockLoaded(makeGraph({ nodes: [makeNode({ id: 'node with spaces', label: 'test' })] }));
-      render(<WorkflowPage sessionId="session/with/slashes" />);
-      fireEvent.click(screen.getByTestId('graph-node-node with spaces'));
-      expect(mockNavigate).toHaveBeenCalledWith(
-        '/agents/session%2Fwith%2Fslashes?agent=node%20with%20spaces'
-      );
+    it('URL-encodes sessionId and nodeId in the navigation path', async () => {
+      stubFetch(graphResponse(
+        makeGraph({ nodes: [makeNode({ id: 'node with spaces', label: 'test' })] }),
+        'session/with/slashes',
+      ));
+      const location = renderPage('session/with/slashes');
+      fireEvent.click(await screen.findByTestId('graph-node-node with spaces'));
+      expect(currentPath(location)).toBe('/agents/session%2Fwith%2Fslashes?agent=node%20with%20spaces');
     });
   });
 });
