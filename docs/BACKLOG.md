@@ -190,6 +190,7 @@ gains `currentPath`, and the three PR #21 files mount through `renderPage`. The 
 - `src/__tests__/support/query-harness.tsx` says `OrgProvider` is deliberately absent, but PR #20 and
   `AdminCustomerPages.test.tsx` both render it. Its `retry` note names only `useApiQuery` and the admin
   hooks, though `useCalibration`, `useDashboard`, `useTrace` and `useSessionDetail` also override `retry`.
+  *Done 2026-10-12:* both notes rewritten.
 - The `isTokenRejection` comment in `worker/index.ts` still says it is lazy for tests that mock `jose`;
   none do after PR #25.
 

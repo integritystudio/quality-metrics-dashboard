@@ -15,9 +15,10 @@
  *    {@link TEST_ACCESS_TOKEN}.
  *  - `fetch`, via {@link stubFetch}.
  *
- * `OrgProvider` is deliberately absent: `useOrgOptional` returns null without
- * one, which is the pre-cutover (no active org) path — no `X-Org-Id` header,
- * `null` leading the query key.
+ * The wrapper mounts no `OrgProvider`, so by default `useOrgOptional` returns
+ * null: the no-active-org path, with no `X-Org-Id` header and `null` leading
+ * the query key. Tests that need an active org nest the real `OrgProvider`
+ * inside it.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -33,8 +34,9 @@ const NO_RETRY_DELAY_MS = 0;
  * A provider wrapper backed by a fresh QueryClient, returned alongside the
  * client so tests can drive a refetch through `invalidateQueries`.
  *
- * `retry: false` only covers bare `useQuery` callers: `useApiQuery` and the
- * admin hooks pass their own `retry`, which overrides it. `retryDelay: 0`
+ * `retry: false` only covers callers that set no `retry` of their own:
+ * `useApiQuery`, the admin hooks, `useCalibration`, `useDashboard`, `useTrace`
+ * and `useSessionDetail` all pass one, which overrides it. `retryDelay: 0`
  * keeps those production retry policies in force while dropping react-query's
  * 1s/2s backoff, so an error assertion resolves within `waitFor`'s default
  * timeout. `gcTime: 0` keeps one test's cache from answering another's query.
