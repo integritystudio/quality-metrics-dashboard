@@ -11,26 +11,29 @@ export const PARENT_ALIAS_RE = /^@parent\//;
  * standalone dashboard CI). @parent is the only sanctioned path to parent
  * code (relative dist/ imports are banned by eslint no-restricted-imports),
  * so this is the single stub point.
+ *
+ * Existence is checked per resolution (not once at plugin init) so that a
+ * stale Vitest module cache from a run where dist/ was absent does not carry
+ * stub modules into a subsequent run where dist/ is present. The cost is one
+ * stat call per import resolution attempt, acceptable in test mode only.
  */
 export function parentDistStub(): Plugin {
-  // When the parent is built locally, let the real exports resolve so tests
-  // exercise actual schema behavior.
   const here = path.dirname(fileURLToPath(import.meta.url));
   const parentDistAbs = path.resolve(here, '../dist');
-  const parentDistExists = existsSync(parentDistAbs);
   return {
     name: 'parent-dist-stub',
     enforce: 'pre',
     resolveId(source) {
-      if (!parentDistExists) {
-        // Match either the bare alias (if our plugin sees it first) or the
-        // already-resolved absolute path (Vite's alias plugin may have run first).
-        if (PARENT_ALIAS_RE.test(source)) {
-          return '\0' + source.replace(PARENT_ALIAS_RE, 'dist/');
-        }
-        if (source.startsWith(parentDistAbs)) {
-          return '\0dist/' + path.relative(parentDistAbs, source);
-        }
+      // When the parent is built locally, let the real exports resolve so
+      // tests exercise actual schema behavior.
+      if (existsSync(parentDistAbs)) return;
+      // Match either the bare alias (if our plugin sees it first) or the
+      // already-resolved absolute path (Vite's alias plugin may have run first).
+      if (PARENT_ALIAS_RE.test(source)) {
+        return '\0' + source.replace(PARENT_ALIAS_RE, 'dist/');
+      }
+      if (source.startsWith(parentDistAbs)) {
+        return '\0dist/' + path.relative(parentDistAbs, source);
       }
     },
     load(id) {
