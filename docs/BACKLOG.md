@@ -94,7 +94,7 @@ No open items.
 | WORKER-TESTS-NOT-IN-CI | `worker/__tests__` (now real JWT and KV checks) still run only locally | P3 | ✅ Done 2026-10-12; commit e976bbb |
 | TYPECHECK-SCRIPTS-HTTP1-FETCH | `npm run typecheck:scripts` fails in the parent's `src/lib/core/http1-fetch.ts(38,3)` | P3 | ⛔ Won't Do 2026-10-12 — worktree-layout artifact, clean on the main checkout; Source: session 2026-10-12, reported by Units 2 and 3 |
 | PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | ✅ Done 2026-10-12; commit ef0fddc |
-| SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | ✅ Done 2026-10-12; commit 65c3390 |
+| SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | ✅ Done 2026-10-12; commit 65c3390 (defensive fix, root cause unconfirmed; reset: `npx vitest --clearCache`) |
 | PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PRs #21 and #22 |
 | STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, Units 1 and 7, review of `999ca85` |
 | TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, Units 3 and 7 |

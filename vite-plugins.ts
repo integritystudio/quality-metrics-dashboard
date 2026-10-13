@@ -12,10 +12,11 @@ export const PARENT_ALIAS_RE = /^@parent\//;
  * code (relative dist/ imports are banned by eslint no-restricted-imports),
  * so this is the single stub point.
  *
- * Existence is checked per resolution (not once at plugin init) so that a
- * stale Vitest module cache from a run where dist/ was absent does not carry
- * stub modules into a subsequent run where dist/ is present. The cost is one
- * stat call per import resolution attempt, acceptable in test mode only.
+ * Existence is checked per resolution rather than once at plugin init.
+ * The match guard runs first so the stat is only paid for @parent imports,
+ * not every module Vite resolves. Note: if dist/ is partially rebuilt while
+ * tests run, some resolutions may return real exports and others the stub;
+ * `npx vitest --clearCache` is the reset for that case.
  */
 export function parentDistStub(): Plugin {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -24,17 +25,19 @@ export function parentDistStub(): Plugin {
     name: 'parent-dist-stub',
     enforce: 'pre',
     resolveId(source) {
+      // Fast path: most imports are not @parent; skip the stat entirely.
+      const isAlias = PARENT_ALIAS_RE.test(source);
+      const isResolved = !isAlias && source.startsWith(parentDistAbs);
+      if (!isAlias && !isResolved) return;
       // When the parent is built locally, let the real exports resolve so
       // tests exercise actual schema behavior.
       if (existsSync(parentDistAbs)) return;
       // Match either the bare alias (if our plugin sees it first) or the
       // already-resolved absolute path (Vite's alias plugin may have run first).
-      if (PARENT_ALIAS_RE.test(source)) {
+      if (isAlias) {
         return '\0' + source.replace(PARENT_ALIAS_RE, 'dist/');
       }
-      if (source.startsWith(parentDistAbs)) {
-        return '\0dist/' + path.relative(parentDistAbs, source);
-      }
+      return '\0dist/' + path.relative(parentDistAbs, source);
     },
     load(id) {
       if (id.startsWith('\0dist/')) {

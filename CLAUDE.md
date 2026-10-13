@@ -93,7 +93,7 @@ Requires parent `dist/` — run `npm run build` in observability-toolkit first.
 
 A Workflow alternative lives at `services/kv-sync-workflow/` in the parent repo — partial coverage, not deployed.
 
-**Test note**: `npm test` runs `src/__tests__` **and** `worker/__tests__` (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI narrows to `npm test src/` (`.github/workflows/ci.yml`, `deploy.yml`) to avoid script-test failures on the parent build dependency — so `worker/__tests__` runs locally but **not** in CI.
+**Test note**: `npm test` runs `src/__tests__` **and** `worker/__tests__` (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI runs `npm test src/ worker/` in both `.github/workflows/ci.yml` and `deploy.yml`; the parent is cloned and symlinked before that step so both suites have `@parent` available.
 
 ## Admin customer view (`/admin/customers`)
 
