@@ -70,7 +70,7 @@ function bulkResult(keyCount: number, unsuccessfulKeys: string[] = []) {
   return cloudflareOk({ successful_key_count: keyCount - unsuccessfulKeys.length, unsuccessful_keys: unsuccessfulKeys });
 }
 
-/** Cloudflare's daily-limit refusal; `retry-after: 0` keeps the SDK's retries of it instant. */
+/** Cloudflare's daily-limit refusal; `retry-after: 0` keeps any retry of it instant if the no-retry rewrite regresses. */
 const DAILY_LIMIT_REPLY = cloudflareError(
   HTTP_TOO_MANY_REQUESTS, KV_DAILY_WRITE_LIMIT_CODE, 'KV daily write limit exceeded', { 'retry-after': '0' },
 );
@@ -213,6 +213,14 @@ describe('kvBulkPut: daily write limit', () => {
     expect(written.size).toBe(KV_BATCH_SIZE);
     expect(written.has(allEntries[KV_BATCH_SIZE]!.key)).toBe(false);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('write limit'));
+  });
+
+  it('sends the refused batch once, without the SDK retrying it', async () => {
+    cloudflare.respondWith(() => DAILY_LIMIT_REPLY);
+
+    await kvBulkPut([entry('metric:a')]);
+
+    expect(cloudflare.requests).toHaveLength(1);
   });
 });
 

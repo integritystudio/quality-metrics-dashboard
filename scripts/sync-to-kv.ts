@@ -121,24 +121,41 @@ type SdkFetch = NonNullable<CloudflareClientOptions['fetch']>;
 
 const HTTP_OK = 200;
 const HTTP_NO_CONTENT = 204;
+const HTTP_TOO_MANY_REQUESTS = 429;
+/** Cloudflare API error code for the KV daily write limit (free tier only). */
+const KV_DAILY_WRITE_LIMIT_CODE = 10048;
+/** The SDK obeys this header over its own retry rules. */
+const SDK_SHOULD_RETRY_HEADER = 'x-should-retry';
 const NULL_RESULT_BODY = '{"result":null}';
-/** Set on a response kv204Fetch rewrote from a 204, so a caller can tell it from a 200 with a null result. */
+/** Set on a response kvSdkFetch rewrote from a 204, so a caller can tell it from a 200 with a null result. */
 export const KV_ORIGINAL_STATUS_HEADER = 'x-kv-original-status';
+
+async function isDailyWriteLimit(response: Response): Promise<boolean> {
+  try {
+    const body = await response.json() as { errors?: Array<{ code?: unknown }> };
+    return body.errors?.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE) ?? false;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Fetch wrapper passed to the Cloudflare SDK.
  *
- * Converts an HTTP 204 (no body) to a 200 with `{"result":null}` so the SDK's
- * `_thenUnwrap((obj) => obj.result)` receives null rather than throwing
- * `TypeError: Cannot read properties of null (reading 'result')`. The existing
- * `result == null` guard in kvBulkPut then credits all batch keys. The original
- * headers are kept, plus `KV_ORIGINAL_STATUS_HEADER`.
+ * - An HTTP 204 (no body) becomes a 200 with `{"result":null}`, so the SDK's
+ *   `_thenUnwrap((obj) => obj.result)` receives null rather than throwing
+ *   `TypeError: Cannot read properties of null (reading 'result')`. The
+ *   `result == null` guard in kvBulkPut then credits all batch keys. The original
+ *   headers are kept, plus `KV_ORIGINAL_STATUS_HEADER`.
+ * - The daily-write-limit 429 gets `x-should-retry: false`: it cannot succeed until
+ *   the next day, so the SDK's retries would only add backoff. Connection failures
+ *   and other 429s keep the SDK's retries.
  *
  * All other responses are forwarded unchanged.
  *
  * Exported for unit-testing the wrapper in isolation.
  */
-export const kv204Fetch: SdkFetch = async (url, init) => {
+export const kvSdkFetch: SdkFetch = async (url, init) => {
   const response = await http1Fetch(url, init);
   if (response.status === HTTP_NO_CONTENT) {
     const headers = new Headers(response.headers);
@@ -147,6 +164,11 @@ export const kv204Fetch: SdkFetch = async (url, init) => {
     headers.set(KV_ORIGINAL_STATUS_HEADER, String(HTTP_NO_CONTENT));
     return new Response(NULL_RESULT_BODY, { status: HTTP_OK, headers });
   }
+  if (response.status === HTTP_TOO_MANY_REQUESTS && await isDailyWriteLimit(response.clone())) {
+    const headers = new Headers(response.headers);
+    headers.set(SDK_SHOULD_RETRY_HEADER, 'false');
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  }
   return response;
 };
 
@@ -154,8 +176,8 @@ let cfClient: Cloudflare | undefined;
 function getCloudflareClient(): Cloudflare {
   // HTTP/1.1: under Node 26's default HTTP/2 fetch a destroyed session fails the
   // SDK's own retries too (ERR_HTTP2_INVALID_SESSION; NODE-FETCH-HTTP2-DEAD-SESSION).
-  // kv204Fetch intercepts 204 responses before the SDK sees them.
-  return cfClient ??= new Cloudflare({ fetch: kv204Fetch });
+  // kvSdkFetch rewrites 204s and the daily-limit 429 before the SDK sees them.
+  return cfClient ??= new Cloudflare({ fetch: kvSdkFetch });
 }
 
 const DEFAULT_DAYS = 30;
@@ -189,8 +211,6 @@ const META_LAST_SYNC_KEY = 'meta:lastSync';
 const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
 /** Hex chars of the sha256 kept as the delta-sync content hash. */
 const HASH_PREFIX_CHARS = 16;
-/** Cloudflare API error code for the KV daily write limit (free tier only). */
-const KV_DAILY_WRITE_LIMIT_CODE = 10048;
 /** Coverage percentages keep two decimals. */
 const COVERAGE_PERCENT_FACTOR = 100;
 const COVERAGE_ROUND_SCALE = PERCENT_MULTIPLIER * COVERAGE_PERCENT_FACTOR;
@@ -404,7 +424,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         body: batch,
       }).withResponse();
       // A null result carries no key info, so every batch key is credited. It comes
-      // from a {"result": null} body or from a 204 that kv204Fetch rewrote to one.
+      // from a {"result": null} body or from a 204 that kvSdkFetch rewrote to one.
       if (result == null) {
         const answer = response.headers.get(KV_ORIGINAL_STATUS_HEADER) === String(HTTP_NO_CONTENT)
           ? 'API answered HTTP 204 with no body'

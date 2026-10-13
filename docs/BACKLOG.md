@@ -9,7 +9,7 @@ Open items from code reviews and deferred work.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | KV-BULK-204-THROWS | A real HTTP 204 from the KV bulk API is counted as a failure | P2 | ✅ Done 2026-10-12 |
-| KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | (review) Source: session 2026-10-12, PR #24 |
+| KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PR #24 |
 | KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (medium) |
 | KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `b9d67e1` (low) |
 | KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
@@ -28,6 +28,11 @@ to HTTP 204 (it actually comes from a `{"result": null}` body). Pinned by two ne
 twice with backoff, though it cannot succeed until the next day. Each connection-failure test in
 `kv-bulk.test.ts` also takes ~1.5 s of real backoff. Decide whether to pass `maxRetries: 0` and let
 `populate`'s own network retry own the policy.
+*Done 2026-10-12.* Not `maxRetries: 0`: that would also drop the SDK's retries of connection failures,
+which defer a whole chunk to the next run. The fetch wrapper, renamed `kvSdkFetch` since it no longer
+handles only 204s, adds `x-should-retry: false` to a 429 whose body carries 10048, and the SDK obeys that
+header over its own rules. Other 429s and connection failures keep their retries, so the connection-failure
+tests still take ~1.5 s.
 
 **KV-BULK-204-END-TO-END-TEST.** `kv-bulk-transport.test.ts` pins `kv204Fetch` against a loopback
 server, and `kv-bulk.test.ts` checks that the client is built with it, but no test sends a 204 through
