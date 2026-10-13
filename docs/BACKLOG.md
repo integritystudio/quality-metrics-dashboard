@@ -14,14 +14,16 @@ Open items from code reviews and deferred work.
 | KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
-| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `ce3d2fe` superseded by `b9d67e1` |
+| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | ✅ Done 2026-10-12; Source: `ce3d2fe` superseded by `b9d67e1` |
 
-**KV-BULK-204-THROWS.** *Done 2026-10-12.* Caught `TypeError` in both `kvBulkPut` and `kvBulkDelete`
-catch blocks — SDK 7.3.0 calls `_thenUnwrap((obj) => obj.result)` on the parsed body; HTTP 204 parses
-as `null`, so `.result` throws `TypeError`. `kvBulkPut` now credits all batch keys and warns; `kvBulkDelete`
-silently treats the batch as deleted. Fixed the incorrect comment that attributed the `null` result path
-to HTTP 204 (it actually comes from a `{"result": null}` body). Pinned by two new `kv-bulk.test.ts` cases
-(one per function) that mock the SDK to throw the exact `TypeError` the real SDK emits.
+**KV-BULK-204-THROWS.** *Done 2026-10-12* in `b9d67e1`. SDK 7.3.0 calls `_thenUnwrap((obj) => obj.result)`
+on the parsed body; an HTTP 204 parses as `null`, so `.result` threw `TypeError`. The client is now built on
+a fetch wrapper (`kv204Fetch`, renamed `kvSdkFetch` by KV-BULK-SDK-RETRIES-DAILY-LIMIT) that rewrites a 204
+to a 200 with `{"result":null}` before the SDK sees it, so `kvBulkPut`'s `result == null` guard credits every
+batch key and `kvBulkDelete` reports none failed. Pinned without mocks: `kv-bulk-transport.test.ts` drives the
+wrapper against a loopback server, and `kv-bulk.test.ts` sends a bodiless 204 through the real SDK. The first
+fix, `ce3d2fe`, caught `TypeError` in both catch blocks with tests that mocked the SDK; review rejected it as
+too broad and `b9d67e1` replaced it.
 
 **KV-BULK-SDK-RETRIES-DAILY-LIMIT.** The client is built as `new Cloudflare({ fetch: http1Fetch })`
 (`scripts/sync-to-kv.ts:122`) with the default `maxRetries: 2`. So a 10048 daily-limit 429 is retried
@@ -69,6 +71,7 @@ typed by what the client accepts.
 (`ce3d2fe`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that
 as too broad and `b9d67e1` replaced it with the `kv204Fetch` transport rewrite and a mock-free
 loopback test. Rewrite the Done note to match what shipped.
+*Done 2026-10-12.* Rewritten.
 
 ### Workflow page
 
