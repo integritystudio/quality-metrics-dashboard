@@ -13,7 +13,7 @@ Open items from code reviews and deferred work.
 | KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (medium) |
 | KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `b9d67e1` (low) |
 | KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `b9d67e1` (low) |
-| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | Source: review of `b9d67e1` (low) |
+| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `ce3d2fe` superseded by `b9d67e1` |
 
 **KV-BULK-204-THROWS.** *Done 2026-10-12.* Caught `TypeError` in both `kvBulkPut` and `kvBulkDelete`
@@ -51,6 +51,8 @@ Log the original status in `kv204Fetch` or tag the synthetic body if the distinc
 **KV-BULK-SDK-FETCH-ALIAS.** `kv204Fetch` borrows its signature as `typeof http1Fetch`; a named
 `SdkFetch` type would state the contract (the fetch the Cloudflare client accepts) instead of tying it
 to a sibling implementation. -- `scripts/sync-to-kv.ts:130`
+*Done 2026-10-12.* `SdkFetch` is `NonNullable<ClientOptions['fetch']>` from the SDK, so the wrapper is
+typed by what the client accepts.
 
 **KV-BULK-204-DONE-NOTE-STALE.** The KV-BULK-204-THROWS paragraph above records the first fix
 (`ce3d2fe`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that

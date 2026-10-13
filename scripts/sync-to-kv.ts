@@ -15,6 +15,7 @@
  */
 
 import Cloudflare, {
+  type ClientOptions as CloudflareClientOptions,
   APIError as CloudflareAPIError,
   APIConnectionError as CloudflareAPIConnectionError,
 } from 'cloudflare';
@@ -115,6 +116,9 @@ function getCloudflareConfig(): CloudflareConfig {
   return cfConfig ??= resolveCloudflareConfig();
 }
 
+/** The fetch the Cloudflare client accepts as its `fetch` option. */
+type SdkFetch = NonNullable<CloudflareClientOptions['fetch']>;
+
 /**
  * Fetch wrapper passed to the Cloudflare SDK.
  *
@@ -127,7 +131,7 @@ function getCloudflareConfig(): CloudflareConfig {
  *
  * Exported for unit-testing the wrapper in isolation.
  */
-export const kv204Fetch: typeof http1Fetch = async (url, init) => {
+export const kv204Fetch: SdkFetch = async (url, init) => {
   const response = await http1Fetch(url, init);
   if (response.status === 204) {
     return new Response('{"result":null}', {
