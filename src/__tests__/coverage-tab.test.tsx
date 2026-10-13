@@ -1,49 +1,47 @@
 /**
  * Coverage tab behaviour (CVG-1).
  *
- * Replaces the todo stubs that stood from 2026-03-27 while the tab was hidden:
- * the dense metric x input payload exceeded Workers KV's 25 MiB value limit, so
- * the writer, the route and these three UI wirings were all commented out. The
- * columnar matrix replaced that payload; these tests hold the feature open.
+ * Holds the tab, the route and the page open against the real query stack:
+ * `useCoverage` → `useApiQuery` → `apiFetch`, the real `PageShell` and a memory
+ * router. Only `useAuth` and `fetch` are substituted.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { PageShellProps } from './test-types.js';
 import type { CoverageMatrix } from '../types.js';
+import type { CoverageResponse } from '../hooks/useCoverage.js';
+import { CoveragePage } from '../pages/CoveragePage.js';
+import { CoverageGrid } from '../components/CoverageGrid.js';
+import { RoleSelector } from '../components/RoleSelector.js';
+import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
+import {
+  PAGE_SHELL_ERROR_HEADING, PAGE_SHELL_SKELETON_SELECTOR, apiErrorMessage, renderPage, stubPendingFetch,
+} from './support/page-harness.js';
 
 // jsdom + React cold-start can exceed the default 5000ms on the first render test.
 const TEST_TIMEOUT_MS = 30_000;
 
-const { setLocation } = vi.hoisted(() => ({ setLocation: vi.fn() }));
-
-vi.mock('../hooks/useCoverage.js', () => ({ useCoverage: vi.fn() }));
-
-vi.mock('../components/PageShell.js', () => ({
-  PageShell: ({ isLoading, error, children }: PageShellProps) => {
-    if (isLoading) return <div data-testid="page-shell-loading" />;
-    if (error) return <div data-testid="page-shell-error">{error.message}</div>;
-    return <div data-testid="page-shell">{children}</div>;
-  },
-}));
-
-vi.mock('wouter', () => ({ useLocation: () => ['/', setLocation] }));
-
 vi.mock('../contexts/AuthContext.js', () => ({
-  useAuth: () => ({ session: { allowedViews: [] } }),
+  useAuth: () => ({
+    getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN),
+    session: { allowedViews: [] },
+  }),
 }));
 
-import { useCoverage } from '../hooks/useCoverage.js';
-import { CoveragePage } from '../pages/CoveragePage.js';
-import { CoverageGrid } from '../components/CoverageGrid.js';
-import { RoleSelector } from '../components/RoleSelector.js';
-
-const mockUseCoverage = vi.mocked(useCoverage);
+const HOME_PATH = '/';
+const COVERAGE_PATH = '/coverage';
+const PERIOD = '7d';
+const PAGE_HEADING = 'Evaluation Coverage';
+/** `useApiQuery` never retries a 401, so the error state renders on the first response. */
+const HTTP_UNAUTHORIZED = 401;
+const UNAUTHORIZED_BODY = { error: 'Unauthorized' };
+const TRACE_COVERAGE_URL = '/api/coverage?period=7d&inputKey=traceId';
+const SESSION_COVERAGE_URL = '/api/coverage?period=7d&inputKey=sessionId';
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -62,18 +60,17 @@ function makeMatrix(overrides: Partial<CoverageMatrix> = {}): CoverageMatrix {
   };
 }
 
-type MockQueryResult = {
-  data: (CoverageMatrix & { period: string }) | undefined;
-  isLoading: boolean;
-  error: Error | null;
-};
-
-function mockQuery(result: MockQueryResult) {
-  mockUseCoverage.mockReturnValue(result as unknown as ReturnType<typeof useCoverage>);
+function makeResponse(matrix: CoverageMatrix = makeMatrix()): CoverageResponse {
+  return { period: PERIOD, ...matrix };
 }
 
-function mockLoaded(matrix: CoverageMatrix = makeMatrix()) {
-  mockQuery({ data: { period: '7d', ...matrix }, isLoading: false, error: null });
+/** Answer each coverage URL with its own matrix, so a requery shows which one the page rendered. */
+function stubCoverageByUrl(bodies: Record<string, CoverageResponse>) {
+  const fetchSpy = vi.fn((url: string, _init?: RequestInit) =>
+    Promise.resolve(new Response(JSON.stringify(bodies[url]), { headers: { 'Content-Type': 'application/json' } })),
+  );
+  vi.stubGlobal('fetch', fetchSpy);
+  return fetchSpy;
 }
 
 /**
@@ -87,81 +84,103 @@ function groupBySelectValue(): string {
 
 describe('Coverage tab navigation', () => {
   it('shows a Coverage tab', () => {
-    render(<RoleSelector />);
+    renderPage(<RoleSelector />, HOME_PATH);
 
     expect(screen.getByRole('tab', { name: 'Coverage' })).toBeTruthy();
   }, TEST_TIMEOUT_MS);
 
   it('navigates to /coverage when the Coverage tab is clicked', () => {
-    render(<RoleSelector />);
+    const { location } = renderPage(<RoleSelector />, HOME_PATH);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Coverage' }));
 
-    expect(setLocation).toHaveBeenCalledWith('/coverage');
+    expect(location.history.at(-1)).toBe(COVERAGE_PATH);
+    expect(screen.getByRole('tab', { name: 'Coverage' })).toHaveAttribute('aria-selected', 'true');
   });
 });
 
 describe('CoveragePage', () => {
-  it('renders the "Evaluation Coverage" heading', () => {
-    mockLoaded();
+  it('renders the "Evaluation Coverage" heading', async () => {
+    stubFetch(makeResponse());
 
-    render(<CoveragePage period="7d" />);
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
-    expect(screen.getByRole('heading', { name: 'Evaluation Coverage' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: PAGE_HEADING })).toBeTruthy();
   }, TEST_TIMEOUT_MS);
 
-  it('renders the matrix it is given as a grid of metric rows', () => {
-    mockLoaded();
+  it('requests the matrix for the period with the bearer token', async () => {
+    const fetchSpy = stubFetch(makeResponse());
 
-    render(<CoveragePage period="7d" />);
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
-    expect(screen.getByRole('table', { name: 'Coverage matrix' })).toBeTruthy();
+    await screen.findByRole('heading', { name: PAGE_HEADING });
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe(TRACE_COVERAGE_URL);
+    expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+  });
+
+  it('renders the matrix it is given as a grid of metric rows', async () => {
+    stubFetch(makeResponse());
+
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
+
+    expect(await screen.findByRole('table', { name: 'Coverage matrix' })).toBeTruthy();
     expect(screen.getByRole('rowheader', { name: 'hallucination' })).toBeTruthy();
     expect(screen.getByRole('rowheader', { name: 'relevance' })).toBeTruthy();
   });
 
-  it('shows an empty state when the matrix has no metrics or inputs', () => {
-    mockLoaded(makeMatrix({ metrics: [], inputs: [], counts: [], overallCoveragePercent: 0 }));
+  it('shows an empty state when the matrix has no metrics or inputs', async () => {
+    stubFetch(makeResponse(makeMatrix({ metrics: [], inputs: [], counts: [], overallCoveragePercent: 0 })));
 
-    render(<CoveragePage period="7d" />);
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
-    expect(screen.getByText('No coverage data available.')).toBeTruthy();
+    expect(await screen.findByText('No coverage data available.')).toBeTruthy();
     expect(screen.queryByRole('table', { name: 'Coverage matrix' })).toBeNull();
   });
 
-  it('defaults the "Group by" select to traceId', () => {
-    mockLoaded();
+  it('defaults the "Group by" select to traceId', async () => {
+    stubFetch(makeResponse());
 
-    render(<CoveragePage period="7d" />);
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
+    await screen.findByRole('heading', { name: PAGE_HEADING });
     expect(groupBySelectValue()).toBe('traceId');
-    expect(mockUseCoverage).toHaveBeenCalledWith('7d', 'traceId');
   });
 
-  it('requeries by sessionId when "Group by" is switched', () => {
-    mockLoaded();
-    render(<CoveragePage period="7d" />);
+  it('requeries by sessionId when "Group by" is switched and renders that matrix', async () => {
+    const sessionMatrix = makeMatrix({ metrics: ['coherence'], inputs: ['session-1'], counts: [[1]], overallCoveragePercent: 100 });
+    const fetchSpy = stubCoverageByUrl({
+      [TRACE_COVERAGE_URL]: makeResponse(),
+      [SESSION_COVERAGE_URL]: makeResponse(sessionMatrix),
+    });
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
+    await screen.findByRole('rowheader', { name: 'hallucination' });
 
     fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'sessionId' } });
 
+    expect(await screen.findByRole('rowheader', { name: 'coherence' })).toBeTruthy();
+    expect(screen.queryByRole('rowheader', { name: 'hallucination' })).toBeNull();
     expect(groupBySelectValue()).toBe('sessionId');
-    expect(mockUseCoverage).toHaveBeenLastCalledWith('7d', 'sessionId');
+    expect(fetchSpy.mock.calls.at(-1)?.[0]).toBe(SESSION_COVERAGE_URL);
   });
 
   it('shows the loading skeleton while the query is in flight', () => {
-    mockQuery({ data: undefined, isLoading: true, error: null });
+    stubPendingFetch();
 
-    render(<CoveragePage period="7d" />);
+    const { container } = renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
-    expect(screen.getByTestId('page-shell-loading')).toBeTruthy();
+    expect(container.querySelector(PAGE_SHELL_SKELETON_SELECTOR)).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: PAGE_HEADING })).toBeNull();
   });
 
-  it('surfaces the error message when the query fails', () => {
-    mockQuery({ data: undefined, isLoading: false, error: new Error('API error: 500') });
+  it('surfaces the error message when the query fails', async () => {
+    stubFetch(UNAUTHORIZED_BODY, { status: HTTP_UNAUTHORIZED });
 
-    render(<CoveragePage period="7d" />);
+    renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
-    expect(screen.getByTestId('page-shell-error').textContent).toBe('API error: 500');
+    expect(await screen.findByRole('heading', { name: PAGE_SHELL_ERROR_HEADING })).toBeTruthy();
+    expect(screen.getByText(apiErrorMessage(HTTP_UNAUTHORIZED, UNAUTHORIZED_BODY))).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: PAGE_HEADING })).toBeNull();
   });
 });
 
