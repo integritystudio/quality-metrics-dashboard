@@ -61,7 +61,7 @@ loopback test. Rewrite the Done note to match what shipped.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| WORKFLOW-GRAPH-ZERO-POSITION | A node ELK returns without x/y is drawn at (0,0) | P3 | Source: session 2026-10-12, PR #19 (Unit 6) |
+| WORKFLOW-GRAPH-ZERO-POSITION | A node ELK returns without x/y is drawn at (0,0) | P3 | ✅ Done 2026-10-12; commit ea2c943 |
 
 **WORKFLOW-GRAPH-ZERO-POSITION.** `WorkflowGraph.tsx:263/271` default a missing ELK coordinate to 0,
 so a broken layout renders as nodes stacked at the origin instead of failing visibly. A related test
@@ -91,10 +91,10 @@ No open items.
 |----|-------|----------|-------|
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | ✅ Done 2026-10-09, ahead of the rollback-release gate at the owner's request; Source: session 2026-10-06 scripts audit |
-| WORKER-TESTS-NOT-IN-CI | `worker/__tests__` (now real JWT and KV checks) still run only locally | P3 | (review) Source: session 2026-10-12, PR #25 (Unit 1) |
+| WORKER-TESTS-NOT-IN-CI | `worker/__tests__` (now real JWT and KV checks) still run only locally | P3 | ✅ Done 2026-10-12; commit e976bbb |
 | TYPECHECK-SCRIPTS-HTTP1-FETCH | `npm run typecheck:scripts` fails in the parent's `src/lib/core/http1-fetch.ts(38,3)` | P3 | ⛔ Won't Do 2026-10-12 — worktree-layout artifact, clean on the main checkout; Source: session 2026-10-12, reported by Units 2 and 3 |
-| PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | Source: session 2026-10-12, PR #23 (Unit 2) mutation check |
-| SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | (review) Source: session 2026-10-12, Units 3 and 4 and the post-batch full run |
+| PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | ✅ Done 2026-10-12; commit ef0fddc |
+| SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | ✅ Done 2026-10-12; commit 65c3390 |
 | PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PRs #21 and #22 |
 | STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `999ca85` |
 | TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, Units 3 and 7 |
