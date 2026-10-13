@@ -7,10 +7,12 @@
  * Non-admin tests use mockAuditorAuthSequence (auditor permissions, no dashboard.admin).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
+import { HttpStatus } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
 
-type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
@@ -23,37 +25,29 @@ const ADMIN_PERMISSIONS = ['dashboard.read', 'dashboard.executive', 'dashboard.o
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
 
-const mockKV = {
-  get: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  list: vi.fn(),
-  getWithMetadata: vi.fn(),
-};
-
 const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })),
+  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
 };
 
 function makeEnv(overrides?: Partial<Record<string, unknown>>) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: new MemoryKv(),
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
     ...overrides,
   };
 }
 
 function adminHeaders() {
-  return { Authorization: 'Bearer mock-admin-jwt' };
+  return { Authorization: `Bearer ${token}` };
 }
 
 /**
  * Wraps a route-level fetch handler with auth middleware responses.
- * The auth middleware makes 2 sequential Supabase calls (jose.jwtVerify is mocked separately):
+ * The auth middleware makes 2 sequential Supabase calls (the token is verified against the served JWKS first):
  *   1. GET /rest/v1/users?auth0_id=eq.{auth0Id}&limit=1 — resolve appUserId
  *   2. GET /rest/v1/user_roles?select=roles(name,permissions)&... — load permissions
  * This helper intercepts those two by URL pattern and delegates everything else
@@ -65,11 +59,11 @@ function withAdminAuth(
   return (url: string, init?: RequestInit) => {
     // Auth user lookup: has auth0_id= and limit=1
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=') && url.includes('limit=1')) {
-      return Promise.resolve(new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: HttpStatus.Ok }));
     }
     // Auth roles: has roles(name,permissions)
     if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
-      return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: HttpStatus.Ok }));
     }
     return routeHandler(url, init);
   };
@@ -80,15 +74,15 @@ function mockAuditorAuthSequence(fetchMock: FetchMock) {
   fetchMock.mockImplementation((url: string) => {
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'auditor@test.com' }]), { status: 200 }),
+        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'auditor@test.com' }]), { status: HttpStatus.Ok }),
       );
     }
     if (url.includes('/rest/v1/user_roles')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: 200 }),
+        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: HttpStatus.Ok }),
       );
     }
-    return Promise.resolve(new Response(null, { status: 200 }));
+    return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
   });
 }
 
@@ -98,19 +92,20 @@ function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn((p: Promise<unknown>) => { void p; }), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 }
 
-vi.mock('jose', () => ({
-  createRemoteJWKSet: vi.fn(),
-  jwtVerify: vi.fn(),
-}));
+let tenant: TestIssuer;
+let token: string;
 
-beforeEach(async () => {
+beforeAll(async () => {
+  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
+  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
+});
+
+beforeEach(() => {
   vi.clearAllMocks();
-  const jose = vi.mocked(await import('jose'));
-  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
   // Default: admin auth succeeds; route handler returns 200 for unmatched calls.
-  fetchMock.mockImplementation(withAdminAuth(() => Promise.resolve(new Response(null, { status: 200 }))));
+  fetchMock.mockImplementation(withAdminAuth(() => Promise.resolve(new Response(null, { status: HttpStatus.Ok }))));
 });
 
 afterEach(() => {
@@ -125,10 +120,10 @@ describe('GET /api/admin/users', () => {
 
     const res = await app.request(
       '/api/admin/users',
-      { headers: { Authorization: 'Bearer real-auditor-token' } },
+      { headers: { Authorization: `Bearer ${token}` } },
       makeEnv(),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(HttpStatus.Forbidden);
   });
 
   it('returns 200 with user list for admin user', async () => {
@@ -142,12 +137,12 @@ describe('GET /api/admin/users', () => {
     fetchMock.mockImplementation(withAdminAuth((url) => {
       // Admin route fetches all users (order=created_at.desc) and role assignments (user_id,role_id)
       if (url.includes('/rest/v1/users')) {
-        return Promise.resolve(new Response(JSON.stringify(mockUsers), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(mockUsers), { status: HttpStatus.Ok }));
       }
       if (url.includes('/rest/v1/user_roles')) {
-        return Promise.resolve(new Response(JSON.stringify(mockRoleRows), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(mockRoleRows), { status: HttpStatus.Ok }));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await app.request(
@@ -155,7 +150,7 @@ describe('GET /api/admin/users', () => {
       { headers: adminHeaders() },
       makeEnv(),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
     // The route drops any row that fails AdminUserSchema, so an empty array is the failure mode.
@@ -171,10 +166,10 @@ describe('GET /api/admin/roles', () => {
 
     const res = await app.request(
       '/api/admin/roles',
-      { headers: { Authorization: 'Bearer real-auditor-token' } },
+      { headers: { Authorization: `Bearer ${token}` } },
       makeEnv(),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(HttpStatus.Forbidden);
   });
 
   it('returns 200 with roles list for admin user', async () => {
@@ -184,9 +179,9 @@ describe('GET /api/admin/roles', () => {
 
     fetchMock.mockImplementation(withAdminAuth((url) => {
       if (url.includes('/rest/v1/roles')) {
-        return Promise.resolve(new Response(JSON.stringify(mockRoles), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify(mockRoles), { status: HttpStatus.Ok }));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await app.request(
@@ -194,7 +189,7 @@ describe('GET /api/admin/roles', () => {
       { headers: adminHeaders() },
       makeEnv(),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
     expect(data).toHaveLength(1);
@@ -204,7 +199,7 @@ describe('GET /api/admin/roles', () => {
     fetchMock.mockImplementation(withAdminAuth(() => Promise.reject(new TypeError('Network connection lost.'))));
 
     const res = await app.request('/api/admin/roles', { headers: adminHeaders() }, makeEnv());
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
     expect(await res.json()).toEqual({ error: 'Failed to fetch roles' });
   });
 });
@@ -222,7 +217,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
       },
       makeEnv(),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 400 for invalid request body (missing role_id)', async () => {
@@ -235,16 +230,16 @@ describe('POST /api/admin/users/:userId/roles', () => {
       },
       makeEnv(),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 204 on successful role assignment', async () => {
     fetchMock.mockImplementation(withAdminAuth((url, init) => {
       // Route handler POSTs to user_roles with no query params
       if (url.includes('/rest/v1/user_roles') && init?.method === 'POST') {
-        return Promise.resolve(new Response(null, { status: 201 }));
+        return Promise.resolve(new Response(null, { status: HttpStatus.Created }));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await app.request(
@@ -257,7 +252,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
       makeEnv(),
       makeCtx(),
     );
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(HttpStatus.NoContent);
   });
 
   it('returns 403 for non-admin user', async () => {
@@ -267,12 +262,12 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { Authorization: 'Bearer real-auditor-token', 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(HttpStatus.Forbidden);
   });
 });
 
@@ -285,7 +280,7 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
       { method: 'DELETE', headers: adminHeaders() },
       makeEnv(),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 400 for invalid roleId', async () => {
@@ -294,16 +289,16 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
       { method: 'DELETE', headers: adminHeaders() },
       makeEnv(),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 204 on successful role revocation', async () => {
     fetchMock.mockImplementation(withAdminAuth((url, init) => {
       // Route handler DELETEs from user_roles with user_id/role_id params
       if (url.includes('/rest/v1/user_roles') && init?.method === 'DELETE') {
-        return Promise.resolve(new Response(null, { status: 200 }));
+        return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await app.request(
@@ -312,7 +307,7 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
       makeEnv(),
       makeCtx(),
     );
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(HttpStatus.NoContent);
   });
 
   it('returns 403 for non-admin user', async () => {
@@ -320,9 +315,9 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
 
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
-      { method: 'DELETE', headers: { Authorization: 'Bearer real-auditor-token' } },
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
       makeEnv(),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(HttpStatus.Forbidden);
   });
 });

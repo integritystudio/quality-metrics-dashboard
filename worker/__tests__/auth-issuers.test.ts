@@ -4,38 +4,39 @@
  * Auth0 stamps `iss` with whichever hostname the token was obtained through — the tenant's or,
  * once a custom domain is configured, that domain — and signs both with the tenant's key set.
  * With AUTH0_CUSTOM_DOMAIN set the Worker must accept both; without it, only the tenant's.
- * jose's `jwtVerify` takes `issuer` as a string or a list, so the assertion is on what the Worker
- * hands it.
+ * Tokens are signed with a real key pair and verified by real jose against the served JWKS.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app, { acceptedIssuers } from '../index.js';
+import { HttpStatus, jsonResponse } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, issuerFor, type TestIssuer } from './support/jwt.js';
 
-const TENANT_DOMAIN = 'test.us.auth0.com';
+const TENANT_DOMAIN = TEST_AUTH0_DOMAIN;
 const CUSTOM_DOMAIN = 'auth.test.integritystudio.ai';
-const TENANT_ISSUER = `https://${TENANT_DOMAIN}/`;
-const CUSTOM_ISSUER = `https://${CUSTOM_DOMAIN}/`;
+const FOREIGN_DOMAIN = 'other-tenant.us.auth0.com';
+const TENANT_ISSUER = issuerFor(TENANT_DOMAIN);
+const CUSTOM_ISSUER = issuerFor(CUSTOM_DOMAIN);
+const FOREIGN_ISSUER = issuerFor(FOREIGN_DOMAIN);
 const MOCK_AUTH0_ID = 'auth0|issuer-user';
 const APP_USER_ID = 'a0000000-0000-4000-8000-000000000041';
 const HOME_ORG_ID = 'a0000000-0000-4000-8000-0000000000aa';
-
-vi.mock('jose', () => ({
-  createRemoteJWKSet: vi.fn(),
-  jwtVerify: vi.fn(),
-}));
-
-const mockKV = {
-  get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn(), getWithMetadata: vi.fn(),
+const HOME_MEMBERSHIP = {
+  role: 'member',
+  organization_id: HOME_ORG_ID,
+  organizations: { id: HOME_ORG_ID, slug: 'home-org', name: 'Home Org' },
 };
-const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })) };
+
+const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })) };
 
 function makeEnv(overrides?: Partial<Record<string, unknown>>) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: new MemoryKv(),
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
     AUTH0_DOMAIN: TENANT_DOMAIN,
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
     ORG_SCOPING_ENABLED: 'true',
     HOME_ORG_ID,
     STAFF_USER_IDS: '[]',
@@ -47,34 +48,27 @@ function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 }
 
-function json(body: unknown): Promise<Response> {
-  return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+function supabase(url: string): Promise<Response> {
+  if (url.includes('/rest/v1/users?')) return Promise.resolve(jsonResponse([{ id: APP_USER_ID, email: 'viewer@test.com', default_organization_id: null }]));
+  if (url.includes('/rest/v1/user_roles?')) return Promise.resolve(jsonResponse([]));
+  if (url.includes('/rest/v1/organization_memberships?')) return Promise.resolve(jsonResponse([HOME_MEMBERSHIP]));
+  return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
 }
 
-function stubSupabase() {
-  vi.stubGlobal('fetch', vi.fn((url: string) => {
-    if (url.includes('/rest/v1/users?')) return json([{ id: APP_USER_ID, email: 'viewer@test.com', default_organization_id: null }]);
-    if (url.includes('/rest/v1/user_roles?')) return json([]);
-    if (url.includes('/rest/v1/organization_memberships?')) return json([]);
-    return Promise.resolve(new Response(null, { status: 200 }));
-  }));
+let tenant: TestIssuer;
+
+async function meStatus(issuer: string, env: ReturnType<typeof makeEnv>): Promise<number> {
+  const token = await tenant.sign({ sub: MOCK_AUTH0_ID, issuer });
+  const res = await app.request('/api/me', { headers: { Authorization: `Bearer ${token}` } }, env, makeCtx());
+  return res.status;
 }
 
-async function issuerPassedToJose(env: ReturnType<typeof makeEnv>): Promise<unknown> {
-  const jose = vi.mocked(await import('jose'));
-  await app.request('/api/me', { headers: { Authorization: 'Bearer mock-jwt' } }, env, makeCtx());
-  expect(jose.jwtVerify).toHaveBeenCalledTimes(1);
-  const [call] = jose.jwtVerify.mock.calls;
-  const options = call?.[2] as { issuer?: unknown } | undefined;
-  return options?.issuer;
-}
+beforeAll(async () => {
+  tenant = await createTestIssuer(TENANT_DOMAIN);
+});
 
-beforeEach(async () => {
-  vi.clearAllMocks();
-  const jose = vi.mocked(await import('jose'));
-  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
-  mockKV.get.mockResolvedValue(null);
-  stubSupabase();
+beforeEach(() => {
+  vi.stubGlobal('fetch', tenant.serveJwks(supabase));
 });
 
 afterEach(() => {
@@ -97,12 +91,31 @@ describe('acceptedIssuers', () => {
 });
 
 describe('JWT verification issuer (CR70)', () => {
-  it('verifies against the tenant issuer only when AUTH0_CUSTOM_DOMAIN is unset', async () => {
-    expect(await issuerPassedToJose(makeEnv())).toEqual([TENANT_ISSUER]);
+  describe('without AUTH0_CUSTOM_DOMAIN', () => {
+    const env = () => makeEnv();
+
+    it('accepts a token issued by the tenant', async () => {
+      expect(await meStatus(TENANT_ISSUER, env())).toBe(HttpStatus.Ok);
+    });
+
+    it('refuses a token issued through the custom domain', async () => {
+      expect(await meStatus(CUSTOM_ISSUER, env())).toBe(HttpStatus.Unauthorized);
+    });
   });
 
-  it('verifies against both issuers when AUTH0_CUSTOM_DOMAIN is set', async () => {
-    expect(await issuerPassedToJose(makeEnv({ AUTH0_CUSTOM_DOMAIN: CUSTOM_DOMAIN })))
-      .toEqual([TENANT_ISSUER, CUSTOM_ISSUER]);
+  describe('with AUTH0_CUSTOM_DOMAIN', () => {
+    const env = () => makeEnv({ AUTH0_CUSTOM_DOMAIN: CUSTOM_DOMAIN });
+
+    it('accepts a token issued by the tenant', async () => {
+      expect(await meStatus(TENANT_ISSUER, env())).toBe(HttpStatus.Ok);
+    });
+
+    it('accepts a token issued through the custom domain', async () => {
+      expect(await meStatus(CUSTOM_ISSUER, env())).toBe(HttpStatus.Ok);
+    });
+
+    it('refuses a token naming any other issuer', async () => {
+      expect(await meStatus(FOREIGN_ISSUER, env())).toBe(HttpStatus.Unauthorized);
+    });
   });
 });

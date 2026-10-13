@@ -7,29 +7,24 @@
  * reads (DASHBOARD-AGGREGATE-DUAL-IMPL).
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import app from '../index.js';
+import { HttpStatus } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
 
 const BYPASS_ORG = 'a0000000-0000-4000-8000-000000000001';
 
-const mockKV = {
-  get: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  list: vi.fn(),
-  getWithMetadata: vi.fn(),
-};
+const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })) };
 
-const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })) };
-
-function makeEnv() {
+function makeEnv(kv = new MemoryKv()) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: kv,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
     ALLOW_TEST_BYPASS: 'true',
     HOME_ORG_ID: '',
     STAFF_USER_IDS: '[]',
@@ -43,68 +38,63 @@ function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 }
 
-function stubKv(store: Record<string, unknown>) {
-  mockKV.get.mockImplementation((key: string) => Promise.resolve(store[key] ?? null));
-}
-
 const DETAIL_PAYLOAD = { name: 'relevance', displayName: 'Relevance', status: 'healthy', sampleCount: 2, dynamics: { velocity: 0.1 } };
+const MONTH_DETAIL_PAYLOAD = { ...DETAIL_PAYLOAD, sampleCount: 30 };
+const BARE_DETAIL_PAYLOAD = { ...DETAIL_PAYLOAD, sampleCount: 99 };
 const TREND_PAYLOAD = { metric: 'relevance', period: '7d', bucketCount: 10, totalEvaluations: 2, overallPercentiles: null, trendData: [], narrowed: false };
+const BARE_TREND_PAYLOAD = { ...TREND_PAYLOAD, totalEvaluations: 99 };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+/** The session's org holds a week and a month; the pre-tenancy bare keys hold other values. */
+function syncedKv(): MemoryKv {
+  return new MemoryKv({
+    [`org:${BYPASS_ORG}:metric:relevance:7d`]: DETAIL_PAYLOAD,
+    [`org:${BYPASS_ORG}:metric:relevance:30d`]: MONTH_DETAIL_PAYLOAD,
+    'metric:relevance:7d': BARE_DETAIL_PAYLOAD,
+    [`org:${BYPASS_ORG}:trend:relevance:7d`]: TREND_PAYLOAD,
+    'trend:relevance:7d': BARE_TREND_PAYLOAD,
+  });
+}
 
 describe('GET /api/metrics/:name', () => {
   it('serves the org-scoped per-period key the sync writes', async () => {
-    stubKv({ [`org:${BYPASS_ORG}:metric:relevance:7d`]: DETAIL_PAYLOAD });
+    const res = await app.request('/api/metrics/relevance?period=7d', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    const res = await app.request('/api/metrics/relevance?period=7d', { headers }, makeEnv(), makeCtx());
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual(DETAIL_PAYLOAD);
-    expect(mockKV.get).toHaveBeenCalledWith(`org:${BYPASS_ORG}:metric:relevance:7d`, 'json');
   });
 
   it('defaults to the month, as the page does', async () => {
-    stubKv({});
+    const res = await app.request('/api/metrics/relevance', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    await app.request('/api/metrics/relevance', { headers }, makeEnv(), makeCtx());
-
-    expect(mockKV.get).toHaveBeenCalledWith(`org:${BYPASS_ORG}:metric:relevance:30d`, 'json');
+    expect(await res.json()).toEqual(MONTH_DETAIL_PAYLOAD);
   });
 
   it('answers the no_data envelope when the key is absent', async () => {
-    stubKv({});
+    const res = await app.request('/api/metrics/relevance?period=24h', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    const res = await app.request('/api/metrics/relevance?period=24h', { headers }, makeEnv(), makeCtx());
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toMatchObject({ name: 'relevance', status: 'no_data', sampleCount: 0 });
   });
 
   it('rejects a period the sync never writes', async () => {
     const res = await app.request('/api/metrics/relevance?period=99d', { headers }, makeEnv(), makeCtx());
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 });
 
 describe('GET /api/trends/:name', () => {
   it('serves the org-scoped per-period key the sync writes', async () => {
-    stubKv({ [`org:${BYPASS_ORG}:trend:relevance:7d`]: TREND_PAYLOAD });
+    const res = await app.request('/api/trends/relevance?period=7d', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    const res = await app.request('/api/trends/relevance?period=7d', { headers }, makeEnv(), makeCtx());
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual(TREND_PAYLOAD);
   });
 
   it('answers the empty series the page reads when the key is absent', async () => {
-    stubKv({});
+    const res = await app.request('/api/trends/relevance?period=24h', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    const res = await app.request('/api/trends/relevance?period=24h', { headers }, makeEnv(), makeCtx());
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual({
       metric: 'relevance', period: '24h', bucketCount: 0, totalEvaluations: 0, overallPercentiles: null, trendData: [], narrowed: false,
     });

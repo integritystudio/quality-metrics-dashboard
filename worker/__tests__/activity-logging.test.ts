@@ -5,37 +5,33 @@
  * and that activity logging failures do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
+import { HttpStatus } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
 
-type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 type FetchMock = Mock<FetchLike>;
+
+const DASHBOARD_KEY = 'dashboard:7d';
 
 const MOCK_AUTH0_ID = 'auth0|test-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
 const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
 
-const mockKV = {
-  get: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  list: vi.fn(),
-  getWithMetadata: vi.fn(),
-};
-
 const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })),
+  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
 };
 
-function makeEnv() {
+function makeEnv(kv = new MemoryKv()) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: kv,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
   };
 }
 
@@ -43,8 +39,11 @@ function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 }
 
+let tenant: TestIssuer;
+let token: string;
+
 function authHeaders() {
-  return { Authorization: 'Bearer mock-jwt' };
+  return { Authorization: `Bearer ${token}` };
 }
 
 function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boolean }) {
@@ -57,13 +56,13 @@ function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boo
     // Get app user by auth0_id — has auth0_id= and limit=1
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=') && url.includes('limit=1')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'user@test.com' }]), { status: 200 })
+        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'user@test.com' }]), { status: HttpStatus.Ok })
       );
     }
     // Get user roles
     if (url.includes('/rest/v1/user_roles')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: 200 })
+        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: HttpStatus.Ok })
       );
     }
     // Activity logging calls: optionally reject for failure testing
@@ -71,23 +70,21 @@ function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boo
       return Promise.reject(new Error('Supabase unreachable'));
     }
     // Activity logging and other calls: return success
-    return Promise.resolve(new Response(null, { status: 201 }));
+    return Promise.resolve(new Response(null, { status: HttpStatus.Created }));
   });
 }
 
-vi.mock('jose', () => ({
-  createRemoteJWKSet: vi.fn(),
-  jwtVerify: vi.fn(),
-}));
-
 let fetchMock: FetchMock;
 
-beforeEach(async () => {
+beforeAll(async () => {
+  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
+  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
+});
+
+beforeEach(() => {
   vi.clearAllMocks();
-  const jose = vi.mocked(await import('jose'));
-  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
 });
 
 afterEach(() => {
@@ -99,19 +96,18 @@ function findActivityCall(calls: unknown[][]) {
 }
 
 const VIEW_ROUTES = [
-  { activityType: 'dashboard_view', path: '/api/dashboard?period=7d', kvValue: { metrics: [] } },
-  { activityType: 'trace_view', path: '/api/traces/trace-1', kvValue: { traceId: 'trace-1', spans: [] } },
-  { activityType: 'session_view', path: '/api/sessions/sess-1', kvValue: { sessionId: 'sess-1' } },
-  { activityType: 'compliance_view', path: '/api/compliance/sla', kvValue: { slaCompliance: [] } },
+  { activityType: 'dashboard_view', path: '/api/dashboard?period=7d', kvKey: DASHBOARD_KEY, kvValue: { metrics: [] } },
+  { activityType: 'trace_view', path: '/api/traces/trace-1', kvKey: 'trace:trace-1', kvValue: { traceId: 'trace-1', spans: [] } },
+  { activityType: 'session_view', path: '/api/sessions/sess-1', kvKey: 'session:sess-1', kvValue: { sessionId: 'sess-1' } },
+  { activityType: 'compliance_view', path: '/api/compliance/sla', kvKey: DASHBOARD_KEY, kvValue: { slaCompliance: [] } },
 ];
 
 describe('logActivity: view routes', () => {
-  it.each(VIEW_ROUTES)('POSTs activity_type=$activityType on $path', async ({ activityType, path, kvValue }) => {
+  it.each(VIEW_ROUTES)('POSTs activity_type=$activityType on $path', async ({ activityType, path, kvKey, kvValue }) => {
     mockAuthSequence(fetchMock);
-    mockKV.get.mockResolvedValue(kvValue);
 
-    const res = await app.request(path, { headers: authHeaders() }, makeEnv(), makeCtx());
-    expect(res.status).toBe(200);
+    const res = await app.request(path, { headers: authHeaders() }, makeEnv(new MemoryKv({ [kvKey]: kvValue })), makeCtx());
+    expect(res.status).toBe(HttpStatus.Ok);
 
     // Wait for microtasks to allow async activity logging to be queued
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -127,10 +123,9 @@ describe('logActivity: view routes', () => {
 
   it('does not POST to user_activity when KV returns no data (404)', async () => {
     mockAuthSequence(fetchMock);
-    mockKV.get.mockResolvedValue(null);
 
     const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv(), makeCtx());
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(HttpStatus.NotFound);
 
     await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -142,15 +137,14 @@ describe('logActivity: view routes', () => {
 describe('logActivity: failure resilience', () => {
   it('returns 200 even when activity POST throws', async () => {
     mockAuthSequence(fetchMock, { rejectActivity: true });
-    mockKV.get.mockResolvedValue({ metrics: [] });
 
     const res = await app.request(
       '/api/dashboard',
       { headers: authHeaders() },
-      makeEnv(),
+      makeEnv(new MemoryKv({ [DASHBOARD_KEY]: { metrics: [] } })),
       makeCtx(),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 });
 
@@ -168,7 +162,7 @@ describe('POST /api/activity: request body', () => {
       makeCtx(),
     );
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     expect(await res.json()).toEqual({ error: 'Invalid request body' });
     expect(findActivityCall(fetchMock.mock.calls as unknown[][])).toBeUndefined();
   });

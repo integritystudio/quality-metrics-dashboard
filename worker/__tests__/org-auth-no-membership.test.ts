@@ -6,12 +6,15 @@
  * provisioned-dashboard-viewer role, so a roles-based fallback reached every
  * user who had not yet provisioned an org and served them the home org's
  * bare (pre-tenancy) KV keys. These tests drive the real JWT middleware path
- * (jose mocked, Supabase REST stubbed), not ALLOW_TEST_BYPASS, which always
+ * (a real signed token, Supabase REST stubbed), not ALLOW_TEST_BYPASS, which always
  * carries an org.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
+import { HttpStatus, jsonResponse } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
 
 const MOCK_AUTH0_ID = 'auth0|no-org-user';
 const APP_USER_ID = 'a0000000-0000-4000-8000-000000000031';
@@ -69,26 +72,29 @@ const NON_DATA_ROUTES: Array<[method: string, path: string]> = [
   ['POST', `/api/admin/users/${APP_USER_ID}/roles`],
   ['DELETE', `/api/admin/users/${APP_USER_ID}/roles/role-1`],
 ];
-const HTTP_NOT_FOUND = 404;
 
-vi.mock('jose', () => ({
-  createRemoteJWKSet: vi.fn(),
-  jwtVerify: vi.fn(),
-}));
+const BARE_PAYLOAD = { overallStatus: 'pre-tenancy', metrics: [] };
+const HOME_PAYLOAD = { overallStatus: 'home-org', metrics: [] };
+const MEMBER_PAYLOAD = { overallStatus: 'member-org', metrics: [] };
 
-const mockKV = {
-  get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn(), getWithMetadata: vi.fn(),
-};
-const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })) };
+/** The home org's pre-tenancy and scoped dashboards, and the member org's, each distinct. */
+function syncedKv(): MemoryKv {
+  return new MemoryKv({
+    [BARE_DASHBOARD_KEY]: BARE_PAYLOAD,
+    [`org:${HOME_ORG_ID}:${BARE_DASHBOARD_KEY}`]: HOME_PAYLOAD,
+    [`org:${MEMBER_ORG_ID}:${BARE_DASHBOARD_KEY}`]: MEMBER_PAYLOAD,
+  });
+}
+const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })) };
 
 function makeEnv(overrides?: Partial<Record<string, unknown>>) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: syncedKv(),
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
     ORG_SCOPING_ENABLED: 'true',
     HOME_ORG_ID,
     STAFF_USER_IDS: '[]',
@@ -101,27 +107,28 @@ function makeCtx(): ExecutionContext {
 }
 
 function json(body: unknown): Promise<Response> {
-  return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  return Promise.resolve(jsonResponse(body));
 }
 
+let tenant: TestIssuer;
+let token: string;
+
 function stubSupabase(memberships: unknown[]) {
-  vi.stubGlobal('fetch', vi.fn((url: string) => {
+  vi.stubGlobal('fetch', tenant.serveJwks((url: string) => {
     if (url.includes('/rest/v1/users?')) return json([{ id: APP_USER_ID, email: 'viewer@test.com', default_organization_id: null }]);
     if (url.includes('/rest/v1/user_roles?')) return json([{ roles: VIEWER_ROLE }]);
     if (url.includes('/rest/v1/organization_memberships?')) return json(memberships);
-    return Promise.resolve(new Response(null, { status: 200 }));
+    return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
   }));
 }
 
 function request(path: string, env = makeEnv(), method = 'GET'): Promise<Response> {
-  return Promise.resolve(app.request(path, { method, headers: { Authorization: 'Bearer mock-jwt' } }, env, makeCtx()));
+  return Promise.resolve(app.request(path, { method, headers: { Authorization: `Bearer ${token}` } }, env, makeCtx()));
 }
 
-beforeEach(async () => {
-  vi.clearAllMocks();
-  const jose = vi.mocked(await import('jose'));
-  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
-  mockKV.get.mockResolvedValue(null);
+beforeAll(async () => {
+  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
+  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
 });
 
 afterEach(() => {
@@ -131,18 +138,17 @@ afterEach(() => {
 describe('org scoping: a viewer-role user with no membership', () => {
   beforeEach(() => stubSupabase([]));
 
-  it.each(DATA_ROUTES)('gets 403 ERR_NO_ORG from %s and reads no KV', async (path) => {
+  it.each(DATA_ROUTES)('gets 403 ERR_NO_ORG from %s, not the home org\'s data', async (path) => {
     const res = await request(path);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(HttpStatus.Forbidden);
     expect(await res.json()).toEqual({ error: ERR_NO_ORG });
-    expect(mockKV.get).not.toHaveBeenCalled();
   });
 
   it.each(NON_DATA_ROUTES)('gets 403 ERR_NO_ORG from %s %s', async (method, path) => {
     const res = await request(path, makeEnv(), method);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(HttpStatus.Forbidden);
     expect(await res.json()).toEqual({ error: ERR_NO_ORG });
   });
 });
@@ -157,9 +163,8 @@ describe('org scoping: sessions that keep access', () => {
 
     const res = await request(DASHBOARD_PATH);
 
-    // KV is empty, so reaching the route is a 404 ERR_NO_DATA, not the middleware's 403.
-    expect(res.status).toBe(HTTP_NOT_FOUND);
-    expect(mockKV.get).toHaveBeenCalledWith(`org:${MEMBER_ORG_ID}:${BARE_DASHBOARD_KEY}`, 'json');
+    expect(res.status).toBe(HttpStatus.Ok);
+    expect(await res.json()).toEqual(MEMBER_PAYLOAD);
   });
 
   it('staff with no membership resolve to the home org', async () => {
@@ -167,7 +172,7 @@ describe('org scoping: sessions that keep access', () => {
 
     const res = await request('/api/me', makeEnv({ STAFF_USER_IDS: JSON.stringify([APP_USER_ID]) }));
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toMatchObject({ activeOrg: HOME_ORG_ID, isStaff: true, role: 'owner' });
   });
 });
@@ -178,7 +183,7 @@ describe('org scoping off', () => {
 
     const res = await request(DASHBOARD_PATH, makeEnv({ ORG_SCOPING_ENABLED: 'false' }));
 
-    expect(res.status).toBe(HTTP_NOT_FOUND);
-    expect(mockKV.get).toHaveBeenCalledWith(BARE_DASHBOARD_KEY, 'json');
+    expect(res.status).toBe(HttpStatus.Ok);
+    expect(await res.json()).toEqual(BARE_PAYLOAD);
   });
 });

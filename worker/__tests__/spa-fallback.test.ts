@@ -7,13 +7,13 @@
  * until the catch-all route is implemented.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
+import { HttpStatus, jsonResponse } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
 
-vi.mock('jose', () => ({
-  createRemoteJWKSet: vi.fn(),
-  jwtVerify: vi.fn(),
-}));
+const LAST_SYNC = '2026-03-16T00:00:00Z';
 
 const SPA_HTML = '<!DOCTYPE html><html><body>SPA</body></html>';
 
@@ -21,50 +21,46 @@ const mockAssets = {
   fetch: vi.fn(),
 };
 
-const mockKV = {
-  get: vi.fn().mockResolvedValue(null),
-  put: vi.fn(),
-  delete: vi.fn(),
-  list: vi.fn(),
-  getWithMetadata: vi.fn(),
-};
-
-function makeEnv() {
+function makeEnv(kv = new MemoryKv()) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: kv,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
   };
 }
 
-// Minimal auth stub for API route tests — handles the 2 middleware fetch calls
-// (jose.jwtVerify is mocked at module level; vi.mock is hoisted).
+let tenant: TestIssuer;
+let authHeaders: { Authorization: string };
+
+// Minimal auth stub for API route tests: the JWKS plus the 2 middleware Supabase reads.
 function stubAuthFetch(): void {
-  vi.stubGlobal('fetch', vi.fn((url: string) => {
+  vi.stubGlobal('fetch', tenant.serveJwks((url: string) => {
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
-      return Promise.resolve(new Response(JSON.stringify([{ id: 'a0000000-0000-4000-8000-000000000002', email: 'test@example.com' }]), { status: 200 }));
+      return Promise.resolve(jsonResponse([{ id: 'a0000000-0000-4000-8000-000000000002', email: 'test@example.com' }]));
     }
     if (url.includes('/rest/v1/user_roles')) {
-      return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ['dashboard.admin'] } }]), { status: 200 }));
+      return Promise.resolve(jsonResponse([{ roles: { name: 'admin', permissions: ['dashboard.admin'] } }]));
     }
-    return Promise.resolve(new Response(null, { status: 200 }));
+    return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
   }));
 }
 
-beforeEach(async () => {
+beforeAll(async () => {
+  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
+  authHeaders = { Authorization: `Bearer ${await tenant.sign({ sub: 'auth0|test-user' })}` };
+});
+
+beforeEach(() => {
   vi.clearAllMocks();
-  const jose = vi.mocked(await import('jose'));
-  jose.jwtVerify.mockResolvedValue({ payload: { sub: 'auth0|test-user' } } as never);
   mockAssets.fetch.mockResolvedValue(
     new Response(SPA_HTML, {
-      status: 200,
+      status: HttpStatus.Ok,
       headers: { 'Content-Type': 'text/html' },
     })
   );
-  mockKV.get.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -80,7 +76,7 @@ describe('SPA fallback: non-API routes serve index.html', () => {
     { path: '/' },
   ])('GET $path returns 200 with an HTML body', async ({ path }) => {
     const res = await app.request(path, {}, makeEnv());
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const contentType = res.headers.get('Content-Type') ?? '';
     expect(contentType).toMatch(/text\/html/);
     const body = await res.text();
@@ -99,30 +95,27 @@ describe('SPA fallback: non-API routes serve index.html', () => {
 
 describe('API routes: unaffected by SPA fallback', () => {
   it('GET /api/health returns JSON (not HTML)', async () => {
-    mockKV.get.mockResolvedValue('2026-03-16T00:00:00Z');
-    const res = await app.request('/api/health', {}, makeEnv());
-    expect(res.status).toBe(200);
+    const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'meta:lastSync': LAST_SYNC })));
+    expect(res.status).toBe(HttpStatus.Ok);
     const contentType = res.headers.get('Content-Type') ?? '';
     expect(contentType).toMatch(/application\/json/);
   });
 
-  it('GET /api/health response body is valid JSON with status field', async () => {
-    mockKV.get.mockResolvedValue('2026-03-16T00:00:00Z');
-    const res = await app.request('/api/health', {}, makeEnv());
-    const body = await res.json();
-    expect(body).toHaveProperty('status');
+  it('GET /api/health response body reports the last sync', async () => {
+    const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'meta:lastSync': LAST_SYNC })));
+    expect(await res.json()).toEqual({ status: 'ok', lastSync: LAST_SYNC });
   });
 
   it('GET /api/nonexistent returns 404 for authenticated requests', async () => {
     stubAuthFetch();
-    const res = await app.request('/api/nonexistent', { headers: { Authorization: 'Bearer mock-jwt' } }, makeEnv());
-    expect(res.status).toBe(404);
+    const res = await app.request('/api/nonexistent', { headers: authHeaders }, makeEnv());
+    expect(res.status).toBe(HttpStatus.NotFound);
   });
 
   it('GET /api (no trailing slash) returns 404, not SPA HTML', async () => {
     stubAuthFetch();
-    const res = await app.request('/api', { headers: { Authorization: 'Bearer mock-jwt' } }, makeEnv());
-    expect(res.status).toBe(404);
+    const res = await app.request('/api', { headers: authHeaders }, makeEnv());
+    expect(res.status).toBe(HttpStatus.NotFound);
     expect(mockAssets.fetch).not.toHaveBeenCalled();
   });
 });
