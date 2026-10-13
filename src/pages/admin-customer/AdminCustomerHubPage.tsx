@@ -7,7 +7,7 @@
  * default org and drop the whole query cache.
  */
 import { useState } from 'react';
-import { useLocation, useSearch } from 'wouter';
+import { useLocation, useSearchParams } from 'wouter';
 import { useAdminOrgDirectory } from '../../hooks/useAdminCustomer.js';
 import { useOrgOptional } from '../../contexts/OrgContext.js';
 import { pickActiveOrg } from '../../lib/admin-customer.js';
@@ -20,13 +20,13 @@ import { NavCard } from '../../components/admin-customer/NavCard.js';
 const ORG_SELECT_ID = 'admin-customer-org';
 
 export function AdminCustomerHubPage() {
-  const search = useSearch();
+  const [searchParams] = useSearchParams();
   const [, navigate] = useLocation();
   const org = useOrgOptional();
   const directory = useAdminOrgDirectory();
   const [observabilityError, setObservabilityError] = useState<string | null>(null);
 
-  const preferredOrgId = new URLSearchParams(search).get(ADMIN_CUSTOMERS_ORG_PARAM);
+  const preferredOrgId = searchParams.get(ADMIN_CUSTOMERS_ORG_PARAM);
   const orgs = directory.data ?? [];
   const activeOrg = pickActiveOrg(orgs, preferredOrgId);
 

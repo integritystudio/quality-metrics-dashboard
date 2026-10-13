@@ -1,4 +1,4 @@
-import { Link, useSearch } from 'wouter';
+import { Link, useSearchParams } from 'wouter';
 import { useAgentSession } from '../hooks/useAgentSession.js';
 import { TurnTimeline } from '../components/TurnTimeline.js';
 import { HandoffCard } from '../components/HandoffCard.js';
@@ -12,7 +12,7 @@ import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useAgentSession(sessionId);
-  const focusedAgent = new URLSearchParams(useSearch()).get(AGENT_SESSION_AGENT_PARAM) ?? undefined;
+  const focusedAgent = useSearchParams()[0].get(AGENT_SESSION_AGENT_PARAM) ?? undefined;
 
   if (!isLoading && !error && !data) return null;
 

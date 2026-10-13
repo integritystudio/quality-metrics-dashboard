@@ -8,15 +8,15 @@ import { EmptyState } from '../components/EmptyState.js';
 import { formatScore, plural } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { TimestampCell } from '../components/TimestampCell.js';
-import { Link, useSearch } from 'wouter';
+import { Link, useSearchParams } from 'wouter';
 import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { SKELETON_HEIGHT_SM } from '../lib/constants.js';
 
 export function EvaluationDetailPage({ traceId }: { traceId: string }) {
   const { data: allEvaluations, isLoading, error } = useTraceEvaluations(traceId);
 
-  const search = useSearch();
-  const metricFilter = new URLSearchParams(search).get('metric');
+  const [searchParams] = useSearchParams();
+  const metricFilter = searchParams.get('metric');
 
   const evaluations = metricFilter && allEvaluations
     ? allEvaluations.filter(ev => ev.evaluationName === metricFilter)
