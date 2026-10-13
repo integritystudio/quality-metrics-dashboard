@@ -1,11 +1,23 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import { ChainOfThoughtPanel } from '../components/ChainOfThoughtPanel.js';
 import { AlertList } from '../components/AlertList.js';
+import { EvaluationDetailPage } from '../pages/EvaluationDetailPage.js';
+import { routes } from '../lib/routes.js';
 import type { TriggeredAlert } from '../types.js';
+import type { TraceEvaluationsResponse, WireEvaluation } from './support/api-responses.js';
+import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
+import { makeRoutedQueryWrapper } from './support/memory-router.js';
 
-afterEach(cleanup);
+vi.mock('../contexts/AuthContext.js', () => ({
+  useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 
 describe('ScoreBadge tooltip', () => {
@@ -147,111 +159,79 @@ describe('AlertList compound alerts', () => {
 });
 
 
-vi.mock('../hooks/useTraceEvaluations.js', () => ({
-  useTraceEvaluations: vi.fn(),
-}));
+const TRACE_ID = 'trace-123';
+const NANOS_PER_MS = 1_000_000n;
+const EVALUATED_AT_NANOS = String(BigInt(Date.parse('2026-02-17T12:00:00Z')) * NANOS_PER_MS);
 
-const mockEvalData = [
+const WIRE_EVALUATIONS: WireEvaluation[] = [
   {
-    timestamp: BigInt(Date.parse('2026-02-17T12:00:00Z')) * 1_000_000n,
+    timestamp: EVALUATED_AT_NANOS,
     evaluationName: 'relevance',
     scoreValue: 0.92,
     scoreLabel: 'excellent',
     explanation: 'Highly relevant response',
     evaluator: 'gpt-4o',
-    evaluatorType: 'llm' as const,
-    traceId: 'trace-123',
+    evaluatorType: 'llm',
+    traceId: TRACE_ID,
   },
   {
-    timestamp: BigInt(Date.parse('2026-02-17T12:00:00Z')) * 1_000_000n,
+    timestamp: EVALUATED_AT_NANOS,
     evaluationName: 'coherence',
     scoreValue: 0.78,
     scoreLabel: 'good',
     explanation: 'Mostly coherent',
     evaluator: 'gpt-4o',
-    evaluatorType: 'llm' as const,
-    traceId: 'trace-123',
+    evaluatorType: 'llm',
+    traceId: TRACE_ID,
   },
 ];
 
+/** Mount the page at `path` under the real query stack and a memory router. */
+function renderDetailPage(body: TraceEvaluationsResponse, path = routes.evaluationDetail(TRACE_ID)) {
+  const fetchSpy = stubFetch(body);
+  const { wrapper } = makeRoutedQueryWrapper(path);
+  const view = render(<EvaluationDetailPage traceId={TRACE_ID} />, { wrapper });
+  return { ...view, fetchSpy };
+}
+
 describe('EvaluationDetailPage', () => {
-  const originalSearch = window.location.search;
-  afterEach(() => {
-    Object.defineProperty(window, 'location', {
-      value: { ...window.location, search: originalSearch },
-      writable: true,
-    });
+  it('fetches the trace evaluations endpoint with the bearer token', async () => {
+    const { fetchSpy } = renderDetailPage({ evaluations: WIRE_EVALUATIONS });
+    await screen.findByRole('heading', { name: 'Trace Evaluations' });
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe(`/api/evaluations/trace/${TRACE_ID}`);
+    expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });
 
   it('renders evaluation cards when data is available', async () => {
-    const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    // @ts-expect-error -- partial mock: only fields consumed by component
-    vi.mocked(useTraceEvaluations).mockReturnValue({
-      data: mockEvalData,
-      isLoading: false,
-      error: null,
-    });
-
-    const { EvaluationDetailPage } = await import('../pages/EvaluationDetailPage.js');
-    const { container } = render(<EvaluationDetailPage traceId="trace-123" />);
-
-    expect(container.textContent).toContain('Trace Evaluations');
-    expect(container.textContent).toContain('trace-123');
+    const { container } = renderDetailPage({ evaluations: WIRE_EVALUATIONS });
+    await screen.findByRole('heading', { name: 'Trace Evaluations' });
+    expect(container.textContent).toContain(TRACE_ID);
     expect(container.textContent).toContain('relevance');
     expect(container.textContent).toContain('coherence');
-    const cards = container.querySelectorAll('.eval-detail-card');
-    expect(cards.length).toBe(2);
+    expect(container.querySelectorAll('.eval-detail-card').length).toBe(2);
   });
 
   it('filters by metric query param', async () => {
-    Object.defineProperty(window, 'location', {
-      value: { ...window.location, search: '?metric=relevance' },
-      writable: true,
-    });
-
-    const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    // @ts-expect-error -- partial mock: only fields consumed by component
-    vi.mocked(useTraceEvaluations).mockReturnValue({
-      data: mockEvalData,
-      isLoading: false,
-      error: null,
-    });
-
-    const { EvaluationDetailPage } = await import('../pages/EvaluationDetailPage.js');
-    const { container } = render(<EvaluationDetailPage traceId="trace-123" />);
-
-    expect(container.textContent).toContain('relevance Evaluations');
-    expect(container.textContent).toContain('View all evaluations');
-    const cards = container.querySelectorAll('.eval-detail-card');
-    expect(cards.length).toBe(1);
+    const { container } = renderDetailPage(
+      { evaluations: WIRE_EVALUATIONS },
+      routes.evaluationDetail(TRACE_ID, 'relevance'),
+    );
+    await screen.findByRole('heading', { name: 'relevance Evaluations' });
+    expect(screen.getByRole('link', { name: 'View all evaluations' }))
+      .toHaveAttribute('href', routes.evaluationDetail(TRACE_ID));
+    expect(container.querySelectorAll('.eval-detail-card').length).toBe(1);
   });
 
   it('renders loading state', async () => {
-    const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    // @ts-expect-error -- partial mock: only fields consumed by component
-    vi.mocked(useTraceEvaluations).mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      error: null,
-    });
-
-    const { EvaluationDetailPage } = await import('../pages/EvaluationDetailPage.js');
-    const { container } = render(<EvaluationDetailPage traceId="trace-123" />);
-    expect(container.querySelector('.skeleton')).toBeInTheDocument();
+    const { container } = renderDetailPage({ evaluations: WIRE_EVALUATIONS });
+    expect(container.querySelector('.page-skeleton')).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Trace Evaluations' });
   });
 
   it('renders empty state when no evaluations', async () => {
-    const { useTraceEvaluations } = await import('../hooks/useTraceEvaluations.js');
-    // @ts-expect-error -- partial mock: only fields consumed by component
-    vi.mocked(useTraceEvaluations).mockReturnValue({
-      data: [],
-      isLoading: false,
-      error: null,
-    });
-
-    const { EvaluationDetailPage } = await import('../pages/EvaluationDetailPage.js');
-    const { container } = render(<EvaluationDetailPage traceId="trace-123" />);
-    expect(container.textContent).toContain('No Evaluations Found');
+    const { container } = renderDetailPage({ evaluations: [] });
+    await screen.findByText('No Evaluations Found');
     expect(container.textContent).toContain('may not have been synced yet');
   });
 });
