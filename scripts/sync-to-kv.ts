@@ -367,11 +367,12 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         account_id: accountId,
         body: batch,
       });
-      // null result = HTTP 204 (no body): the SDK treats this as success and
-      // returns null. Credit all batch keys. If the API later gains a body,
-      // unsuccessful_keys will be populated and failures will be excluded below.
+      // null result = {"result": null} body: the SDK unwraps the top-level
+      // result field and returns null when the body carries no keys.
+      // Credit all batch keys. HTTP 204 is a separate case — the SDK
+      // throws TypeError before reaching here (see catch below).
       if (result == null) {
-        console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned no response body — crediting all ${batch.length} keys as written`);
+        console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned null result — crediting all ${batch.length} keys as written`);
       }
       const failed = new Set(result?.unsuccessful_keys ?? []);
       if (failed.size > 0) {
@@ -393,6 +394,15 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
           `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ` +
           describeFetchError(err.cause ?? err),
         );
+        continue;
+      }
+      // SDK 7.3.0 calls _thenUnwrap((obj) => obj.result) after parsing the
+      // response body. HTTP 204 causes the SDK to parse the body as null, then
+      // read .result off null, throwing TypeError. Treat that as success and
+      // credit all batch keys, identical to the {"result": null} body path above.
+      if (err instanceof TypeError) {
+        console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned HTTP 204 — crediting all ${batch.length} keys as written`);
+        for (const e of batch) writtenKeys.add(e.key);
         continue;
       }
       console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${describeUnknown(err)}`);
@@ -439,6 +449,11 @@ export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }):
         for (const k of failedDeletes) failedKeys.add(k);
       }
     } catch (err) {
+      // SDK 7.3.0 throws TypeError on HTTP 204 (null body, .result access).
+      // All deletes succeeded; no keys to retry.
+      if (err instanceof TypeError) {
+        continue;
+      }
       console.warn(`[sync-to-kv] bulk delete failed for ${batch.length} key(s): ${describeUnknown(err)}`);
       // Conservatively keep all batch keys in state so the next run retries.
       for (const k of batch) failedKeys.add(k);

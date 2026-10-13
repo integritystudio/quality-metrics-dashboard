@@ -6,11 +6,35 @@ Open items from code reviews and deferred work.
 
 ### Behaviour
 
-No open items.
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| KV-BULK-204-THROWS | A real HTTP 204 from the KV bulk API is counted as a failure | P2 | ✅ Done 2026-10-12 |
+| KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | (review) Source: session 2026-10-12, PR #24 |
+
+**KV-BULK-204-THROWS.** *Done 2026-10-12.* Caught `TypeError` in both `kvBulkPut` and `kvBulkDelete`
+catch blocks — SDK 7.3.0 calls `_thenUnwrap((obj) => obj.result)` on the parsed body; HTTP 204 parses
+as `null`, so `.result` throws `TypeError`. `kvBulkPut` now credits all batch keys and warns; `kvBulkDelete`
+silently treats the batch as deleted. Fixed the incorrect comment that attributed the `null` result path
+to HTTP 204 (it actually comes from a `{"result": null}` body). Pinned by two new `kv-bulk.test.ts` cases
+(one per function) that mock the SDK to throw the exact `TypeError` the real SDK emits.
+
+**KV-BULK-SDK-RETRIES-DAILY-LIMIT.** The client is built as `new Cloudflare({ fetch: http1Fetch })`
+(`scripts/sync-to-kv.ts:122`) with the default `maxRetries: 2`. So a 10048 daily-limit 429 is retried
+twice with backoff, though it cannot succeed until the next day. Each connection-failure test in
+`kv-bulk.test.ts` also takes ~1.5 s of real backoff. Decide whether to pass `maxRetries: 0` and let
+`populate`'s own network retry own the policy.
 
 ### Workflow page
 
-No open items.
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| WORKFLOW-GRAPH-ZERO-POSITION | A node ELK returns without x/y is drawn at (0,0) | P3 | Source: session 2026-10-12, PR #19 (Unit 6) |
+
+**WORKFLOW-GRAPH-ZERO-POSITION.** `WorkflowGraph.tsx:263/271` default a missing ELK coordinate to 0,
+so a broken layout renders as nodes stacked at the origin instead of failing visibly. A related test
+gap: `WorkflowGraph.test.tsx` checks only that siblings have different x, not that they don't overlap,
+because `NODE_WIDTH` is not exported. Acceptance: a missing coordinate is surfaced (logged or rejected),
+and a sibling non-overlap test uses the exported node width.
 
 ### API client
 
@@ -34,6 +58,13 @@ No open items.
 |----|-------|----------|-------|
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | ✅ Done 2026-10-09, ahead of the rollback-release gate at the owner's request; Source: session 2026-10-06 scripts audit |
+| WORKER-TESTS-NOT-IN-CI | `worker/__tests__` (now real JWT and KV checks) still run only locally | P3 | (review) Source: session 2026-10-12, PR #25 (Unit 1) |
+| TYPECHECK-SCRIPTS-HTTP1-FETCH | `npm run typecheck:scripts` fails in the parent's `src/lib/core/http1-fetch.ts(38,3)` | P3 | Source: session 2026-10-12, reported by Units 2 and 3 |
+| PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | Source: session 2026-10-12, PR #23 (Unit 2) mutation check |
+| SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | (review) Source: session 2026-10-12, Units 3 and 4 and the post-batch full run |
+| PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | Source: session 2026-10-12, PRs #21 and #22 |
+| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `c07bad6` |
+| TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | Source: session 2026-10-12, Units 3 and 7 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
 `VITE_API_URL`. It was removed from the local `.env`, but left in Doppler `integrity-studio`.
@@ -84,6 +115,45 @@ dependency and is left in place. `stg` no longer holds it; `prd` holds `https://
   - **JUDGE-BACKFILL-FLAG: resolved, 2026-10-09.** `--backfill` was removed, so it no longer holds `_loadExistingKeys`
     or `account-stamps.ts` in place. The `backfill` cohort and `trace-backfill` evaluator type stay readable for
     rows already written.
+
+**WORKER-TESTS-NOT-IN-CI.** `ci.yml` and `deploy.yml` run `npm test src/`, so `worker/__tests__` never runs
+in CI. Since PR #25 those files verify real RS256 tokens: a wrong `jwtVerify` audience fails 86 of them,
+which passed before. Leaving them out means a worker auth regression can ship green. Acceptance: CI runs
+`worker/__tests__`, or this note records why it can't.
+
+**TYPECHECK-SCRIPTS-HTTP1-FETCH.** An undici `Response` type mismatch at `../src/lib/core/http1-fetch.ts(38,3)`
+reds `typecheck:scripts` with no dashboard file changed. The file lives in the parent repo; fix it there or
+narrow the scripts program's view of it.
+
+**PARITY-EVAL-WINDOW-GAP.** Dropping `startDate` from `loadEvaluationsByMetric` in `src/api/data-loader.ts`
+passed every parity test before and after PR #23. The fixture data has no evaluation that falls inside one
+window and outside another. Add one, using the fixture server's opt-in `dateWindow`.
+
+**SUITE-FLAKES-ON-PARENT-REBUILD.** While a parent `npm run build` rewrote `../dist`, runs failed with
+`Cannot read properties of undefined (reading 'AGENT_NAME')` (13 script test files) and
+`Cannot find module '@parent/...'`. One post-batch `npm test` failed 5 worker test files at load. Each
+passed on rerun. The suspected cause is `parentDistStub` stubbing `@parent` while `dist/` is missing,
+and that stub being cached in `node_modules/.vitest-cache`. Unconfirmed. `npx vitest --clearCache` is the
+reset.
+
+**PAGE-TEST-HARNESS-MERGE.** `src/__tests__/support/memory-router.tsx` (`makeRoutedQueryWrapper`, PR #21) and
+`src/__tests__/support/page-harness.tsx` (`renderPage`, PR #22) both wrap a wouter `memoryLocation` around
+`makeQueryWrapper`. Fold them into one once both land. Since `c07bad6`, error-path tests in those PRs can
+use a 500 again instead of the 401 they chose to dodge retry backoff.
+
+**STALE-TEST-DOUBLE-COMMENTS.**
+- `src/__tests__/support/query-harness.tsx` says `OrgProvider` is deliberately absent, but PR #20 and
+  `AdminCustomerPages.test.tsx` both render it. Its `retry` note names only `useApiQuery` and the admin
+  hooks, though `useCalibration`, `useDashboard`, `useTrace` and `useSessionDetail` also override `retry`.
+- The `isTokenRejection` comment in `worker/index.ts` still says it is lazy for tests that mock `jose`;
+  none do after PR #25.
+
+**TEST-FIXTURE-DUPLICATES.**
+- `org-switcher.test.tsx` (PR #20) repeats the org fixtures in `org-switch.test.tsx`.
+- `auth-context-refresh.test.tsx` keeps `'obs:login_recorded'` as a literal because the key is private
+  to `AuthContext`.
+- `scripts/__tests__/judge-anthropic-client.test.ts` keeps its own loopback server beside the new
+  `scripts/__tests__/support/recording-server.ts` (PR #24).
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.11](changelog/3.0.11/CHANGELOG.md) (2026-10-09).
