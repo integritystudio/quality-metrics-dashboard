@@ -129,11 +129,6 @@ function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
   return map;
 }
 
-/** Narrows to nodes with a non-empty `clusterId`, so `group` keys them by `string`. */
-function hasClusterId(node: WorkflowNode): node is WorkflowNode & { clusterId: string } {
-  return Boolean(node.clusterId);
-}
-
 const CLUSTER_NODE_PREFIX = '__cluster__';
 
 function clusterNodeId(clusterId: string): string {
@@ -165,10 +160,11 @@ export function applyClusterCollapse(
 
   const nodeDataMap = buildNodeDataMap(nodes);
   const clusterableNodes = [...nodeClusterMap.keys()].map(id => nodeDataMap.get(id)).filter((n): n is WorkflowNode => n != null);
-  const clusterMembers = group(clusterableNodes.filter(hasClusterId), n => n.clusterId);
+  const clusterMembers = group(clusterableNodes, n => nodeClusterMap.get(n.id));
 
   const syntheticNodes: WorkflowNode[] = [];
   for (const [cId, members] of clusterMembers) {
+    if (cId === undefined) continue;
     syntheticNodes.push({
       id: clusterNodeId(cId),
       label: `[Cluster] ${cId}`,
