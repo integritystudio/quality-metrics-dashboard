@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createJudgeAnthropicClient, responseText } from '../judge-anthropic-client.js';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 
-// Placeholder, not a credential: the local server only echoes it back.
+// Placeholder, not a credential: the local server only records it.
 const API_KEY = 'test-key-value';
 const MODEL = 'claude-haiku-4-5-20251001';
 const REPLY_TEXT = 'ok';
@@ -44,9 +44,10 @@ describe('createJudgeAnthropicClient', () => {
     });
 
     expect(response.content).toEqual([{ type: 'text', text: REPLY_TEXT }]);
-    const last = server.requests.at(-1)!;
-    expect(last.headers['x-api-key']).toBe(API_KEY);
-    expect(last.httpVersion).toBe('1.1');
+    expect(server.requests).toHaveLength(1);
+    const [last] = server.requests;
+    expect(last!.headers['x-api-key']).toBe(API_KEY);
+    expect(last!.httpVersion).toBe('1.1');
   });
 });
 
