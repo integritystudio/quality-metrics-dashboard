@@ -6,6 +6,10 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 import regexp from 'eslint-plugin-regexp';
 import tanstackQuery from '@tanstack/eslint-plugin-query';
 import eslintReact from '@eslint-react/eslint-plugin';
+import unicorn from 'eslint-plugin-unicorn';
+import vitest from '@vitest/eslint-plugin';
+
+const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts'];
 
 const noUnusedVarsRule = ['error', {
   argsIgnorePattern: '^_',
@@ -23,7 +27,14 @@ const typeSafetyRules = {
   '@typescript-eslint/no-unsafe-return': 'error',
   '@typescript-eslint/no-unsafe-call': 'error',
   '@typescript-eslint/no-floating-promises': 'error',
-  '@typescript-eslint/restrict-template-expressions': 'error',
+  '@typescript-eslint/restrict-template-expressions': ['error', {
+    allowNumber: true,
+    allowBoolean: true,
+    allowNullish: false,
+    allowRegExp: false,
+    allowNever: false,
+    allow: [{ name: ['URLSearchParams', 'URL', 'Error'], from: 'lib' }],
+  }],
   '@typescript-eslint/no-misused-promises': 'error',
   '@typescript-eslint/no-unnecessary-type-assertion': 'error',
   '@typescript-eslint/prefer-nullish-coalescing': 'error',
@@ -44,6 +55,10 @@ const typeSafetyRules = {
   '@typescript-eslint/no-extraneous-class': 'error',
   '@typescript-eslint/prefer-literal-enum-member': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
+  'prefer-template': 'error',
+  'object-shorthand': ['error', 'always'],
+  'unicorn/throw-new-error': 'error',
+  'unicorn/prefer-node-protocol': 'error',
   'radix': 'error',
   'no-param-reassign': ['error', { props: false }],
   'array-callback-return': ['error', { checkForEach: true }],
@@ -83,7 +98,7 @@ export default tseslint.config(
   // src/ and worker/ files - uses tsconfig.json
   {
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts'],
-    plugins: { 'react-hooks': reactHooks, 'react': react },
+    plugins: { 'react-hooks': reactHooks, 'react': react, unicorn },
     // 'detect' calls context.getFilename, removed in ESLint 10, so the major is pinned here.
     settings: { react: { version: '19' } },
     languageOptions: {
@@ -177,11 +192,13 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    plugins: { unicorn },
     rules: {
       ...typeSafetyRules,
       '@typescript-eslint/no-unsafe-member-access': 'error',
       '@typescript-eslint/no-base-to-string': 'error',
       '@typescript-eslint/require-await': 'error',
+      '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/prefer-nullish-coalescing': ['error', {
         // `foo?.endsWith(x) || foo?.endsWith(y)` is boolean | undefined — a
         // `??` fix would stop at a valid `false` instead of checking the
@@ -193,9 +210,19 @@ export default tseslint.config(
   },
   // Every test tree, including support modules the src/ test override misses.
   {
-    files: ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'scripts/**/*.test.ts'],
+    files: TEST_FILES,
+    plugins: { vitest },
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'warn',
+      // A stray `.only` silently skips the rest of the suite.
+      'vitest/no-focused-tests': 'error',
+      'vitest/no-identical-title': 'error',
+      // Fixture lookups are `| undefined` only because of noUncheckedIndexedAccess.
+      '@typescript-eslint/restrict-template-expressions': ['error', {
+        allowNumber: true,
+        allowBoolean: true,
+        allowNullish: true,
+      }],
     },
   },
   // Parent-boundary enforcement (DASH-DIST-IMPORT). The parent

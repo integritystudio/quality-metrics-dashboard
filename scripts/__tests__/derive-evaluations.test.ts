@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   deriveAgentHeuristics,
   trackTaskActivity,
@@ -972,7 +972,7 @@ describe('deriveAgentHeuristics', () => {
 
   function transcript(name: string, entries: object[]): string {
     const path = join(dir, name);
-    writeFileSync(path, entries.map(e => JSON.stringify(e)).join('\n') + '\n');
+    writeFileSync(path, `${entries.map(e => JSON.stringify(e)).join('\n')  }\n`);
     return path;
   }
 

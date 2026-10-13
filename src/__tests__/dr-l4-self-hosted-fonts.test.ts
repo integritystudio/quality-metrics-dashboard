@@ -5,8 +5,8 @@
  * and that the font files are present in public/fonts/.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const DASHBOARD_ROOT = resolve(__dirname, '../../');
 const THEME_CSS = resolve(DASHBOARD_ROOT, 'src/theme.css');

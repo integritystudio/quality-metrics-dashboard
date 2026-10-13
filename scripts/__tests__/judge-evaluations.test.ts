@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
-import { spawnSync } from 'child_process';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { writeFileSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   isSystemPrompt,
   isToolResultOnly,

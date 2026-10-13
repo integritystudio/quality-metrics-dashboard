@@ -21,7 +21,7 @@
  * configuration problem (missing URL or no key for any stamped account).
  */
 
-import { readdirSync, writeFileSync } from 'fs';
+import { readdirSync, writeFileSync } from 'node:fs';
 import { ascending, sum } from 'd3-array';
 import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToMs, nsToMs } from './hrt.js';
@@ -276,7 +276,7 @@ async function main(): Promise<number> {
   }
 
   if (options.jsonPath) {
-    writeFileSync(options.jsonPath, JSON.stringify({ window, unstamped, results }, null, JSON_INDENT) + '\n');
+    writeFileSync(options.jsonPath, `${JSON.stringify({ window, unstamped, results }, null, JSON_INDENT)  }\n`);
     console.log(`\n${CLI_PREFIX} results written: ${options.jsonPath}`);
   }
 

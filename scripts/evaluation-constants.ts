@@ -5,7 +5,7 @@
  * (sync-to-kv, trace-coverage) does not load the judge and its dependencies.
  */
 
-import { join } from 'path';
+import { join } from 'node:path';
 
 export const HOME = process.env.HOME ?? '';
 // Must match the producer: hooks/lib/constants.ts writes telemetry here.

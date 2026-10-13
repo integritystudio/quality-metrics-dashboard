@@ -113,7 +113,7 @@ export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, o
 /** One log line in the pipeline's `k=v` shape. */
 export function formatTurnSelection(s: TurnSelection): string {
   const held = Object.entries(s.heldForKey).map(([k, v]) => `${k}=${v}`).join(' ');
-  return `discovered=${s.discovered} judged=${s.judged} withheld=${s.withheld}`
-    + (held ? ` heldForKey[${held}]` : '')
-    + ` pending=${s.pending} selected=${s.selected.length}`;
+  return `discovered=${s.discovered} judged=${s.judged} withheld=${s.withheld}${
+     held ? ` heldForKey[${held}]` : ''
+     } pending=${s.pending} selected=${s.selected.length}`;
 }

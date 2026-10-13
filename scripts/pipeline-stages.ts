@@ -115,7 +115,8 @@ const REMOVED_SOURCE_FLAGS = ['--source', '--judge-source', '--derive-source'] a
 export function rejectRemovedSourceFlags(args: readonly string[]): void {
   const stale = args.find(arg => REMOVED_SOURCE_FLAGS.some(flag => arg === flag || arg.startsWith(`${flag}=`)));
   if (stale !== undefined) {
-    throw new CliArgError(`${stale.split('=')[0]} was removed: derive and the judge read the cloud only`, 'unknown');
+    const [flagName = stale] = stale.split('=');
+    throw new CliArgError(`${flagName} was removed: derive and the judge read the cloud only`, 'unknown');
   }
 }
 

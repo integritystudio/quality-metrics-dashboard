@@ -2,9 +2,9 @@
  * Turns: discovered from transcripts, extracted, anchored to their spans and fitted to the judge's input caps.
  */
 
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { group } from 'd3-array';
-import { join, basename } from 'path';
+import { join, basename } from 'node:path';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import { otelLogEntrySchema, transcriptEntrySchema } from '../../src/lib/validation/dashboard-schemas.js';
 import { streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';

@@ -14,8 +14,8 @@
  *   tsx scripts/backtest-degradation.ts [--days=90] [--metric=relevance] [--output=backtest-results.json]
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { basename, join } from 'path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { CloudBackend } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';

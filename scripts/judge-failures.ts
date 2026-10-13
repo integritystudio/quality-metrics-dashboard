@@ -1,8 +1,8 @@
 /** Judge failure classification, the run summary and its exit verdict, and run state. */
 
 import { sum } from 'd3-array';
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK } from './pipeline-stages.js';

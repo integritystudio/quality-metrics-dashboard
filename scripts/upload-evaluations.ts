@@ -54,9 +54,9 @@
  */
 
 import { sum } from 'd3-array';
-import { createHash, createHmac } from 'crypto';
-import { readdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { createHash, createHmac } from 'node:crypto';
+import { readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { z } from 'zod';
 
 import {
@@ -534,7 +534,7 @@ export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey
   return {
     url: `${baseUrl}${KEYED_PATH}`,
     headers: { 'Content-Type': NDJSON_CONTENT_TYPE, Authorization: `Bearer ${apiKey}` },
-    body: batch.map((p) => JSON.stringify(p)).join('\n') + '\n',
+    body: `${batch.map((p) => JSON.stringify(p)).join('\n')  }\n`,
   };
 }
 
@@ -815,10 +815,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     `[upload-evaluations]${opts.dryRun ? ' dry-run:' : ''} ` +
     `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${formatCounts(skips)}]` +
     ` byDestination[${formatCounts(sentByDestination)}] withheld=${withheld}` +
-    ` routedBy[${formatCounts(routedBy)}]` +
-    (Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : '') +
-    (parseErrors ? ` parseErrors=${parseErrors}` : '') +
-    (manifest ? ` onlyKeys[matched=${matchedKeys.size} of ${manifest.size} notInManifest=${notInManifest}]` : ''),
+    ` routedBy[${formatCounts(routedBy)}]${ 
+    Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : '' 
+    }${parseErrors ? ` parseErrors=${parseErrors}` : '' 
+    }${manifest ? ` onlyKeys[matched=${matchedKeys.size} of ${manifest.size} notInManifest=${notInManifest}]` : ''}`,
   );
   return 0;
 }

@@ -46,9 +46,9 @@
  */
 
 import { sum } from 'd3-array';
-import { spawnSync } from 'child_process';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   DRY_RUN_FLAG,
   SYNC_BUDGET_FLAG,

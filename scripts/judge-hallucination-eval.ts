@@ -30,8 +30,8 @@
  */
 
 import { sum } from 'd3-array';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';

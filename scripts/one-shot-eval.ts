@@ -4,9 +4,9 @@
  * runs once, and refuses a second start.
  */
 
-import { closeSync, constants, existsSync, mkdirSync, openSync, readdirSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { closeSync, constants, existsSync, mkdirSync, openSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CliArgError, parseCli, type CliArgs, type CliSpec } from './cli-args.js';
@@ -137,7 +137,7 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
       const marker = join(docsDir, markerFilename);
       mkdirSync(docsDir, { recursive: true });
       const fd = openSync(marker, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY);
-      writeFileSync(fd, JSON.stringify({ startedAt: startedAt.toISOString(), pid: process.pid, ...payload }, null, JSON_INDENT) + '\n');
+      writeFileSync(fd, `${JSON.stringify({ startedAt: startedAt.toISOString(), pid: process.pid, ...payload }, null, JSON_INDENT)  }\n`);
       closeSync(fd);
       console.log(`${logPrefix} marker written: ${marker} — API calls start now`);
       return startedAt;
@@ -163,7 +163,7 @@ export function admitOneShot(guard: RunGuard, args: OneShotArgs): JudgeApiKey | 
 
 export function writeResults(guard: RunGuard, startedAt: Date, results: object): string {
   const outPath = guard.resultsFilePath(DOCS_DIR, startedAt);
-  writeFileSync(outPath, JSON.stringify(results, null, JSON_INDENT) + '\n');
+  writeFileSync(outPath, `${JSON.stringify(results, null, JSON_INDENT)  }\n`);
   return outPath;
 }
 

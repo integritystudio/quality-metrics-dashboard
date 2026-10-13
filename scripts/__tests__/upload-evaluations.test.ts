@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join, resolve } from 'path';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 import {
   mapRecord,
@@ -377,7 +377,7 @@ describe('account index (TKR7/TKR9)', () => {
     ...(ref === undefined ? {} : { identityKeyRef: ref }),
   });
   const writeTraces = (name: string, lines: string[]): void =>
-    writeFileSync(join(dir, name), lines.join('\n') + '\n');
+    writeFileSync(join(dir, name), `${lines.join('\n')  }\n`);
 
   it('indexes stamped spans by span id', () => {
     writeTraces('traces-2026-09-15.jsonl', [span('sp1', 's1', GMAIL_REF)]);

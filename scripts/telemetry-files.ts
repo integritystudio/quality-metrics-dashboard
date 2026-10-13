@@ -1,7 +1,7 @@
 /** Dated JSONL files under the telemetry directory. */
 
-import { readdirSync } from 'fs';
-import { join } from 'path';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 
 /**

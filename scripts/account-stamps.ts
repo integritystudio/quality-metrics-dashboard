@@ -20,8 +20,8 @@
  * The pre-Phase-1 time-based join was removed under TKR9; see `indexSpanRecords`.
  */
 
-import { readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { asHrTime, hrtToMs, type HrTime } from './hrt.js';
 import { pushTo } from './collections.js';
@@ -84,11 +84,11 @@ export function asString(value: unknown): string | undefined {
 
 /** Whether a dated file (`<prefix>-YYYY-MM-DD.jsonl`) is inside the window. */
 export function fileInWindow(file: string, pattern: RegExp, windowDays: number, nowMs: number): boolean {
-  const m = pattern.exec(file);
-  if (!m) return false;
+  const date = pattern.exec(file)?.[1];
+  if (date === undefined) return false;
   // Compare on the date in the name, never mtime: derive rewrites evaluation
   // files wholesale, so mtime says nothing about which day's records are inside.
-  return Date.parse(`${m[1]}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
+  return Date.parse(`${date}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
 }
 
 /** Every parseable line of the trace files `files` (names under `dir`). */

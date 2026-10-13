@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readMultiTurnInput, readSingleTurnInput } from '../agent-heuristic-inputs.js';
 import { SCORING_THRESHOLDS } from '../../../src/lib/agent-judge/agent-eval-metrics.js';
 
@@ -29,7 +29,7 @@ afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 function transcript(entries: object[]): string {
   const path = join(dir, 'transcript.jsonl');
-  writeFileSync(path, entries.map(e => JSON.stringify(e)).join('\n') + '\n');
+  writeFileSync(path, `${entries.map(e => JSON.stringify(e)).join('\n')  }\n`);
   return path;
 }
 

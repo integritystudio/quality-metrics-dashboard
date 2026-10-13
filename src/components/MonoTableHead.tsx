@@ -3,7 +3,7 @@ export interface TableColumn {
   align?: 'left' | 'right' | 'center';
 }
 
-const ALIGN_CLASS: Record<string, string> = {
+const ALIGN_CLASS: Record<NonNullable<TableColumn['align']>, string> = {
   left: 'text-left',
   center: 'text-center',
   right: 'text-right',

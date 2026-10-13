@@ -126,7 +126,7 @@ export async function postEvaluationRecords(
 /** One log line in the same `k=v` shape as upload's summary. */
 export function formatPostSummary(summary: PostSummary): string {
   return `sent=${summary.sent} byDestination[${formatCounts(summary.byDestination)}] skipped[${formatCounts(summary.skipped)}]`
-    + ` withheld=${summary.withheld} routedBy[${formatCounts(summary.routedBy)}]`
-    + (Object.keys(summary.heldForKey).length ? ` heldForKey[${formatCounts(summary.heldForKey)}]` : '')
-    + (summary.failure ? ` failure=${summary.failure}` : '');
+    + ` withheld=${summary.withheld} routedBy[${formatCounts(summary.routedBy)}]${
+     Object.keys(summary.heldForKey).length ? ` heldForKey[${formatCounts(summary.heldForKey)}]` : ''
+     }${summary.failure ? ` failure=${summary.failure}` : ''}`;
 }

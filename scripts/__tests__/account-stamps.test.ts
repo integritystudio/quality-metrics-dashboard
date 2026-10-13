@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
 import { anchorTurns, turnSourceFields, type Turn } from '../judge-turns.js';
@@ -43,7 +43,7 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
   });
 
   const index = (spans: SpanFixture[]): AccountIndex => {
-    writeFileSync(join(dir, 'traces-2026-09-23.jsonl'), spans.map(spanLine).join('\n') + '\n');
+    writeFileSync(join(dir, 'traces-2026-09-23.jsonl'), `${spans.map(spanLine).join('\n')  }\n`);
     return buildAccountIndex(dir, 7, NOW);
   };
 

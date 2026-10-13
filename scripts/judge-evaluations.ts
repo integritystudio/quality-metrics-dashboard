@@ -29,9 +29,9 @@
  * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, linkSync, renameSync } from 'fs';
-import { createHash } from 'crypto';
-import { join } from 'path';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync, linkSync, renameSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 import type AnthropicSdk from '@anthropic-ai/sdk';
 import pLimit from 'p-limit';
 import type { LLMProvider, ResponseJsonSchema, QagVerificationMode } from '../../src/lib/judge/llm-as-judge.js';
@@ -556,7 +556,7 @@ function releaseLock(): void {
 function writeEvaluations(evals: EvalRecord[]): string {
   const today = toDateOnly(new Date());
   const outFile = join(TELEMETRY_DIR, datedJsonlName(EVALUATIONS_FILE_PREFIX, today));
-  const content = evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n') + '\n';
+  const content = `${evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n')  }\n`;
   appendFileSync(outFile, content);
   return outFile;
 }

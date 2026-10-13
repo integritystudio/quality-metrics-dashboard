@@ -29,9 +29,9 @@
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-quality-eval.ts --yes
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
@@ -223,7 +223,7 @@ async function loadOrFreezeTurns(wanted: readonly AgreementTurn[]): Promise<Turn
   console.log('[quality] locating the agreement run\'s turns through the pipeline…');
   const turns = await locateTurns(wanted);
   mkdirSync(dirname(FROZEN_TURNS_PATH), { recursive: true });
-  writeFileSync(FROZEN_TURNS_PATH, JSON.stringify(turns, null, JSON_INDENT) + '\n');
+  writeFileSync(FROZEN_TURNS_PATH, `${JSON.stringify(turns, null, JSON_INDENT)  }\n`);
   console.log(`[quality] ${turns.length} turns frozen to ${FROZEN_TURNS_PATH}`);
   return turns;
 }
