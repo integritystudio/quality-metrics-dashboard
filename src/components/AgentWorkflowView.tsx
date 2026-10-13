@@ -5,7 +5,7 @@ import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
 import { agentColorScale, fmtDuration } from '../lib/quality-utils.js';
-import { criticalPath } from '../lib/workflow-graph.js';
+import { criticalPath } from '../lib/critical-path.js';
 import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';

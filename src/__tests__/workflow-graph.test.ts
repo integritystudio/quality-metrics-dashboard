@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildWorkflowGraph, criticalPath } from '../lib/workflow-graph.js';
+import { buildWorkflowGraph } from '../lib/workflow-graph.js';
+import { criticalPath } from '../lib/critical-path.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan, makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
