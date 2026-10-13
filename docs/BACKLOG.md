@@ -12,7 +12,7 @@ Open items from code reviews and deferred work.
 | KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | (review) Source: session 2026-10-12, PR #24 |
 | KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (medium) |
 | KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `b9d67e1` (low) |
-| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `b9d67e1` (low) |
+| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `ce3d2fe` superseded by `b9d67e1` |
 
@@ -47,6 +47,9 @@ headers survive the 204 rewrite or the non-204 pass-through. -- `scripts/__tests
 tell a real 204 from a 200 with a null `result`, so a run log does not show which Cloudflare sent.
 Log the original status in `kv204Fetch` or tag the synthetic body if the distinction matters.
 -- `scripts/sync-to-kv.ts:398`
+*Done 2026-10-12.* `kv204Fetch` keeps the 204's headers and adds `x-kv-original-status: 204`
+(`KV_ORIGINAL_STATUS_HEADER`); `kvBulkPut` reads it through `.withResponse()` and logs
+`API answered HTTP 204 with no body` instead of `API returned null result`.
 
 **KV-BULK-SDK-FETCH-ALIAS.** `kv204Fetch` borrows its signature as `typeof http1Fetch`; a named
 `SdkFetch` type would state the contract (the fetch the Cloudflare client accepts) instead of tying it

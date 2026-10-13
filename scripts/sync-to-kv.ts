@@ -119,13 +119,20 @@ function getCloudflareConfig(): CloudflareConfig {
 /** The fetch the Cloudflare client accepts as its `fetch` option. */
 type SdkFetch = NonNullable<CloudflareClientOptions['fetch']>;
 
+const HTTP_OK = 200;
+const HTTP_NO_CONTENT = 204;
+const NULL_RESULT_BODY = '{"result":null}';
+/** Set on a response kv204Fetch rewrote from a 204, so a caller can tell it from a 200 with a null result. */
+export const KV_ORIGINAL_STATUS_HEADER = 'x-kv-original-status';
+
 /**
  * Fetch wrapper passed to the Cloudflare SDK.
  *
  * Converts an HTTP 204 (no body) to a 200 with `{"result":null}` so the SDK's
  * `_thenUnwrap((obj) => obj.result)` receives null rather than throwing
  * `TypeError: Cannot read properties of null (reading 'result')`. The existing
- * `result == null` guard in kvBulkPut then credits all batch keys.
+ * `result == null` guard in kvBulkPut then credits all batch keys. The original
+ * headers are kept, plus `KV_ORIGINAL_STATUS_HEADER`.
  *
  * All other responses are forwarded unchanged.
  *
@@ -133,11 +140,12 @@ type SdkFetch = NonNullable<CloudflareClientOptions['fetch']>;
  */
 export const kv204Fetch: SdkFetch = async (url, init) => {
   const response = await http1Fetch(url, init);
-  if (response.status === 204) {
-    return new Response('{"result":null}', {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    });
+  if (response.status === HTTP_NO_CONTENT) {
+    const headers = new Headers(response.headers);
+    headers.delete('content-length');
+    headers.set('content-type', 'application/json');
+    headers.set(KV_ORIGINAL_STATUS_HEADER, String(HTTP_NO_CONTENT));
+    return new Response(NULL_RESULT_BODY, { status: HTTP_OK, headers });
   }
   return response;
 };
@@ -391,16 +399,17 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
     }
     const { namespaceId, accountId } = getCloudflareConfig();
     try {
-      const result = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
+      const { data: result, response } = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
         account_id: accountId,
         body: batch,
-      });
-      // null result comes from the SDK unwrapping {"result": null}: the API
-      // returned no key info, so credit all batch keys. HTTP 204 is also
-      // handled here: kv204Fetch converts 204 → 200+{"result":null} before
-      // the SDK sees the response.
+      }).withResponse();
+      // A null result carries no key info, so every batch key is credited. It comes
+      // from a {"result": null} body or from a 204 that kv204Fetch rewrote to one.
       if (result == null) {
-        console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned null result — crediting all ${batch.length} keys as written`);
+        const answer = response.headers.get(KV_ORIGINAL_STATUS_HEADER) === String(HTTP_NO_CONTENT)
+          ? 'API answered HTTP 204 with no body'
+          : 'API returned null result';
+        console.warn(`[sync-to-kv] bulk put${batchLabel}: ${answer} — crediting all ${batch.length} keys as written`);
       }
       const failed = new Set(result?.unsuccessful_keys ?? []);
       if (failed.size > 0) {

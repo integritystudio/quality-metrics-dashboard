@@ -154,6 +154,7 @@ describe('kvBulkPut: successful write', () => {
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
 
     expect([...written].sort()).toEqual(['metric:a', 'metric:b']);
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('HTTP 204'));
   });
 
   it('returns all keys when the API result is null', async () => {
@@ -163,6 +164,7 @@ describe('kvBulkPut: successful write', () => {
 
     expect(written.size).toBe(2);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('null result'));
+    expect(vi.mocked(console.warn)).not.toHaveBeenCalledWith(expect.stringContaining('HTTP 204'));
   });
 });
 
