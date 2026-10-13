@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { scoreColor, agentColorScale } from '../lib/quality-utils.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
@@ -29,14 +29,13 @@ export function TurnTimeline({ turns, agentNames, focusedAgent }: TurnTimelinePr
     return <EmptyState message="No turns to display." />;
   }
 
-  const colorByAgent = new Map<string, string>();
-  for (const name of agentNames) colorByAgent.set(name, agentColor(name, agentNames));
+  const colorOf = agentColorScale(agentNames);
 
   return (
     <div className="d-flex gap-2 overflow-x-auto py-2">
       {turns.map((turn, index) => {
         const agent = turn.agentName ?? UNKNOWN_AGENT;
-        const color = colorByAgent.get(agent) ?? agentColor(agent, agentNames);
+        const color = colorOf(agent);
         const bandColor = scoreColor(turn.relevance);
         const focused = agent === focusedAgent;
 

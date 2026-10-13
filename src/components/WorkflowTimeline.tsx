@@ -1,5 +1,5 @@
 import React from 'react';
-import { scoreColor, agentColor } from '../lib/quality-utils.js';
+import { scoreColor, agentColorScale } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
 import { SCORE_CHIP_PRECISION, SCORE_LABEL_PRECISION } from '../lib/constants.js';
@@ -134,14 +134,8 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
     ? handoffs.filter(h => selectedAgents.has(h.sourceAgent) && selectedAgents.has(h.targetAgent))
     : handoffs;
 
-  const agentLaneIndex = new Map<string, number>();
-  const agentColorMap = new Map<string, string>();
-  for (let i = 0; i < visibleAgentNames.length; i++) {
-    const name = visibleAgentNames[i];
-    if (name === undefined) continue;
-    agentLaneIndex.set(name, i);
-    agentColorMap.set(name, agentColor(name, agentNames));
-  }
+  const agentLaneIndex = new Map(visibleAgentNames.map((name, i) => [name, i]));
+  const colorOf = agentColorScale(agentNames);
 
   const availableWidth = totalTurns * TURN_BLOCK_STRIDE;
   const svgWidth = LABEL_WIDTH + availableWidth + TURN_BLOCK_GAP;
@@ -182,7 +176,7 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
         </g>
 
         {lanes.map(({ agentName, turns: laneTurns, laneIndex }) => {
-          const color = agentColorMap.get(agentName) ?? agentColor(agentName, agentNames);
+          const color = colorOf(agentName);
           const laneTop = HEADER_HEIGHT + laneIndex * LANE_HEIGHT;
 
           return (

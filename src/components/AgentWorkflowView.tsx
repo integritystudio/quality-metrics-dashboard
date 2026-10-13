@@ -4,7 +4,7 @@ import { WorkflowGraphView } from './WorkflowGraph.js';
 import { WorkflowTimeline } from './WorkflowTimeline.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
-import { agentColor, fmtDuration } from '../lib/quality-utils.js';
+import { agentColorScale, fmtDuration } from '../lib/quality-utils.js';
 import { criticalPath } from '../lib/workflow-graph.js';
 import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
 
@@ -113,6 +113,7 @@ export function AgentWorkflowView({
     link.click();
   }, []);
 
+  const colorOf = useMemo(() => agentColorScale(agentNames), [agentNames]);
   const showFilter = agentNames.length >= WORKFLOW_FILTER_MIN_AGENTS;
   const showControls = graph.nodes.length > 0;
 
@@ -144,7 +145,7 @@ export function AgentWorkflowView({
       {showFilter && (
         <div className="workflow-filter" role="group" aria-label="Filter agents">
           {agentNames.map(name => {
-            const color = agentColor(name, agentNames);
+            const color = colorOf(name);
             const active = effectiveSelected.has(name);
             return (
               <button

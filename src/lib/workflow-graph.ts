@@ -1,4 +1,4 @@
-import { mean } from 'd3-array';
+import { group, mean } from 'd3-array';
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
 import { SCORE_CHIP_PRECISION } from './constants.js';
@@ -64,10 +64,10 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
   // Per-agent span timing bounds used to compute handoff latency.
   const agentLastEndNs = new Map<string, number>();
   const agentFirstStartNs = new Map<string, number>();
-  for (const [agentId, group] of spansByAgent) {
+  for (const [agentId, agentGroup] of spansByAgent) {
     let minStart = Infinity;
     let maxEnd = -Infinity;
-    for (const s of group) {
+    for (const s of agentGroup) {
       const start = Number(s.startTimeUnixNano);
       if (start < minStart) minStart = start;
       const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
@@ -150,7 +150,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   const nodes: WorkflowNode[] = [];
   const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
 
-  for (const [agentId, group] of agentSpans) {
+  for (const [agentId, agentGroup] of agentSpans) {
     let toolCallCount = 0;
     let tokenSum = 0;
     let tokenCount = 0;
@@ -158,7 +158,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
     let hasError = false;
     let minStart = Infinity;
     let maxEnd = -Infinity;
-    for (const s of group) {
+    for (const s of agentGroup) {
       if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
       const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
       if (typeof tv === 'number' && Number.isFinite(tv)) { tokenSum += tv; tokenCount++; }
@@ -176,7 +176,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
       toolCallCount,
       totalTokens: tokenCount > 0 ? tokenSum : null,
       durationMs,
-      turnCount: group.length,
+      turnCount: agentGroup.length,
       hasError,
     });
     agentTimings.push({ id: agentId, minStart, maxEnd });
@@ -274,7 +274,7 @@ export function criticalPath(graph: WorkflowGraph): string[] {
   const root = graph.rootNodeId;
   if (root === null) return [];
 
-  const outEdges = groupBy(graph.edges, e => e.source);
+  const outEdges = group(graph.edges, e => e.source);
   const durationOf = new Map(graph.nodes.map(n => [n.id, n.durationMs]));
   const settled = new Map<string, { cost: number; path: string[] }>();
   const onStack = new Set<string>();

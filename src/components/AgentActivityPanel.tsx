@@ -12,10 +12,10 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { scoreColor, scoreColorBand, formatCompactCount, formatPercent } from '../lib/quality-utils.js';
+import { agentColorScale, scoreColor, scoreColorBand, formatCompactCount, formatPercent } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
-  AGENT_PALETTE, ERROR_RATE_WARNING_THRESHOLD,
+  ERROR_RATE_WARNING_THRESHOLD,
   SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
 } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
@@ -92,18 +92,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
   const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const colorIndex = useMemo(
-    () => {
-      const m = new Map<string, string>();
-      for (let i = 0; i < agents.length; i++) {
-        const a = agents[i];
-        if (!a) continue;
-        m.set(a.agentName, AGENT_PALETTE[i % AGENT_PALETTE.length] ?? AGENT_PALETTE[0]);
-      }
-      return m;
-    },
-    [agents],
-  );
+  const colorOf = useMemo(() => agentColorScale(agents.map(a => a.agentName)), [agents]);
 
   const table = useTable({
     features,
@@ -142,7 +131,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map(({ original: agent }) => {
-            const color = colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0];
+            const color = colorOf(agent.agentName);
             const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
             const invPct = (agent.invocations / maxInvocations) * 100;
             const topSource = greatest(Object.entries(agent.sourceTypes), ([, count]) => count)?.[0];
@@ -236,7 +225,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                               data={agent.dailyCounts}
                               width={SPARKLINE_WIDTH}
                               height={SPARKLINE_HEIGHT}
-                              color={colorIndex.get(agent.agentName) ?? AGENT_PALETTE[0]}
+                              color={colorOf(agent.agentName)}
                               label={`Daily invocations for ${agent.agentName}`}
                             />
                             <span className="mono text-muted text-2xs shrink-0">
