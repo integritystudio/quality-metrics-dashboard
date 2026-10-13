@@ -51,7 +51,7 @@ interface DashboardExtras {
    * and the route passes it through untouched. Not a bare number.
    */
   cqi?: JsonSafe<CompositeQualityIndex>;
-  sparklines: Record<string, (number | null)[]>;
+  sparklines: Record<string, Array<number | null>>;
 }
 
 /** `GET /dashboard` — `{ ...dashboard, cqi, sparklines }`. */
@@ -68,7 +68,7 @@ export interface HealthResponse {
 
 /** `GET /quality/live` — `lastUpdated` is a decimal-nanos string or an ISO date. */
 export interface QualityLiveResponse {
-  metrics: { name: string; score: number; evaluatorType: string; timestamp: string }[];
+  metrics: Array<{ name: string; score: number; evaluatorType: string; timestamp: string }>;
   sessionCount: number;
   lastUpdated: string;
 }
@@ -206,7 +206,7 @@ export interface TraceEvaluationsResponse {
 /** `GET /compliance/sla`. */
 export interface SlaComplianceResponse {
   period: string;
-  results: JsonSafe<SLAComplianceResult>[];
+  results: Array<JsonSafe<SLAComplianceResult>>;
   noSLAsConfigured: boolean;
 }
 
@@ -214,7 +214,7 @@ export interface SlaComplianceResponse {
 export interface VerificationsResponse {
   period: string;
   count: number;
-  verifications: JsonSafe<HumanVerificationEvent>[];
+  verifications: Array<JsonSafe<HumanVerificationEvent>>;
 }
 
 /** `GET /coverage` — `{ period, ...heatmap }`. */

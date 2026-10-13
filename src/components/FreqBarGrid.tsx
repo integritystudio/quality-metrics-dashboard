@@ -2,7 +2,7 @@ import { FreqBar } from './FreqBar.js';
 import { byValueDesc } from '../lib/quality-utils.js';
 
 interface FreqBarGridProps {
-  entries: [string, number][];
+  entries: Array<[string, number]>;
   max: number;
   color?: string;
 }

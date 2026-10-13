@@ -754,7 +754,7 @@ app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), v
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
   const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
 
-  const data = await getSessionKv<{ rows: Record<string, unknown>[] }>(c, `metric:evaluations:${name}:${period}`);
+  const data = await getSessionKv<{ rows: Array<Record<string, unknown>> }>(c, `metric:evaluations:${name}:${period}`);
   if (!data) return c.json({ rows: [], total: 0, limit, offset, hasMore: false });
 
   let rows = data.rows;
@@ -1101,7 +1101,7 @@ app.get('/api/admin/users', requireGlobalAdmin, async (c) => {
   const rawUsers = safeArray(usersRes.data);
   const rawRoleRows = safeArray(roleRowsRes.data);
 
-  const rolesByUser = new Map<string, { id: string; name: string }[]>();
+  const rolesByUser = new Map<string, Array<{ id: string; name: string }>>();
   for (const row of rawRoleRows) {
     const parsed = AdminUserRoleRowSchema.safeParse(row);
     if (!parsed.success || !parsed.data.roles) continue;

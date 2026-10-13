@@ -46,10 +46,11 @@ function buildTree(
   }
 
   for (const s of spans) {
-    const node = nodeMap.get(s.spanId)!;
-    const parentId = s.parentSpanId;
-    if (parentId && nodeMap.has(parentId)) {
-      nodeMap.get(parentId)!.children.push(node);
+    const node = nodeMap.get(s.spanId);
+    if (!node) continue;
+    const parent = s.parentSpanId ? nodeMap.get(s.parentSpanId) : undefined;
+    if (parent) {
+      parent.children.push(node);
     } else {
       roots.push(node);
     }

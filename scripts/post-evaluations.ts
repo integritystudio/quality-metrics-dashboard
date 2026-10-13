@@ -96,7 +96,7 @@ export async function postEvaluationRecords(
       increment(summary.heldForKey, delivery.ref);
       continue;
     }
-    pushTo(batches, delivery.destination, mapped.payload!);
+    pushTo(batches, delivery.destination, mapped.payload);
   }
 
   const { baseUrl, secret } = resolveSendConfig();

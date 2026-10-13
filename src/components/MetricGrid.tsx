@@ -4,7 +4,7 @@ import { MetricCard } from './MetricCard.js';
 
 export function MetricGrid({ metrics, sparklines, children }: {
   metrics?: QualityMetricResult[] | undefined;
-  sparklines?: Record<string, (number | null)[]> | undefined;
+  sparklines?: Record<string, Array<number | null>> | undefined;
   children?: ReactNode;
 }) {
   return (

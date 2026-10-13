@@ -92,7 +92,7 @@ function createFakeProvider(
   };
 }
 
-function names(selection: { criteria: { name: string }[] }): string[] {
+function names(selection: { criteria: Array<{ name: string }> }): string[] {
   return selection.criteria.map(c => c.name);
 }
 

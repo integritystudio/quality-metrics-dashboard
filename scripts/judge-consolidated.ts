@@ -451,17 +451,19 @@ export async function evaluateTurnConsolidated(
   // Steps are per criterion; a criterion whose steps fail drops out of this
   // turn alone, as it would on the per-criterion path.
   const prepared: PreparedCriterion[] = [];
-  const stepResults = await Promise.allSettled(
-    selection.criteria.map(config => cachedEvaluationSteps(provider, config, stepsCache)),
+  const stepOutcomes = await Promise.all(
+    selection.criteria.map(config => cachedEvaluationSteps(provider, config, stepsCache).then(
+      steps => ({ config, steps }),
+      (reason: unknown) => ({ config, reason }),
+    )),
   );
-  stepResults.forEach((result, i) => {
-    const config = selection.criteria[i]!;
-    if (result.status === 'fulfilled') {
-      prepared.push({ config, steps: result.value });
-      return;
+  for (const outcome of stepOutcomes) {
+    if ('steps' in outcome) {
+      prepared.push({ config: outcome.config, steps: outcome.steps });
+      continue;
     }
-    for (const name of recordNamesFor(config.name)) trackFailure(name, result.reason, sessionPreview);
-  });
+    for (const name of recordNamesFor(outcome.config.name)) trackFailure(name, outcome.reason, sessionPreview);
+  }
   if (prepared.length === 0) return [];
 
   const names = prepared.map(p => p.config.name);

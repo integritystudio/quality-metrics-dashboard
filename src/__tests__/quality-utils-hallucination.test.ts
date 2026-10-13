@@ -20,7 +20,7 @@ describe('isHallucinationIndicator', () => {
     ['a hallucination score equal to the threshold', { evaluationName: 'hallucination', scoreValue: HALLUCINATION_RISK_THRESHOLD }],
     ['hallucination_risk above the threshold', { evaluationName: 'hallucination_risk', scoreValue: FAITHFUL }],
     ['a differently cased name', { evaluationName: 'Hallucination', scoreValue: FAITHFUL }],
-  ] satisfies [string, ScoredEvaluation][])('flags %s', (_label, evaluation) => {
+  ] satisfies Array<[string, ScoredEvaluation]>)('flags %s', (_label, evaluation) => {
     expect(isHallucinationIndicator(evaluation)).toBe(true);
   });
 
@@ -34,7 +34,7 @@ describe('isHallucinationIndicator', () => {
     ['a name that only contains hallucination', { evaluationName: 'hallucination_check', scoreValue: FAITHFUL }],
     ['a failed non-hallucination evaluation with a very low score', { evaluationName: 'tool_correctness', scoreValue: LOW_SCORE, scoreLabel: 'fail' }],
     ['a passing evaluation with a low score', { evaluationName: 'relevance', scoreValue: LOW_SCORE, scoreLabel: 'pass' }],
-  ] satisfies [string, ScoredEvaluation][])('does not flag %s', (_label, evaluation) => {
+  ] satisfies Array<[string, ScoredEvaluation]>)('does not flag %s', (_label, evaluation) => {
     expect(isHallucinationIndicator(evaluation)).toBe(false);
   });
 });

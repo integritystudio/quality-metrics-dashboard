@@ -154,7 +154,7 @@ export interface SessionDetailResponse {
 export function useSessionDetail(sessionId: string | undefined) {
   return useApiQuery<SessionDetailResponse>(
     ['session-detail', sessionId],
-    () => `/api/sessions/${encodeURIComponent(sessionId!)}`,
+    () => `/api/sessions/${encodeURIComponent(sessionId ?? '')}`,
     {
       enabled: !!sessionId,
       staleTime: STALE_TIME.DETAIL,

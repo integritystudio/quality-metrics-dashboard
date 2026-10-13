@@ -56,7 +56,7 @@ function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<str
 const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ sessionId: 'pipeline-sess-abc', traceId: 'trace-pipeline-001', timestamp: '2026-02-25T00:00:00.000Z', userText: 'Fix the authentication bug in login.ts', assistantText: 'I found the issue in the JWT validation. Here is the fix.', ...overrides });
 
 /** Parse a JSONL string into an array of objects */
-function parseJsonl(content: string): Record<string, unknown>[] {
+function parseJsonl(content: string): Array<Record<string, unknown>> {
   return content
     .split('\n')
     .filter(Boolean)

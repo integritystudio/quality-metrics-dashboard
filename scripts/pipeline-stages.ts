@@ -271,8 +271,8 @@ export async function runWithRetry<T>(options: RetryOptions<T>): Promise<T> {
   const wait = options.sleep ?? sleep;
   const totalAttempts = delays.length + 1;
   let outcome = await options.attempt(1);
-  for (let retry = 0; retry < delays.length && options.shouldRetry(outcome); retry++) {
-    const waitMs = delays[retry]!;
+  for (const [retry, waitMs] of delays.entries()) {
+    if (!options.shouldRetry(outcome)) break;
     options.onRetry?.(waitMs, retry + 1, totalAttempts, outcome);
     await wait(waitMs);
     outcome = await options.attempt(retry + 2);

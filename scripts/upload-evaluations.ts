@@ -89,7 +89,7 @@ import {
 import { evaluationCohortSchema, INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
-import { increment, pushTo } from './collections.js';
+import { getOrThrow, increment, pushTo } from './collections.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
@@ -204,17 +204,21 @@ export interface EvaluationPayload {
   metadata?: Record<string, unknown>;
 }
 
-interface MapResult {
-  payload?: EvaluationPayload;
-  /**
-   * The record's own account stamp (TKR8 Phase 1); absent when the record has
-   * none. Kept off `payload` on purpose: the stamp routes the record and is
-   * never shipped.
-   */
-  accountRef?: AccountRef;
-  /** Why the record was dropped; absent when `payload` is set. */
-  skip?: 'not-an-evaluation' | 'canary' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
-}
+type MapSkip = 'not-an-evaluation' | 'canary' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
+
+type MapResult =
+  | {
+    payload: EvaluationPayload;
+    /**
+     * The record's own account stamp (TKR8 Phase 1); absent when the record has
+     * none. Kept off `payload` on purpose: the stamp routes the record and is
+     * never shipped.
+     */
+    accountRef?: AccountRef;
+    skip?: undefined;
+  }
+  /** A dropped record, and why. */
+  | { payload?: undefined; accountRef?: undefined; skip: MapSkip };
 
 function truncate(value: string, max: number): string {
   return value.length > max ? value.slice(0, max) : value;
@@ -505,8 +509,8 @@ export type RouteBasis = 'stamp' | 'span' | 'join';
  */
 export function routeRecord(mapped: MapResult, index: AccountIndex): { route: Route; basis: RouteBasis } {
   if (mapped.accountRef !== undefined) return { route: routeForRef(mapped.accountRef), basis: 'stamp' };
-  const spanId = mapped.payload!.spanId;
-  if (spanId && index.bySpan.has(spanId)) return { route: routeForRef(index.bySpan.get(spanId)!), basis: 'span' };
+  const spanId = mapped.payload?.spanId;
+  if (spanId && index.bySpan.has(spanId)) return { route: routeForRef(getOrThrow(index.bySpan, spanId)), basis: 'span' };
   return { route: { kind: 'webhook' }, basis: 'join' };
 }
 
@@ -617,9 +621,13 @@ export function sendBatch(
   baseUrl: string,
   secret: string | undefined,
 ): Promise<SendResult> {
-  return postBatch(destination === WEBHOOK_DESTINATION
-    ? webhookRequest(baseUrl, payloads, secret!)
-    : keyedRequest(baseUrl, payloads, process.env[destination]!));
+  if (destination === WEBHOOK_DESTINATION) {
+    if (secret === undefined) throw new Error('The webhook destination needs INJECT_HMAC_SECRET');
+    return postBatch(webhookRequest(baseUrl, payloads, secret));
+  }
+  const apiKey = process.env[destination];
+  if (apiKey === undefined) throw new Error(`${destination} is not set; check held-for-key before sending`);
+  return postBatch(keyedRequest(baseUrl, payloads, apiKey));
 }
 
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
@@ -713,7 +721,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       const done = new Set(shipped[file] ?? []);
 
       /** One pending batch per destination: `WEBHOOK_DESTINATION` or a key ref. */
-      const batches = new Map<string, { payload: EvaluationPayload; fp: string }[]>();
+      const batches = new Map<string, Array<{ payload: EvaluationPayload; fp: string }>>();
       /** Confirmed-delivered fingerprints for this file, recorded only after a 2xx. */
       const delivered: string[] = [...done];
 
@@ -766,7 +774,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           if (mapped.skip !== 'too-old') delivered.push(fp);
           continue;
         }
-        const manifestRef = key === undefined ? undefined : manifest!.get(key);
+        const manifestRef = key === undefined ? undefined : manifest?.get(key);
         const { route, basis }: { route: Route; basis: RouteBasis } = manifestRef
           ? { route: { kind: 'keyed', ref: manifestRef }, basis: 'stamp' }
           : routeRecord(mapped, accounts);
@@ -785,7 +793,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           continue;
         }
         const { destination } = delivery;
-        const batch = pushTo(batches, destination, { payload: mapped.payload!, fp });
+        const batch = pushTo(batches, destination, { payload: mapped.payload, fp });
         if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
       }
       for (const destination of [...batches.keys()]) {

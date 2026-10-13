@@ -122,7 +122,7 @@ describe('labelToOrdinal', () => {
     ['fabricated', 0, 'Fail'],
     ['toxic', 0, 'Fail'],
     ['dangerous', 0, 'Fail'],
-  ] as [string, number, string][])('"%s" → ordinal %i, category %s', (label, ordinal, category) => {
+  ] as Array<[string, number, string]>)('"%s" → ordinal %i, category %s', (label, ordinal, category) => {
     const result = labelToOrdinal(label);
     expect(result.ordinal).toBe(ordinal);
     expect(result.category).toBe(category);

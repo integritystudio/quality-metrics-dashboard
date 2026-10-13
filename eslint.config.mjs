@@ -35,6 +35,14 @@ const typeSafetyRules = {
   '@typescript-eslint/no-dynamic-delete': 'error',
   '@typescript-eslint/no-deprecated': 'warn',
   '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
+  '@typescript-eslint/no-non-null-assertion': 'error',
+  '@typescript-eslint/switch-exhaustiveness-check': ['error', { considerDefaultExhaustiveForUnions: true }],
+  // An un-awaited promise returned inside `try` rejects past its `catch`.
+  '@typescript-eslint/return-await': ['error', 'in-try-catch'],
+  '@typescript-eslint/no-misused-spread': 'error',
+  '@typescript-eslint/array-type': ['error', { default: 'array-simple' }],
+  '@typescript-eslint/no-extraneous-class': 'error',
+  '@typescript-eslint/prefer-literal-enum-member': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
   'radix': 'error',
   'no-param-reassign': ['error', { props: false }],
@@ -181,6 +189,13 @@ export default tseslint.config(
         // scripts/{backtest-degradation,derive-evaluations,judge-evaluations,sync-to-kv}.ts.
         ignorePrimitives: { boolean: true },
       }],
+    },
+  },
+  // Every test tree, including support modules the src/ test override misses.
+  {
+    files: ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'scripts/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'warn',
     },
   },
   // Parent-boundary enforcement (DASH-DIST-IMPORT). The parent

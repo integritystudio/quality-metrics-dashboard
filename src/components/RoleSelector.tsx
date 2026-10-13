@@ -8,8 +8,9 @@ const ROLE_TABS: Array<{ path: string; label: string; role: RoleViewType }> = [
   { path: '/role/auditor', label: 'Auditor', role: 'auditor' },
 ];
 
-const STATIC_TABS: Array<{ path: string; label: string }> = [
-  { path: '/', label: 'Dashboard' },
+const HOME_TAB = { path: '/', label: 'Dashboard' };
+
+const TRAILING_STATIC_TABS: Array<{ path: string; label: string }> = [
   { path: '/correlations', label: 'Correlations' },
   { path: '/coverage', label: 'Coverage' },
   { path: '/pipeline', label: 'Pipeline' },
@@ -23,9 +24,9 @@ export function RoleSelector() {
   const visibleRoleTabs = ROLE_TABS.filter((t) => allowedViews.includes(t.role));
 
   const tabs = [
-    STATIC_TABS[0]!,
+    HOME_TAB,
     ...visibleRoleTabs,
-    ...STATIC_TABS.slice(1),
+    ...TRAILING_STATIC_TABS,
   ];
 
   return (

@@ -335,7 +335,7 @@ export async function evaluateTurn(
   const toolContext = fitContextForJudge(turn.toolResults);
   // Every criterion catches its own failure, so a collected promise can only
   // fulfil; the allSettled at the end is the guard, not the error path.
-  const inFlight: Promise<void>[] = [];
+  const inFlight: Array<Promise<void>> = [];
   const score = (criterion: () => Promise<void>): Promise<void> => {
     if (!options.concurrent) return criterion();
     inFlight.push(criterion());

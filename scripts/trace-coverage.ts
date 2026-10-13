@@ -25,7 +25,7 @@ import { readdirSync, writeFileSync } from 'fs';
 import { ascending, sum } from 'd3-array';
 import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToMs, nsToMs } from './hrt.js';
-import { incrementIn, pushTo } from './collections.js';
+import { getOrThrow, incrementIn, pushTo } from './collections.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { TRACE_FILE_PATTERN, fileInWindow, asString, readSpanRecord, traceFileRecords, type AccountRef } from './account-stamps.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
@@ -66,7 +66,7 @@ export interface AccountCoverage {
   local: number;
   matched: number;
   coverage: number;
-  missingBySession: { sessionId: string; missing: number }[];
+  missingBySession: Array<{ sessionId: string; missing: number }>;
 }
 
 export interface CoverageWindow {
@@ -255,7 +255,13 @@ async function main(): Promise<number> {
   }
   console.log(`${CLI_PREFIX} ${local.length} local spans; ${unstamped} unstamped (not compared)`);
 
-  const missingKeys = [...byRef.keys()].filter((ref) => !asString(process.env[ref]));
+  const apiKeys = new Map<string, string>();
+  const missingKeys: string[] = [];
+  for (const ref of byRef.keys()) {
+    const apiKey = asString(process.env[ref]);
+    if (apiKey) apiKeys.set(ref, apiKey);
+    else missingKeys.push(ref);
+  }
   if (missingKeys.length > 0) {
     console.error(`${CLI_PREFIX} no API key in env for: ${missingKeys.join(', ')}`);
     return CHECK_EXIT.ERROR;
@@ -263,7 +269,7 @@ async function main(): Promise<number> {
 
   const results: AccountCoverage[] = [];
   for (const [ref, spans] of [...byRef].sort(([a], [b]) => ascending(a, b))) {
-    const cloud = await fetchCloudSpans(process.env[ref]!, window);
+    const cloud = await fetchCloudSpans(getOrThrow(apiKeys, ref), window);
     const result = compareAccount(ref, spans, cloud);
     printAccount(result);
     results.push(result);

@@ -93,7 +93,7 @@ describe('ChainOfThoughtPanel', () => {
 
 
 describe('AlertList compound alerts', () => {
-  function makeAlerts(): (TriggeredAlert & { metricName: string })[] {
+  function makeAlerts(): Array<TriggeredAlert & { metricName: string }> {
     return [
       {
         severity: 'warning',

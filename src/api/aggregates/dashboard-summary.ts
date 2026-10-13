@@ -21,7 +21,7 @@ import type { EvaluationResult, CompositeQualityIndex } from '../../types.js';
 /** Sparklines bucket count: 24 ≈ one data point per hour over a 24 h view. */
 export const SPARKLINE_BUCKET_COUNT = 24;
 
-export type DashboardSparklines = Record<string, (number | null)[]>;
+export type DashboardSparklines = Record<string, Array<number | null>>;
 
 export type DashboardFullResult = ReturnType<typeof computeDashboardSummary> & {
   cqi: CompositeQualityIndex | undefined;
@@ -33,9 +33,9 @@ function computeSparklines(
   startMs: number,
   endMs: number,
   buckets: number,
-): Record<string, (number | null)[]> {
+): Record<string, Array<number | null>> {
   const range = endMs - startMs;
-  const sparklines: Record<string, (number | null)[]> = {};
+  const sparklines: Record<string, Array<number | null>> = {};
   for (const [metricName, evals] of evaluationsByMetric) {
     if (range <= 0 || evals.length === 0) {
       sparklines[metricName] = [];

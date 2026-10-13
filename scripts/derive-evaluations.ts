@@ -73,7 +73,8 @@ export function setSpanAccounts(accounts: ReadonlyMap<string, AccountRef>): void
 
 /** The scored span's stamp as a record field; `{}` when the span carried none. */
 function spanAccountField(span: LocalTraceSpan): Pick<EvalRecord, 'identityKeyRef'> {
-  return spanAccounts.has(span.spanId) ? { identityKeyRef: spanAccounts.get(span.spanId)! } : {};
+  const identityKeyRef = spanAccounts.get(span.spanId);
+  return identityKeyRef === undefined ? {} : { identityKeyRef };
 }
 
 /** What each rule metric decides; every other record field comes from `span`. */
@@ -354,7 +355,7 @@ interface AgentSessionData {
   pre: number;
   lastSpan: LocalTraceSpan;
   /** Ordered agent names per post-tool span, used for handoff detection */
-  agentSequence: { agentName: string; score: number; span: LocalTraceSpan }[];
+  agentSequence: Array<{ agentName: string; score: number; span: LocalTraceSpan }>;
 }
 const sessionAgents = new Map<string, AgentSessionData>();
 
@@ -477,7 +478,7 @@ export async function deriveAgentHeuristics(
   nowMs: number = Date.now(),
 ): Promise<EvalRecord[]> {
   const limit = pLimit(TRANSCRIPT_READ_CONCURRENCY);
-  const jobs: Promise<EvalRecord[]>[] = [];
+  const jobs: Array<Promise<EvalRecord[]>> = [];
   const lastSpanBySession = new Map<string, LocalTraceSpan>();
 
   for (const span of spans) {

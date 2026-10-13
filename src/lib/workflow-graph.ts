@@ -48,7 +48,7 @@ export function buildWorkflowGraph(
 }
 
 function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, typeof evaluation.turns[number][]>();
+  const agentTurns = new Map<string, Array<typeof evaluation.turns[number]>>();
   let droppedTurns = 0;
   // Root: agent with lowest turnIndex, lexicographic tiebreak
   let rootAgentName: string | null = null;
@@ -161,7 +161,7 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   }
 
   const nodes: WorkflowNode[] = [];
-  const agentTimings: { id: string; minStart: number; maxEnd: number }[] = [];
+  const agentTimings: Array<{ id: string; minStart: number; maxEnd: number }> = [];
 
   for (const [agentId, agentGroup] of agentSpans) {
     let toolCallCount = 0;

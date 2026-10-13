@@ -92,8 +92,8 @@ export async function queryEachAccount<T>(
   label: AccountQueryLabel,
   logPrefix: string,
   query: (backend: CloudBackend) => Promise<T[]>,
-): Promise<{ ref: string; rows: T[] }[]> {
-  const perAccount: { ref: string; rows: T[] }[] = [];
+): Promise<Array<{ ref: string; rows: T[] }>> {
+  const perAccount: Array<{ ref: string; rows: T[] }> = [];
   for (const ref of accountRefsFromEnv(env)) {
     const apiKey = asString(env[ref]);
     if (apiKey === undefined) continue;
@@ -124,7 +124,7 @@ function utcDateOfNanos(ns: bigint): string {
  * keys share an org, and the count is reported.
  */
 export function mergeAccountSpans(
-  perAccount: readonly { ref: string; spans: readonly TraceSpan[] }[],
+  perAccount: ReadonlyArray<{ ref: string; spans: readonly TraceSpan[] }>,
   dates: ReadonlySet<string>,
 ): LoadedSpans & { duplicates: number; rejected: number } {
   const seen = new Map<string, { span: TraceSpan; local: LocalTraceSpan }>();

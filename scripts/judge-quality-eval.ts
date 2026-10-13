@@ -62,7 +62,7 @@ import {
 } from './judge-agreement.js';
 import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, jsonSchemaFormat, responseText } from './judge-anthropic-client.js';
 import { runIfMain } from './cli-args.js';
-import { incrementIn } from './collections.js';
+import { getOrThrow, incrementIn } from './collections.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -268,7 +268,7 @@ export function estimateReferenceSpend(
  * the signed mean is added here because agreement has no direction.
  */
 export function compareToReference<K extends string>(
-  turns: readonly (Record<K, Record<string, number>> & { reference: Record<string, number> })[],
+  turns: ReadonlyArray<Record<K, Record<string, number>> & { reference: Record<string, number> }>,
   side: K,
 ): ReferenceSummary {
   const agreement = computeAgreement(turns.map(t => ({ perCriterion: t[side], consolidated: t.reference })));
@@ -314,7 +314,7 @@ export function closestConfiguration<K extends string>(
       .filter((e): e is { c: K; mae: number } => e.mae !== null)
       .sort((a, b) => a.mae - b.mae);
     const [best, next] = scored;
-    verdict[name] = !best || scored.length < 2 || best.mae === next!.mae ? 'tie' : best.c;
+    verdict[name] = !best || !next || best.mae === next.mae ? 'tie' : best.c;
   }
   return verdict;
 }
@@ -416,13 +416,13 @@ function printTable(
     tableRow(TABLE_CELL_WIDTH, 'criterion', 'n', 'pc exact', 'pc mae', 'pc bias', 'cons exact', 'cons mae', 'cons bias')
     + padCell('closer', CLOSER_CELL_WIDTH),
   );
-  const names = [...Object.keys(verdict), 'overall'];
-  for (const name of names) {
+  const overallCloser: Side = (perCriterion.overall.meanAbsDiff ?? Infinity) < (consolidated.overall.meanAbsDiff ?? Infinity)
+    ? 'perCriterion'
+    : 'consolidated';
+  const rows: Array<[string, Side | 'tie']> = [...Object.entries(verdict), ['overall', overallCloser]];
+  for (const [name, closer] of rows) {
     const a = name === 'overall' ? perCriterion.overall : perCriterion.byCriterion[name];
     const b = name === 'overall' ? consolidated.overall : consolidated.byCriterion[name];
-    const closer = name === 'overall'
-      ? ((a?.meanAbsDiff ?? Infinity) < (b?.meanAbsDiff ?? Infinity) ? 'perCriterion' : 'consolidated')
-      : verdict[name]!;
     console.log(
       tableRow(
         TABLE_CELL_WIDTH,
@@ -466,7 +466,7 @@ async function main(): Promise<void> {
   console.log(`[quality] ${matched.length} turns matched, ${unmatched} no longer locatable`);
   if (matched.length === 0) return refuse('none of the agreement run\'s turns could be located');
 
-  const estimate = estimateReferenceSpend(matched.map(t => byKey.get(turnKey(t))!), pricing);
+  const estimate = estimateReferenceSpend(matched.map(t => getOrThrow(byKey, turnKey(t))), pricing);
   console.log(
     `[quality] estimate: ~${estimate.calls} reference calls, ~${estimate.inputTokens.toLocaleString()} input / `
     + `~${estimate.outputTokens.toLocaleString()} output tokens, ~${formatUsd(estimate.usd)} `
@@ -487,7 +487,7 @@ async function main(): Promise<void> {
   const progress = turnProgress('[quality]', matched.length);
   const scored = await processBatch(matched, REFERENCE_CONCURRENCY, NO_BATCH_DELAY_MS, async (turn): Promise<QualityTurn> => {
     const errors: string[] = [];
-    const reference = await scoreTurnWithReference(provider, byKey.get(turnKey(turn))!, stepsCache, canSpend, errors);
+    const reference = await scoreTurnWithReference(provider, getOrThrow(byKey, turnKey(turn)), stepsCache, canSpend, errors);
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
     progress(` (${formatUsd(tokenUsageCostUsd(totals, pricing))} so far)`);
     return { ...turn, reference };

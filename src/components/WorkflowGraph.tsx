@@ -241,9 +241,11 @@ async function computeLayout(
   const layout = await elk.layout(elkGraph);
 
   const rfNodes: Node[] = (layout.children ?? [])
-    .filter(elkNode => nodeDataMap.has(elkNode.id))
-    .map(elkNode => {
-      const workflowNode = nodeDataMap.get(elkNode.id)!;
+    .flatMap(elkNode => {
+      const workflowNode = nodeDataMap.get(elkNode.id);
+      return workflowNode ? [{ elkNode, workflowNode }] : [];
+    })
+    .map(({ elkNode, workflowNode }) => {
       const dimmed = selectedAgents != null && !selectedAgents.has(elkNode.id);
       const critical = criticalPath?.has(elkNode.id) ?? false;
       const isCluster = isClusterNodeId(elkNode.id);

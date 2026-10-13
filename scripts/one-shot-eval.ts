@@ -199,7 +199,7 @@ export function padCell(value: string | number, width: number): string {
 }
 
 /** A TABLE_NAME_WIDTH name column, then right-aligned cells `cellWidth` wide. */
-export function tableRow(cellWidth: number, name: string, ...cells: (string | number)[]): string {
+export function tableRow(cellWidth: number, name: string, ...cells: Array<string | number>): string {
   return name.padEnd(TABLE_NAME_WIDTH) + cells.map(value => padCell(value, cellWidth)).join('');
 }
 

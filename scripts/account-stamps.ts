@@ -227,8 +227,10 @@ export function turnSpan(
   fromMs: number,
   toMs: number = UNTIMED_MS,
 ): SpanRef | undefined {
-  const span = spansInTurn(index, sessionId, fromMs, toMs).find((s) => s.spanId && s.traceId);
-  return span ? { spanId: span.spanId!, traceId: span.traceId! } : undefined;
+  for (const { spanId, traceId } of spansInTurn(index, sessionId, fromMs, toMs)) {
+    if (spanId && traceId) return { spanId, traceId };
+  }
+  return undefined;
 }
 
 /** A session's spans in `[fromMs, toMs)`, in start order. */

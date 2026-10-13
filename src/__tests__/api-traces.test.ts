@@ -91,7 +91,7 @@ describe('GET /traces/:traceId', () => {
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
 
     expect(res.status).toBe(200);
-    const body = await res.json() as { evaluations: { timestamp: string }[] };
+    const body = await res.json() as { evaluations: Array<{ timestamp: string }> };
     expect(body.evaluations[0]!.timestamp).toBe(String(EVAL_NANOS));
   });
 
@@ -107,7 +107,7 @@ describe('GET /traces/:traceId', () => {
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
 
     expect(res.status).toBe(200);
-    const body = await res.json() as { spans: { startTimeUnixNano: string; endTimeUnixNano: string }[] };
+    const body = await res.json() as { spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }> };
     expect(body.spans[0]!.startTimeUnixNano).toBe(String(START_NANOS));
     expect(body.spans[0]!.endTimeUnixNano).toBe(String(END_NANOS));
   });

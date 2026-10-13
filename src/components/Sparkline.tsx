@@ -4,7 +4,7 @@ import { scaleLinear } from 'd3-scale';
 
 interface SparklineProps {
   /** Array of score values (nulls allowed for gaps) */
-  data: (number | null)[];
+  data: Array<number | null>;
   /** SVG width in px */
   width?: number;
   /** SVG height in px */

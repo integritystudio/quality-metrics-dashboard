@@ -87,7 +87,7 @@ function DashboardPage({ period }: { period: Period }) {
 
   if (!data || ('role' in data)) return <MetricGridSkeleton />;
   const dashboard = data;
-  const sparklines = (data as QualityDashboardSummary & { sparklines?: Record<string, (number | null)[]> }).sparklines;
+  const sparklines = (data as QualityDashboardSummary & { sparklines?: Record<string, Array<number | null>> }).sparklines;
 
   if (dashboard.overallStatus === 'no_data') return <NoEvaluationData />;
 

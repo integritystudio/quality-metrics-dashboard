@@ -73,13 +73,13 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
   it('includes evaluatorKind and cohort in the KV row', () => {
     const fromKv = kvValue(synced, 'metric:evaluations:relevance:7d') as
-      { rows: Record<string, unknown>[] } | undefined;
+      { rows: Array<Record<string, unknown>> } | undefined;
     expect(fromKv?.rows[0]).toMatchObject({ evaluatorKind: 'llm', cohort: 'normal' });
   });
 
   it('includes evaluatorKind and cohort in the route row', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=200');
-    const { rows } = await res.json() as { rows: Record<string, unknown>[] };
+    const { rows } = await res.json() as { rows: Array<Record<string, unknown>> };
     expect(rows[0]).toMatchObject({ evaluatorKind: 'llm', cohort: 'normal' });
   });
 });

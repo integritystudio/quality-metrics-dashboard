@@ -63,6 +63,7 @@ import {
   type ReferenceSummary,
 } from './judge-quality-eval.js';
 import { runIfMain } from './cli-args.js';
+import { getOrThrow } from './collections.js';
 import {
   DOCS_DIR,
   EXIT_REFUSED,
@@ -149,7 +150,7 @@ export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
 const { refuse, begin } = runGuard;
 
 export function readPriorReference(path: string): QualityTurn[] {
-  const parsed = JSON.parse(readFileSync(path, 'utf8')) as { turns?: { reference?: unknown }[] };
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as { turns?: Array<{ reference?: unknown }> };
   if (!Array.isArray(parsed.turns) || parsed.turns.some(t => typeof t.reference !== 'object' || t.reference === null)) {
     throw new Error(`${path} has no turns with reference scores — not a judge-quality results file`);
   }
@@ -185,7 +186,7 @@ export function mergeReference(prior: Record<string, number>, hallucination: num
 }
 
 /** Acceptance (c): a configuration that measures hallucination does not produce faithfulness + hallucination = 1. */
-export function countComplements(scores: readonly Record<string, number>[]): ComplementCount {
+export function countComplements(scores: ReadonlyArray<Record<string, number>>): ComplementCount {
   let paired = 0;
   let sumToOne = 0;
   for (const s of scores) {
@@ -230,9 +231,9 @@ function printTable(
 ): void {
   console.log(`\n[hallucination] MAE from ${REFERENCE_MODEL} (1–5 scale)`);
   console.log(tableRow(TABLE_CELL_WIDTH, 'criterion', ...CONFIGURATIONS.map(c => c.slice(0, TABLE_CELL_WIDTH - 1)), 'closest'));
-  for (const name of Object.keys(closest)) {
+  for (const [name, closestVerdict] of Object.entries(closest)) {
     const maes = CONFIGURATIONS.map(c => formatDiff(summaries[c].byCriterion[name]?.meanAbsDiff));
-    console.log(tableRow(TABLE_CELL_WIDTH, name, ...maes, closest[name]!));
+    console.log(tableRow(TABLE_CELL_WIDTH, name, ...maes, closestVerdict));
   }
   console.log(tableRow(TABLE_CELL_WIDTH, 'overall', ...CONFIGURATIONS.map(c => formatDiff(summaries[c].overall.meanAbsDiff))));
   console.log('\n[hallucination] faithfulness + hallucination = 1 (acceptance c: the candidate should read 0)');
@@ -260,7 +261,7 @@ async function main(): Promise<void> {
   console.log(`[hallucination] ${prior.length} turns from ${args.referencePath} matched the frozen turns`);
   if (prior.length === 0) return refuse('no prior reference turn matches a frozen turn');
 
-  const estimate = estimateRunSpend(prior.map(t => byKey.get(turnKey(t))!), haikuPricing, referencePricing);
+  const estimate = estimateRunSpend(prior.map(t => getOrThrow(byKey, turnKey(t))), haikuPricing, referencePricing);
   console.log(
     `[hallucination] estimate: Haiku ~${formatUsd(estimate.haikuUsd)}, `
     + `${estimate.referenceCalls} reference calls ~${formatUsd(estimate.referenceUsd)}`,
@@ -295,7 +296,7 @@ async function main(): Promise<void> {
 
   const progress = turnProgress('[hallucination]', prior.length);
   const scored = await processBatch(prior, REFERENCE_CONCURRENCY, NO_BATCH_DELAY_MS, async (priorTurn): Promise<HallucinationTurn> => {
-    const turn = byKey.get(turnKey(priorTurn))!;
+    const turn = getOrThrow(byKey, turnKey(priorTurn));
     const errors: string[] = [];
     const outcome: HallucinationTurn = {
       sessionId: priorTurn.sessionId,

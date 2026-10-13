@@ -98,7 +98,8 @@ export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, o
     } else if (skip === 'withheld') {
       selection.withheld++;
     } else if (skip === 'held-for-key') {
-      const secret = deliverySecret(turn)!;
+      const secret = deliverySecret(turn);
+      if (secret === null) throw new Error('A held-for-key turn always has a delivery secret');
       increment(selection.heldForKey, secret);
     } else {
       selection.selected.push(turn);

@@ -183,7 +183,7 @@ export async function createFixtureServer(options: FixtureServerOptions = {}): P
   let traceRows: TraceWireRow[] = [];
   let logRows: LogWireRow[] = [];
   const failPaths = new Set<string>();
-  let failQueries: { path: string; param: string; value: string }[] = [];
+  let failQueries: Array<{ path: string; param: string; value: string }> = [];
   let requested: FixtureRequest[] = [];
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {

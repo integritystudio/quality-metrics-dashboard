@@ -68,7 +68,7 @@ export function isoToNs(iso: string): bigint {
 /** Structural result of {@link jsonSafe}: every `bigint` becomes a decimal `string`. */
 export type JsonSafe<T> =
   T extends bigint ? string
-  : T extends (infer U)[] ? JsonSafe<U>[]
+  : T extends Array<infer U> ? Array<JsonSafe<U>>
   : T extends Date ? T
   : T extends object ? { [K in keyof T]: JsonSafe<T[K]> }
   : T;

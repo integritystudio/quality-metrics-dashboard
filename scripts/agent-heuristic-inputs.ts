@@ -36,7 +36,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function blocksOf(content: unknown): Record<string, unknown>[] {
+function blocksOf(content: unknown): Array<Record<string, unknown>> {
   return Array.isArray(content) ? content.filter(isRecord) : [];
 }
 

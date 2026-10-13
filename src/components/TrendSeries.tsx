@@ -34,13 +34,15 @@ function formatTime(iso: string, spanDays: number): string {
 }
 
 export function TrendSeries({ data, metricName }: TrendSeriesProps) {
-  if (data.length === 0) {
+  const first = data[0];
+  const last = data.at(-1);
+  if (!first || !last) {
     return <EmptyState message="No trend data available" />;
   }
 
   const spanMs = differenceInMilliseconds(
-    new Date(data[data.length - 1]!.endTime),
-    new Date(data[0]!.startTime)
+    new Date(last.endTime),
+    new Date(first.startTime)
   );
   const spanDays = spanMs / (1000 * 60 * 60 * 24);
 
