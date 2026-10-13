@@ -196,8 +196,8 @@ gains `currentPath`, and the three PR #21 files mount through `renderPage`. The 
 **TEST-FIXTURE-DUPLICATES.**
 - ~~`org-switcher.test.tsx` (PR #20) repeats the org fixtures in `org-switch.test.tsx`.~~ Done 2026-10-12:
   merged into `org-switch.test.tsx`.
-- `auth-context-refresh.test.tsx` keeps `'obs:login_recorded'` as a literal because the key is private
-  to `AuthContext`.
+- ~~`auth-context-refresh.test.tsx` keeps `'obs:login_recorded'` as a literal because the key is private
+  to `AuthContext`.~~ Done 2026-10-12: `AuthContext` exports `SESSION_LOGIN_KEY` and the test imports it.
 - `scripts/__tests__/judge-anthropic-client.test.ts` keeps its own loopback server beside the new
   `scripts/__tests__/support/recording-server.ts` (PR #24).
 

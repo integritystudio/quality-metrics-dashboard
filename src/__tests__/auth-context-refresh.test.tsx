@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act, waitFor, cleanup, within } from '@testing-library/react';
-import { AuthProvider, useAuth } from '../contexts/AuthContext.js';
+import { AuthProvider, SESSION_LOGIN_KEY, useAuth } from '../contexts/AuthContext.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -39,7 +39,6 @@ vi.mock('../lib/auth0.js', () => ({
 const ACCESS_TOKEN = 'mock-access-token';
 const ME_URL = '/api/me';
 const ACTIVITY_URL = '/api/activity';
-const LOGIN_RECORDED_KEY = 'obs:login_recorded';
 const HTTP_OK = 200;
 const HTTP_CREATED = 201;
 const HTTP_UNAUTHORIZED = 401;
@@ -195,7 +194,7 @@ describe('AuthContext: login activity', () => {
     const headers = init?.headers as Record<string, string>;
     expect(headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
     expect(headers).not.toHaveProperty(ORG_ID_HEADER);
-    expect(sessionStorage.getItem(LOGIN_RECORDED_KEY)).not.toBeNull();
+    expect(sessionStorage.getItem(SESSION_LOGIN_KEY)).not.toBeNull();
   });
 
   it('keeps the session when the login activity post fails', async () => {
@@ -220,7 +219,7 @@ describe('AuthContext: login activity', () => {
 
   it('does not post login activity on re-render when sessionStorage flag is already set', async () => {
     mockIsAuthenticated = true;
-    sessionStorage.setItem(LOGIN_RECORDED_KEY, '1');
+    sessionStorage.setItem(SESSION_LOGIN_KEY, '1');
     const fetchSpy = makeAuthenticatedFetch();
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -252,7 +251,7 @@ describe('AuthContext: login activity', () => {
     });
 
     expect(callsTo(fetchSpy, ACTIVITY_URL)).toHaveLength(0);
-    expect(sessionStorage.getItem(LOGIN_RECORDED_KEY)).toBeNull();
+    expect(sessionStorage.getItem(SESSION_LOGIN_KEY)).toBeNull();
   });
 });
 

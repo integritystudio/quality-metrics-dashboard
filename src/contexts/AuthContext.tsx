@@ -8,7 +8,7 @@ import { apiFetch } from '../lib/api-client.js';
 import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 
 /** sessionStorage key used to prevent duplicate login events on page refresh. */
-const SESSION_LOGIN_KEY = 'obs:login_recorded';
+export const SESSION_LOGIN_KEY = 'obs:login_recorded';
 
 /** Rejection reason when Auth0 resolves without a token (typed `string | undefined` since auth0-react 2.28). */
 const MISSING_ACCESS_TOKEN_ERROR = 'Auth0 returned no access token';
