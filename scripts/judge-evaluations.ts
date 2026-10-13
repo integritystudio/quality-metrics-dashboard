@@ -556,7 +556,7 @@ function releaseLock(): void {
 function writeEvaluations(evals: EvalRecord[]): string {
   const today = toDateOnly(new Date());
   const outFile = join(TELEMETRY_DIR, datedJsonlName(EVALUATIONS_FILE_PREFIX, today));
-  const content = `${evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n')  }\n`;
+  const content = `${evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n')}\n`;
   appendFileSync(outFile, content);
   return outFile;
 }

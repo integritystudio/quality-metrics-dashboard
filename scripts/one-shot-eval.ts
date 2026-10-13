@@ -163,7 +163,7 @@ export function admitOneShot(guard: RunGuard, args: OneShotArgs): JudgeApiKey | 
 
 export function writeResults(guard: RunGuard, startedAt: Date, results: object): string {
   const outPath = guard.resultsFilePath(DOCS_DIR, startedAt);
-  writeFileSync(outPath, `${JSON.stringify(results, null, JSON_INDENT)  }\n`);
+  writeFileSync(outPath, `${JSON.stringify(results, null, JSON_INDENT)}\n`);
   return outPath;
 }
 

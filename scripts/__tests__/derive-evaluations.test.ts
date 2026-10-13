@@ -972,7 +972,7 @@ describe('deriveAgentHeuristics', () => {
 
   function transcript(name: string, entries: object[]): string {
     const path = join(dir, name);
-    writeFileSync(path, `${entries.map(e => JSON.stringify(e)).join('\n')  }\n`);
+    writeFileSync(path, `${entries.map(e => JSON.stringify(e)).join('\n')}\n`);
     return path;
   }
 

@@ -451,7 +451,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         connectionFailures++;
         lastConnectionError = err;
         console.warn(
-          `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ${ 
+          `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ${
           describeFetchError(err.cause ?? err)}`,
         );
         continue;
@@ -612,7 +612,7 @@ async function main(): Promise<void> {
     console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${RECOMMENDED_MIN_BUDGET}); high-priority entries may be skipped`);
   }
   console.log(
-    `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}${ 
+    `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}${
     HOME_ORG_ID ? ` orgScoping=on home=${HOME_ORG_ID}` : ' orgScoping=off (HOME_ORG_ID unset — legacy bare keys only)'}`,
   );
 
@@ -637,7 +637,7 @@ async function main(): Promise<void> {
     if (isHome) homeComputation = res;
     hitCap ||= res.hitCap;
     perOrgSummaries.push(
-      `${orgId ?? 'legacy'}: entries=${res.allEntries.length} evals=${res.evalCount} spans=${res.spanCount} periods=[${res.periodCounts}]${ 
+      `${orgId ?? 'legacy'}: entries=${res.allEntries.length} evals=${res.evalCount} spans=${res.spanCount} periods=[${res.periodCounts}]${
       res.hitCap ? ' CAP-HIT' : ''}`,
     );
 
@@ -791,10 +791,10 @@ async function main(): Promise<void> {
 
   console.log(
     `[sync-to-kv] Done: computed=${allEntries.length} changed=${changed.length} ` +
-    `unchanged=${allEntries.length - changed.length} written=${writtenKeys.size} deferred=${actualDeferred}${ 
+    `unchanged=${allEntries.length - changed.length} written=${writtenKeys.size} deferred=${actualDeferred}${
     dryRun ? ' (dry-run, no KV writes)' : '' 
     } | kvWrites[${writeCounter}]` +
-    ` | traces=${traceIds.length} | per-org: ${perOrgSummaries.join(' · ')}${ 
+    ` | traces=${traceIds.length} | per-org: ${perOrgSummaries.join(' · ')}${
     hitCap ? ' | WARNING: query hit page cap — results may be truncated' : ''}`,
   );
 }

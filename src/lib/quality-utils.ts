@@ -59,7 +59,7 @@ export interface RoleFeatureConfig {
 }
 
 export function truncateText(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)  }...` : text;
+  return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
 export function truncateId(id: string, max = 10): string {

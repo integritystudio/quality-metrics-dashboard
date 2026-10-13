@@ -29,7 +29,7 @@ afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 function transcript(entries: object[]): string {
   const path = join(dir, 'transcript.jsonl');
-  writeFileSync(path, `${entries.map(e => JSON.stringify(e)).join('\n')  }\n`);
+  writeFileSync(path, `${entries.map(e => JSON.stringify(e)).join('\n')}\n`);
   return path;
 }
 

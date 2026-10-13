@@ -9,7 +9,7 @@ const RATE_PRECISION = 1;
 const SCORED_WINDOW = '21d';
 
 function fmtPct(rate: number): string {
-  return `${(rate * 100).toFixed(RATE_PRECISION)  }%`;
+  return `${(rate * 100).toFixed(RATE_PRECISION)}%`;
 }
 
 function CohortBadge({ cohort }: { cohort: SurvivalCohort }) {

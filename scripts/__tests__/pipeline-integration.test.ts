@@ -235,7 +235,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
     // Simulate what judge-evaluations.ts writes to JSONL
     const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
     const lines = evals.map(ev => JSON.stringify(toOTelRecord(ev)));
-    writeFileSync(outFile, `${lines.join('\n')  }\n`);
+    writeFileSync(outFile, `${lines.join('\n')}\n`);
 
     // Read back and validate backend-readable format
     const content = readFileSync(outFile, 'utf-8');
@@ -367,7 +367,7 @@ describe('full pipeline: derive + judge write/read cycle', () => {
     // Step 3: Combine and write to JSONL (as populate-dashboard.ts would do)
     const allEvals: EvalRecord[] = [...deriveEvals, ...judgeEvals];
     const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
-    const content = `${allEvals.map(ev => JSON.stringify(toOTelRecord(ev))).join('\n')  }\n`;
+    const content = `${allEvals.map(ev => JSON.stringify(toOTelRecord(ev))).join('\n')}\n`;
     writeFileSync(outFile, content);
 
     // Step 4: Validate the combined output is valid JSONL

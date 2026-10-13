@@ -223,7 +223,7 @@ async function loadOrFreezeTurns(wanted: readonly AgreementTurn[]): Promise<Turn
   console.log('[quality] locating the agreement run\'s turns through the pipeline…');
   const turns = await locateTurns(wanted);
   mkdirSync(dirname(FROZEN_TURNS_PATH), { recursive: true });
-  writeFileSync(FROZEN_TURNS_PATH, `${JSON.stringify(turns, null, JSON_INDENT)  }\n`);
+  writeFileSync(FROZEN_TURNS_PATH, `${JSON.stringify(turns, null, JSON_INDENT)}\n`);
   console.log(`[quality] ${turns.length} turns frozen to ${FROZEN_TURNS_PATH}`);
   return turns;
 }
