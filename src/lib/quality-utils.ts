@@ -26,7 +26,7 @@ export interface LabelOrdinal {
   mapped: boolean;
 }
 
-import { scaleLinear, scaleOrdinal } from 'd3-scale';
+import { scaleLinear, scaleOrdinal, scaleThreshold } from 'd3-scale';
 import {
   type Role,
   AGENT_PALETTE,
@@ -122,16 +122,23 @@ export function scoreColor(value: number, direction?: ScoreDirection): string {
   return SCORE_COLORS[scoreColorBand(value, direction)];
 }
 
+const SCORE_BANDS_ASCENDING: ScoreColorBand[] = ['failing', 'poor', 'adequate', 'good', 'excellent'];
+const SCORE_BAND_LOWER_BOUNDS = [0.4, 0.6, 0.8, 0.9];
+
+function bandScale(lowerBounds: number[]) {
+  return scaleThreshold<number, ScoreColorBand>()
+    .domain(lowerBounds)
+    .range(SCORE_BANDS_ASCENDING)
+    .unknown<ScoreColorBand>('failing');
+}
+
+const scoreBandOf = bandScale(SCORE_BAND_LOWER_BOUNDS);
+
 export function scoreColorBand(
   value: number,
   direction: ScoreDirection = 'maximize',
 ): ScoreColorBand {
-  const v = direction === 'minimize' ? 1 - value : value;
-  if (v >= 0.9) return 'excellent';
-  if (v >= 0.8) return 'good';
-  if (v >= 0.6) return 'adequate';
-  if (v >= 0.4) return 'poor';
-  return 'failing';
+  return scoreBandOf(direction === 'minimize' ? 1 - value : value);
 }
 
 type ThresholdDirection = 'above' | 'below';
@@ -343,6 +350,7 @@ const QUANTILE_P25 = 0.25;
 const QUANTILE_P50 = 0.5;
 const QUANTILE_P75 = 0.75;
 const QUANTILE_P90 = 0.9;
+const quantileBandOf = bandScale([QUANTILE_P25, QUANTILE_P50, QUANTILE_P75, QUANTILE_P90]);
 
 export const METRIC_SCALE_STRATEGY: Record<string, ScaleStrategy> = {
   relevance: 'quantile',
@@ -378,12 +386,7 @@ export function adaptiveScoreColorBand(
       if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
         return scoreColorBand(value, direction);
       }
-      const rank = empiricalCDF(value, distribution);
-      if (rank >= QUANTILE_P90) return 'excellent';
-      if (rank >= QUANTILE_P75) return 'good';
-      if (rank >= QUANTILE_P50) return 'adequate';
-      if (rank >= QUANTILE_P25) return 'poor';
-      return 'failing';
+      return quantileBandOf(empiricalCDF(value, distribution));
     }
     case 'log': {
       const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
