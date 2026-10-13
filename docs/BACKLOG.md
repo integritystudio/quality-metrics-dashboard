@@ -10,11 +10,11 @@ Open items from code reviews and deferred work.
 |----|-------|----------|-------|
 | KV-BULK-204-THROWS | A real HTTP 204 from the KV bulk API is counted as a failure | P2 | ✅ Done 2026-10-12 |
 | KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | (review) Source: session 2026-10-12, PR #24 |
-| KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | Source: review of `ad4f290` (medium) |
-| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `ad4f290` (low) |
-| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `ad4f290` (low) |
-| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | Source: review of `ad4f290` (low) |
-| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `c11a54b` superseded by `ad4f290` |
+| KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | Source: review of `28ec94c` (medium) |
+| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `28ec94c` (low) |
+| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `28ec94c` (low) |
+| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | Source: review of `28ec94c` (low) |
+| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `f630867` superseded by `28ec94c` |
 
 **KV-BULK-204-THROWS.** *Done 2026-10-12.* Caught `TypeError` in both `kvBulkPut` and `kvBulkDelete`
 catch blocks — SDK 7.3.0 calls `_thenUnwrap((obj) => obj.result)` on the parsed body; HTTP 204 parses
@@ -50,8 +50,8 @@ Log the original status in `kv204Fetch` or tag the synthetic body if the distinc
 to a sibling implementation. -- `scripts/sync-to-kv.ts:130`
 
 **KV-BULK-204-DONE-NOTE-STALE.** The KV-BULK-204-THROWS paragraph above records the first fix
-(`c11a54b`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that
-as too broad and `ad4f290` replaced it with the `kv204Fetch` transport rewrite and a mock-free
+(`f630867`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that
+as too broad and `28ec94c` replaced it with the `kv204Fetch` transport rewrite and a mock-free
 loopback test. Rewrite the Done note to match what shipped.
 
 ### Workflow page
@@ -89,11 +89,11 @@ No open items.
 | VITE-API-URL-DOPPLER | Doppler `integrity-studio` still holds `VITE_API_URL`, which this app no longer reads | P4 | ⛔ Won't Do 2026-10-05 — the value is read by a separate repo (tcad-scraper), so it is not this app's to remove |
 | PHASE6-LOCAL-RETIREMENT | Retire `--source=local` and the parity tools after the rollback release | P3 | ✅ Done 2026-10-09, ahead of the rollback-release gate at the owner's request; Source: session 2026-10-06 scripts audit |
 | WORKER-TESTS-NOT-IN-CI | `worker/__tests__` (now real JWT and KV checks) still run only locally | P3 | (review) Source: session 2026-10-12, PR #25 (Unit 1) |
-| TYPECHECK-SCRIPTS-HTTP1-FETCH | `npm run typecheck:scripts` fails in the parent's `src/lib/core/http1-fetch.ts(38,3)` | P3 | Source: session 2026-10-12, reported by Units 2 and 3 |
+| TYPECHECK-SCRIPTS-HTTP1-FETCH | `npm run typecheck:scripts` fails in the parent's `src/lib/core/http1-fetch.ts(38,3)` | P3 | ⛔ Won't Do 2026-10-12 — worktree-layout artifact, clean on the main checkout; Source: session 2026-10-12, reported by Units 2 and 3 |
 | PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | Source: session 2026-10-12, PR #23 (Unit 2) mutation check |
 | SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | (review) Source: session 2026-10-12, Units 3 and 4 and the post-batch full run |
-| PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | Source: session 2026-10-12, PRs #21 and #22 |
-| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `c07bad6` |
+| PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PRs #21 and #22 |
+| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `2398a72` |
 | TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | Source: session 2026-10-12, Units 3 and 7 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
@@ -154,6 +154,14 @@ which passed before. Leaving them out means a worker auth regression can ship gr
 **TYPECHECK-SCRIPTS-HTTP1-FETCH.** An undici `Response` type mismatch at `../src/lib/core/http1-fetch.ts(38,3)`
 reds `typecheck:scripts` with no dashboard file changed. The file lives in the parent repo; fix it there or
 narrow the scripts program's view of it.
+*Won't Do, 2026-10-12.* Not a code fault: `typecheck:scripts` exits 0 on the main checkout and fails only
+inside `dashboard/.claude/worktrees/<name>/`, where the units ran. There `../src` is a symlink sitting in
+`.claude/worktrees/`, so tsc resolves the parent file's `undici` by walking up through `dashboard/node_modules`
+and gets 7.30.0 (held at 7 by this app's `overrides`, for jsdom and miniflare) instead of the parent's 8.11.2.
+Undici 7's `Response` lacks `textStream`, which `@types/node`'s `undici-types` 8.9 requires. A cast in
+`http1-fetch.ts` would be an unnecessary assertion on the parent's own build, and lifting the override to 8 would
+move jsdom and miniflare. Put the worktree beside `dashboard/` (`../.dashboard-wt-<name>`) so `../src` is the
+real parent `src/` and resolves the parent's `node_modules`.
 
 **PARITY-EVAL-WINDOW-GAP.** Dropping `startDate` from `loadEvaluationsByMetric` in `src/api/data-loader.ts`
 passed every parity test before and after PR #23. The fixture data has no evaluation that falls inside one
@@ -168,8 +176,12 @@ reset.
 
 **PAGE-TEST-HARNESS-MERGE.** `src/__tests__/support/memory-router.tsx` (`makeRoutedQueryWrapper`, PR #21) and
 `src/__tests__/support/page-harness.tsx` (`renderPage`, PR #22) both wrap a wouter `memoryLocation` around
-`makeQueryWrapper`. Fold them into one once both land. Since `c07bad6`, error-path tests in those PRs can
+`makeQueryWrapper`. Fold them into one once both land. Since `2398a72`, error-path tests in those PRs can
 use a 500 again instead of the 401 they chose to dodge retry backoff.
+*Done 2026-10-12.* Merged both PRs, then deleted `memory-router.tsx`: `page-harness.tsx` keeps `renderPage` and
+gains `currentPath`, and the three PR #21 files mount through `renderPage`. The error tests in `WorkflowPage`,
+`coverage-tab` and `DegradationSignalsPage` now use the harness's shared `SERVER_ERROR_STATUS`/`SERVER_ERROR_BODY`
+(500), so they also run `useApiQuery`'s retry policy.
 
 **STALE-TEST-DOUBLE-COMMENTS.**
 - `src/__tests__/support/query-harness.tsx` says `OrgProvider` is deliberately absent, but PR #20 and
