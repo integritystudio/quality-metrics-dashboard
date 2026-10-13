@@ -166,6 +166,9 @@ export const kvSdkFetch: SdkFetch = async (url, init) => {
   }
   if (response.status === HTTP_TOO_MANY_REQUESTS && await isDailyWriteLimit(response.clone())) {
     const headers = new Headers(response.headers);
+    // undici has already decoded the body, so the encoded length and encoding no longer describe it.
+    headers.delete('content-length');
+    headers.delete('content-encoding');
     headers.set(SDK_SHOULD_RETRY_HEADER, 'false');
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }

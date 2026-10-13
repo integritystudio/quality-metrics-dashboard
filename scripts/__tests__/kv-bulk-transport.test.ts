@@ -27,6 +27,7 @@ const JSON_CONTENT_TYPE = 'application/json';
 const SDK_SHOULD_RETRY_HEADER = 'x-should-retry';
 const RAY_HEADER = 'cf-ray';
 const RAY_ID = '8c1f0e2d3a4b5c6d-DFW';
+const NON_JSON_BODY = '<html>Too Many Requests</html>';
 
 const BULK_PUT = {
   method: 'PUT',
@@ -138,6 +139,7 @@ describe('kvSdkFetch: pass-through for other responses', () => {
     ['a 200 bulk result', HTTP_OK, '{"result":{"unsuccessful_keys":[]}}'],
     ['a 400 authentication error', HTTP_BAD_REQUEST, errorBody(AUTHENTICATION_ERROR_CODE, 'Authentication error')],
     ['a 429 that is not the daily limit', HTTP_TOO_MANY_REQUESTS, errorBody(RATE_LIMIT_CODE, 'Rate limited')],
+    ['a 429 whose body is not JSON', HTTP_TOO_MANY_REQUESTS, NON_JSON_BODY],
   ])('returns %s unchanged', async (_name, status, body) => {
     cloudflare.respondWith(() => ({
       status,
