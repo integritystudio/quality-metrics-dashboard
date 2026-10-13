@@ -1,6 +1,6 @@
-import { Hono, type Context, type HonoRequest } from 'hono';
+import type { Context, HonoRequest } from 'hono';
 import { cors } from 'hono/cors';
-import { createMiddleware } from 'hono/factory';
+import { createFactory } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
@@ -318,8 +318,10 @@ type Variables = {
 };
 
 type AppEnv = { Bindings: Bindings; Variables: Variables };
+type AppContext = Context<AppEnv>;
 
-const app = new Hono<AppEnv>();
+const factory = createFactory<AppEnv>();
+const app = factory.createApp();
 
 // A handler that throws (an upstream fetch rejecting, say) gets the same JSON
 // error shape as every handled failure, not Hono's plain-text default.
@@ -608,7 +610,7 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
 
 /** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
 function requirePermission(permission: DashboardPermission) {
-  return createMiddleware<AppEnv>(async (c, next) => {
+  return factory.createMiddleware(async (c, next) => {
     if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
     return next();
   });
@@ -627,12 +629,6 @@ async function readJsonBody<T extends z.ZodType>(req: HonoRequest, schema: T): P
   const result = schema.safeParse(await req.json().catch(() => null));
   return result.success ? result.data : null;
 }
-
-type AppContext = {
-  env: Bindings;
-  get: (key: 'session') => AppSession;
-  executionCtx: { waitUntil: (promise: Promise<unknown>) => void };
-};
 
 /**
  * Session-scoped KV read used by every /api/* data route. With
@@ -686,7 +682,7 @@ function buildMePayload(session: AppSession): Record<string, unknown> {
 }
 
 /** The validated me payload for `session`, or a 500 when it does not satisfy MeResponseSchema. */
-function respondMe(c: Context<AppEnv>, session: AppSession): Response {
+function respondMe(c: AppContext, session: AppSession): Response {
   const meResult = MeResponseSchema.safeParse(buildMePayload(session));
   if (!meResult.success) {
     console.error(`[${c.req.path}] MeResponseSchema validation failed:`, meResult.error.issues);
@@ -979,7 +975,7 @@ app.get('/api/routing-telemetry', requirePermission('dashboard.read'), validQuer
 // ---------------------------------------------------------------------------
 
 /** Org-admin gate: dashboard.admin + an org-scoped session; binds the route to that org. */
-const requireOrgAdmin = createMiddleware<AppEnv>(async (c, next) => {
+const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.admin') || !session.activeOrgId) {
     return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
@@ -994,7 +990,7 @@ function canTouchOwnerRole(session: AppSession): boolean {
 }
 
 /** The target's membership role in the active org, or the response that ends the request. */
-async function targetMemberRole(c: Context<AppEnv>, supabase: PostgrestClient, userId: string): Promise<{ role: string | undefined } | Response> {
+async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId: string): Promise<{ role: string | undefined } | Response> {
   const current = await supabase.from('organization_memberships')
     .select('role')
     .eq('organization_id', c.get('orgId'))
@@ -1077,7 +1073,7 @@ app.delete('/api/admin/members/:userId', requireOrgAdmin, async (c) => {
 // Legacy GLOBAL admin routes: under org scoping these become staff-only —
 // dashboard.admin is now an org-scoped grant and must not reach cross-org
 // user_roles mutation. Flag OFF keeps today's dashboard.admin gate.
-const requireGlobalAdmin = createMiddleware<AppEnv>(async (c, next) => {
+const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   const allowed = isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, 'dashboard.admin');
   if (!allowed) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
