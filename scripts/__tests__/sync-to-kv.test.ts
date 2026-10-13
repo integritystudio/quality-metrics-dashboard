@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -14,17 +14,11 @@ import {
   toKVValue,
   KV_ENTRY_TTL_SECONDS,
 } from '../sync-to-kv.js';
-import { CALIBRATION_STATE_DIR } from '../evaluation-constants.js';
-import { loadCalibrationState, saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
+import { saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
-
-vi.mock('../../../src/lib/quality/qfe-percentiles.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../src/lib/quality/qfe-percentiles.js')>();
-  return { ...actual, loadCalibrationState: vi.fn(actual.loadCalibrationState) };
-});
 
 /**
  * Parse the entry's value as the type `useCalibration` actually receives.
@@ -289,11 +283,13 @@ describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
 });
 
 describe('loadCalibrationEntry', () => {
+  const DEFAULT_DIR_CALIBRATED_AT = '2026-10-01T06:00:00.000Z';
   let dir: string | undefined;
   afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });
     dir = undefined;
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("builds meta:calibration from the file derive's own writer produced", () => {
@@ -314,13 +310,19 @@ describe('loadCalibrationEntry', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('.calibration-state.json'));
   });
 
-  it('reads from the directory derive writes to by default', () => {
-    vi.mocked(loadCalibrationState).mockClear();
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('reads the directory derive writes to (CALIBRATION_STATE_DIR) by default', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'telemetry-'));
+    vi.stubEnv('TELEMETRY_DIR', dir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.resetModules();
+    const { loadCalibrationEntry: loadFromDefaultDir } = await import('../sync-to-kv.js');
+    const { CALIBRATION_STATE_DIR: deriveDir } = await import('../evaluation-constants.js');
+    expect(deriveDir.startsWith(dir)).toBe(true);
+    mkdirSync(deriveDir, { recursive: true });
+    saveCalibrationState(deriveDir, makeCalibrationState({ lastCalibrated: DEFAULT_DIR_CALIBRATED_AT }));
 
-    loadCalibrationEntry();
+    const entry = loadFromDefaultDir();
 
-    expect(vi.mocked(loadCalibrationState)).toHaveBeenCalledWith(CALIBRATION_STATE_DIR);
+    expect(JSON.parse(entry?.value ?? '{}')).toMatchObject({ lastCalibrated: DEFAULT_DIR_CALIBRATED_AT });
   });
 });
