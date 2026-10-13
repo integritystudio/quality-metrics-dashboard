@@ -6,10 +6,12 @@
  * do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
+import { HttpStatus } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
 
-type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
@@ -22,26 +24,18 @@ const ADMIN_PERMISSIONS = [
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
 
-vi.mock('jose', () => ({
-  createRemoteJWKSet: vi.fn(),
-  jwtVerify: vi.fn(),
-}));
-
-const mockKV = {
-  get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn(), getWithMetadata: vi.fn(),
-};
 const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })),
+  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
 };
 
 function makeEnv() {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: new MemoryKv(),
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
   };
 }
 
@@ -51,12 +45,12 @@ function withAdminAuth(
   return (url: string, init?: RequestInit) => {
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=') && url.includes('limit=1')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: 200 }),
+        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'admin@test.com' }]), { status: HttpStatus.Ok }),
       );
     }
     if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: 200 }),
+        new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: HttpStatus.Ok }),
       );
     }
     return routeHandler(url, init);
@@ -64,14 +58,19 @@ function withAdminAuth(
 }
 
 let fetchMock: FetchMock;
+let tenant: TestIssuer;
+let token: string;
 let mockExecutionCtx: { waitUntil: Mock<ExecutionContext['waitUntil']>; passThroughOnException: Mock<ExecutionContext['passThroughOnException']> };
 
-beforeEach(async () => {
+beforeAll(async () => {
+  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
+  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
+});
+
+beforeEach(() => {
   vi.clearAllMocks();
-  const jose = vi.mocked(await import('jose'));
-  jose.jwtVerify.mockResolvedValue({ payload: { sub: MOCK_AUTH0_ID } } as never);
   fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
   mockExecutionCtx = {
     waitUntil: vi.fn((p: Promise<unknown>) => { void p; }),
     passThroughOnException: vi.fn(),
@@ -100,23 +99,24 @@ const ROLE_ASSIGN: RoleMutation = {
   path: `/api/admin/users/${VALID_USER_UUID}/roles`,
   init: {
     method: 'POST',
-    headers: { Authorization: 'Bearer mock-admin-jwt', 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
   },
-  upstreamOkStatus: 204,
+  upstreamOkStatus: HttpStatus.NoContent,
 };
 const ROLE_MUTATIONS: RoleMutation[] = [
   ROLE_ASSIGN,
   {
     action: 'role.revoke',
     path: `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
-    init: { method: 'DELETE', headers: { Authorization: 'Bearer mock-admin-jwt' } },
-    upstreamOkStatus: 200,
+    init: { method: 'DELETE' },
+    upstreamOkStatus: HttpStatus.Ok,
   },
 ];
 
 function requestMutation({ path, init }: RoleMutation) {
-  return app.request(path, init, makeEnv(), mockExecutionCtx as unknown as ExecutionContext);
+  const headers = { ...init.headers as Record<string, string>, Authorization: `Bearer ${token}` };
+  return app.request(path, { ...init, headers }, makeEnv(), mockExecutionCtx as unknown as ExecutionContext);
 }
 
 describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
@@ -126,13 +126,13 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
         return Promise.resolve(new Response(null, { status: mutation.upstreamOkStatus }));
       }
       if (url.includes('/rest/v1/audit_log')) {
-        return Promise.resolve(new Response(null, { status: 201 }));
+        return Promise.resolve(new Response(null, { status: HttpStatus.Created }));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await requestMutation(mutation);
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(HttpStatus.NoContent);
 
     await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -154,13 +154,13 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
   it('does not POST to audit_log when the mutation fails', async () => {
     fetchMock.mockImplementation(withAdminAuth((url) => {
       if (url.includes('/rest/v1/user_roles')) {
-        return Promise.resolve(new Response(null, { status: 500 }));
+        return Promise.resolve(new Response(null, { status: HttpStatus.InternalServerError }));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await requestMutation(mutation);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
 
     await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -173,15 +173,15 @@ describe('audit log: failure resilience', () => {
   it('returns 204 even when audit_log POST rejects', async () => {
     fetchMock.mockImplementation(withAdminAuth((url) => {
       if (url.includes('/rest/v1/user_roles')) {
-        return Promise.resolve(new Response(null, { status: 204 }));
+        return Promise.resolve(new Response(null, { status: HttpStatus.NoContent }));
       }
       if (url.includes('/rest/v1/audit_log')) {
         return Promise.reject(new Error('Supabase unreachable'));
       }
-      return Promise.resolve(new Response(null, { status: 200 }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     const res = await requestMutation(ROLE_ASSIGN);
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(HttpStatus.NoContent);
   });
 });

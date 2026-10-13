@@ -5,29 +5,25 @@
  * rejected on every load (DASHBOARD-AGGREGATE-DUAL-IMPL).
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import app from '../index.js';
+import { HttpStatus } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
 
 const BYPASS_ORG = 'a0000000-0000-4000-8000-000000000001';
+const OTHER_ORG = 'a0000000-0000-4000-8000-0000000000ff';
 
-const mockKV = {
-  get: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  list: vi.fn(),
-  getWithMetadata: vi.fn(),
-};
+const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })) };
 
-const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: 200 })) };
-
-function makeEnv() {
+function makeEnv(kv: MemoryKv) {
   return {
-    DASHBOARD: mockKV,
+    DASHBOARD: kv,
     ASSETS: mockAssets,
     SUPABASE_URL: 'https://test.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: 'test.us.auth0.com',
-    AUTH0_AUDIENCE: 'https://test.api.dev',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
     ALLOW_TEST_BYPASS: 'true',
     HOME_ORG_ID: '',
     STAFF_USER_IDS: '[]',
@@ -41,52 +37,54 @@ function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 }
 
-function stubKv(store: Record<string, unknown>) {
-  mockKV.get.mockImplementation((key: string) => Promise.resolve(store[key] ?? null));
+function agentsPayload(period: string, invocations: number) {
+  return {
+    period,
+    startDate: '2026-10-01',
+    endDate: '2026-10-08',
+    agents: [{ agentName: 'general-purpose', invocations, errors: 0, errorRate: 0 }],
+  };
 }
 
-const WEEK_PAYLOAD = {
-  period: '7d',
-  startDate: '2026-10-01',
-  endDate: '2026-10-08',
-  agents: [{ agentName: 'general-purpose', invocations: 2, errors: 0, errorRate: 0 }],
-};
+const WEEK_PAYLOAD = agentsPayload('7d', 2);
+const MONTH_PAYLOAD = agentsPayload('30d', 9);
+const OTHER_ORG_WEEK_PAYLOAD = agentsPayload('7d', 5);
+const BARE_WEEK_PAYLOAD = agentsPayload('7d', 7);
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+/** The session's org, another org, and the pre-tenancy bare key each hold a different week. */
+function syncedKv(): MemoryKv {
+  return new MemoryKv({
+    [`org:${BYPASS_ORG}:meta:agents:7d`]: WEEK_PAYLOAD,
+    [`org:${BYPASS_ORG}:meta:agents:30d`]: MONTH_PAYLOAD,
+    [`org:${OTHER_ORG}:meta:agents:7d`]: OTHER_ORG_WEEK_PAYLOAD,
+    'meta:agents:7d': BARE_WEEK_PAYLOAD,
+  });
+}
 
 describe('GET /api/agents', () => {
   it('serves the org-scoped per-period key the sync writes', async () => {
-    stubKv({ [`org:${BYPASS_ORG}:meta:agents:7d`]: WEEK_PAYLOAD });
+    const res = await app.request('/api/agents?period=7d', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    const res = await app.request('/api/agents?period=7d', { headers }, makeEnv(), makeCtx());
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual(WEEK_PAYLOAD);
-    expect(mockKV.get).toHaveBeenCalledWith(`org:${BYPASS_ORG}:meta:agents:7d`, 'json');
   });
 
   it('defaults to the month, as the dev route does', async () => {
-    stubKv({});
+    const res = await app.request('/api/agents', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    await app.request('/api/agents', { headers }, makeEnv(), makeCtx());
-
-    expect(mockKV.get).toHaveBeenCalledWith(`org:${BYPASS_ORG}:meta:agents:30d`, 'json');
+    expect(await res.json()).toEqual(MONTH_PAYLOAD);
   });
 
   it('answers the envelope the page requires when the key is absent', async () => {
-    stubKv({});
+    const res = await app.request('/api/agents?period=24h', { headers }, makeEnv(syncedKv()), makeCtx());
 
-    const res = await app.request('/api/agents?period=24h', { headers }, makeEnv(), makeCtx());
-
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual({ period: '24h', startDate: null, endDate: null, agents: [] });
   });
 
   it('rejects a period the sync never writes', async () => {
-    const res = await app.request('/api/agents?period=99d', { headers }, makeEnv(), makeCtx());
+    const res = await app.request('/api/agents?period=99d', { headers }, makeEnv(new MemoryKv()), makeCtx());
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 });

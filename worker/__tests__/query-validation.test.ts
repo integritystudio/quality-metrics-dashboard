@@ -8,45 +8,74 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HTTPException } from 'hono/http-exception';
 import app from '../index.js';
+import { HttpStatus } from './support/http.js';
+import { MemoryKv } from './support/memory-kv.js';
+import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
 
-const BAD_REQUEST = 400;
-const OK = 200;
-const PAYLOAD_TOO_LARGE = 413;
-
-const mockKV = {
-  get: vi.fn(), put: vi.fn(), delete: vi.fn(), list: vi.fn(), getWithMetadata: vi.fn(),
-};
 const mockAssets = { fetch: vi.fn() };
 
+function pipelinePayload(period: string) {
+  return { period, stages: [{ name: `stage-${period}` }], totalEvaluations: 1 };
+}
+
+function correlationsPayload(period: string) {
+  return { correlations: [{ period }], metrics: [] };
+}
+
+const TREND_24H = { metric: 'm', period: '24h', bucketCount: 1, totalEvaluations: 1, overallPercentiles: null, trendData: [], narrowed: false };
+const DASHBOARD_7D = { overallStatus: 'healthy', metrics: [] };
+const EVALUATIONS_30D = { rows: [{ score: 3, label: 'pass' }, { score: 1, label: 'pass' }, { score: 2, label: 'fail' }] };
+const EVALUATIONS_7D = { rows: [{ score: 9, label: 'pass' }] };
+
+/** Every period's key holds its own payload, so a response shows which key was read. */
+function syncedKv(): MemoryKv {
+  return new MemoryKv({
+    'pipeline:24h': pipelinePayload('24h'),
+    'pipeline:7d': pipelinePayload('7d'),
+    'pipeline:30d': pipelinePayload('30d'),
+    'correlations:7d': correlationsPayload('7d'),
+    'correlations:30d': correlationsPayload('30d'),
+    'trend:m:24h': TREND_24H,
+    'dashboard:7d': DASHBOARD_7D,
+    'metric:evaluations:m:30d': EVALUATIONS_30D,
+    'metric:evaluations:m:7d': EVALUATIONS_7D,
+  });
+}
+
+/** A KV binding whose every read fails with `err`. */
+function failingKv(err: Error) {
+  return { get: () => Promise.reject(err) };
+}
+
 // ALLOW_TEST_BYPASS requires the production markers to be absent.
-const env = {
-  DASHBOARD: mockKV,
-  ASSETS: mockAssets,
-  SUPABASE_URL: 'https://test.supabase.co',
-  SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-  AUTH0_DOMAIN: 'test.us.auth0.com',
-  AUTH0_AUDIENCE: 'https://test.api.dev',
-  ALLOW_TEST_BYPASS: 'true',
-  HOME_ORG_ID: '',
-  STAFF_USER_IDS: '[]',
-};
+function makeEnv(kv: unknown = syncedKv()) {
+  return {
+    DASHBOARD: kv,
+    ASSETS: mockAssets,
+    SUPABASE_URL: 'https://test.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
+    AUTH0_AUDIENCE: TEST_AUDIENCE,
+    ALLOW_TEST_BYPASS: 'true',
+    HOME_ORG_ID: '',
+    STAFF_USER_IDS: '[]',
+  };
+}
 
 function makeCtx(): ExecutionContext {
   return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 }
 
-function get(path: string): Promise<Response> {
+function get(path: string, env = makeEnv()): Promise<Response> {
   return Promise.resolve(app.request(path, { headers: { Authorization: 'Bearer test-token' } }, env, makeCtx()));
 }
 
-function kvKeysRead(): unknown[] {
-  return mockKV.get.mock.calls.map(([key]: unknown[]) => key);
+async function bodyOf(path: string): Promise<unknown> {
+  return (await get(path)).json();
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  mockKV.get.mockResolvedValue(null);
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 201 })));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: HttpStatus.Created })));
 });
 
 describe('400 with the failing field\'s error', () => {
@@ -60,7 +89,7 @@ describe('400 with the failing field\'s error', () => {
     ['/api/coverage?inputKey=spanId', 'Invalid inputKey. Must be traceId or sessionId.'],
   ])('%s', async (path, error) => {
     const res = await get(path);
-    expect(res.status).toBe(BAD_REQUEST);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     expect(await res.json()).toEqual({ error });
   });
 
@@ -72,46 +101,38 @@ describe('400 with the failing field\'s error', () => {
 
 describe('accepted queries', () => {
   it('defaults period to 7d, and to 30d on /api/correlations', async () => {
-    await get('/api/pipeline');
-    await get('/api/correlations');
-    expect(kvKeysRead()).toEqual(['pipeline:7d', 'correlations:30d']);
+    expect(await bodyOf('/api/pipeline')).toEqual(pipelinePayload('7d'));
+    expect(await bodyOf('/api/correlations')).toEqual(correlationsPayload('30d'));
   });
 
   it('reads the first value of a repeated key', async () => {
-    await get('/api/trends/m?period=24h&period=bogus');
-    expect(kvKeysRead()).toEqual(['trend:m:24h']);
+    expect(await bodyOf('/api/trends/m?period=24h&period=bogus')).toEqual(TREND_24H);
   });
 
   it('treats an empty role as no role', async () => {
     const res = await get('/api/dashboard?role=');
-    expect(res.status).not.toBe(BAD_REQUEST);
-    expect(kvKeysRead()).toEqual(['dashboard:7d']);
+    expect(res.status).toBe(HttpStatus.Ok);
+    expect(await res.json()).toEqual(DASHBOARD_7D);
   });
 
   it('pages, sorts and filters metric evaluations', async () => {
-    mockKV.get.mockResolvedValue({
-      rows: [{ score: 3, label: 'pass' }, { score: 1, label: 'pass' }, { score: 2, label: 'fail' }],
-    });
     const res = await get('/api/metrics/m/evaluations?period=30d&sortBy=score_asc&scoreLabel=pass&limit=1&offset=1');
-    expect(res.status).toBe(OK);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual({ rows: [{ score: 3, label: 'pass' }], total: 2, limit: 1, offset: 1, hasMore: false });
-    expect(kvKeysRead()).toEqual(['metric:evaluations:m:30d']);
   });
 });
 
 describe('unhandled errors', () => {
   it('answer a JSON 500, not Hono\'s plain-text default', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    mockKV.get.mockRejectedValue(new Error('KV unavailable'));
-    const res = await get('/api/pipeline');
+    const res = await get('/api/pipeline', makeEnv(failingKv(new Error('KV unavailable'))));
     consoleError.mockRestore();
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
     expect(await res.json()).toEqual({ error: 'Internal server error' });
   });
 
   it('pass an HTTPException\'s own response through', async () => {
-    mockKV.get.mockRejectedValue(new HTTPException(PAYLOAD_TOO_LARGE));
-    const res = await get('/api/pipeline');
-    expect(res.status).toBe(PAYLOAD_TOO_LARGE);
+    const res = await get('/api/pipeline', makeEnv(failingKv(new HTTPException(HttpStatus.PayloadTooLarge))));
+    expect(res.status).toBe(HttpStatus.PayloadTooLarge);
   });
 });
