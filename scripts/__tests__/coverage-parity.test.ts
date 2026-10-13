@@ -6,8 +6,10 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation, type OrgReadBackend } from '../sync-to-kv.js';
+import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
+import { coverageRoutes } from '../../src/api/routes/coverage.js';
 import { evaluation } from './support/evaluations.js';
+import { serveParityFixture } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -15,35 +17,20 @@ const evaluations: EvaluationResult[] = [
   // LLM judge evaluations — included
   evaluation('r1', '2026-10-08T10:00:00.000Z', {
     evaluationName: 'relevance', scoreValue: 0.8, traceId: 'trace-a',
-    evaluatorType: 'llm',
+    evaluatorKind: 'llm',
   }),
   evaluation('r2', '2026-10-07T10:00:00.000Z', {
     evaluationName: 'relevance', scoreValue: 0.6, traceId: 'trace-b',
-    evaluatorType: 'llm',
+    evaluatorKind: 'llm',
   }),
   // Rule-based evaluation — excluded from coverage
   evaluation('rule1', '2026-10-08T11:00:00.000Z', {
     evaluationName: 'tool_correctness', scoreValue: 1.0, traceId: 'trace-c',
-    evaluatorType: 'rule',
+    evaluatorKind: 'rule',
   }),
 ];
 
-vi.mock('../../src/api/data-loader.js', () => ({
-  loadEvaluationsByMetric: (_start: string, _end: string) => Promise.resolve(
-    new Map([
-      ['relevance', evaluations.filter(e => e.evaluationName === 'relevance')],
-      ['tool_correctness', evaluations.filter(e => e.evaluationName === 'tool_correctness')],
-    ])
-  ),
-  checkHealth: () => Promise.resolve({ hasData: true }),
-}));
-
-const { coverageRoutes } = await import('../../src/api/routes/coverage.js');
-
-const backend: OrgReadBackend = {
-  queryEvaluations: ({ limit }) => Promise.resolve(evaluations.slice(0, limit)),
-  queryTraces: () => Promise.resolve([]),
-};
+const fixture = serveParityFixture({ evaluations });
 
 function kvValue(result: OrgComputation, key: string): unknown {
   const entry = result.allEntries.find(e => e.key === key);
@@ -55,7 +42,7 @@ describe('coverage parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(backend, NOW, false);
+    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
   });
 
   afterEach(() => {

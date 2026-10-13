@@ -5,18 +5,21 @@
  * both paths must now give the same value.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
+import type { EvaluationResult } from '../../../src/backends/index.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
-import { computeOrgEntries, type OrgComputation, type OrgReadBackend } from '../sync-to-kv.js';
+import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { agentStatsKey, HOOK_NAME_ATTRIBUTE, type AgentStatsResponse } from '../../src/api/aggregates/agent-stats.js';
-import { HOOK_NAME, timestampToMs } from '../../src/api/api-constants.js';
+import { HOOK_NAME } from '../../src/api/api-constants.js';
+import { agentRoutes } from '../../src/api/routes/agents.js';
+import { spanToWire, type TraceWireRow } from '../../src/__tests__/support/fixture-server.js';
 import { evaluation, isoToNs } from './support/evaluations.js';
+import { serveParityFixture } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-08T01:08:00.000Z');
 
-function agentSpan(agentName: string, iso: string, traceId: string, sessionId: string, attrs: Record<string, unknown> = {}): TraceSpan {
-  return {
+function agentSpan(agentName: string, iso: string, traceId: string, sessionId: string, attrs: Record<string, unknown> = {}): TraceWireRow {
+  return spanToWire({
     traceId,
     spanId: `${traceId}-${iso}`,
     name: `hook:${HOOK_NAME.AGENT_FINALIZE}`,
@@ -30,17 +33,17 @@ function agentSpan(agentName: string, iso: string, traceId: string, sessionId: s
       'integritystudio.agent.output_size': 500,
       ...attrs,
     },
-  };
+  });
 }
 
-const spans: TraceSpan[] = [
+const spans: TraceWireRow[] = [
   agentSpan('general-purpose', '2026-10-07T12:00:00.000Z', 'trace-a', 'sess-1', { 'integritystudio.agent.has_error': true }),
   agentSpan('Explore', '2026-10-07T12:30:00.000Z', 'trace-a', 'sess-1'),
   agentSpan('general-purpose', '2026-10-06T09:00:00.000Z', 'trace-b', 'sess-2'),
   // Older than 7d, inside 30d.
   agentSpan('general-purpose', '2026-09-20T10:00:00.000Z', 'trace-c', 'sess-3'),
   // Not an agent-finalize span: never counted.
-  { traceId: 'trace-z', spanId: 'z', name: 'session-span', kind: 'INTERNAL', startTimeUnixNano: isoToNs('2026-10-07T11:00:00.000Z'), attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-9' } },
+  spanToWire({ traceId: 'trace-z', spanId: 'z', name: 'session-span', kind: 'INTERNAL', startTimeUnixNano: isoToNs('2026-10-07T11:00:00.000Z'), attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-9' } }),
 ];
 
 const evaluations: EvaluationResult[] = [
@@ -49,32 +52,7 @@ const evaluations: EvaluationResult[] = [
   evaluation('no agent', '2026-10-07T11:30:00.000Z', { traceId: 'trace-z', scoreValue: 0.1 }),
 ];
 
-function withinMs(iso: string | number | bigint | null | undefined, startMs: number, endMs: number): boolean {
-  const ms = timestampToMs(iso);
-  return ms >= startMs && ms <= endMs;
-}
-
-// The dev route's loaders, faked as the backend behaves: the span read honours
-// the window and the attribute filter, the evaluation read returns the
-// requested traces' rows.
-vi.mock('../../src/api/data-loader.js', () => ({
-  loadTracesByFilter: (filter: Record<string, unknown>, start: string, end: string) =>
-    Promise.resolve(spans.filter(s =>
-      withinMs(s.startTimeUnixNano, Date.parse(start), Date.parse(end)) &&
-      Object.entries(filter).every(([key, value]) => s.attributes?.[key] === value),
-    )),
-  loadEvaluationsByTraceIds: (traceIds: string[]) =>
-    Promise.resolve(evaluations.filter(e => e.traceId && traceIds.includes(e.traceId))),
-  loadTracesBySessionId: () => Promise.resolve([]),
-}));
-
-const { agentRoutes } = await import('../../src/api/routes/agents.js');
-
-const backend: OrgReadBackend = {
-  queryEvaluations: ({ limit }) => Promise.resolve(evaluations.slice(0, limit)),
-  // The code-quality reads filter by attribute; the span read does not.
-  queryTraces: ({ attributeFilter }) => Promise.resolve(attributeFilter ? [] : spans),
-};
+const fixture = serveParityFixture({ evaluations, spans });
 
 function kvValue(result: OrgComputation, key: string): AgentStatsResponse | undefined {
   const entry = result.allEntries.find(e => e.key === key);
@@ -92,7 +70,7 @@ describe('agents page parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(backend, NOW, false);
+    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
   });
 
   afterEach(() => {

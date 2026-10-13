@@ -5,16 +5,17 @@
  * Worker served it for every period. One fixture through both paths must now
  * give the same value per period.
  *
- * The route's loader is faked as the server reads: both bounds rounded to whole
- * UTC days, which is what the sync's in-memory `between` reproduces.
+ * The fixture server reads as obtool-api does, both bounds rounded to whole UTC
+ * days, which is what the sync's in-memory `between` reproduces.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { queriedDateWindow } from '../../../src/backends/cloud.js';
-import { computeOrgEntries, type OrgComputation, type OrgReadBackend } from '../sync-to-kv.js';
+import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { metricDetailKey } from '../../src/api/aggregates/metric-detail.js';
+import { metricsRoutes } from '../../src/api/routes/metrics.js';
 import { DEFAULT_BUCKET_COUNT, DEFAULT_TOP_N } from '../../src/lib/constants.js';
-import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
+import { evaluation, FIXTURE_METRIC } from './support/evaluations.js';
+import { serveParityFixture } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -27,23 +28,7 @@ const evaluations: EvaluationResult[] = [
   evaluation('last month', '2026-08-25T10:00:00.000Z', { scoreValue: 0.3, traceId: 'trace-d' }),
 ];
 
-function serverRead(name: string, start: string, end: string): EvaluationResult[] {
-  const { startNs = 0n, endNs } = queriedDateWindow({ startDate: isoToNs(start), endDate: isoToNs(end) });
-  return evaluations.filter(e =>
-    e.evaluationName === name && e.timestamp >= startNs && (endNs === undefined || e.timestamp < endNs));
-}
-
-vi.mock('../../src/api/data-loader.js', () => ({
-  loadEvaluationsForMetric: (name: string, start: string, end: string) => Promise.resolve(serverRead(name, start, end)),
-  checkHealth: () => Promise.resolve({ hasData: true }),
-}));
-
-const { metricsRoutes } = await import('../../src/api/routes/metrics.js');
-
-const backend: OrgReadBackend = {
-  queryEvaluations: ({ limit }) => Promise.resolve(evaluations.slice(0, limit)),
-  queryTraces: () => Promise.resolve([]),
-};
+const fixture = serveParityFixture({ evaluations });
 
 type DetailValue = { sampleCount: number; trend?: { previousValue: number }; dynamics?: { velocity: number } };
 
@@ -57,7 +42,7 @@ describe('metric detail parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(backend, NOW, false);
+    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
   });
 
   afterEach(() => {

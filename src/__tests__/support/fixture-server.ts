@@ -27,6 +27,7 @@ import type { IncomingMessage, ServerResponse, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { EvaluationRow, LogRow, TraceSpan } from '@obtool-api/types';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
+import { TIME_MS } from '../../lib/constants.js';
 
 // ── Wire-format row types ─────────────────────────────────────────────────────
 // Typed off obtool-api's own response rows (type-only import, erased at runtime),
@@ -56,9 +57,9 @@ export interface FixtureServer {
   readonly port: number;
   /** Base URL — set `process.env.OBTOOL_API_URL` to this value. */
   readonly url: string;
-  /** Set evaluation rows returned by GET /v1/evaluations, narrowed by its `evaluationName` and `traceId` params. */
+  /** Set evaluation rows returned by GET /v1/evaluations, narrowed by its `evaluationName` and `traceId` params (and its window, under `dateWindow`). */
   setEvals(rows: EvalWireRow[]): void;
-  /** Set trace span rows returned by the next GET /v1/traces. */
+  /** Set trace span rows returned by GET /v1/traces, narrowed by its `sessionId` param (and its window, under `dateWindow`). */
   setTraces(rows: TraceWireRow[]): void;
   /** Set log rows returned by the next GET /v1/logs. */
   setLogs(rows: LogWireRow[]): void;
@@ -98,6 +99,48 @@ function filterEvals(rows: EvalWireRow[], query: URLSearchParams): EvalWireRow[]
     && (!traceId || row.trace_id === traceId));
 }
 
+const NANOS_PER_MS = 1_000_000n;
+const NANOS_PER_DAY = BigInt(TIME_MS.DAY) * NANOS_PER_MS;
+const START_DATE_PARAM = 'startDate';
+const END_DATE_PARAM = 'endDate';
+const SESSION_ID_PARAM = 'sessionId';
+const HTTP_BAD_REQUEST = 400;
+
+export interface FixtureServerOptions {
+  /**
+   * Narrow evaluation, trace and log reads to their `startDate`/`endDate` window
+   * as obtool-api does: from midnight UTC of `startDate` up to, not including,
+   * the midnight after `endDate`. Off by default, so rows at the fixed fixture
+   * timestamps reach routes that read a window relative to the real clock.
+   */
+  dateWindow?: boolean;
+}
+
+/** A `YYYY-MM-DD` window bound as epoch nanoseconds at midnight UTC. */
+function dateParamNs(date: string): bigint {
+  return BigInt(Date.parse(date)) * NANOS_PER_MS;
+}
+
+function hasInvalidDateParam(query: URLSearchParams): boolean {
+  return [START_DATE_PARAM, END_DATE_PARAM].some((param) => {
+    const date = query.get(param);
+    return date !== null && Number.isNaN(Date.parse(date));
+  });
+}
+
+/** `sessionId` exactly, against the `session_id` column, as obtool-api does. */
+function filterTraces(rows: TraceWireRow[], query: URLSearchParams): TraceWireRow[] {
+  const sessionId = query.get(SESSION_ID_PARAM);
+  return sessionId ? rows.filter((row) => row.session_id === sessionId) : rows;
+}
+
+function inDateWindow(timestampNs: string, query: URLSearchParams): boolean {
+  const ns = BigInt(timestampNs);
+  const start = query.get(START_DATE_PARAM);
+  const end = query.get(END_DATE_PARAM);
+  return (!start || ns >= dateParamNs(start)) && (!end || ns < dateParamNs(end) + NANOS_PER_DAY);
+}
+
 /** A request the fixture received: its path and parsed query string. */
 export interface FixtureRequest {
   path: string;
@@ -132,7 +175,10 @@ function pagedBody<T>(rows: T[], query?: URLSearchParams): unknown {
   };
 }
 
-export async function createFixtureServer(): Promise<FixtureServer> {
+export async function createFixtureServer(options: FixtureServerOptions = {}): Promise<FixtureServer> {
+  const windowed = <T>(rows: T[], query: URLSearchParams, timestampNs: (row: T) => string): T[] =>
+    options.dateWindow ? rows.filter((row) => inDateWindow(timestampNs(row), query)) : rows;
+
   let evalRows: EvalWireRow[] = [];
   let traceRows: TraceWireRow[] = [];
   let logRows: LogWireRow[] = [];
@@ -156,18 +202,21 @@ export async function createFixtureServer(): Promise<FixtureServer> {
 
     res.setHeader('Content-Type', 'application/json');
 
-    if (path === '/health') {
+    if (options.dateWindow && hasInvalidDateParam(query)) {
+      res.writeHead(HTTP_BAD_REQUEST);
+      res.end(JSON.stringify({ error: 'invalid date window' }));
+    } else if (path === '/health') {
       res.writeHead(200);
       res.end(JSON.stringify({ status: 'ok' }));
     } else if (path === '/v1/evaluations') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(filterEvals(evalRows, query), query)));
+      res.end(JSON.stringify(pagedBody(windowed(filterEvals(evalRows, query), query, (row) => row.timestamp_ns), query)));
     } else if (path === '/v1/traces') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(traceRows, query)));
+      res.end(JSON.stringify(pagedBody(windowed(filterTraces(traceRows, query), query, (row) => row.start_time_ns), query)));
     } else if (path === '/v1/logs') {
       res.writeHead(200);
-      res.end(JSON.stringify(pagedBody(logRows, query)));
+      res.end(JSON.stringify(pagedBody(windowed(logRows, query, (row) => row.timestamp_ns), query)));
     } else {
       res.writeHead(404);
       res.end(JSON.stringify({ error: 'not found' }));
@@ -206,7 +255,6 @@ export async function createFixtureServer(): Promise<FixtureServer> {
 
 // ── Conversion helpers ────────────────────────────────────────────────────────
 
-const NANOS_PER_MS = 1_000_000n;
 const FIXTURE_ORG_ID = 'test-org';
 const FIXTURE_R2_KEY = 'fixture/r2/key';
 const FIXTURE_SERVICE_NAME = 'claude-code';
