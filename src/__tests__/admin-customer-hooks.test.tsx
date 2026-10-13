@@ -57,7 +57,6 @@ const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const HTTP_SERVER_ERROR = 500;
 const HTTP_GATEWAY_TIMEOUT = 504;
-const RETRY_WAIT_MS = 6_000;
 const SHORT_TIMEOUT_MS = 1;
 const LONG_TIMEOUT_MS = 60_000;
 
@@ -170,7 +169,7 @@ describe('error wording (DashboardService)', () => {
     gateway.control.refuse = 'network-error';
 
     const { result } = renderHook(() => useAdminBillingStatus(ORG_A.id), makeWrapper());
-    await waitFor(() => { expect(result.current.error).not.toBeNull(); }, { timeout: RETRY_WAIT_MS });
+    await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
     expect(result.current.error?.message).toBe(CUSTOMER_VIEW.errors.network);
   });
@@ -191,11 +190,11 @@ describe('error wording (DashboardService)', () => {
     gateway.control.refuse = { status: HTTP_SERVER_ERROR };
 
     const { result } = renderHook(() => useAdminBillingStatus(ORG_A.id), makeWrapper());
-    await waitFor(() => { expect(result.current.error).not.toBeNull(); }, { timeout: RETRY_WAIT_MS });
+    await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
     expect(result.current.error?.message).toBe(CUSTOMER_VIEW.errors.server);
     expect(gateway.gatewayRequests()).toHaveLength(GATEWAY_MAX_RETRIES + 1);
-  }, RETRY_WAIT_MS);
+  });
 
   it('classifies 500 and 504 as retried server errors and 401/403/404 as final', () => {
     expect(isRetryableGatewayError(gatewayErrorForStatus(HTTP_SERVER_ERROR))).toBe(true);

@@ -27,17 +27,21 @@ import type { ReactNode } from 'react';
 /** The token the per-file `useAuth` mock must resolve; assert it on the header. */
 export const TEST_ACCESS_TOKEN = 'test-access-token';
 
+const NO_RETRY_DELAY_MS = 0;
+
 /**
  * A provider wrapper backed by a fresh QueryClient, returned alongside the
  * client so tests can drive a refetch through `invalidateQueries`.
  *
- * Retries are off so an error assertion resolves on the first failed response
- * rather than after `defaultRetry`'s backoff, and `gcTime: 0` keeps one test's
- * cache from answering another's query.
+ * `retry: false` only covers bare `useQuery` callers: `useApiQuery` and the
+ * admin hooks pass their own `retry`, which overrides it. `retryDelay: 0`
+ * keeps those production retry policies in force while dropping react-query's
+ * 1s/2s backoff, so an error assertion resolves within `waitFor`'s default
+ * timeout. `gcTime: 0` keeps one test's cache from answering another's query.
  */
 export function makeQueryWrapper() {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    defaultOptions: { queries: { retry: false, retryDelay: NO_RETRY_DELAY_MS, gcTime: 0 } },
   });
   function QueryWrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

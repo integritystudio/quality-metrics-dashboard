@@ -25,8 +25,6 @@ vi.mock('../contexts/AuthContext.js', () => ({
 
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_SERVER_ERROR = 500;
-/** defaultRetry allows 2 retries with react-query's 1s/2s backoff — 5s clears both. */
-const RETRY_EXHAUSTION_TIMEOUT_MS = 5_000;
 
 function makeQualityResponse(overrides: Partial<QualityLiveData> = {}): QualityLiveData {
   return {
@@ -112,10 +110,7 @@ describe('useQualityLive', () => {
     const fetchSpy = stubFetch({ error: 'boom' }, { status: HTTP_SERVER_ERROR });
 
     const { result } = renderHook(() => useQualityLive(), makeQueryWrapper());
-    await waitFor(
-      () => { expect(result.current.error).not.toBeNull(); },
-      { timeout: RETRY_EXHAUSTION_TIMEOUT_MS },
-    );
+    await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
     expect(result.current.error?.message).toContain(`API error: ${HTTP_SERVER_ERROR}`);
     expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);

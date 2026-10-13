@@ -28,8 +28,6 @@ vi.mock('../contexts/AuthContext.js', () => ({
 }));
 
 const HTTP_NOT_FOUND = 404;
-/** The hook's retry:1 costs react-query's 1s first backoff — 3s clears it. */
-const RETRY_EXHAUSTION_TIMEOUT_MS = 3_000;
 
 function makeCalibrationResponse(overrides: Partial<CalibrationResponse> = {}): CalibrationResponse {
   return {
@@ -102,10 +100,7 @@ describe('useCalibration', () => {
     const fetchSpy = stubFetch({ error: 'some other reason' }, { status: HTTP_NOT_FOUND });
 
     const { result } = renderHook(() => useCalibration(), makeQueryWrapper());
-    await waitFor(
-      () => { expect(result.current.error).not.toBeNull(); },
-      { timeout: RETRY_EXHAUSTION_TIMEOUT_MS },
-    );
+    await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
     expect(result.current.error?.message).toContain(`API error: ${HTTP_NOT_FOUND}`);
     expect(result.current.data).toBeUndefined();
