@@ -54,8 +54,9 @@ vi.mock('../contexts/AuthContext.js', () => ({
 }));
 
 beforeEach(() => {
-  // switchOrg persists the choice, and OrgProvider reads it on mount.
-  window.localStorage.clear();
+  // switchOrg persists the choice, and OrgProvider reads it on mount. Clear the
+  // store api-client uses: Node 26's own global localStorage can shadow jsdom's.
+  globalThis.localStorage.clear();
 });
 
 afterEach(() => {
