@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createServer, type IncomingHttpHeaders, type Server } from 'http';
-import type { AddressInfo } from 'net';
 import { createJudgeAnthropicClient, responseText } from '../judge-anthropic-client.js';
+import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 
 // Placeholder, not a credential: the local server only echoes it back.
 const API_KEY = 'test-key-value';
@@ -22,29 +21,21 @@ const MESSAGE_RESPONSE = {
 };
 
 describe('createJudgeAnthropicClient', () => {
-  let server: Server;
-  let baseURL: string;
-  const received: { headers: IncomingHttpHeaders; httpVersion: string }[] = [];
+  let server: RecordingServer;
 
   beforeAll(async () => {
-    server = createServer((req, res) => {
-      received.push({ headers: req.headers, httpVersion: req.httpVersion });
-      req.resume();
-      req.on('end', () => {
-        res.writeHead(HTTP_OK, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(MESSAGE_RESPONSE));
-      });
-    });
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-    baseURL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    server = await startRecordingServer();
+    server.respondWith(() => ({
+      status: HTTP_OK,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(MESSAGE_RESPONSE),
+    }));
   });
 
-  afterAll(async () => {
-    await new Promise<void>(resolve => server.close(() => resolve()));
-  });
+  afterAll(() => server.close());
 
   it('sends a request through its own fetch with the caller options intact', async () => {
-    const client = await createJudgeAnthropicClient({ apiKey: API_KEY, baseURL, maxRetries: 0 });
+    const client = await createJudgeAnthropicClient({ apiKey: API_KEY, baseURL: server.url, maxRetries: 0 });
 
     const response = await client.messages.create({
       model: MODEL,
@@ -53,7 +44,7 @@ describe('createJudgeAnthropicClient', () => {
     });
 
     expect(response.content).toEqual([{ type: 'text', text: REPLY_TEXT }]);
-    const last = received.at(-1)!;
+    const last = server.requests.at(-1)!;
     expect(last.headers['x-api-key']).toBe(API_KEY);
     expect(last.httpVersion).toBe('1.1');
   });

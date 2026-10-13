@@ -97,7 +97,7 @@ No open items.
 | SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | (review) Source: session 2026-10-12, Units 3 and 4 and the post-batch full run |
 | PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PRs #21 and #22 |
 | STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `999ca85` |
-| TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | Source: session 2026-10-12, Units 3 and 7 |
+| TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, Units 3 and 7 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
 `VITE_API_URL`. It was removed from the local `.env`, but left in Doppler `integrity-studio`.
@@ -198,8 +198,8 @@ gains `currentPath`, and the three PR #21 files mount through `renderPage`. The 
   merged into `org-switch.test.tsx`.
 - ~~`auth-context-refresh.test.tsx` keeps `'obs:login_recorded'` as a literal because the key is private
   to `AuthContext`.~~ Done 2026-10-12: `AuthContext` exports `SESSION_LOGIN_KEY` and the test imports it.
-- `scripts/__tests__/judge-anthropic-client.test.ts` keeps its own loopback server beside the new
-  `scripts/__tests__/support/recording-server.ts` (PR #24).
+- ~~`scripts/__tests__/judge-anthropic-client.test.ts` keeps its own loopback server beside the new
+  `scripts/__tests__/support/recording-server.ts` (PR #24).~~ Done 2026-10-12: it uses `startRecordingServer`.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.11](changelog/3.0.11/CHANGELOG.md) (2026-10-09).
