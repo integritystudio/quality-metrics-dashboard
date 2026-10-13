@@ -56,8 +56,8 @@ jobs:
           ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Run src tests
-        run: npm test src/
+      - name: Run src and worker tests
+        run: npm test src/ worker/
 
   deploy-worker:
     needs: check

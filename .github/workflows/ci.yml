@@ -53,8 +53,8 @@ jobs:
           ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-      - name: Run src tests
-        run: doppler run --project integrity-studio --config prd -- npm test src/
+      - name: Run src and worker tests
+        run: doppler run --project integrity-studio --config prd -- npm test src/ worker/
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       # Specs asserting on rendered metric content skip themselves when
