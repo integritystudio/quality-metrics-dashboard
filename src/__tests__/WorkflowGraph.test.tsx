@@ -78,6 +78,7 @@ vi.mock('@xyflow/react', async () => {
 
 import { WorkflowGraphView, applyClusterCollapse, extractClusterIds, NODE_WIDTH } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph, makeClusteredGraph } from './workflow-fixtures.js';
+import { defined } from './support/defined.js';
 
 afterEach(cleanup);
 
@@ -311,7 +312,7 @@ describe('WorkflowGraphView layout', () => {
     const positions = await Promise.all(graph.nodes.map(n => findLaidOutNode(n.id)));
 
     for (let i = 1; i < positions.length; i++) {
-      expect(positions[i]!.y).toBeGreaterThan(positions[i - 1]!.y);
+      expect(defined(positions[i]).y).toBeGreaterThan(defined(positions[i - 1]).y);
     }
   });
 
@@ -444,7 +445,7 @@ describe('applyClusterCollapse', () => {
     );
     // Both b->c and a2->c reroute to cluster_node->c — should be deduped to 1 edge
     expect(result.edges).toHaveLength(1);
-    expect(result.edges[0]!.target).toBe('c');
+    expect(defined(result.edges[0]).target).toBe('c');
   });
 
   it('aggregates hasError: true when any member has error', () => {

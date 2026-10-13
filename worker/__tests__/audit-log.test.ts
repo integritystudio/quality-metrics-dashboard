@@ -11,6 +11,7 @@ import app from '../index.js';
 import { HttpStatus } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 type FetchMock = Mock<FetchLike>;
 
@@ -138,7 +139,7 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
 
     const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
     expect(auditCall).toBeDefined();
-    const init = auditCall![1] as RequestInit;
+    const init = defined(auditCall)[1] as RequestInit;
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.actor_user_id).toBe(MOCK_APP_USER_ID);

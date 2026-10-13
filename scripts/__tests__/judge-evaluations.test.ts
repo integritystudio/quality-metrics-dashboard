@@ -67,6 +67,7 @@ import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
 import { makeTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 // Test Data Factories
 
@@ -262,9 +263,9 @@ describe('extractTurns', () => {
     const turns = await extractTurns(info);
 
     expect(turns).toHaveLength(1);
-    expect(turns[0]!.userText).toBe('Fix the bug');
-    expect(turns[0]!.assistantText).toBe('I fixed it in auth.ts');
-    expect(turns[0]!.sessionId).toBe('sess-1');
+    expect(defined(turns[0]).userText).toBe('Fix the bug');
+    expect(defined(turns[0]).assistantText).toBe('I fixed it in auth.ts');
+    expect(defined(turns[0]).sessionId).toBe('sess-1');
   });
 
   it('skips system prompts', async () => {
@@ -331,7 +332,7 @@ describe('extractTurns', () => {
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(1);
-    expect(turns[0]!.toolResults).toContain('tool output 1');
+    expect(defined(turns[0]).toolResults).toContain('tool output 1');
   });
 
   it('clears tool results between turns (M4)', async () => {
@@ -370,8 +371,8 @@ describe('extractTurns', () => {
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
     expect(turns).toHaveLength(2);
-    expect(turns[0]!.toolResults).toContain('tool output from turn 1');
-    expect(turns[1]!.toolResults).toHaveLength(0); // Should not leak from turn 1
+    expect(defined(turns[0]).toolResults).toContain('tool output from turn 1');
+    expect(defined(turns[1]).toolResults).toHaveLength(0); // Should not leak from turn 1
   });
 
   it('skips progress and file-history-snapshot entries', async () => {
@@ -414,8 +415,8 @@ describe('extractTurns', () => {
     ]);
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns[0]!.userText.length).toBe(8000);
-    expect(turns[0]!.assistantText.length).toBe(8000);
+    expect(defined(turns[0]).userText.length).toBe(8000);
+    expect(defined(turns[0]).assistantText.length).toBe(8000);
   });
 
   it('handles malformed JSON lines gracefully', async () => {
@@ -543,8 +544,8 @@ describe('seedEvaluations', () => {
     const turn = makeTurn();
     const { evals } = seedEvaluations([turn], new Set());
 
-    const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
-    const hal = evals.find(e => e.evaluationName === 'hallucination')!;
+    const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
+    const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
     expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
   });
 
@@ -955,7 +956,7 @@ describe('fitContextForJudge', () => {
     const [fitted] = fitContextForJudge(['x'.repeat(MAX_TEXT_LENGTH + 1)]);
 
     expect(fitted).toHaveLength(MAX_TEXT_LENGTH);
-    expect(fitted!.endsWith(CONTEXT_TRUNCATION_MARKER)).toBe(true);
+    expect(defined(fitted).endsWith(CONTEXT_TRUNCATION_MARKER)).toBe(true);
   });
 
   it('keeps at most the tool-context item limit', () => {
@@ -1366,8 +1367,8 @@ describe('evaluateTurnsBatched', () => {
 
     expect(flush).toHaveBeenCalledTimes(1);
     expect(perTurn).toHaveLength(2);
-    expect(perTurn[0]!.map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
-    expect(perTurn[1]!.map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'hallucination', 'tool_correctness']));
+    expect(defined(perTurn[0]).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+    expect(defined(perTurn[1]).map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'hallucination', 'tool_correctness']));
     expect(evalFailures).toEqual({});
   });
 

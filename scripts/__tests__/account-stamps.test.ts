@@ -10,6 +10,7 @@ import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../der
 import { fingerprint, mapRecord, routeRecord } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 // TKR8 Phase 1: evaluations carry the account of what they score, and upload
 // routes on that stamp instead of joining by trace and time. Phase 2: they also
@@ -166,12 +167,12 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
 
     it("copies the scored span's stamp and leaves an unstamped span's record unstamped", () => {
       setSpanAccounts(new Map([['stamped', GMAIL_REF]]));
-      expect(deriveEvaluationLatency(measurable('stamped'))!.identityKeyRef).toBe(GMAIL_REF);
+      expect(defined(deriveEvaluationLatency(measurable('stamped'))).identityKeyRef).toBe(GMAIL_REF);
       expect(deriveEvaluationLatency(measurable('bare'))).not.toHaveProperty('identityKeyRef');
     });
 
     it('names the span it scores', () => {
-      expect(deriveEvaluationLatency(measurable('scored'))!.spanId).toBe('scored');
+      expect(defined(deriveEvaluationLatency(measurable('scored'))).spanId).toBe('scored');
     });
   });
 
@@ -215,8 +216,8 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       const mapped = mapRecord(evalLine({
         attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 0.8, [GENAI_RESPONSE_ATTRIBUTES.ID]: 'msg_1' },
       }), NOW, MAX_AGE_MS);
-      expect(mapped.payload!.responseId).toBe('msg_1');
-      expect(mapped.payload!.metadata).not.toHaveProperty('responseId');
+      expect(defined(mapped.payload).responseId).toBe('msg_1');
+      expect(defined(mapped.payload).metadata).not.toHaveProperty('responseId');
     });
 
     it('withholds a record stamped with an unmapped account', () => {

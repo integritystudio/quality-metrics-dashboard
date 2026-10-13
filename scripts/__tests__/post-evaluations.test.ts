@@ -6,6 +6,7 @@ import { EVALUATION_RESULT_EVENT } from '../eval-record.js';
 import { evaluationId, MAX_BATCH_SIZE } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_PREFIX } from '../../../src/lib/core/obtool-contract.js';
+import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 const NOW = Date.parse('2026-09-28T12:00:00.000Z');
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
@@ -62,10 +63,11 @@ describe('postEvaluationRecords', () => {
     expect(summary).toMatchObject({ sent: 1, byDestination: { [KEY_REF]: 1 }, routedBy: { stamp: 1 } });
     expect(ingest.requests).toHaveLength(1);
     const [sent] = ingest.requests;
-    expect(sent!.method).toBe('POST');
-    expect(sent!.path).toBe(KEYED_INGEST_PATH);
-    expect(sent!.headers.authorization).toBe(`Bearer ${API_KEY}`);
-    expect(JSON.parse(sent!.body.trim())).toMatchObject({ evaluationId: evaluationId(r), traceId: 'trace-1' });
+    assertDefined(sent);
+    expect(sent.method).toBe('POST');
+    expect(sent.path).toBe(KEYED_INGEST_PATH);
+    expect(sent.headers.authorization).toBe(`Bearer ${API_KEY}`);
+    expect(JSON.parse(sent.body.trim())).toMatchObject({ evaluationId: evaluationId(r), traceId: 'trace-1' });
   });
 
   it('sends an unstamped record over the webhook, signed over the bytes received', async () => {
@@ -74,8 +76,8 @@ describe('postEvaluationRecords', () => {
     expect(summary.byDestination).toEqual({ webhook: 1 });
     expect(ingest.requests.map(r => r.path)).toEqual([WEBHOOK_INGEST_PATH]);
     const [sent] = ingest.requests;
-    const expectedSignature = createHmac(HMAC_ALGORITHM, HMAC_SECRET).update(sent!.body).digest('hex');
-    expect(sent!.headers[WEBHOOK_SIGNATURE_HEADER.toLowerCase()]).toBe(`${WEBHOOK_SIGNATURE_PREFIX}${expectedSignature}`);
+    const expectedSignature = createHmac(HMAC_ALGORITHM, HMAC_SECRET).update(defined(sent).body).digest('hex');
+    expect(defined(sent).headers[WEBHOOK_SIGNATURE_HEADER.toLowerCase()]).toBe(`${WEBHOOK_SIGNATURE_PREFIX}${expectedSignature}`);
   });
 
   it('does not age out old records, because the flush dates rows by evaluatedAtMs', async () => {

@@ -10,6 +10,7 @@
 import { vi } from 'vitest';
 import { API_GATEWAY_URL } from '../../lib/gateway.js';
 import { headersOf } from './query-harness.js';
+import { defined } from './defined.js';
 
 export type GatewayRoute = 'directory' | 'billing' | 'usage' | 'quota' | 'entitlements';
 export type GatewayRefusal = { status: number; body?: unknown } | 'network-error';
@@ -62,7 +63,7 @@ export function startFakeGateway(responders: Responders) {
 
     const responder = responders[route];
     if (!responder) throw new Error(`fake gateway has no fixture for ${route}`);
-    return Promise.resolve(json(responder(match![1] ?? '')));
+    return Promise.resolve(json(responder(defined(match)[1] ?? '')));
   }));
 
   return {
@@ -70,7 +71,7 @@ export function startFakeGateway(responders: Responders) {
     requests,
     gatewayRequests: () => requests.filter((r) => r.url.startsWith(API_GATEWAY_URL)),
     requestsFor: (route: GatewayRoute) => {
-      const pattern = ROUTE_PATTERNS.find(([name]) => name === route)![1];
+      const pattern = defined(ROUTE_PATTERNS.find(([name]) => name === route))[1];
       return requests.filter((r) => r.url.startsWith(API_GATEWAY_URL) && pattern.test(r.path));
     },
     switchRequests: () => requests.filter((r) => r.path === SWITCH_PATH),

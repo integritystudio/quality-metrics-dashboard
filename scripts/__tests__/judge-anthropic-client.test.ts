@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { ALPN_HTTP1_1 } from '../../../src/test-helpers/alpn-server.js';
 import { createJudgeAnthropicClient, responseText } from '../judge-anthropic-client.js';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
+import { assertDefined } from '../../src/__tests__/support/defined.js';
 
 // Placeholder, not a credential: the local server only records it.
 const API_KEY = 'test-key-value';
@@ -47,8 +48,9 @@ describe('createJudgeAnthropicClient', () => {
     expect(response.content).toEqual([{ type: 'text', text: REPLY_TEXT }]);
     expect(server.requests).toHaveLength(1);
     const [last] = server.requests;
-    expect(last!.headers['x-api-key']).toBe(API_KEY);
-    expect(last!.alpnProtocol).toBe(ALPN_HTTP1_1);
+    assertDefined(last);
+    expect(last.headers['x-api-key']).toBe(API_KEY);
+    expect(last.alpnProtocol).toBe(ALPN_HTTP1_1);
   });
 });
 

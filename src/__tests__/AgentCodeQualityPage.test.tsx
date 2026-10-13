@@ -4,6 +4,7 @@ import type { AgentWindowStats, CodeQualityResponse } from '../api/routes/code-q
 import { AgentCodeQualityPage } from '../pages/AgentCodeQualityPage.js';
 import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
 import { renderPage } from './support/page-harness.js';
+import { defined } from './support/defined.js';
 
 /**
  * AgentCodeQualityPage splits survival rows by cohort (CSV2) and content kind
@@ -62,7 +63,7 @@ describe('AgentCodeQualityPage', () => {
   it('requests the code-quality aggregate with the bearer token', async () => {
     const fetchSpy = await renderWith([row({})]);
 
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(CODE_QUALITY_URL);
     expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   }, TEST_TIMEOUT_MS);

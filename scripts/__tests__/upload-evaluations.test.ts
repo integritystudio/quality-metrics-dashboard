@@ -25,6 +25,7 @@ import { EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, LEGACY_SCORE_UNIT_
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;
@@ -518,12 +519,12 @@ describe('payloadManifestKey', () => {
       duration: [0, 1_463_666] as [number, number],
       attributes: { [SESSION_ATTRIBUTES.ID]: 's1', [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true },
     };
-    const line = JSON.stringify(toOTelRecord(deriveToolCorrectness(span)!));
+    const line = JSON.stringify(toOTelRecord(defined(deriveToolCorrectness(span))));
 
     const { payload } = mapRecord(JSON.parse(line), NOW, Number.POSITIVE_INFINITY);
 
     // A D1 row stores timestamp_ns = evaluatedAtMs * 1e6; the manifest carries that in ms.
-    expect(payloadManifestKey(payload!)).toBe(manifestKey('tool_correctness', '0123456789abcdef0123456789abcdef', 1_790_553_614_235));
+    expect(payloadManifestKey(defined(payload))).toBe(manifestKey('tool_correctness', '0123456789abcdef0123456789abcdef', 1_790_553_614_235));
   });
 
   it('is undefined for a payload with no event time', () => {

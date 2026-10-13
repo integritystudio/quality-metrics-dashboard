@@ -19,6 +19,7 @@ import {
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../../src/lib/validation/dashboard-schemas.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
+import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 type MessageBatch = Anthropic.Messages.MessageBatch;
 type ResultLine = Anthropic.Messages.MessageBatchIndividualResponse;
@@ -77,7 +78,7 @@ function fakeClient() {
       return Promise.resolve(makeBatch('in_progress'));
     }),
     retrieve: vi.fn(() => Promise.resolve(makeBatch('ended'))),
-    results: vi.fn(() => Promise.resolve(Readable.from(submitted.at(-1)!.map(answer)))),
+    results: vi.fn(() => Promise.resolve(Readable.from(defined(submitted.at(-1)).map(answer)))),
     cancel: vi.fn(() => Promise.resolve(makeBatch('canceling'))),
   } satisfies BatchClient;
   return { client, submitted };
@@ -96,8 +97,9 @@ describe('adaptBatchProvider', () => {
     const schema = { type: 'object', properties: {}, required: [] };
     await provider.generate('verdict please', { schema });
     const [request] = submitted.flat();
-    expect(request!.params.max_tokens).toBe(CONSOLIDATED_MAX_TOKENS);
-    expect(request!.params.output_config).toEqual({ format: { type: 'json_schema', schema } });
+    assertDefined(request);
+    expect(request.params.max_tokens).toBe(CONSOLIDATED_MAX_TOKENS);
+    expect(request.params.output_config).toEqual({ format: { type: 'json_schema', schema } });
   });
 
   it('leaves a schema-less call on the provider budget with no output_config', async () => {
@@ -105,8 +107,9 @@ describe('adaptBatchProvider', () => {
     const provider = adaptBatchProvider(await createBatchProvider({ ...BASE, client }));
     await provider.generate(STEPS_PROMPT_MARKER);
     const [request] = submitted.flat();
-    expect(request!.params.max_tokens).toBe(PROVIDER_MAX_TOKENS);
-    expect(request!.params.output_config).toBeUndefined();
+    assertDefined(request);
+    expect(request.params.max_tokens).toBe(PROVIDER_MAX_TOKENS);
+    expect(request.params.output_config).toBeUndefined();
   });
 });
 
@@ -120,7 +123,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
 
     expect(submitted).toHaveLength(2);
     // Two criteria without tool results; steps are shared across turns through the cache.
-    expect(submitted[0]!.map(promptOf).every(p => p.includes(STEPS_PROMPT_MARKER))).toBe(true);
+    expect(defined(submitted[0]).map(promptOf).every(p => p.includes(STEPS_PROMPT_MARKER))).toBe(true);
     expect(submitted[0]).toHaveLength(2);
     // One verdict call per turn, not one per criterion.
     expect(submitted[1]).toHaveLength(turns.length);
@@ -136,7 +139,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
 
     const [records] = await evaluateTurnsConsolidatedBatched(batch, [makeTurn({ toolResults: ['config.yaml: port 8080'] })], new Set());
 
-    const byName = Object.fromEntries(records!.map(r => [r.evaluationName, r.scoreValue]));
+    const byName = Object.fromEntries(defined(records).map(r => [r.evaluationName, r.scoreValue]));
     expect(byName[FAITHFULNESS_EVAL_NAME]).toBe(0.75);
     expect(byName[HALLUCINATION_EVAL_NAME]).toBe(0.25);
   });
@@ -149,8 +152,8 @@ describe('evaluateTurnsConsolidatedBatched', () => {
 
     const [records] = await evaluateTurnsConsolidatedBatched(batch, [turn], existing);
 
-    expect(records!.map(r => r.evaluationName)).toEqual([COHERENCE_EVAL_NAME]);
-    expect(schemaKeys(submitted[1]![0]!)).toEqual([COHERENCE_EVAL_NAME]);
+    expect(defined(records).map(r => r.evaluationName)).toEqual([COHERENCE_EVAL_NAME]);
+    expect(schemaKeys(defined(defined(submitted[1])[0]))).toEqual([COHERENCE_EVAL_NAME]);
   });
 });
 

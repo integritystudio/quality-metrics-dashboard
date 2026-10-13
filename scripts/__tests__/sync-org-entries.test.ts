@@ -20,6 +20,7 @@ import { BACKFILL_COHORT, RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-recor
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 /** 01:08 UTC, so every window's start is mid-day and the day rounding is visible. */
 const NOW = new Date('2026-10-08T01:08:00.000Z');
@@ -240,7 +241,7 @@ describe('dashboardEntry', () => {
   it('ignores the run stamp and every metric period', () => {
     const laterRun = {
       timestamp: '2026-10-08T05:08:00.000Z',
-      metrics: [{ ...view.metrics[0]!, period: { start: '2026-10-01T05:08:00.000Z', end: '2026-10-08T05:08:00.000Z' } }],
+      metrics: [{ ...defined(view.metrics[0]), period: { start: '2026-10-01T05:08:00.000Z', end: '2026-10-08T05:08:00.000Z' } }],
     };
 
     expect(hashOf(laterRun)).toBe(hashOf(view));
@@ -249,7 +250,7 @@ describe('dashboardEntry', () => {
   it('keeps a nested timestamp, which is event time', () => {
     const otherWorst = {
       ...view,
-      metrics: [{ ...view.metrics[0]!, worstExplanation: { score: 0.1, timestamp: '2026-10-07T13:00:00.000Z' } }],
+      metrics: [{ ...defined(view.metrics[0]), worstExplanation: { score: 0.1, timestamp: '2026-10-07T13:00:00.000Z' } }],
     };
 
     expect(hashOf(otherWorst)).not.toBe(hashOf(view));
@@ -390,10 +391,11 @@ describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
     const kvKey = `coverage:7d:traceId`;
     const matrix = entryValue<{ metrics: string[]; inputs: string[] }>(result, kvKey);
     expect(matrix).toBeDefined();
-    expect(matrix!.metrics).not.toContain('tool_correctness');
-    expect(matrix!.inputs).not.toContain('trace-rule');
-    expect(matrix!.metrics).toContain(FIXTURE_METRIC);
-    expect(matrix!.inputs).toContain('trace-llm');
+    assertDefined(matrix);
+    expect(matrix.metrics).not.toContain('tool_correctness');
+    expect(matrix.inputs).not.toContain('trace-rule');
+    expect(matrix.metrics).toContain(FIXTURE_METRIC);
+    expect(matrix.inputs).toContain('trace-llm');
   });
 
   it('produces an empty matrix when all evaluations are rule-based', async () => {
@@ -403,8 +405,9 @@ describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
 
     const matrix = entryValue<{ metrics: string[]; inputs: string[]; overallCoveragePercent: number }>(result, `coverage:7d:traceId`);
     expect(matrix).toBeDefined();
-    expect(matrix!.metrics).toHaveLength(0);
-    expect(matrix!.inputs).toHaveLength(0);
-    expect(matrix!.overallCoveragePercent).toBe(0);
+    assertDefined(matrix);
+    expect(matrix.metrics).toHaveLength(0);
+    expect(matrix.inputs).toHaveLength(0);
+    expect(matrix.overallCoveragePercent).toBe(0);
   });
 });

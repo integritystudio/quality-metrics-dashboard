@@ -35,6 +35,7 @@ import { type Turn } from '../judge-turns.js';
 import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { G_EVAL_MAX_SCORE, G_EVAL_MIN_SCORE } from '../../../src/lib/judge/llm-judge-constants.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 // Fixtures
 
@@ -170,7 +171,7 @@ describe('buildConsolidatedSchema', () => {
 
   it('asks for reasoning before an integer score limited to 1-5', () => {
     const schema = buildConsolidatedSchema([RELEVANCE_EVAL_NAME]);
-    const verdict = (schema.properties as Record<string, { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean }>)[RELEVANCE_EVAL_NAME]!;
+    const verdict = defined((schema.properties as Record<string, { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean }>)[RELEVANCE_EVAL_NAME]);
     expect(Object.keys(verdict.properties)).toEqual([REASONING_KEY, SCORE_KEY]);
     expect(verdict.required).toEqual([REASONING_KEY, SCORE_KEY]);
     expect(verdict.additionalProperties).toBe(false);
@@ -294,8 +295,8 @@ describe('evaluateTurnConsolidated', () => {
     expect(records.map(r => r.evaluationName)).toEqual(ALL_TOOL_NAMES);
     const schemaCalls = calls.filter(c => c.options?.schema);
     expect(schemaCalls).toHaveLength(1);
-    expect((schemaCalls[0]!.options!.schema as { required: string[] }).required).toEqual(ALL_TOOL_CRITERIA);
-    expect(schemaCalls[0]!.prompt.split(TOOL_RESULT).length - 1).toBe(1);
+    expect((defined(defined(schemaCalls[0]).options).schema as { required: string[] }).required).toEqual(ALL_TOOL_CRITERIA);
+    expect(defined(schemaCalls[0]).prompt.split(TOOL_RESULT).length - 1).toBe(1);
     for (const record of records) {
       // Its own producer, distinct from the per-criterion path's: the two measure
       // faithfulness and hallucination with different instruments, and this is the
@@ -318,11 +319,11 @@ describe('evaluateTurnConsolidated', () => {
     const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set());
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
-    expect(byName[RELEVANCE_EVAL_NAME]!.scoreValue).toBe(0.75);
-    expect(byName[RELEVANCE_EVAL_NAME]!.explanation).toBe(`${RELEVANCE_EVAL_NAME} reasoning`);
-    expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue).toBe(0.25);
-    expect(byName['hallucination']!.scoreValue).toBe(0.75);
-    expect(byName['hallucination']!.explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
+    expect(defined(byName[RELEVANCE_EVAL_NAME]).scoreValue).toBe(0.75);
+    expect(defined(byName[RELEVANCE_EVAL_NAME]).explanation).toBe(`${RELEVANCE_EVAL_NAME} reasoning`);
+    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(0.25);
+    expect(defined(byName['hallucination']).scoreValue).toBe(0.75);
+    expect(defined(byName['hallucination']).explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
   });
 
   it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
@@ -333,12 +334,12 @@ describe('evaluateTurnConsolidated', () => {
 
     const schemaCalls = calls.filter(c => c.options?.schema);
     expect(schemaCalls).toHaveLength(1);
-    expect((schemaCalls[0]!.options!.schema as { required: string[] }).required).toContain('hallucination');
-    expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue).toBe(0.25);
+    expect((defined(defined(schemaCalls[0]).options).schema as { required: string[] }).required).toContain('hallucination');
+    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(0.25);
     // 5 = no fabrication on HALLUCINATION_CRITERIA, stored higher-is-worse.
-    expect(byName['hallucination']!.scoreValue).toBe(0);
-    expect(byName['hallucination']!.explanation).toBe('hallucination reasoning');
-    expect(byName[FAITHFULNESS_EVAL_NAME]!.scoreValue + byName['hallucination']!.scoreValue).not.toBe(1);
+    expect(defined(byName['hallucination']).scoreValue).toBe(0);
+    expect(defined(byName['hallucination']).explanation).toBe('hallucination reasoning');
+    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue + defined(byName['hallucination']).scoreValue).not.toBe(1);
   });
 
   it('does not skip a criterion another model judged, since the dedup key is per judge model', () => {

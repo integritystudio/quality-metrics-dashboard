@@ -26,6 +26,7 @@ import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
+import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 // Test Data Factories
 
@@ -106,10 +107,10 @@ describe('trackTaskActivity', () => {
       },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
+    const data = defined(sessionTasks.get('sess-abc'));
     expect(data.creates).toBe(1);
     expect(data.tasks.size).toBe(1);
-    const task = [...data.tasks.values()][0]!;
+    const task = defined([...data.tasks.values()][0]);
     expect(task.statuses.has('pending')).toBe(true);
   });
 
@@ -144,10 +145,10 @@ describe('trackTaskActivity', () => {
       },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
+    const data = defined(sessionTasks.get('sess-abc'));
     expect(data.creates).toBe(1);
     expect(data.updates).toBe(2);
-    const task = data.tasks.get('task-1')!;
+    const task = defined(data.tasks.get('task-1'));
     expect(task.statuses).toEqual(new Set(['pending', 'in_progress', 'completed']));
   });
 
@@ -170,8 +171,8 @@ describe('trackTaskActivity', () => {
       },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
-    const task = data.tasks.get('task-rapid')!;
+    const data = defined(sessionTasks.get('sess-abc'));
+    const task = defined(data.tasks.get('task-rapid'));
     expect(task.statuses).toEqual(new Set(['in_progress', 'completed']));
     expect(scoreTask(task.statuses)).toBe(1.0);
   });
@@ -186,7 +187,7 @@ describe('trackTaskActivity', () => {
       },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
+    const data = defined(sessionTasks.get('sess-abc'));
     expect(data.updates).toBe(1);
     expect(data.tasks.size).toBe(0); // deleted is not in STATUS_SCORES
   });
@@ -201,7 +202,7 @@ describe('trackTaskActivity', () => {
       },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
+    const data = defined(sessionTasks.get('sess-abc'));
     expect(data.tasks.has('anon-span-xyz')).toBe(true);
   });
 
@@ -223,7 +224,7 @@ describe('trackTaskActivity', () => {
       },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
+    const data = defined(sessionTasks.get('sess-abc'));
     expect(data.tasks.size).toBe(2);
     expect(data.tasks.has('anon-span-1')).toBe(true);
     expect(data.tasks.has('anon-span-2')).toBe(true);
@@ -237,7 +238,7 @@ describe('trackTaskActivity', () => {
       attributes: { 'builtin.tool': 'TaskUpdate', [SESSION_ATTRIBUTES.ID]: 'sess-abc' },
     }));
 
-    const data = sessionTasks.get('sess-abc')!;
+    const data = defined(sessionTasks.get('sess-abc'));
     expect(data.creates).toBe(1);
     expect(data.updates).toBe(1);
     expect(data.tasks.size).toBe(0); // no status attributes -> no task entries
@@ -263,9 +264,9 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0]!.scoreValue).toBe(1.0);
-    expect(evals[0]!.evaluationName).toBe('task_completion');
-    expect(evals[0]!.explanation).toContain('1 completed');
+    expect(defined(evals[0]).scoreValue).toBe(1.0);
+    expect(defined(evals[0]).evaluationName).toBe('task_completion');
+    expect(defined(evals[0]).explanation).toContain('1 completed');
   });
 
   it('scores mixed session as average', () => {
@@ -287,7 +288,7 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0]!.scoreValue).toBe(0.75); // (1.0 + 0.5) / 2
+    expect(defined(evals[0]).scoreValue).toBe(0.75); // (1.0 + 0.5) / 2
   });
 
   it('uses ratio fallback for old data without status attributes', () => {
@@ -304,8 +305,8 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0]!.scoreValue).toBe(1.0); // 2 updates / (1 create * 2) = 1.0
-    expect(evals[0]!.explanation).toContain('ratio fallback');
+    expect(defined(evals[0]).scoreValue).toBe(1.0); // 2 updates / (1 create * 2) = 1.0
+    expect(defined(evals[0]).explanation).toContain('ratio fallback');
   });
 
   it('skips sessions with no creates and no tasks', () => {
@@ -328,8 +329,8 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(evals[0]!.scoreValue).toBe(0.0);
-    expect(evals[0]!.explanation).toContain('1 pending');
+    expect(defined(evals[0]).scoreValue).toBe(0.0);
+    expect(defined(evals[0]).explanation).toContain('1 pending');
   });
 
   it('handles multiple sessions independently', () => {
@@ -348,8 +349,8 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(2);
-    const sess1 = evals.find(e => e.sessionId === 'sess-1')!;
-    const sess2 = evals.find(e => e.sessionId === 'sess-2')!;
+    const sess1 = defined(evals.find(e => e.sessionId === 'sess-1'));
+    const sess2 = defined(evals.find(e => e.sessionId === 'sess-2'));
     expect(sess1.scoreValue).toBe(1.0);
     expect(sess2.scoreValue).toBe(0.0);
   });
@@ -364,11 +365,12 @@ describe('deriveEvaluationLatency', () => {
     }));
 
     expect(record).not.toBeNull();
-    expect(record!.evaluationName).toBe('evaluation_latency');
-    expect(record!.scoreValue).toBe(2.5);
-    expect(record!.scoreUnit).toBe('seconds');
-    expect(record!.explanation).toContain('2.5');
-    expect(record!.timestamp).toBe('2024-02-08T13:46:40.000Z');
+    assertDefined(record);
+    expect(record.evaluationName).toBe('evaluation_latency');
+    expect(record.scoreValue).toBe(2.5);
+    expect(record.scoreUnit).toBe('seconds');
+    expect(record.explanation).toContain('2.5');
+    expect(record.timestamp).toBe('2024-02-08T13:46:40.000Z');
   });
 
   it('returns null for a span whose name is not measurable', () => {
@@ -740,7 +742,7 @@ describe('deriveAll over the renamed agent hook spans', () => {
   // record to one span and cloud derive, which reads in start order, to the other.
   it('attaches session records to the latest-starting span whatever order the spans arrive in', () => {
     const [p1, f1, p2, f2] = spans;
-    const writeOrder = [p1!, p2!, f2!, f1!];
+    const writeOrder = [defined(p1), defined(p2), defined(f2), defined(f1)];
 
     const fromWriteOrder = deriveAll({ spans: writeOrder, accounts: new Map() })
       .filter(r => r.evaluationName !== 'evaluation_latency');
@@ -1002,11 +1004,11 @@ describe('deriveAgentHeuristics', () => {
     const records = await deriveAgentHeuristics([subagentStop(path)], SINCE_MS, new Map());
 
     expect(records.map(r => r.evaluationName)).toEqual(['argument_correctness', 'agent_overall']);
-    const args = records[0]!;
+    const args = defined(records[0]);
     // The one argument is empty, so the call scores 0 and fails.
     expect(args).toMatchObject({ scoreValue: 0, scoreLabel: 'fail', spanId: 'span-stop', sessionId: 'sess-abc' });
     expect(args.explanation).toBe('code-reviewer agent: 1 tool calls');
-    expect(records[1]!.scoreLabel).toMatch(/^(pass|partial|fail)$/);
+    expect(defined(records[1]).scoreLabel).toMatch(/^(pass|partial|fail)$/);
   });
 
   it('scores a session from its transcript on the session\'s last span', async () => {
@@ -1057,8 +1059,8 @@ describe('deriveAgentHeuristics', () => {
     expect(recordsB.length).toBeGreaterThan(0);
     // Every session record carries the same stableEvaluationKey regardless of span anchor.
     for (let i = 0; i < recordsA.length; i++) {
-      const a = recordsA[i]!;
-      const b = recordsB[i]!;
+      const a = defined(recordsA[i]);
+      const b = defined(recordsB[i]);
       expect(a.stableEvaluationKey).toBeDefined();
       expect(a.stableEvaluationKey).toBe(b.stableEvaluationKey);
       expect(a.stableEvaluationKey).toMatch(/^session:sess-abc:/);

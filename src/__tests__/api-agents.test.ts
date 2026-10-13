@@ -20,6 +20,7 @@ import { agentRoutes } from '../api/routes/agents.js';
 import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
+import { defined } from './support/defined.js';
 
 let fixture: FixtureServer;
 
@@ -113,8 +114,8 @@ describe('GET /agents', () => {
     const res = await agentRoutes.request('/agents?period=7d');
     const body = (await res.json()) as AgentListResponse;
     expect(body.agents).toHaveLength(1);
-    expect(body.agents[0]!.agentName).toBe('general-purpose');
-    expect(body.agents[0]!.invocations).toBe(2);
+    expect(defined(body.agents[0]).agentName).toBe('general-purpose');
+    expect(defined(body.agents[0]).invocations).toBe(2);
   });
 
   it('computes errorRate correctly', async () => {
@@ -125,7 +126,7 @@ describe('GET /agents', () => {
 
     const res = await agentRoutes.request('/agents?period=7d');
     const body = (await res.json()) as AgentListResponse;
-    expect(body.agents[0]!.errorRate).toBeCloseTo(0.5, 3);
+    expect(defined(body.agents[0]).errorRate).toBeCloseTo(0.5, 3);
   });
 
   it('agent record has required fields', async () => {
@@ -153,9 +154,9 @@ describe('GET /agents', () => {
 
     const res = await agentRoutes.request('/agents?period=7d');
     const body = (await res.json()) as AgentListResponse;
-    expect(body.agents[0]!.agentName).toBe('busy-agent');
-    expect(body.agents[0]!.invocations).toBe(2);
-    expect(body.agents[1]!.invocations).toBe(1);
+    expect(defined(body.agents[0]).agentName).toBe('busy-agent');
+    expect(defined(body.agents[0]).invocations).toBe(2);
+    expect(defined(body.agents[1]).invocations).toBe(1);
   });
 
   it('returns 500 when backend throws', async () => {

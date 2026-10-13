@@ -15,6 +15,7 @@ import type { TrendBucket } from '../hooks/useTrend.js';
 import type { ErrorResponse, TrendDetailResponse } from './support/api-responses.js';
 import { createFixtureServer } from './support/fixture-server.js';
 import type { FixtureServer } from './support/fixture-server.js';
+import { defined } from './support/defined.js';
 
 // Note: ResizeObserver stub is installed globally in setup.ts
 
@@ -76,9 +77,9 @@ describe('Sparkline', () => {
     expect(svg).not.toBeNull();
     const polyline = container.querySelector('polyline');
     expect(polyline).not.toBeNull();
-    const points = polyline!.getAttribute('points');
+    const points = defined(polyline).getAttribute('points');
     expect(points).toBeTruthy();
-    expect(points!.split(' ')).toHaveLength(3);
+    expect(defined(points).split(' ')).toHaveLength(3);
   });
 
   it('handles null gaps — excludes them from polyline points', () => {
@@ -86,7 +87,7 @@ describe('Sparkline', () => {
     const polyline = container.querySelector('polyline');
     expect(polyline).not.toBeNull();
     // Only 2 valid values, so polyline has 2 points
-    expect(polyline!.getAttribute('points')!.split(' ')).toHaveLength(2);
+    expect(defined(defined(polyline).getAttribute('points')).split(' ')).toHaveLength(2);
   });
 
   it('uses custom label as aria-label', () => {

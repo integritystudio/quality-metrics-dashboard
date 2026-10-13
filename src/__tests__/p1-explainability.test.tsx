@@ -9,6 +9,7 @@ import type { TriggeredAlert } from '../types.js';
 import type { TraceEvaluationsResponse, WireEvaluation } from './support/api-responses.js';
 import { TEST_ACCESS_TOKEN, headersOf, stubFetch } from './support/query-harness.js';
 import { renderPage } from './support/page-harness.js';
+import { assertDefined, defined } from './support/defined.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
@@ -36,9 +37,10 @@ describe('ScoreBadge tooltip', () => {
     expect(wrapper).toBeInTheDocument();
     const tooltip = container.querySelector('.score-badge-tooltip');
     expect(tooltip).toBeInTheDocument();
-    expect(tooltip!.textContent).toContain('gpt-4o');
-    expect(tooltip!.textContent).toContain('llm');
-    expect(tooltip!.textContent).toContain('This response is highly relevant');
+    assertDefined(tooltip);
+    expect(tooltip.textContent).toContain('gpt-4o');
+    expect(tooltip.textContent).toContain('llm');
+    expect(tooltip.textContent).toContain('This response is highly relevant');
   });
 
   it('does not render tooltip without tooltip props', () => {
@@ -59,7 +61,7 @@ describe('ScoreBadge tooltip', () => {
     );
     const link = container.querySelector('.tooltip-link');
     expect(link).toBeInTheDocument();
-    expect(link!.getAttribute('href')).toBe('/evaluations/trace/trace-abc-123');
+    expect(defined(link).getAttribute('href')).toBe('/evaluations/trace/trace-abc-123');
   });
 });
 
@@ -71,8 +73,9 @@ describe('ChainOfThoughtPanel', () => {
     );
     const details = container.querySelector('details');
     expect(details).toBeInTheDocument();
-    expect(details!.hasAttribute('open')).toBe(true);
-    expect(details!.textContent).toContain('The model output is coherent');
+    assertDefined(details);
+    expect(details.hasAttribute('open')).toBe(true);
+    expect(details.textContent).toContain('The model output is coherent');
   });
 
   it('renders evaluator inline without expandable config', () => {
@@ -128,18 +131,19 @@ describe('AlertList compound alerts', () => {
     const { container } = render(<AlertList alerts={makeAlerts()} />);
     const compoundCard = container.querySelector('.alert-compound');
     expect(compoundCard).toBeInTheDocument();
-    expect(compoundCard!.textContent).toContain('Review prompt templates');
-    expect(compoundCard!.textContent).toContain('Check model configuration');
-    expect(compoundCard!.textContent).toContain('Audit training data');
+    assertDefined(compoundCard);
+    expect(compoundCard.textContent).toContain('Review prompt templates');
+    expect(compoundCard.textContent).toContain('Check model configuration');
+    expect(compoundCard.textContent).toContain('Audit training data');
   });
 
   it('renders related metric links for compound alerts', () => {
     const { container } = render(<AlertList alerts={makeAlerts()} />);
     const links = container.querySelectorAll('.alert-metric-link');
     expect(links.length).toBe(3);
-    expect(links[0]!.getAttribute('href')).toBe('/metrics/relevance');
-    expect(links[1]!.getAttribute('href')).toBe('/metrics/hallucination');
-    expect(links[2]!.getAttribute('href')).toBe('/metrics/coherence');
+    expect(defined(links[0]).getAttribute('href')).toBe('/metrics/relevance');
+    expect(defined(links[1]).getAttribute('href')).toBe('/metrics/hallucination');
+    expect(defined(links[2]).getAttribute('href')).toBe('/metrics/coherence');
   });
 
   it('renders threshold bar for compound alerts', () => {
@@ -154,7 +158,7 @@ describe('AlertList compound alerts', () => {
     expect(items.length).toBe(2);
     const simpleItem = Array.from(items).find(el => !el.classList.contains('alert-compound'));
     expect(simpleItem).toBeInTheDocument();
-    expect(simpleItem!.textContent).toContain('Relevance score below threshold');
+    expect(defined(simpleItem).textContent).toContain('Relevance score below threshold');
   });
 });
 
@@ -197,7 +201,7 @@ describe('EvaluationDetailPage', () => {
   it('fetches the trace evaluations endpoint with the bearer token', async () => {
     const { fetchSpy } = renderDetailPage({ evaluations: WIRE_EVALUATIONS });
     await screen.findByRole('heading', { name: 'Trace Evaluations' });
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(`/api/evaluations/trace/${TRACE_ID}`);
     expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });

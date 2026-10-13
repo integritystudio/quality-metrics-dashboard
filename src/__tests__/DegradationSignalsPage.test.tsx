@@ -13,6 +13,7 @@ import {
   PAGE_SHELL_ERROR_HEADING, PAGE_SHELL_SKELETON_SELECTOR, SERVER_ERROR_BODY, SERVER_ERROR_STATUS, apiErrorMessage,
   renderPage, stubPendingFetch,
 } from './support/page-harness.js';
+import { defined } from './support/defined.js';
 
 // jsdom + React cold-start can exceed the default 5000ms on the first render test.
 const TEST_TIMEOUT_MS = 30_000;
@@ -80,7 +81,7 @@ async function renderLoaded(body: DegradationSignalsResponse = makeResponse(), p
 function firstRowCell(column: string): HTMLElement {
   const index = screen.getAllByRole('columnheader').findIndex(header => header.textContent === column);
   const [, firstRow] = screen.getAllByRole('row');
-  return within(firstRow!).getAllByRole('cell')[index]!;
+  return defined(within(defined(firstRow)).getAllByRole('cell')[index]);
 }
 
 describe('DegradationSignalsPage — render', () => {
@@ -255,7 +256,7 @@ describe('DegradationSignalsPage — request', () => {
   ])('requests the %s signals with the bearer token', async (period, expectedUrl) => {
     const fetchSpy = await renderLoaded(makeResponse({ period }), period);
 
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(expectedUrl);
     expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });

@@ -29,6 +29,7 @@ import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/va
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 // Helpers
 
@@ -82,7 +83,7 @@ describe('pipeline contract: derive → judge', () => {
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
 
-    const ev = evals[0]!;
+    const ev = defined(evals[0]);
     // Convert to OTel format (same function used by derive-evaluations main)
     const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
 
@@ -107,7 +108,7 @@ describe('pipeline contract: derive → judge', () => {
     }));
 
     const evals = deriveTaskCompletionPerSession();
-    const ev = evals[0]!;
+    const ev = defined(evals[0]);
 
     // Judge dedup key format: `${sessionId}:${evaluationName}:${turnKey}`
     // Verify all fields needed to construct dedup keys are present
@@ -172,8 +173,8 @@ describe('pipeline contract: judge seed output', () => {
 
   it('faithfulness + hallucination scores sum to 1.0 (complementary invariant)', () => {
     const { evals } = seedEvaluations([makeTurn()], new Set());
-    const faith = evals.find(e => e.evaluationName === 'faithfulness')!;
-    const hal = evals.find(e => e.evaluationName === 'hallucination')!;
+    const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
+    const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
     expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
   });
 
@@ -309,8 +310,8 @@ describe('pipeline contract: judge → sync-to-kv', () => {
 
     expect(run1.length).toBe(run2.length);
     for (let i = 0; i < run1.length; i++) {
-      expect(run1[i]!.scoreValue).toBe(run2[i]!.scoreValue);
-      expect(run1[i]!.evaluationName).toBe(run2[i]!.evaluationName);
+      expect(defined(run1[i]).scoreValue).toBe(defined(run2[i]).scoreValue);
+      expect(defined(run1[i]).evaluationName).toBe(defined(run2[i]).evaluationName);
     }
   });
 });
@@ -390,7 +391,7 @@ describe('full pipeline: derive + judge write/read cycle', () => {
       return attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] === 'task_completion';
     });
     expect(taskCompletionRecords).toHaveLength(1);
-    const tcAttrs = taskCompletionRecords[0]!.attributes as Record<string, unknown>;
+    const tcAttrs = defined(taskCompletionRecords[0]).attributes as Record<string, unknown>;
     expect(tcAttrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(1.0);
 
     // Verify LLM judge evals are in the combined output

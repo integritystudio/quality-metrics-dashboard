@@ -8,6 +8,7 @@ import type { ErrorResponse } from './support/api-responses.js';
 // The route serves the KV value byte-for-byte, so its body type is the
 // producer's contract — imported from the one place it is declared.
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
+import { defined } from './support/defined.js';
 
 const HTTP_OK = 200;
 
@@ -122,7 +123,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
     const data = makeCalibrationData();
     // A p50-less distribution: the shape the pre-schema loose response type
     // accepted, and that empiricalCDF would have read as NaN downstream.
-    const { p50: _p50, ...withoutP50 } = data.distributions['relevance']!;
+    const { p50: _p50, ...withoutP50 } = defined(data.distributions['relevance']);
     const res = await requestCalibration({
       'meta:calibration': { ...data, distributions: { relevance: withoutP50 } },
     });

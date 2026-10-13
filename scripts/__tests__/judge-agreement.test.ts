@@ -14,6 +14,7 @@ import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from
 import { YES_FLAG } from '../one-shot-eval.js';
 import { estimateTurnTokens } from '../judge-usage.js';
 import { makeTurn, TEST_PRICING } from './support/fixtures.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 
 describe('parseArgs', () => {
@@ -50,7 +51,7 @@ describe('agreement math', () => {
     ];
     const { byCriterion } = computeAgreement(turns);
     expect(byCriterion[FAITHFULNESS_EVAL_NAME]).toMatchObject({ paired: 1, exactMatches: 1 });
-    expect(byCriterion[FAITHFULNESS_EVAL_NAME]!.meanAbsDiff).toBeCloseTo(0.2);
+    expect(defined(byCriterion[FAITHFULNESS_EVAL_NAME]).meanAbsDiff).toBeCloseTo(0.2);
     expect(byCriterion[RELEVANCE_EVAL_NAME]).toMatchObject({ paired: 0, exactMatchRate: null, meanAbsDiff: null, perCriterionOnly: 1 });
     expect(byCriterion[COHERENCE_EVAL_NAME]).toMatchObject({ paired: 0, consolidatedOnly: 1 });
   });
@@ -70,9 +71,9 @@ describe('agreement math', () => {
 describe('estimateSpend', () => {
   it('estimates per-criterion input as a multiple of the consolidated input', () => {
     const turns = [makeTurn({ toolResults: ['x'.repeat(4000)] }), makeTurn()];
-    expect(estimateTurnTokens(turns[1]!)).toBeGreaterThan(0);
+    expect(estimateTurnTokens(defined(turns[1]))).toBeGreaterThan(0);
     const estimate = estimateSpend(turns, TEST_PRICING);
-    expect(estimate.consolidatedInputTokens).toBe(estimateTurnTokens(turns[0]!) + estimateTurnTokens(turns[1]!));
+    expect(estimate.consolidatedInputTokens).toBe(estimateTurnTokens(defined(turns[0])) + estimateTurnTokens(defined(turns[1])));
     expect(estimate.perCriterionInputTokens).toBeGreaterThan(estimate.consolidatedInputTokens * 2);
     expect(estimate.totalUsd).toBeGreaterThan(0);
   });

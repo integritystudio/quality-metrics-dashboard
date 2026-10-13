@@ -33,6 +33,7 @@ import type { AppSession } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper } from './support/query-harness.js';
 import { startFakeGateway } from './support/fake-gateway.js';
 import { BILLING_ACTIVE, ORG_A, ORG_B, QUOTA_GROWTH, QUOTA_UNINITIALIZED, USAGE_SUMMARY } from './support/admin-customer-fixtures.js';
+import { assertDefined, defined } from './support/defined.js';
 
 /** A staff session with an active org, so the X-Org-Id choke point has a value it could send. */
 const STAFF_SESSION: AppSession = {
@@ -83,8 +84,9 @@ describe('what the hooks send', () => {
     expect(result.current.data?.map((o) => o.name)).toEqual(['Acme', 'Beta Labs']);
     const [request] = gateway.gatewayRequests();
     expect(request).toMatchObject({ method: 'GET', url: `${API_GATEWAY_URL}/v1/admin/orgs` });
-    expect(request!.headers).toEqual({ Authorization: `Bearer ${TEST_ACCESS_TOKEN}` });
-    expect(request!.headers).not.toHaveProperty(ORG_ID_HEADER);
+    assertDefined(request);
+    expect(request.headers).toEqual({ Authorization: `Bearer ${TEST_ACCESS_TOKEN}` });
+    expect(request.headers).not.toHaveProperty(ORG_ID_HEADER);
   });
 
   it.each([
@@ -104,8 +106,9 @@ describe('what the hooks send', () => {
     await waitFor(() => { expect(result.current.data).toBeDefined(); });
 
     const [request] = gateway.gatewayRequests();
-    expect(request!.url).toBe(`${API_GATEWAY_URL}${path}`);
-    expect(request!.headers).toEqual({ Authorization: `Bearer ${TEST_ACCESS_TOKEN}` });
+    assertDefined(request);
+    expect(request.url).toBe(`${API_GATEWAY_URL}${path}`);
+    expect(request.headers).toEqual({ Authorization: `Bearer ${TEST_ACCESS_TOKEN}` });
   });
 
   it('keys the queries under their own scope, apart from the org-scoped ones', async () => {
@@ -128,8 +131,8 @@ describe('what the hooks send', () => {
 
     // The interval is an observer option, not a query option.
     const [query] = queryClient.getQueryCache().findAll();
-    const [observer] = query!.observers;
-    expect(observer!.options.refetchInterval).toBe(USAGE_POLL_INTERVAL_MS);
+    const [observer] = defined(query).observers;
+    expect(defined(observer).options.refetchInterval).toBe(USAGE_POLL_INTERVAL_MS);
     expect(USAGE_POLL_INTERVAL_MS).toBe(30_000);
   });
 });

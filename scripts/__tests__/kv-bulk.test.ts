@@ -19,6 +19,7 @@ import {
 } from './support/recording-server.js';
 import { ALPN_HTTP1_1 } from '../../../src/test-helpers/alpn-server.js';
 import { kvBulkPut, kvBulkDelete, chunkKvPairs, KV_BATCH_SIZE, KV_BATCH_MAX_BYTES, type KVEntry } from '../sync-to-kv.js';
+import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 const TEST_NAMESPACE_ID = '902fc8a43e7147b486b6376c485c4506';
 const TEST_ACCOUNT_ID = 'test-account-id';
@@ -211,7 +212,7 @@ describe('kvBulkPut: daily write limit', () => {
     const written = await kvBulkPut(allEntries);
 
     expect(written.size).toBe(KV_BATCH_SIZE);
-    expect(written.has(allEntries[KV_BATCH_SIZE]!.key)).toBe(false);
+    expect(written.has(defined(allEntries[KV_BATCH_SIZE]).key)).toBe(false);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('write limit'));
   });
 
@@ -229,18 +230,20 @@ describe('kvBulkPut: request shape', () => {
     await kvBulkPut([entry('metric:y')]);
 
     const [request] = cloudflare.requests;
-    expect(request!.method).toBe('PUT');
-    expect(request!.path).toBe(BULK_PUT_PATH);
-    expect(request!.headers.authorization).toBe(`Bearer ${TEST_API_TOKEN}`);
+    assertDefined(request);
+    expect(request.method).toBe('PUT');
+    expect(request.path).toBe(BULK_PUT_PATH);
+    expect(request.headers.authorization).toBe(`Bearer ${TEST_API_TOKEN}`);
   });
 
   it('wraps each value in a version envelope', async () => {
     await kvBulkPut([{ key: 'metric:x', value: '"raw-value"' }]);
 
-    const [pair] = putPairs(cloudflare.requests[0]!);
-    expect(pair!.key).toBe('metric:x');
-    expect(pair!.value).toMatch(/^\{"v":/);
-    expect(pair!.value).toContain('"raw-value"');
+    const [pair] = putPairs(defined(cloudflare.requests[0]));
+    assertDefined(pair);
+    expect(pair.key).toBe('metric:x');
+    expect(pair.value).toMatch(/^\{"v":/);
+    expect(pair.value).toContain('"raw-value"');
   });
 
   it('negotiates HTTP/1.1 with a server that also offers h2', async () => {
@@ -270,7 +273,7 @@ describe('kvBulkPut: batching', () => {
   it('excludes failed keys from the correct batch in a multi-batch run', async () => {
     const remainder = 2;
     const entries = Array.from({ length: KV_BATCH_SIZE + remainder }, (_, i) => entry(`metric:${i}`));
-    const failedKey = entries[KV_BATCH_SIZE]!.key;
+    const failedKey = defined(entries[KV_BATCH_SIZE]).key;
     cloudflare.respondWith(inOrder(bulkResult(KV_BATCH_SIZE), bulkResult(remainder, [failedKey])));
 
     const written = await kvBulkPut(entries);
@@ -438,9 +441,10 @@ describe('kvBulkDelete: request shape', () => {
 
     expect(cloudflare.requests).toHaveLength(1);
     const [request] = cloudflare.requests;
-    expect(request!.method).toBe('POST');
-    expect(request!.path).toBe(BULK_DELETE_PATH);
-    expect(deletedKeys(request!)).toEqual(keys);
+    assertDefined(request);
+    expect(request.method).toBe('POST');
+    expect(request.path).toBe(BULK_DELETE_PATH);
+    expect(deletedKeys(request)).toEqual(keys);
   });
 });
 

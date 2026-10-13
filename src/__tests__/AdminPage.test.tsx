@@ -17,6 +17,7 @@ import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import type { AdminMember, AdminRole, AdminUser, ApiKey, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
 import type { AppSession, DashboardRole } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf, makeQueryWrapper } from './support/query-harness.js';
+import { defined } from './support/defined.js';
 
 let currentSession: AppSession | null = null;
 const getAccessToken = () => Promise.resolve(TEST_ACCESS_TOKEN);
@@ -112,7 +113,7 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
         // As in production: the old key is revoked, so the active-key list
         // drops it and gains the new key under a new id. A fake that kept the
         // old id let the token survive in its row here while production lost it.
-        const old = state.keys.find((k) => k.id === keyId)!;
+        const old = defined(state.keys.find((k) => k.id === keyId));
         state.keys = state.keys
           .filter((k) => k.id !== keyId)
           .concat({ ...old, id: NEW_KEY_ID, prefix: NEW_PREFIX });
@@ -123,15 +124,15 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
       method: 'POST',
       pattern: /^\/api\/admin\/users\/([^/]+)\/roles$/,
       handle: ([userId], body) => {
-        const role = [VIEWER, OPERATOR].find((r) => r.id === (body as { role_id: string }).role_id)!;
-        state.users.find((u) => u.id === userId)!.roles.push({ id: role.id, name: role.name });
+        const role = defined([VIEWER, OPERATOR].find((r) => r.id === (body as { role_id: string }).role_id));
+        defined(state.users.find((u) => u.id === userId)).roles.push({ id: role.id, name: role.name });
       },
     },
     {
       method: 'DELETE',
       pattern: /^\/api\/admin\/users\/([^/]+)\/roles\/([^/]+)$/,
       handle: ([userId, roleId]) => {
-        const user = state.users.find((u) => u.id === userId)!;
+        const user = defined(state.users.find((u) => u.id === userId));
         user.roles = user.roles.filter((r) => r.id !== roleId);
       },
     },
@@ -139,7 +140,7 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
       method: 'POST',
       pattern: /^\/api\/admin\/members\/([^/]+)\/role$/,
       handle: ([userId], body) => {
-        state.members.find((m) => m.userId === userId)!.membershipRole =
+        defined(state.members.find((m) => m.userId === userId)).membershipRole =
           (body as { membershipRole: OrgMembershipRoleValue }).membershipRole;
       },
     },
@@ -180,7 +181,7 @@ async function renderAdminPage(mode: { orgRole: DashboardRole } | 'legacy') {
   currentSession = mode === 'legacy' ? null : orgSession(mode.orgRole);
   const { wrapper, queryClient } = makeQueryWrapper();
   render(mode === 'legacy' ? <AdminPage /> : <OrgProvider><AdminPage /></OrgProvider>, { wrapper });
-  await screen.findByText(mode === 'legacy' ? ANN.email! : BOB.email!);
+  await screen.findByText(mode === 'legacy' ? defined(ANN.email) : defined(BOB.email));
   return { queryClient };
 }
 
@@ -233,11 +234,11 @@ describe('AdminPage — user management (no active org)', () => {
       path: `/api/admin/users/${ANN.id}/roles`,
       body: { role_id: OPERATOR.id },
     });
-    expect(request!.headers).toMatchObject({
+    expect(defined(request).headers).toMatchObject({
       Authorization: `Bearer ${TEST_ACCESS_TOKEN}`,
       'Content-Type': 'application/json',
     });
-    expect(request!.headers).not.toHaveProperty(ORG_ID_HEADER);
+    expect(defined(request).headers).not.toHaveProperty(ORG_ID_HEADER);
   });
 
   it('shows the assigned role once the list reloads', async () => {
@@ -306,7 +307,7 @@ describe('AdminPage — organization members (active org)', () => {
       path: `/api/admin/members/${BOB.userId}/role`,
       body: { membershipRole: 'admin' },
     });
-    expect(request!.headers[ORG_ID_HEADER]).toBe(ORG_ID);
+    expect(defined(request).headers[ORG_ID_HEADER]).toBe(ORG_ID);
   });
 
   it('disables Update again once the list reloads with the new role', async () => {
@@ -336,7 +337,7 @@ describe('AdminPage — organization members (active org)', () => {
 
     await renderAdminPage({ orgRole: 'admin' });
 
-    const olgaRow = screen.getByText(OLGA.email!).closest('tr')!;
+    const olgaRow = defined(screen.getByText(defined(OLGA.email)).closest('tr'));
     expect(within(olgaRow).getByRole('combobox')).toBeDisabled();
     expect(within(olgaRow).getByRole('button', { name: 'Remove' })).toBeDisabled();
   });
@@ -346,7 +347,7 @@ describe('AdminPage — organization members (active org)', () => {
 
     await renderAdminPage({ orgRole: 'owner' });
 
-    const olgaRow = screen.getByText(OLGA.email!).closest('tr')!;
+    const olgaRow = defined(screen.getByText(defined(OLGA.email)).closest('tr'));
     expect(within(olgaRow).getByRole('combobox')).toBeEnabled();
     expect(within(olgaRow).getByRole('button', { name: 'Remove' })).toBeEnabled();
   });
@@ -365,17 +366,17 @@ describe('AdminPage — organization members (active org)', () => {
     const memberReads = () => worker.requestedPaths().filter((path) => path === '/api/admin/members').length;
     const readsBefore = memberReads();
 
-    const bobRow = within(screen.getByText(BOB.email!).closest('tr')!);
+    const bobRow = within(defined(screen.getByText(defined(BOB.email)).closest('tr')));
     fireEvent.change(bobRow.getByRole('combobox'), { target: { value: 'viewer' } });
     fireEvent.click(bobRow.getByRole('button', { name: 'Update' }));
-    fireEvent.click(within(screen.getByText(OLGA.email!).closest('tr')!).getByRole('button', { name: 'Remove' }));
+    fireEvent.click(within(defined(screen.getByText(defined(OLGA.email)).closest('tr'))).getByRole('button', { name: 'Remove' }));
     await waitFor(() => { expect(queryClient.isMutating()).toBe(1); });
 
     expect(memberReads()).toBe(readsBefore);
 
     releaseRoleChange();
 
-    await waitFor(() => { expect(screen.queryByText(OLGA.email!)).toBeNull(); });
+    await waitFor(() => { expect(screen.queryByText(defined(OLGA.email))).toBeNull(); });
     expect(memberReads()).toBe(readsBefore + 1);
   });
 });
@@ -575,7 +576,7 @@ describe('AdminPage — API keys section (org mode)', () => {
       method: 'POST',
       path: `/api/admin/keys/${TEST_KEY_ID}/rotate`,
     });
-    expect(req!.headers[ORG_ID_HEADER]).toBe(ORG_ID);
+    expect(defined(req).headers[ORG_ID_HEADER]).toBe(ORG_ID);
   });
 
   it('leaves the Rotate button when the admin cancels the confirmation', async () => {

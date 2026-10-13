@@ -10,6 +10,7 @@ import app from '../index.js';
 import { HttpStatus } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 type FetchMock = Mock<FetchLike>;
 
@@ -114,7 +115,7 @@ describe('logActivity: view routes', () => {
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
-    const init = activityCall![1] as RequestInit;
+    const init = defined(activityCall)[1] as RequestInit;
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.user_id).toBe(MOCK_APP_USER_ID);

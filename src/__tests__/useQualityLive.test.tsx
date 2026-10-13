@@ -18,6 +18,7 @@ import {
   stubFetch,
   headersOf,
 } from './support/query-harness.js';
+import { defined } from './support/defined.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
@@ -50,7 +51,7 @@ describe('useQualityLive', () => {
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]![0]).toBe(`/api/quality/live`);
+    expect(defined(fetchSpy.mock.calls[0])[0]).toBe(`/api/quality/live`);
   });
 
   it('sends the access token as a bearer header', async () => {
@@ -59,7 +60,7 @@ describe('useQualityLive', () => {
     const { result } = renderHook(() => useQualityLive(), makeQueryWrapper());
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
-    expect(headersOf(fetchSpy.mock.calls[0]![1]).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+    expect(headersOf(defined(fetchSpy.mock.calls[0])[1]).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });
 
   it('omits X-Org-Id when no org is active', async () => {
@@ -68,7 +69,7 @@ describe('useQualityLive', () => {
     const { result } = renderHook(() => useQualityLive(), makeQueryWrapper());
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
-    expect(headersOf(fetchSpy.mock.calls[0]![1])).not.toHaveProperty('X-Org-Id');
+    expect(headersOf(defined(fetchSpy.mock.calls[0])[1])).not.toHaveProperty('X-Org-Id');
   });
 
   it('returns isLoading=true, data=null, error=null before the response arrives', () => {

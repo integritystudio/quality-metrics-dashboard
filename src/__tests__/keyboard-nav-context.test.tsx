@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
+import { defined } from './support/defined.js';
 
 afterEach(cleanup);
 
@@ -65,7 +66,7 @@ describe('shortcut conflict guard', () => {
     }
     expect(caught).not.toBeNull();
     // The error message must name the conflicting shortcut so devs know what clashes
-    expect(caught!.message).toMatch(/Go home page/);
+    expect(defined(caught).message).toMatch(/Go home page/);
     spy.mockRestore();
   });
 

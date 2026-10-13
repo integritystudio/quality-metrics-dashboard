@@ -22,6 +22,7 @@ import {
   stubFetch,
   headersOf,
 } from './support/query-harness.js';
+import { defined } from './support/defined.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
@@ -53,8 +54,8 @@ describe('useCalibration', () => {
     await waitFor(() => { expect(result.current.isLoading).toBe(false); });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]![0]).toBe(`/api/calibration`);
-    expect(headersOf(fetchSpy.mock.calls[0]![1]).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+    expect(defined(fetchSpy.mock.calls[0])[0]).toBe(`/api/calibration`);
+    expect(headersOf(defined(fetchSpy.mock.calls[0])[1]).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });
 
   it('returns the parsed calibration payload', async () => {

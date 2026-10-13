@@ -9,6 +9,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, within, cleanup } from '@testing-library/react';
 import { ScoreBadge } from '../components/ScoreBadge.js';
 import type { PercentileDistribution } from '../lib/quality-utils.js';
+import { defined } from './support/defined.js';
 
 afterEach(cleanup);
 
@@ -168,7 +169,7 @@ describe('ScoreBadge with calibration prop', () => {
     expect(labeled.length).toBeGreaterThan(0);
 
     // The aria-label should show 'good' or 'excellent' (adaptive), not 'adequate' (uniform)
-    const ariaLabel = labeled[0]!.getAttribute('aria-label') ?? '';
+    const ariaLabel = defined(labeled[0]).getAttribute('aria-label') ?? '';
     expect(ariaLabel).toMatch(/excellent|good/i);
   });
 });

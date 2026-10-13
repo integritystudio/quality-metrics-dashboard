@@ -16,6 +16,7 @@ vi.mock('../contexts/AuthContext.js', () => ({
 import { AgentSessionPage } from '../pages/AgentSessionPage.js';
 import { routes } from '../lib/routes.js';
 import { makeGraph, makeEvaluation, makeTurn } from './workflow-fixtures.js';
+import { defined } from './support/defined.js';
 
 const SESSION_ID = 'session-xyz';
 const FOCUSED_AGENT = 'executor';
@@ -61,7 +62,7 @@ function focusedTurnNumbers(container: HTMLElement): string[] {
 describe('AgentSessionPage', () => {
   it('fetches the session endpoint with the bearer token', async () => {
     const { fetchSpy } = await renderAt(routes.agentSession(SESSION_ID));
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(`/api/agents/${SESSION_ID}`);
     expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });

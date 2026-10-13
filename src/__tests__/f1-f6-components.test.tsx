@@ -6,6 +6,7 @@ import { EvaluationTable, type EvalRow } from '../components/EvaluationTable.js'
 import { CorrelationHeatmap } from '../components/CorrelationHeatmap.js';
 import { KeyboardNavProvider, useShortcut, useKeyboardNav } from '../contexts/KeyboardNavContext.js';
 import type { CompositeQualityIndex, CorrelationFeature } from '../types.js';
+import { defined } from './support/defined.js';
 
 afterEach(cleanup);
 
@@ -122,7 +123,7 @@ describe('EvaluationTable', () => {
 
   it('filters rows when category button clicked', () => {
     const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const failBtn = screen.getAllByRole('button').find(b => b.textContent === 'Fail')!;
+    const failBtn = defined(screen.getAllByRole('button').find(b => b.textContent === 'Fail'));
     fireEvent.click(failBtn);
     const rows = container.querySelectorAll('tbody tr');
     expect(rows.length).toBeLessThan(3);
@@ -141,7 +142,7 @@ describe('EvaluationTable', () => {
 
   it('reports a clicked column\'s sort direction in aria-sort and its indicator', () => {
     const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
-    const header = [...container.querySelectorAll('th[aria-sort]')].find((th) => th.textContent.startsWith('Label'))!;
+    const header = defined([...container.querySelectorAll('th[aria-sort]')].find((th) => th.textContent.startsWith('Label')));
     expect(header.getAttribute('aria-sort')).toBe('none');
 
     const sortButton = within(header as HTMLElement).getByRole('button');

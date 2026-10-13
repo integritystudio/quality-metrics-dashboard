@@ -27,6 +27,7 @@ import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import { DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 type MessageBatch = Anthropic.Messages.MessageBatch;
 type ResultLine = Anthropic.Messages.MessageBatchIndividualResponse;
@@ -110,11 +111,11 @@ function fakeClient(options: FakeClientOptions) {
       return options.create ? options.create() : Promise.resolve(makeBatch('in_progress'));
     }),
     retrieve: vi.fn(() => {
-      const outcome = statuses[Math.min(polls++, statuses.length - 1)]!;
+      const outcome = defined(statuses[Math.min(polls++, statuses.length - 1)]);
       return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(makeBatch(outcome));
     }),
     // A stream, as the SDK's JSONL decoder is: the results file is read line by line.
-    results: vi.fn(() => Promise.resolve().then(() => Readable.from(options.results(submitted.at(-1)!)))),
+    results: vi.fn(() => Promise.resolve().then(() => Readable.from(options.results(defined(submitted.at(-1)))))),
     cancel: vi.fn(() => {
       statuses = options.afterCancel ?? ['canceling'];
       polls = 0;
@@ -140,15 +141,15 @@ describe('createBatchProvider', () => {
     expect(await beta).toEqual({ text: 're:beta' });
     expect(await gamma).toEqual({ text: 're:gamma' });
     expect(client.create).toHaveBeenCalledTimes(1);
-    const requests = submitted[0]!;
+    const requests = defined(submitted[0]);
     expect(new Set(requests.map(r => r.custom_id)).size).toBe(3);
-    expect(requests[0]!.params).toEqual({
+    expect(defined(requests[0]).params).toEqual({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       temperature: TEMPERATURE,
       messages: [{ role: 'user', content: 'alpha' }],
     });
-    expect(requests[1]!.params).toMatchObject({ temperature: 0.7 });
+    expect(defined(requests[1]).params).toMatchObject({ temperature: 0.7 });
   });
 
   it('polls until the batch has ended and only then reads results', async () => {
@@ -167,10 +168,10 @@ describe('createBatchProvider', () => {
   it('rejects errored, expired and canceled items with a typed error the judge can classify, and resolves the rest', async () => {
     const { client } = fakeClient({
       results: ([first, second, third, fourth]) => [
-        errored(first!.custom_id, 'billing_error', 'Your credit balance is too low to access the Anthropic API.'),
-        { custom_id: second!.custom_id, result: { type: 'expired' } },
-        { custom_id: third!.custom_id, result: { type: 'canceled' } },
-        succeeded(fourth!.custom_id, 'fine'),
+        errored(defined(first).custom_id, 'billing_error', 'Your credit balance is too low to access the Anthropic API.'),
+        { custom_id: defined(second).custom_id, result: { type: 'expired' } },
+        { custom_id: defined(third).custom_id, result: { type: 'canceled' } },
+        succeeded(defined(fourth).custom_id, 'fine'),
       ],
     });
     const provider = await createBatchProvider({ ...BASE, client });
@@ -257,7 +258,7 @@ describe('createBatchProvider', () => {
     const structured = provider.generate('structured', { jsonSchema: schema });
     await provider.flush();
     await structured;
-    expect(submitted[0]![0]!.params.output_config).toEqual({ format: { type: 'json_schema', schema } });
+    expect(defined(defined(submitted[0])[0]).params.output_config).toEqual({ format: { type: 'json_schema', schema } });
   });
 
   it('rejects a succeeded request when the onUsage callback throws, instead of leaving it pending (JUDGE-BATCH-SETTLE-THROW-LEAVES-PENDING)', async () => {
@@ -320,9 +321,9 @@ describe('createBatchProvider at the wall clock', () => {
       afterCancel: ['canceling', 'ended'],
       // The fourth request gets no line at all.
       results: ([first, second, third]) => [
-        succeeded(first!.custom_id, 'kept'),
-        errored(second!.custom_id, 'invalid_request_error', 'max_tokens: too large'),
-        { custom_id: third!.custom_id, result: { type: 'canceled' } },
+        succeeded(defined(first).custom_id, 'kept'),
+        errored(defined(second).custom_id, 'invalid_request_error', 'max_tokens: too large'),
+        { custom_id: defined(third).custom_id, result: { type: 'canceled' } },
       ],
     });
     const provider = await createBatchProvider({ ...SHORT, client, onUsage });
@@ -346,7 +347,7 @@ describe('createBatchProvider at the wall clock', () => {
     expect(client.cancel).toHaveBeenCalledTimes(1);
     // Read once, and only after the poll that saw the batch end.
     expect(client.results).toHaveBeenCalledTimes(1);
-    expect(client.results.mock.invocationCallOrder[0]).toBeGreaterThan(client.retrieve.mock.invocationCallOrder.at(-1)!);
+    expect(client.results.mock.invocationCallOrder[0]).toBeGreaterThan(defined(client.retrieve.mock.invocationCallOrder.at(-1)));
     expect(provider.failure).toBeUndefined();
     await expect(provider.generate('after')).rejects.toBe(overrun);
   });
@@ -404,7 +405,7 @@ describe('createBatchProvider at the wall clock', () => {
     const { client } = fakeClient({
       statuses: ['in_progress'],
       afterCancel: ['ended'],
-      results: ([first]) => [succeeded(first!.custom_id, 'first')],
+      results: ([first]) => [succeeded(defined(first).custom_id, 'first')],
     });
     const provider = await createBatchProvider({ ...SHORT, client });
 
@@ -424,8 +425,8 @@ describe('createBatchProvider at the wall clock', () => {
       statuses: ['in_progress'],
       afterCancel: ['ended'],
       results: ([first, second]) => [
-        succeeded(first!.custom_id, 'kept'),
-        { custom_id: second!.custom_id, result: { type: 'expired' } },
+        succeeded(defined(first).custom_id, 'kept'),
+        { custom_id: defined(second).custom_id, result: { type: 'expired' } },
       ],
     });
     const provider = await createBatchProvider({ ...SHORT, client });
@@ -464,7 +465,7 @@ describe('createBatchProvider at the wall clock', () => {
     const { client } = fakeClient({
       statuses: ['in_progress'],
       afterCancel: [POLL_LOST, 'ended'],
-      results: ([first]) => [succeeded(first!.custom_id, 'kept')],
+      results: ([first]) => [succeeded(defined(first).custom_id, 'kept')],
     });
     const provider = await createBatchProvider({ ...SHORT, client });
 

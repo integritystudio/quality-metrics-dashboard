@@ -26,6 +26,7 @@ import {
   BILLING_ACTIVE, ENTITLEMENTS_EMPTY, ENTITLEMENTS_GROWTH, ORG_A, ORG_B,
   QUOTA_GROWTH, QUOTA_UNINITIALIZED, USAGE_EMPTY, USAGE_SUMMARY,
 } from './support/admin-customer-fixtures.js';
+import { defined } from './support/defined.js';
 
 let currentSession: AppSession | null = null;
 const getAccessToken = () => Promise.resolve(TEST_ACCESS_TOKEN);
@@ -76,7 +77,7 @@ function renderAt(path: string, ui: ReactNode, session: AppSession = STAFF_SESSI
   return location;
 }
 
-const currentPath = (location: ReturnType<typeof memoryLocation>) => location.history!.at(-1);
+const currentPath = (location: ReturnType<typeof memoryLocation>) => defined(location.history).at(-1);
 
 afterEach(() => {
   cleanup();
@@ -208,7 +209,7 @@ describe('AdminCustomerHubPage (ADMIN-CV-HUB)', () => {
 
     await waitFor(() => { expect(currentPath(location)).toBe('/'); });
     expect(gateway.switchRequests()).toHaveLength(1);
-    expect(gateway.switchRequests()[0]!.headers['X-Org-Id']).toBe(ORG_A.id);
+    expect(defined(gateway.switchRequests()[0]).headers['X-Org-Id']).toBe(ORG_A.id);
   });
 });
 

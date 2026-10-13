@@ -16,6 +16,7 @@ import type { FixtureServer } from './support/fixture-server.js';
 import { metricsRoutes } from '../api/routes/metrics.js';
 import type { ErrorResponse, MetricDetailResponse, MetricEvaluationsResponse } from './support/api-responses.js';
 import type { EvaluationResult } from '../types.js';
+import { defined } from './support/defined.js';
 
 let fixture: FixtureServer;
 
@@ -169,7 +170,7 @@ describe('GET /metrics/:name/evaluations', () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&scoreLabel=relevant');
     const body = await res.json() as MetricEvaluationsResponse;
     expect(body.total).toBe(1);
-    expect(body.rows[0]!.label).toBe('relevant');
+    expect(defined(body.rows[0]).label).toBe('relevant');
   });
 
   it('sorts score_asc correctly', async () => {

@@ -20,6 +20,7 @@ import {
   nextStepAfter,
   runWithRetry,
 } from '../pipeline-stages.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 const MS_PER_MINUTE = 60_000;
 
@@ -67,7 +68,7 @@ describe('runWithRetry', () => {
     const outcomes = ['fail', 'fail', 'ok'];
 
     const outcome = await runWithRetry({
-      attempt: n => { attempts.push(n); return outcomes[n - 1]!; },
+      attempt: n => { attempts.push(n); return defined(outcomes[n - 1]); },
       shouldRetry: o => o === 'fail',
       delaysMs: [10, 20, 40],
       sleep: ms => { sleeps.push(ms); return Promise.resolve(); },

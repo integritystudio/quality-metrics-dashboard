@@ -14,6 +14,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useTrace } from '../hooks/useTrace.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper } from './support/query-harness.js';
+import { defined } from './support/defined.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
@@ -60,7 +61,7 @@ describe('query abort on key change', () => {
       initialProps: { id: SLOW_ID },
     });
     await waitFor(() => { expect(fetchSpy).toHaveBeenCalledTimes(1); });
-    const firstSignal = fetchSpy.mock.calls[0]![1]?.signal;
+    const firstSignal = defined(fetchSpy.mock.calls[0])[1]?.signal;
     expect(firstSignal?.aborted).toBe(false);
 
     rerender({ id: FAST_ID });

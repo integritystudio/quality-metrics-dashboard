@@ -24,6 +24,7 @@ import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 import type { AppSession, OrgMembershipSummary } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf, makeQueryWrapper, stubFetch } from './support/query-harness.js';
+import { defined } from './support/defined.js';
 
 const ORG_A = 'a0000000-0000-4000-8000-00000000000a';
 const ORG_B = 'b0000000-0000-4000-8000-00000000000b';
@@ -90,7 +91,7 @@ describe('OrgSwitcher', () => {
     expect(getStoredOrgId()).toBe(ORG_B);
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(SWITCH_URL);
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({ orgId: ORG_B });

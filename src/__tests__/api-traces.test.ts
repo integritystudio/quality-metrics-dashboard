@@ -15,6 +15,7 @@ import type { FixtureServer } from './support/fixture-server.js';
 import { traceRoutes } from '../api/routes/traces.js';
 import type { loadTracesByTraceId, loadEvaluationsByTraceId } from '../api/data-loader.js';
 import type { TraceDetailResponse } from './support/api-responses.js';
+import { defined } from './support/defined.js';
 
 let fixture: FixtureServer;
 
@@ -92,7 +93,7 @@ describe('GET /traces/:traceId', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json() as { evaluations: Array<{ timestamp: string }> };
-    expect(body.evaluations[0]!.timestamp).toBe(String(EVAL_NANOS));
+    expect(defined(body.evaluations[0]).timestamp).toBe(String(EVAL_NANOS));
   });
 
   it('serializes bigint nanosecond timestamps instead of throwing', async () => {
@@ -108,8 +109,8 @@ describe('GET /traces/:traceId', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json() as { spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }> };
-    expect(body.spans[0]!.startTimeUnixNano).toBe(String(START_NANOS));
-    expect(body.spans[0]!.endTimeUnixNano).toBe(String(END_NANOS));
+    expect(defined(body.spans[0]).startTimeUnixNano).toBe(String(START_NANOS));
+    expect(defined(body.spans[0]).endTimeUnixNano).toBe(String(END_NANOS));
   });
 
   it('loads spans and evaluations in parallel (both called)', async () => {

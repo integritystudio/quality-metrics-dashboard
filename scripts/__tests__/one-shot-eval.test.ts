@@ -17,6 +17,7 @@ import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV } from '../judge-credentials.js'
 import * as agreement from '../judge-agreement.js';
 import * as quality from '../judge-quality-eval.js';
 import * as hallucination from '../judge-hallucination-eval.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 const MARKER = '.test.started';
 const RESULTS_PREFIX = 'test-';
@@ -65,7 +66,7 @@ describe('createRunGuard', () => {
 
     expect(startedAt).toBeInstanceOf(Date);
     expect(JSON.parse(readFileSync(join(dir, MARKER), 'utf8'))).toEqual({
-      startedAt: startedAt!.toISOString(),
+      startedAt: defined(startedAt).toISOString(),
       pid: process.pid,
       turns: 3,
     });

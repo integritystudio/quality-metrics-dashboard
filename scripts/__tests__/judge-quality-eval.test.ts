@@ -21,6 +21,7 @@ import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from
 import { RELEVANCE_CRITERIA, FAITHFULNESS_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { TOKENS_PER_CHAR } from '../../../src/lib/core/constants-models.js';
 import { makeSizedTurn } from './support/fixtures.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 const PRICING = { input: 5.0, output: 25.0, provider: 'anthropic' } as const;
 const ONE_MILLION = 1_000_000;
@@ -126,12 +127,12 @@ describe('compareToReference', () => {
 
   it('signs the bias: positive when the configuration is more lenient', () => {
     const cons = compareToReference(turns, 'consolidated');
-    expect(cons.byCriterion[COHERENCE_EVAL_NAME]!.meanSignedDiff).toBe(2);
+    expect(defined(cons.byCriterion[COHERENCE_EVAL_NAME]).meanSignedDiff).toBe(2);
     const harsh = compareToReference(
       [makeQualityTurn({ perCriterion: { [RELEVANCE_EVAL_NAME]: SCORE_1 }, reference: { [RELEVANCE_EVAL_NAME]: SCORE_5 } })],
       'perCriterion',
     );
-    expect(harsh.byCriterion[RELEVANCE_EVAL_NAME]!.meanSignedDiff).toBe(-4);
+    expect(defined(harsh.byCriterion[RELEVANCE_EVAL_NAME]).meanSignedDiff).toBe(-4);
   });
 
   it('counts scores present on only one side instead of pairing them', () => {

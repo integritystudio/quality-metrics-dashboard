@@ -39,6 +39,7 @@ import { WorkflowPage } from '../pages/WorkflowPage.js';
 import { routes } from '../lib/routes.js';
 import { makeNode, makeGraph, makeEvaluation } from './workflow-fixtures.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
+import { defined } from './support/defined.js';
 
 /** The route's payload, plus the null graph a session key synced before graphs were precomputed carries. */
 type GraphPayload = Omit<AgentGraphResponse, 'graph'> & { graph: AgentGraphResponse['graph'] | null };
@@ -102,7 +103,7 @@ describe('WorkflowPage', () => {
       const fetchSpy = stubFetch(graphResponse(makeGraph(), 'my-session-id'));
       renderWorkflowPage('my-session-id');
       await screen.findByTestId(WORKFLOW_VIEW);
-      const [url, init] = fetchSpy.mock.calls[0]!;
+      const [url, init] = defined(fetchSpy.mock.calls[0]);
       expect(url).toBe('/api/agents/my-session-id/graph');
       expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
     });
@@ -111,7 +112,7 @@ describe('WorkflowPage', () => {
       const fetchSpy = stubFetch(graphResponse(makeGraph(), 'session/with/slashes'));
       renderWorkflowPage('session/with/slashes');
       await screen.findByTestId(WORKFLOW_VIEW);
-      expect(fetchSpy.mock.calls[0]![0]).toBe('/api/agents/session%2Fwith%2Fslashes/graph');
+      expect(defined(fetchSpy.mock.calls[0])[0]).toBe('/api/agents/session%2Fwith%2Fslashes/graph');
     });
   });
 

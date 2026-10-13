@@ -19,6 +19,7 @@ import {
   PAGE_SHELL_ERROR_HEADING, PAGE_SHELL_SKELETON_SELECTOR, SERVER_ERROR_BODY, SERVER_ERROR_STATUS, apiErrorMessage,
   renderPage, stubPendingFetch,
 } from './support/page-harness.js';
+import { defined } from './support/defined.js';
 
 // jsdom + React cold-start can exceed the default 5000ms on the first render test.
 const TEST_TIMEOUT_MS = 30_000;
@@ -112,7 +113,7 @@ describe('CoveragePage', () => {
     renderPage(<CoveragePage period={PERIOD} />, COVERAGE_PATH);
 
     await screen.findByRole('heading', { name: PAGE_HEADING });
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(TRACE_COVERAGE_URL);
     expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });

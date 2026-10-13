@@ -12,6 +12,7 @@ import app from '../index.js';
 import { HttpStatus, jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { defined } from '../../src/__tests__/support/defined.js';
 
 const LAST_SYNC = '2026-03-16T00:00:00Z';
 
@@ -86,7 +87,7 @@ describe('SPA fallback: non-API routes serve index.html', () => {
   it('ASSETS.fetch is called with the original request', async () => {
     await app.request('/agents', {}, makeEnv());
     expect(mockAssets.fetch).toHaveBeenCalledTimes(1);
-    const passedReq = mockAssets.fetch.mock.calls[0]![0] as Request;
+    const passedReq = defined(mockAssets.fetch.mock.calls[0])[0] as Request;
     expect(new URL(passedReq.url).pathname).toBe('/agents');
   });
 });

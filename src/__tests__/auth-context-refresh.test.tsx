@@ -12,6 +12,7 @@ import { AuthProvider, SESSION_LOGIN_KEY, useAuth } from '../contexts/AuthContex
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { defined } from './support/defined.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -188,7 +189,7 @@ describe('AuthContext: login activity', () => {
 
     const activityCalls = callsTo(fetchSpy, ACTIVITY_URL);
     expect(activityCalls).toHaveLength(1);
-    const [, init] = activityCalls[0]!;
+    const [, init] = defined(activityCalls[0]);
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({ activity_type: LOGIN_ACTIVITY });
     const headers = init?.headers as Record<string, string>;
