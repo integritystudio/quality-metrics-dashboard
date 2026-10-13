@@ -10,6 +10,11 @@ Open items from code reviews and deferred work.
 |----|-------|----------|-------|
 | KV-BULK-204-THROWS | A real HTTP 204 from the KV bulk API is counted as a failure | P2 | ✅ Done 2026-10-12 |
 | KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | (review) Source: session 2026-10-12, PR #24 |
+| KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | Source: review of `ad4f290` (medium) |
+| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `ad4f290` (low) |
+| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `ad4f290` (low) |
+| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | Source: review of `ad4f290` (low) |
+| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `c11a54b` superseded by `ad4f290` |
 
 **KV-BULK-204-THROWS.** *Done 2026-10-12.* Caught `TypeError` in both `kvBulkPut` and `kvBulkDelete`
 catch blocks — SDK 7.3.0 calls `_thenUnwrap((obj) => obj.result)` on the parsed body; HTTP 204 parses
@@ -23,6 +28,31 @@ to HTTP 204 (it actually comes from a `{"result": null}` body). Pinned by two ne
 twice with backoff, though it cannot succeed until the next day. Each connection-failure test in
 `kv-bulk.test.ts` also takes ~1.5 s of real backoff. Decide whether to pass `maxRetries: 0` and let
 `populate`'s own network retry own the policy.
+
+**KV-BULK-204-END-TO-END-TEST.** `kv-bulk-transport.test.ts` pins `kv204Fetch` against a loopback
+server, and `kv-bulk.test.ts` checks that the client is built with it, but no test sends a 204 through
+`new Cloudflare({ fetch: kv204Fetch })` into `kvBulkPut`/`kvBulkDelete`. An SDK upgrade that changes
+how it unwraps a 200 `{"result":null}` body would pass both files while 204s fail again. Serve the
+bulk endpoints from a `node:http` server with `CLOUDFLARE_BASE_URL` set and assert every key is
+credited. -- `scripts/sync-to-kv.ts:130`
+
+**KV-BULK-TRANSPORT-TEST-GAPS.** The transport tests issue GET requests only, while production sends
+`PUT …/bulk` and `POST …/bulk/delete` with bodies, and none asserts that the original response
+headers survive the 204 rewrite or the non-204 pass-through. -- `scripts/__tests__/kv-bulk-transport.test.ts:39`
+
+**KV-BULK-204-LOG-AMBIGUITY.** After the rewrite, the `result == null` branch in `kvBulkPut` cannot
+tell a real 204 from a 200 with a null `result`, so a run log does not show which Cloudflare sent.
+Log the original status in `kv204Fetch` or tag the synthetic body if the distinction matters.
+-- `scripts/sync-to-kv.ts:398`
+
+**KV-BULK-SDK-FETCH-ALIAS.** `kv204Fetch` borrows its signature as `typeof http1Fetch`; a named
+`SdkFetch` type would state the contract (the fetch the Cloudflare client accepts) instead of tying it
+to a sibling implementation. -- `scripts/sync-to-kv.ts:130`
+
+**KV-BULK-204-DONE-NOTE-STALE.** The KV-BULK-204-THROWS paragraph above records the first fix
+(`c11a54b`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that
+as too broad and `ad4f290` replaced it with the `kv204Fetch` transport rewrite and a mock-free
+loopback test. Rewrite the Done note to match what shipped.
 
 ### Workflow page
 
