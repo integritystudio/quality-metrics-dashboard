@@ -370,6 +370,15 @@ describe('buildWorkflowGraph — span-inference fallback', () => {
     expect(graph.nodes).toHaveLength(2);
   });
 
+  it('leaves out spans whose gen_ai.agent.id is not a string', () => {
+    const spans: TraceSpan[] = [
+      makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 2_000n, durationMs: 1 }),
+      makeSpan({ spanId: 's2', attributes: { [ATTR_AGENT_ID]: 42 }, startTimeUnixNano: 3_000n, endTimeUnixNano: 4_000n, durationMs: 1 }),
+    ];
+    const graph: WorkflowGraph = buildWorkflowGraph(null, spans);
+    expect(graph.nodes.map(n => n.id)).toEqual(['agentA']);
+  });
+
   it('infers sequential edge when agent A spans end before agent B spans start', () => {
     const spans: TraceSpan[] = [
       makeSpan({ spanId: 's1', attributes: { [ATTR_AGENT_ID]: 'agentA' }, startTimeUnixNano: 1_000n, endTimeUnixNano: 2_000n, durationMs: 1 }),

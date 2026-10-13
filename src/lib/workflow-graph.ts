@@ -1,4 +1,4 @@
-import { group, mean } from 'd3-array';
+import { group, mean, rollup } from 'd3-array';
 import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
 import { SCORE_CHIP_PRECISION } from './constants.js';
@@ -16,10 +16,18 @@ const SPAN_NAME_TOOL_PREFIX = 'tool:';
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 const NS_TO_MS = 1_000_000;
 
-/** Spans grouped by an attribute's value; spans without the attribute are left out. */
+/**
+ * Spans grouped by a string attribute's value; spans without a string value are left out.
+ * `gen_ai.agent.id` and `gen_ai.agent.name` are typed `string` by the GenAI semantic conventions.
+ * @see https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/#gen-ai-agent-id
+ * @see https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/#gen-ai-agent-name
+ */
 function groupByAttribute(spans: TraceSpan[], attribute: string): Map<string, TraceSpan[]> {
-  const keyOf = (span: TraceSpan) => span.attributes?.[attribute] as string | undefined;
-  return group(spans.filter(span => keyOf(span) != null), span => keyOf(span) as string);
+  const keyed = spans.flatMap(span => {
+    const value = span.attributes?.[attribute];
+    return typeof value === 'string' ? [{ value, span }] : [];
+  });
+  return rollup(keyed, entries => entries.map(entry => entry.span), entry => entry.value);
 }
 
 function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string {
