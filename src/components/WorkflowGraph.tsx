@@ -14,9 +14,9 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ELK from 'elkjs/lib/elk.bundled.js';
-import { mean, sum } from 'd3-array';
+import { group, mean, sum } from 'd3-array';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
-import { fmtDuration, formatCompactCount, groupBy } from '../lib/quality-utils.js';
+import { fmtDuration, formatCompactCount } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 const NODE_WIDTH = 220;
@@ -129,6 +129,11 @@ function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
   return map;
 }
 
+/** Narrows to nodes with a non-empty `clusterId`, so `group` keys them by `string`. */
+function hasClusterId(node: WorkflowNode): node is WorkflowNode & { clusterId: string } {
+  return Boolean(node.clusterId);
+}
+
 const CLUSTER_NODE_PREFIX = '__cluster__';
 
 function clusterNodeId(clusterId: string): string {
@@ -160,7 +165,7 @@ export function applyClusterCollapse(
 
   const nodeDataMap = buildNodeDataMap(nodes);
   const clusterableNodes = [...nodeClusterMap.keys()].map(id => nodeDataMap.get(id)).filter((n): n is WorkflowNode => n != null);
-  const clusterMembers = groupBy(clusterableNodes, n => nodeClusterMap.get(n.id));
+  const clusterMembers = group(clusterableNodes.filter(hasClusterId), n => n.clusterId);
 
   const syntheticNodes: WorkflowNode[] = [];
   for (const [cId, members] of clusterMembers) {

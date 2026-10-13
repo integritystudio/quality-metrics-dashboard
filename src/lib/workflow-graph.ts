@@ -3,7 +3,6 @@ import type { MultiAgentEvaluation, TraceSpan } from '../types.js';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge, WorkflowShape } from '../types/workflow-graph.js';
 import { SCORE_CHIP_PRECISION } from './constants.js';
 import { GENAI_AGENT_ATTRIBUTES } from './otel-attributes.js';
-import { groupBy } from './quality-utils.js';
 import { incrementIn } from './collections.js';
 
 const ATTR_TOTAL_TOKENS = 'llm.usage.total_tokens';
@@ -16,6 +15,12 @@ const SPAN_NAME_TOOL_PREFIX = 'tool:';
  */
 const SPAN_SEQUENCE_EPSILON_NS = 1_000_000;
 const NS_TO_MS = 1_000_000;
+
+/** Spans grouped by an attribute's value; spans without the attribute are left out. */
+function groupByAttribute(spans: TraceSpan[], attribute: string): Map<string, TraceSpan[]> {
+  const keyOf = (span: TraceSpan) => span.attributes?.[attribute] as string | undefined;
+  return group(spans.filter(span => keyOf(span) != null), span => keyOf(span) as string);
+}
 
 function buildEdgeLabel(primaryLabel: string, latencyMs: number | null): string {
   const parts = [primaryLabel];
@@ -59,7 +64,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     }
   }
 
-  const spansByAgent = groupBy(spans, s => s.attributes?.[GENAI_AGENT_ATTRIBUTES.AGENT_NAME] as string | undefined);
+  const spansByAgent = groupByAttribute(spans, GENAI_AGENT_ATTRIBUTES.AGENT_NAME);
 
   // Per-agent span timing bounds used to compute handoff latency.
   const agentLastEndNs = new Map<string, number>();
@@ -141,7 +146,7 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
 }
 
 function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
-  const agentSpans = groupBy(spans, span => span.attributes?.[GENAI_AGENT_ATTRIBUTES.AGENT_ID] as string | undefined);
+  const agentSpans = groupByAttribute(spans, GENAI_AGENT_ATTRIBUTES.AGENT_ID);
 
   if (agentSpans.size === 0) {
     return { nodes: [], edges: [], rootNodeId: null, workflowShape: 'single_agent', droppedTurns: 0 };

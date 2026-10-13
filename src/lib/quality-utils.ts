@@ -318,21 +318,6 @@ export function fmtDuration(ms: number, secDecimals = 1): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
 }
 
-export function groupBy<T, K extends PropertyKey = string>(
-  items: T[],
-  keyFn: (item: T) => K | undefined,
-): Map<K, T[]> {
-  const map = new Map<K, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (key == null) continue;
-    const group = map.get(key);
-    if (group) group.push(item);
-    else map.set(key, [item]);
-  }
-  return map;
-}
-
 const COMPACT_COUNT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: COMPACT_UNIT_PRECISION });
 
 /** A count as `950`, `1.5K`, `2.3M`. */
