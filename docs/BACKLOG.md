@@ -11,7 +11,7 @@ Open items from code reviews and deferred work.
 | KV-BULK-204-THROWS | A real HTTP 204 from the KV bulk API is counted as a failure | P2 | ✅ Done 2026-10-12 |
 | KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PR #24 |
 | KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (medium) |
-| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `b9d67e1` (low) |
+| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (low) |
 | KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `ce3d2fe` superseded by `b9d67e1` |
@@ -47,6 +47,9 @@ bodiless 204 through the SDK; both fail when the client is built on plain `http1
 **KV-BULK-TRANSPORT-TEST-GAPS.** The transport tests issue GET requests only, while production sends
 `PUT …/bulk` and `POST …/bulk/delete` with bodies, and none asserts that the original response
 headers survive the 204 rewrite or the non-204 pass-through. -- `scripts/__tests__/kv-bulk-transport.test.ts:39`
+*Done 2026-10-12.* The tests send `PUT /bulk` and `POST /bulk/delete` with bodies to the shared recording
+server and assert they arrive unchanged; a `cf-ray` header is checked through the 204 rewrite, the
+daily-limit rewrite and three pass-through cases (200, 400, a non-10048 429).
 
 **KV-BULK-204-LOG-AMBIGUITY.** After the rewrite, the `result == null` branch in `kvBulkPut` cannot
 tell a real 204 from a 200 with a null `result`, so a run log does not show which Cloudflare sent.
