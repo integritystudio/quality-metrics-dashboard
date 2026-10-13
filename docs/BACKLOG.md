@@ -10,11 +10,11 @@ Open items from code reviews and deferred work.
 |----|-------|----------|-------|
 | KV-BULK-204-THROWS | A real HTTP 204 from the KV bulk API is counted as a failure | P2 | ✅ Done 2026-10-12 |
 | KV-BULK-SDK-RETRIES-DAILY-LIMIT | The Cloudflare SDK retries the 10048 daily-limit response twice before `kvBulkPut` sees it | P4 | (review) Source: session 2026-10-12, PR #24 |
-| KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | Source: review of `28ec94c` (medium) |
-| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `28ec94c` (low) |
-| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `28ec94c` (low) |
-| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | Source: review of `28ec94c` (low) |
-| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `f630867` superseded by `28ec94c` |
+| KV-BULK-204-END-TO-END-TEST | No test drives the real SDK, `kv204Fetch` and `kvBulkPut` together on a 204 | P3 | ✅ Done 2026-10-12; Source: review of `b9d67e1` (medium) |
+| KV-BULK-TRANSPORT-TEST-GAPS | `kv-bulk-transport.test.ts` uses GET only and never asserts header pass-through | P4 | Source: review of `b9d67e1` (low) |
+| KV-BULK-204-LOG-AMBIGUITY | A converted 204 and a genuine `{"result":null}` body log the same line | P4 | Source: review of `b9d67e1` (low) |
+| KV-BULK-SDK-FETCH-ALIAS | `kv204Fetch` is typed `typeof http1Fetch` rather than a named `SdkFetch` type | P4 | Source: review of `b9d67e1` (low) |
+| KV-BULK-204-DONE-NOTE-STALE | The KV-BULK-204-THROWS Done note describes the superseded `TypeError` catch, not `kv204Fetch` | P4 | (review) Source: `ce3d2fe` superseded by `b9d67e1` |
 
 **KV-BULK-204-THROWS.** *Done 2026-10-12.* Caught `TypeError` in both `kvBulkPut` and `kvBulkDelete`
 catch blocks — SDK 7.3.0 calls `_thenUnwrap((obj) => obj.result)` on the parsed body; HTTP 204 parses
@@ -35,6 +35,9 @@ server, and `kv-bulk.test.ts` checks that the client is built with it, but no te
 how it unwraps a 200 `{"result":null}` body would pass both files while 204s fail again. Serve the
 bulk endpoints from a `node:http` server with `CLOUDFLARE_BASE_URL` set and assert every key is
 credited. -- `scripts/sync-to-kv.ts:130`
+*Done 2026-10-12.* Resolved while rebasing onto PR #24, whose `kv-bulk.test.ts` serves Cloudflare's
+envelopes from a local server. `kvBulkPut` and `kvBulkDelete` each have a case that receives a real
+bodiless 204 through the SDK; both fail when the client is built on plain `http1Fetch`.
 
 **KV-BULK-TRANSPORT-TEST-GAPS.** The transport tests issue GET requests only, while production sends
 `PUT …/bulk` and `POST …/bulk/delete` with bodies, and none asserts that the original response
@@ -50,8 +53,8 @@ Log the original status in `kv204Fetch` or tag the synthetic body if the distinc
 to a sibling implementation. -- `scripts/sync-to-kv.ts:130`
 
 **KV-BULK-204-DONE-NOTE-STALE.** The KV-BULK-204-THROWS paragraph above records the first fix
-(`f630867`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that
-as too broad and `28ec94c` replaced it with the `kv204Fetch` transport rewrite and a mock-free
+(`ce3d2fe`: catching `TypeError` in both catch blocks, tests that mock the SDK). Review rejected that
+as too broad and `b9d67e1` replaced it with the `kv204Fetch` transport rewrite and a mock-free
 loopback test. Rewrite the Done note to match what shipped.
 
 ### Workflow page
@@ -93,7 +96,7 @@ No open items.
 | PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | Source: session 2026-10-12, PR #23 (Unit 2) mutation check |
 | SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | (review) Source: session 2026-10-12, Units 3 and 4 and the post-batch full run |
 | PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PRs #21 and #22 |
-| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `2398a72` |
+| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `999ca85` |
 | TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | Source: session 2026-10-12, Units 3 and 7 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
@@ -176,7 +179,7 @@ reset.
 
 **PAGE-TEST-HARNESS-MERGE.** `src/__tests__/support/memory-router.tsx` (`makeRoutedQueryWrapper`, PR #21) and
 `src/__tests__/support/page-harness.tsx` (`renderPage`, PR #22) both wrap a wouter `memoryLocation` around
-`makeQueryWrapper`. Fold them into one once both land. Since `2398a72`, error-path tests in those PRs can
+`makeQueryWrapper`. Fold them into one once both land. Since `999ca85`, error-path tests in those PRs can
 use a 500 again instead of the 401 they chose to dodge retry backoff.
 *Done 2026-10-12.* Merged both PRs, then deleted `memory-router.tsx`: `page-harness.tsx` keeps `renderPage` and
 gains `currentPath`, and the three PR #21 files mount through `renderPage`. The error tests in `WorkflowPage`,
