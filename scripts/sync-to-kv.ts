@@ -115,11 +115,35 @@ function getCloudflareConfig(): CloudflareConfig {
   return cfConfig ??= resolveCloudflareConfig();
 }
 
+/**
+ * Fetch wrapper passed to the Cloudflare SDK.
+ *
+ * Converts an HTTP 204 (no body) to a 200 with `{"result":null}` so the SDK's
+ * `_thenUnwrap((obj) => obj.result)` receives null rather than throwing
+ * `TypeError: Cannot read properties of null (reading 'result')`. The existing
+ * `result == null` guard in kvBulkPut then credits all batch keys.
+ *
+ * All other responses are forwarded unchanged.
+ *
+ * Exported for unit-testing the wrapper in isolation.
+ */
+export const kv204Fetch: typeof http1Fetch = async (url, init) => {
+  const response = await http1Fetch(url, init);
+  if (response.status === 204) {
+    return new Response('{"result":null}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  return response;
+};
+
 let cfClient: Cloudflare | undefined;
 function getCloudflareClient(): Cloudflare {
   // HTTP/1.1: under Node 26's default HTTP/2 fetch a destroyed session fails the
   // SDK's own retries too (ERR_HTTP2_INVALID_SESSION; NODE-FETCH-HTTP2-DEAD-SESSION).
-  return cfClient ??= new Cloudflare({ fetch: http1Fetch });
+  // kv204Fetch intercepts 204 responses before the SDK sees them.
+  return cfClient ??= new Cloudflare({ fetch: kv204Fetch });
 }
 
 const DEFAULT_DAYS = 30;
@@ -367,10 +391,10 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         account_id: accountId,
         body: batch,
       });
-      // null result = {"result": null} body: the SDK unwraps the top-level
-      // result field and returns null when the body carries no keys.
-      // Credit all batch keys. HTTP 204 is a separate case — the SDK
-      // throws TypeError before reaching here (see catch below).
+      // null result comes from the SDK unwrapping {"result": null}: the API
+      // returned no key info, so credit all batch keys. HTTP 204 is also
+      // handled here: kv204Fetch converts 204 → 200+{"result":null} before
+      // the SDK sees the response.
       if (result == null) {
         console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned null result — crediting all ${batch.length} keys as written`);
       }
@@ -394,15 +418,6 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
           `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ` +
           describeFetchError(err.cause ?? err),
         );
-        continue;
-      }
-      // SDK 7.3.0 calls _thenUnwrap((obj) => obj.result) after parsing the
-      // response body. HTTP 204 causes the SDK to parse the body as null, then
-      // read .result off null, throwing TypeError. Treat that as success and
-      // credit all batch keys, identical to the {"result": null} body path above.
-      if (err instanceof TypeError) {
-        console.warn(`[sync-to-kv] bulk put${batchLabel}: API returned HTTP 204 — crediting all ${batch.length} keys as written`);
-        for (const e of batch) writtenKeys.add(e.key);
         continue;
       }
       console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${describeUnknown(err)}`);
@@ -449,11 +464,6 @@ export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }):
         for (const k of failedDeletes) failedKeys.add(k);
       }
     } catch (err) {
-      // SDK 7.3.0 throws TypeError on HTTP 204 (null body, .result access).
-      // All deletes succeeded; no keys to retry.
-      if (err instanceof TypeError) {
-        continue;
-      }
       console.warn(`[sync-to-kv] bulk delete failed for ${batch.length} key(s): ${describeUnknown(err)}`);
       // Conservatively keep all batch keys in state so the next run retries.
       for (const k of batch) failedKeys.add(k);

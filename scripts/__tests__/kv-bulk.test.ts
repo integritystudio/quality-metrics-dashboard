@@ -29,6 +29,7 @@ const BULK_PUT_PATH = `${NAMESPACE_PATH}/bulk`;
 const BULK_DELETE_PATH = `${NAMESPACE_PATH}/bulk/delete`;
 
 const HTTP_OK = 200;
+const HTTP_NO_CONTENT = 204;
 const HTTP_FORBIDDEN = 403;
 const HTTP_TOO_MANY_REQUESTS = 429;
 const KV_DAILY_WRITE_LIMIT_CODE = 10048;
@@ -147,13 +148,21 @@ describe('kvBulkPut: successful write', () => {
     expect([...written].sort()).toEqual(['metric:a', 'metric:b']);
   });
 
+  it('credits all keys when the API answers HTTP 204 with no body', async () => {
+    cloudflare.respondWith(() => ({ status: HTTP_NO_CONTENT }));
+
+    const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
+
+    expect([...written].sort()).toEqual(['metric:a', 'metric:b']);
+  });
+
   it('returns all keys when the API result is null', async () => {
     cloudflare.respondWith(() => cloudflareOk(null));
 
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
 
     expect(written.size).toBe(2);
-    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('no response body'));
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('null result'));
   });
 });
 
@@ -343,6 +352,17 @@ describe('kvBulkDelete: empty guard', () => {
     expect(cloudflare.requests).toHaveLength(0);
     expect(failed).toBeInstanceOf(Set);
     expect(failed.size).toBe(0);
+  });
+});
+
+describe('kvBulkDelete: HTTP 204', () => {
+  it('reports no failed keys when the API answers with no body', async () => {
+    cloudflare.respondWith(() => ({ status: HTTP_NO_CONTENT }));
+
+    const failed = await kvBulkDelete(['trace:abc', 'trace:xyz']);
+
+    expect(failed.size).toBe(0);
+    expect(vi.mocked(console.warn)).not.toHaveBeenCalled();
   });
 });
 
