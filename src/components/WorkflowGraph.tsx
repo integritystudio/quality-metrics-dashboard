@@ -19,7 +19,7 @@ import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflo
 import { fmtDuration, formatCompactCount } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
-const NODE_WIDTH = 220;
+export const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
 const CLUSTER_NODE_WIDTH = 240;
 const CLUSTER_NODE_HEIGHT = 90;
@@ -248,6 +248,10 @@ async function computeLayout(
       const critical = criticalPath?.has(elkNode.id) ?? false;
       const isCluster = isClusterNodeId(elkNode.id);
       const onActivate = onNodeActivate ? () => onNodeActivate(elkNode.id) : undefined;
+
+      if (elkNode.x === undefined || elkNode.y === undefined) {
+        console.warn(`WorkflowGraph: ELK returned no position for node "${elkNode.id}"; rendering at origin`);
+      }
 
       if (isCluster) {
         const avgScore = workflowNode.evaluationScore;

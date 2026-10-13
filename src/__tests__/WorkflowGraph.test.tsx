@@ -76,7 +76,7 @@ vi.mock('@xyflow/react', async () => {
   };
 });
 
-import { WorkflowGraphView, applyClusterCollapse, extractClusterIds } from '../components/WorkflowGraph.js';
+import { WorkflowGraphView, applyClusterCollapse, extractClusterIds, NODE_WIDTH } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph, makeClusteredGraph } from './workflow-fixtures.js';
 
 afterEach(cleanup);
@@ -337,7 +337,7 @@ describe('WorkflowGraphView layout', () => {
 
     expect(left.y).toBeGreaterThan(root.y);
     expect(right.y).toBe(left.y);
-    expect(right.x).not.toBe(left.x);
+    expect(Math.abs(right.x - left.x)).toBeGreaterThanOrEqual(NODE_WIDTH);
   });
 
   it('lays out a delegation cycle on separate ranks', async () => {
