@@ -65,7 +65,7 @@ export const PERMISSIONS_BY_DASHBOARD_ROLE: Record<DashboardRole, readonly Dashb
   ],
 };
 
-/** View-permission pairs — mirrors the worker's VIEW_PERMISSION_MAP. */
+/** The permission that grants each view. */
 const VIEW_PERMISSIONS: ReadonlyArray<readonly [DashboardPermission, DashboardView]> = [
   ['dashboard.executive', 'executive'],
   ['dashboard.operator', 'operator'],

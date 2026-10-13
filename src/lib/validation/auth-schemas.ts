@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
 import { RoleSchema } from '../roles.js';
 import { UUID_PATTERN } from '../worker-contract.js';
+import type { DashboardPermission } from '../../types/auth.js';
 
 /**
  * Every Supabase id in these schemas — user, role, org. Built from the same
@@ -78,6 +79,19 @@ export type OrgMembershipRoleValue = z.infer<typeof OrgMembershipRoleSchema>;
 
 export const DashboardRoleSchema = z.enum(['owner', 'admin', 'read', 'e2e-dashboard-reader']);
 export type DashboardRoleValue = z.infer<typeof DashboardRoleSchema>;
+
+export const DashboardPermissionSchema = z.enum([
+  'dashboard.read',
+  'dashboard.executive',
+  'dashboard.operator',
+  'dashboard.auditor',
+  'dashboard.traces.read',
+  'dashboard.sessions.read',
+  'dashboard.agents.read',
+  'dashboard.pipeline.read',
+  'dashboard.compliance.read',
+  'dashboard.admin',
+] as const satisfies readonly DashboardPermission[]);
 
 /** organization_memberships row joined with organizations — worker auth fetch. */
 export const OrgMembershipRowSchema = z.object({
@@ -206,18 +220,7 @@ export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
 export const MeResponseSchema = z.object({
   email: z.email(),
   roles: z.array(z.string()),
-  permissions: z.array(z.enum([
-    'dashboard.read',
-    'dashboard.executive',
-    'dashboard.operator',
-    'dashboard.auditor',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-    'dashboard.admin',
-  ])),
+  permissions: z.array(DashboardPermissionSchema),
   allowedViews: z.array(RoleSchema),
   // Org-scoping fields (P5) — optional: absent only when ORG_SCOPING_ENABLED is
   // off (with it on, a session without an org is refused), so pre-cutover
