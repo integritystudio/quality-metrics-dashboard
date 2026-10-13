@@ -5,11 +5,14 @@ import type { ReactNode } from 'react';
 interface MockNode {
   id: string;
   type: string;
+  position: { x: number; y: number };
   data: Record<string, unknown>;
 }
 
 interface MockEdge {
   id: string;
+  source: string;
+  target: string;
   label?: string;
 }
 
@@ -31,13 +34,25 @@ vi.mock('@xyflow/react', async () => {
         {(nodes ?? []).map((n) => {
           const NodeComp = nodeTypes?.[n.type];
           return (
-            <div key={n.id} data-testid={`rf-node-${n.id}`} onClick={() => onNodeClick?.({}, n)}>
+            <div
+              key={n.id}
+              data-testid={`rf-node-${n.id}`}
+              data-x={n.position.x}
+              data-y={n.position.y}
+              onClick={() => onNodeClick?.({}, n)}
+            >
               {NodeComp ? <NodeComp data={n.data} /> : n.id}
             </div>
           );
         })}
         {(edges ?? []).map((e) => (
-          <div key={e.id} data-testid={`rf-edge-${e.id}`} data-label={e.label} />
+          <div
+            key={e.id}
+            data-testid={`rf-edge-${e.id}`}
+            data-label={e.label}
+            data-source={e.source}
+            data-target={e.target}
+          />
         ))}
         {children}
       </div>
@@ -60,26 +75,6 @@ vi.mock('@xyflow/react', async () => {
     useReactFlow: () => ({ fitView: vi.fn() }),
   };
 });
-
-interface ELKGraph {
-  children?: Array<{ x?: number; y?: number; [key: string]: unknown }>;
-  [key: string]: unknown;
-}
-
-vi.mock('elkjs/lib/elk.bundled.js', () => ({
-  default: class ELK {
-    layout(graph: ELKGraph) {
-      return Promise.resolve({
-        ...graph,
-        children: (graph.children ?? []).map((c, i: number) => ({
-          ...c,
-          x: i * 300,
-          y: i * 200,
-        })),
-      });
-    }
-  },
-}));
 
 import { WorkflowGraphView, applyClusterCollapse, extractClusterIds } from '../components/WorkflowGraph.js';
 import { makeNode, makeEdge, makeGraph, makeChainGraph, makeClusteredGraph } from './workflow-fixtures.js';
@@ -212,6 +207,14 @@ describe('WorkflowGraphView', () => {
   });
 });
 
+function readPosition(element: HTMLElement): { x: number; y: number } {
+  return { x: Number(element.dataset.x), y: Number(element.dataset.y) };
+}
+
+async function findLaidOutNode(nodeId: string): Promise<{ x: number; y: number }> {
+  return readPosition(await screen.findByTestId(`rf-node-${nodeId}`));
+}
+
 const ST_G5_LARGE_GRAPH_SIZE = 100;
 const ST_G5_DEEP_CHAIN_SIZE = 20;
 const ST_G5_DISCONNECTED_SIZE = 10;
@@ -255,7 +258,7 @@ describe('WorkflowGraphView stress', () => {
     });
   });
 
-  it('renders disconnected nodes (no edges) without crash', async () => {
+  it('renders disconnected nodes (no edges) at distinct positions', async () => {
     const nodes = Array.from({ length: ST_G5_DISCONNECTED_SIZE }, (_, i) =>
       makeNode({ id: `orphan-${i}`, label: `isolated-${i}` })
     );
@@ -266,6 +269,9 @@ describe('WorkflowGraphView stress', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
     });
+    const positions = screen.getAllByTestId(/^rf-node-/).map(readPosition);
+    const distinct = new Set(positions.map(({ x, y }) => `${x},${y}`));
+    expect(distinct.size).toBe(ST_G5_DISCONNECTED_SIZE);
   });
 
   it('renders two graphs in the same DOM without node state leakage between instances', async () => {
@@ -291,6 +297,88 @@ describe('WorkflowGraphView stress', () => {
     unmountA();
     expect(screen.queryByTestId('rf-node-a-1')).not.toBeInTheDocument();
     expect(screen.getByTestId('rf-node-b-1')).toBeInTheDocument();
+  });
+});
+
+const LAYOUT_CHAIN_SIZE = 4;
+const COLLAPSED_ALPHA_CLUSTER_TEST_ID = /^rf-node-__cluster__alpha$/;
+
+describe('WorkflowGraphView layout', () => {
+  it('ranks a delegation chain top to bottom, each agent below the one that handed off to it', async () => {
+    const graph = makeChainGraph(LAYOUT_CHAIN_SIZE, 'step', 'linear');
+    render(<WorkflowGraphView graph={graph} />);
+
+    const positions = await Promise.all(graph.nodes.map(n => findLaidOutNode(n.id)));
+
+    for (let i = 1; i < positions.length; i++) {
+      expect(positions[i]!.y).toBeGreaterThan(positions[i - 1]!.y);
+    }
+  });
+
+  it('places sibling delegates on one rank below their parent, side by side', async () => {
+    const graph = makeGraph({
+      nodes: [
+        makeNode({ id: 'root', label: 'planner' }),
+        makeNode({ id: 'left', label: 'researcher' }),
+        makeNode({ id: 'right', label: 'writer' }),
+      ],
+      edges: [
+        makeEdge({ id: 'root->left', source: 'root', target: 'left' }),
+        makeEdge({ id: 'root->right', source: 'root', target: 'right' }),
+      ],
+      rootNodeId: 'root',
+      workflowShape: 'branching',
+    });
+    render(<WorkflowGraphView graph={graph} />);
+
+    const root = await findLaidOutNode('root');
+    const left = await findLaidOutNode('left');
+    const right = await findLaidOutNode('right');
+
+    expect(left.y).toBeGreaterThan(root.y);
+    expect(right.y).toBe(left.y);
+    expect(right.x).not.toBe(left.x);
+  });
+
+  it('lays out a delegation cycle on separate ranks', async () => {
+    const graph = makeGraph({
+      nodes: [makeNode({ id: 'caller', label: 'caller' }), makeNode({ id: 'callee', label: 'callee' })],
+      edges: [
+        makeEdge({ id: 'caller->callee', source: 'caller', target: 'callee' }),
+        makeEdge({ id: 'callee->caller', source: 'callee', target: 'caller' }),
+      ],
+      rootNodeId: 'caller',
+      workflowShape: 'branching',
+    });
+    render(<WorkflowGraphView graph={graph} />);
+
+    const caller = await findLaidOutNode('caller');
+    const callee = await findLaidOutNode('callee');
+
+    expect(callee.y).not.toBe(caller.y);
+  });
+
+  it('ranks a collapsed cluster above the agents it hands off to', async () => {
+    render(<WorkflowGraphView graph={makeClusteredGraph(['alpha', 'beta'], 2)} />);
+    fireEvent.click(await screen.findByRole('button', { name: /▼ alpha/ }));
+
+    const cluster = readPosition(await screen.findByTestId(COLLAPSED_ALPHA_CLUSTER_TEST_ID));
+    const firstBeta = await findLaidOutNode('beta-node-0');
+    const secondBeta = await findLaidOutNode('beta-node-1');
+
+    expect(firstBeta.y).toBeGreaterThan(cluster.y);
+    expect(secondBeta.y).toBeGreaterThan(firstBeta.y);
+  });
+
+  it('keeps every edge with its source and target after layout', async () => {
+    const graph = makeChainGraph(LAYOUT_CHAIN_SIZE, 'step', 'linear');
+    render(<WorkflowGraphView graph={graph} />);
+
+    for (const edge of graph.edges) {
+      const rendered = await screen.findByTestId(`rf-edge-${edge.id}`);
+      expect(rendered).toHaveAttribute('data-source', edge.source);
+      expect(rendered).toHaveAttribute('data-target', edge.target);
+    }
   });
 });
 
