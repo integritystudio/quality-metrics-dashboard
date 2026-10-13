@@ -66,7 +66,6 @@ const Http = {
  * refetching the key set, so the token's kid is not Auth0's (another tenant, or forged).
  * Everything else is upstream: JWKSTimeout, JWKSInvalid, the generic JOSEError jose throws on a
  * non-200 JWKS response, and the raw fetch error it rethrows on a network failure.
- * Lazy so a test that mocks `jose` without `errors` can still import this module.
  */
 function isTokenRejection(err: unknown): boolean {
   return [

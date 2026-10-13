@@ -96,7 +96,7 @@ No open items.
 | PARITY-EVAL-WINDOW-GAP | No parity test catches a dropped `startDate` in `loadEvaluationsByMetric` | P3 | ✅ Done 2026-10-12; commit ef0fddc |
 | SUITE-FLAKES-ON-PARENT-REBUILD | Test files fail to load while the parent `dist/` is being rebuilt | P3 | ✅ Done 2026-10-12; commit 65c3390 |
 | PAGE-TEST-HARNESS-MERGE | Two memory-router page harnesses landed side by side | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, PRs #21 and #22 |
-| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | Source: session 2026-10-12, Units 1 and 7, review of `999ca85` |
+| STALE-TEST-DOUBLE-COMMENTS | Comments still describe test doubles the batch removed | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, Units 1 and 7, review of `999ca85` |
 | TEST-FIXTURE-DUPLICATES | Fixtures and helpers duplicated across test files | P4 | ✅ Done 2026-10-12; Source: session 2026-10-12, Units 3 and 7 |
 
 **VITE-API-URL-DOPPLER.** Since `e2d519b` (same-origin `/api` everywhere) this app reads no
@@ -192,7 +192,7 @@ gains `currentPath`, and the three PR #21 files mount through `renderPage`. The 
   hooks, though `useCalibration`, `useDashboard`, `useTrace` and `useSessionDetail` also override `retry`.
   *Done 2026-10-12:* both notes rewritten.
 - The `isTokenRejection` comment in `worker/index.ts` still says it is lazy for tests that mock `jose`;
-  none do after PR #25.
+  none do after PR #25. *Done 2026-10-12:* line removed.
 
 **TEST-FIXTURE-DUPLICATES.**
 - ~~`org-switcher.test.tsx` (PR #20) repeats the org fixtures in `org-switch.test.tsx`.~~ Done 2026-10-12:
