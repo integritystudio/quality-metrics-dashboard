@@ -135,7 +135,7 @@ const CLOSER_CELL_WIDTH = TABLE_CELL_WIDTH + 2;
 export type ParsedArgs = OneShotArgs & { agreementPath?: string };
 
 /** One turn of a judge-agreement results file. */
-export interface AgreementTurn {
+export type AgreementTurn = {
   sessionId: string;
   timestamp: string;
   hasTools: boolean;
@@ -144,14 +144,14 @@ export interface AgreementTurn {
   consolidated: Record<string, number>;
 }
 
-export interface QualityTurn extends AgreementTurn {
+export type QualityTurn = {
   reference: Record<string, number>;
-}
+} & AgreementTurn
 
 export type Side = 'perCriterion' | 'consolidated';
 
 /** A configuration's distance from the reference, per criterion, on the 1–5 scale. */
-export interface ReferenceDistance {
+export type ReferenceDistance = {
   paired: number;
   exactMatchRate: number | null;
   meanAbsDiff: number | null;
@@ -163,7 +163,7 @@ export interface ReferenceDistance {
   referenceOnly: number;
 }
 
-export interface ReferenceSummary {
+export type ReferenceSummary = {
   byCriterion: Record<string, ReferenceDistance>;
   overall: ReferenceDistance;
 }

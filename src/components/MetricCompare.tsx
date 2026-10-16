@@ -3,7 +3,7 @@ import { TrendChart } from './TrendChart.js';
 import { useMetricDetail } from '../hooks/useMetricDetail.js';
 import type { Period, MetricDynamics } from '../types.js';
 
-interface MetricCompareProps {
+type MetricCompareProps = {
   metricName: string | undefined;
   period: Period;
   availableMetrics: string[];

@@ -13,7 +13,7 @@ export const SESSION_LOGIN_KEY = 'obs:login_recorded';
 /** Rejection reason when Auth0 resolves without a token (typed `string | undefined` since auth0-react 2.28). */
 const MISSING_ACCESS_TOKEN_ERROR = 'Auth0 returned no access token';
 
-interface AuthContextValue {
+type AuthContextValue = {
   session: AppSession | null;
   isLoading: boolean;
   signOut: () => Promise<void>;

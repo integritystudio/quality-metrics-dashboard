@@ -3,7 +3,7 @@ import { fmtDuration, plural } from '../lib/quality-utils.js';
 import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
-interface SpanNode {
+type SpanNode = {
   spanId: string;
   name: string;
   durationMs: number | undefined;
@@ -13,7 +13,7 @@ interface SpanNode {
   evalCount: number;
 }
 
-interface SpanTreeProps {
+type SpanTreeProps = {
   spans: Array<{
     spanId: string;
     name: string;

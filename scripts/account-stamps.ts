@@ -58,7 +58,7 @@ export type AccountRef = string | null;
  * undefined) so a turn can be anchored to its span even where no account was
  * stamped; `turnAccount` skips them.
  */
-export interface SessionSpan {
+export type SessionSpan = {
   atMs: number;
   spanId: string | undefined;
   traceId: string | undefined;
@@ -66,12 +66,12 @@ export interface SessionSpan {
 }
 
 /** The span a turn is parented to, per the semconv evaluation-event rule. */
-export interface SpanRef {
+export type SpanRef = {
   spanId: string;
   traceId: string;
 }
 
-export interface AccountIndex {
+export type AccountIndex = {
   /** Every span of a session, stamped or not, sorted by start time. */
   sessionSpans: Map<string, SessionSpan[]>;
   /** The stamp of one span, by span id. */
@@ -96,7 +96,7 @@ export function* traceFileRecords(
   dir: string,
   files: readonly string[],
   onReadError?: (file: string, err: unknown) => void,
-): Generator<unknown> {
+): Generator {
   for (const file of files) {
     let text: string;
     try {
@@ -125,7 +125,7 @@ export function indexTraceFiles(dir: string, files: readonly string[]): AccountI
   return indexSpanRecords(traceFileRecords(dir, files));
 }
 
-export interface SpanRecordFields {
+export type SpanRecordFields = {
   spanId: string | undefined;
   traceId: string | undefined;
   startTime: HrTime | undefined;

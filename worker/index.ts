@@ -427,7 +427,7 @@ app.use('/api/*', async (c, next) => {
     console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
     return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
   }
-  const auth0Id = typeof jwtPayload['sub'] === 'string' ? jwtPayload['sub'] : null;
+  const auth0Id = typeof jwtPayload.sub === 'string' ? jwtPayload.sub : null;
   if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
 
   const orgScopingEnabled = isOrgScopingEnabled(c.env);
@@ -468,9 +468,9 @@ app.use('/api/*', async (c, next) => {
     .abortSignal(signal);
   const membershipsPromise = orgScopingEnabled
     ? supabase.from('organization_memberships')
-        .select('role,organization_id,organizations(id,slug,name)')
-        .eq('user_id', appUserId)
-        .abortSignal(signal)
+      .select('role,organization_id,organizations(id,slug,name)')
+      .eq('user_id', appUserId)
+      .abortSignal(signal)
     : null;
   const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
 
@@ -635,7 +635,7 @@ async function readJsonBody<T extends z.ZodType>(req: HonoRequest, schema: T): P
  * ORG_SCOPING_ENABLED=false this is a bare-key read; with it on, the auth
  * middleware refuses any session without an activeOrgId.
  */
-function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
+async function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
   const orgId = isOrgScopingEnabled(c.env)
     ? c.get('session').activeOrgId ?? null
     : null;
@@ -904,11 +904,11 @@ app.get('/api/agents/:sessionId', requirePermission('dashboard.agents.read'), as
   return c.json({
     sessionId,
     spans: [],
-    evaluation: session['multiAgentEvaluation'] ?? null,
-    evaluations: safeArray(session['evaluations']),
+    evaluation: session.multiAgentEvaluation ?? null,
+    evaluations: safeArray(session.evaluations),
     agentMap: {},
     // Precomputed by sync-to-kv; absent on session keys written before it was added.
-    graph: session['workflowGraph'] ?? null,
+    graph: session.workflowGraph ?? null,
   });
 });
 
@@ -920,8 +920,8 @@ app.get('/api/agents/:sessionId/graph', requirePermission('dashboard.agents.read
   if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
   return c.json({
     sessionId,
-    evaluation: session['multiAgentEvaluation'] ?? null,
-    graph: session['workflowGraph'] ?? null,
+    evaluation: session.multiAgentEvaluation ?? null,
+    graph: session.workflowGraph ?? null,
   });
 });
 
@@ -930,7 +930,7 @@ app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), v
   const dashboard = await getSessionKv<Record<string, unknown>>(c, `dashboard:${period}`);
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
   logActivity(c, 'compliance_view');
-  const slaResults = safeArray(dashboard['slaCompliance']);
+  const slaResults = safeArray(dashboard.slaCompliance);
   return c.json({
     period,
     results: slaResults,
@@ -1114,10 +1114,10 @@ app.get('/api/admin/users', requireGlobalAdmin, async (c) => {
   for (const raw of rawUsers) {
     const r = raw as Record<string, unknown>;
     const parsed = AdminUserSchema.safeParse({
-      id: r['id'],
-      email: r['email'],
-      created_at: r['created_at'],
-      roles: rolesByUser.get(r['id'] as string) ?? [],
+      id: r.id,
+      email: r.email,
+      created_at: r.created_at,
+      roles: rolesByUser.get(r.id as string) ?? [],
     });
     if (parsed.success) users.push(parsed.data);
   }

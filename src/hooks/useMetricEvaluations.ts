@@ -3,7 +3,7 @@ import type { Period } from '../types.js';
 import { DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-interface EvaluationsResponse {
+type EvaluationsResponse = {
   rows: EvalRow[];
   total: number;
   limit: number;

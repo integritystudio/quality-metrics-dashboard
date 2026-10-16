@@ -9,13 +9,13 @@ import {
 import { BarIndicator } from './BarIndicator.js';
 
 
-interface EvaluatorScore {
+type EvaluatorScore = {
   evaluator: string;
   score: number;
   label?: string;
 }
 
-interface ConfidencePanelProps {
+type ConfidencePanelProps = {
   confidence: ConfidenceIndicator;
   /** Per-evaluator scores for multi-judge display */
   evaluatorScores?: EvaluatorScore[];

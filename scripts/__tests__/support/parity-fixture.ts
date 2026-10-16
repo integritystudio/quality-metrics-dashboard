@@ -38,14 +38,14 @@ export function evaluationToWire(evaluation: EvaluationResult, id: number): Eval
   };
 }
 
-export interface ParityRows {
+export type ParityRows = {
   evaluations: EvaluationResult[];
   spans?: TraceWireRow[];
 }
 
-export interface ParityFixture {
+export type ParityFixture = {
   /** The sync's reader: a real CloudBackend over the same fixture server the dev routes read. */
-  syncBackend(): CloudBackend;
+  syncBackend: () => CloudBackend;
 }
 
 /**

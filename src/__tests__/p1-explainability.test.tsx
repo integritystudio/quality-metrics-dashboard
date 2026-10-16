@@ -203,7 +203,7 @@ describe('EvaluationDetailPage', () => {
     await screen.findByRole('heading', { name: 'Trace Evaluations' });
     const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(`/api/evaluations/trace/${TRACE_ID}`);
-    expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+    expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });
 
   it('renders evaluation cards when data is available', async () => {

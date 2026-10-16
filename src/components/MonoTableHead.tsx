@@ -1,4 +1,4 @@
-export interface TableColumn {
+export type TableColumn = {
   label: string;
   align?: 'left' | 'right' | 'center';
 }

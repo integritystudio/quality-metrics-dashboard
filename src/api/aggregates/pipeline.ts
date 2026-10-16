@@ -12,7 +12,7 @@ import { computeDashboardSummary } from '../parent/quality-metrics.js';
 import { computePipelineView } from '../parent/quality-visualization.js';
 import type { EvaluationResult } from '../../types.js';
 
-export interface PipelineResult {
+export type PipelineResult = {
   stages: unknown[];
   dropoffs: unknown[];
   overallConversionPercent: number;

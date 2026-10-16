@@ -9,7 +9,7 @@ const STAT_TONE_CLASS: Record<StatTone, string> = {
   secondary: 'text-secondary',
 };
 
-interface StatDisplayProps {
+type StatDisplayProps = {
   value: ReactNode;
   label: string;
   tone?: StatTone | undefined;

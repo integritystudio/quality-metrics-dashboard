@@ -25,7 +25,7 @@ const SESSION = 's1';
 const at = (hhmm: string): number => Date.parse(`2026-09-23T${hhmm}:00.000Z`);
 const hrTime = (ms: number): [number, number] => [Math.floor(ms / 1000), (ms % 1000) * 1_000_000];
 
-interface SpanFixture { spanId: string; traceId: string; atMs: number; ref?: string | null; sessionId?: string }
+type SpanFixture = { spanId: string; traceId: string; atMs: number; ref?: string | null; sessionId?: string }
 
 const spanLine = ({ spanId, traceId, atMs, ref, sessionId = SESSION }: SpanFixture): string => JSON.stringify({
   traceId,

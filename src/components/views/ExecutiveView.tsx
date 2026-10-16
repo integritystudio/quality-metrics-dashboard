@@ -9,9 +9,9 @@ import { ViewSection } from '../Section.js';
 import { HealthBanner } from '../HealthBanner.js';
 import { plural } from '../../lib/quality-utils.js';
 
-interface ExtendedExecutiveView extends ExecutiveViewType {
+type ExtendedExecutiveView = {
   cqi?: CompositeQualityIndex | undefined;
-}
+} & ExecutiveViewType
 
 export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
   return (

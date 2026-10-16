@@ -5,7 +5,7 @@ import { EmptyState } from './EmptyState.js';
 import { formatPercent } from '../lib/quality-utils.js';
 import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
 
-interface PipelineFunnelProps {
+type PipelineFunnelProps = {
   stages: PipelineStage[];
   dropoffs: PipelineDropoff[];
   overallConversionPercent: number;

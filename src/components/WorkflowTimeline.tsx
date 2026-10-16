@@ -21,7 +21,7 @@ const HEADER_HEIGHT = 28;
  */
 const MAX_VISIBLE_TURNS = 200;
 
-interface LaneSegment {
+type LaneSegment = {
   agentName: string;
   turns: TurnLevelResult[];
   /** Index of the lane (display order). */
@@ -53,7 +53,7 @@ function findHandoffTurnIndex(
   return null;
 }
 
-interface TurnBlockProps {
+type TurnBlockProps = {
   turn: TurnLevelResult;
   color: string;
   width: number;
@@ -106,7 +106,7 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
   );
 }
 
-export interface WorkflowTimelineProps {
+export type WorkflowTimelineProps = {
   turns: TurnLevelResult[];
   handoffs?: HandoffEvaluation[] | undefined;
   agentNames: string[];

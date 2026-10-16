@@ -90,7 +90,7 @@ function rejection(promise: Promise<unknown>): Promise<Error> {
 /** What one poll reports: the batch's status, or the error the poll fails with. */
 type PollOutcome = MessageBatch['processing_status'] | Error;
 
-interface FakeClientOptions {
+type FakeClientOptions = {
   /** What `retrieve` reports, in order; the last entry repeats. */
   statuses?: PollOutcome[];
   /** What `retrieve` reports once `cancel` has been called, in order; the last entry repeats. A batch that never ends by default. */

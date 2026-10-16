@@ -1,12 +1,12 @@
 import type { SLAComplianceResult, HumanVerificationEvent, Period } from '../types.js';
 import { useApiQuery } from './useApiQuery.js';
 
-interface SLAResponse {
+type SLAResponse = {
   results: SLAComplianceResult[];
   noSLAsConfigured: boolean;
 }
 
-interface VerificationResponse {
+type VerificationResponse = {
   count: number;
   verifications: HumanVerificationEvent[];
 }

@@ -11,7 +11,7 @@ import { computeCorrelationMatrix } from '../parent/qfe-correlation.js';
 import { extractFiniteScores } from '../api-constants.js';
 import type { EvaluationResult, CorrelationFeature } from '../../types.js';
 
-export interface CorrelationsResult {
+export type CorrelationsResult = {
   correlations: CorrelationFeature[];
   metrics: string[];
 }

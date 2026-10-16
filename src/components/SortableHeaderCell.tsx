@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { SortDirection } from '@tanstack/react-table';
 
 /** The sorting slice of a TanStack column, whatever other features its table enables. */
-export interface SortableColumn {
+export type SortableColumn = {
   getCanSort: () => boolean;
   getIsSorted: () => false | SortDirection;
   getToggleSortingHandler: () => undefined | ((event: unknown) => void);
@@ -11,7 +11,7 @@ export interface SortableColumn {
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
 const SORT_INDICATOR = { asc: '↑', desc: '↓' } as const;
 
-interface SortableHeaderCellProps {
+type SortableHeaderCellProps = {
   column: SortableColumn;
   className?: string | undefined;
   children: ReactNode;

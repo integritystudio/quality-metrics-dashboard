@@ -60,7 +60,7 @@ function contentKindOf(span: SpanLike): ContentKind {
 
 export type { ContentKind, SurvivalCohort };
 
-export interface AgentWindowStats {
+export type AgentWindowStats = {
   agentName: string;
   agentVersion: string;
   window: string;
@@ -73,7 +73,7 @@ export interface AgentWindowStats {
   latestTimestamp: string;
 }
 
-export interface AgentVersionStats {
+export type AgentVersionStats = {
   agentName: string;
   agentVersion: string;
   cohort: SurvivalCohort;
@@ -81,7 +81,7 @@ export interface AgentVersionStats {
   latestTimestamp: string;
 }
 
-export interface CodeQualityResponse {
+export type CodeQualityResponse = {
   survivalByAgentWindow: AgentWindowStats[];
   versionRollout: AgentVersionStats[];
   hasData: boolean;

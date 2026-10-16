@@ -111,7 +111,7 @@ describe('GET /dashboard', () => {
     // sparklines keys come from the evaluation Map returned by loadEvaluationsByMetric;
     // the fixture serves a 'relevance' evaluation so 'relevance' is a key.
     expect(sparklines).toHaveProperty('relevance');
-    const vals = sparklines['relevance'] as Array<number | null>;
+    const vals = sparklines.relevance as Array<number | null>;
     expect(Array.isArray(vals)).toBe(true);
     expect(vals.length).toBeGreaterThan(0);
     expect(vals.every(v => v === null || typeof v === 'number')).toBe(true);

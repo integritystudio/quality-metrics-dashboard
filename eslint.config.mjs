@@ -6,6 +6,7 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 import regexp from 'eslint-plugin-regexp';
 import tanstackQuery from '@tanstack/eslint-plugin-query';
 import eslintReact from '@eslint-react/eslint-plugin';
+import stylistic from '@stylistic/eslint-plugin';
 import unicorn from 'eslint-plugin-unicorn';
 import vitest from '@vitest/eslint-plugin';
 
@@ -52,6 +53,14 @@ const typeSafetyRules = {
   '@typescript-eslint/return-await': ['error', 'in-try-catch'],
   '@typescript-eslint/no-misused-spread': 'error',
   '@typescript-eslint/array-type': ['error', { default: 'array-simple' }],
+  // Parent-parity, all autofixable (DASH-LINT-PARENT-PARITY).
+  '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
+  // Method shorthand keeps parameters bivariant even under strictFunctionTypes.
+  '@typescript-eslint/method-signature-style': ['error', 'property'],
+  // A synchronous throw from a non-async Promise-returning function skips `.catch()`.
+  '@typescript-eslint/promise-function-async': 'error',
+  '@typescript-eslint/dot-notation': 'error',
+  '@typescript-eslint/no-unnecessary-type-arguments': 'error',
   '@typescript-eslint/no-extraneous-class': 'error',
   '@typescript-eslint/prefer-literal-enum-member': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
@@ -214,6 +223,10 @@ export default tseslint.config(
     plugins: { vitest },
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'warn',
+      // Async stubs stand in for Promise-returning interfaces without awaiting
+      // anything, and `new Promise(r => setTimeout(r, ms))` is the sleep idiom.
+      // Off in the parent's test block for the same reason.
+      '@typescript-eslint/promise-function-async': 'off',
       // A stray `.only` silently skips the rest of the suite.
       'vitest/no-focused-tests': 'error',
       'vitest/no-identical-title': 'error',
@@ -264,6 +277,24 @@ export default tseslint.config(
           },
         ],
       }],
+    },
+  },
+  // Formatting: indentation only, matching the parent. Core `indent` is deprecated
+  // since ESLint 8.53.0 and removed in 11, so @stylistic is the only option. Error
+  // rather than warn so `--fix` keeps it true; the tree was swept when it landed.
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    plugins: { '@stylistic': stylistic },
+    rules: {
+      '@stylistic/indent': ['error', 2, { SwitchCase: 1 }],
+    },
+  },
+  // Declaration files augment existing global/module interfaces, and declaration
+  // merging only works with `interface` — a `type` alias breaks them.
+  {
+    files: ['**/*.d.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-definitions': 'off',
     },
   },
   {

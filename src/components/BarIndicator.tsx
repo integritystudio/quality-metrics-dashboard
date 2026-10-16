@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-interface BarIndicatorProps {
+type BarIndicatorProps = {
   /** Percentage width 0-100 */
   value: number;
   /** Fill color (default: CSS var(--accent)) */

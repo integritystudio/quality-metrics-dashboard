@@ -15,7 +15,7 @@ export const CACHE_CREATION_INPUT_PRICE_RATIO = 1.25;
 export const BATCH_PRICE_RATIO = 0.5;
 
 /** The `usage` of one Messages API response; cache counts are null on models without caching. */
-export interface ProviderUsage {
+export type ProviderUsage = {
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens?: number | null;
@@ -23,7 +23,7 @@ export interface ProviderUsage {
 }
 
 /** The one accounting shape; `ProviderUsage` is converted to it at the SDK boundary and nowhere else. */
-export interface JudgeTokenUsage {
+export type JudgeTokenUsage = {
   inputTokens: number;
   outputTokens: number;
   cacheCreationInputTokens: number;
@@ -50,14 +50,14 @@ export function addUsage(totals: JudgeTokenUsage, usage: JudgeTokenUsage): void 
   totals.cacheReadInputTokens += usage.cacheReadInputTokens;
 }
 
-export interface CallUsageTotals extends JudgeTokenUsage {
+export type CallUsageTotals = {
   calls: number;
-}
+} & JudgeTokenUsage
 
 /** {@link CallUsageTotals} priced at list rates. */
-export interface CallUsageReport extends CallUsageTotals {
+export type CallUsageReport = {
   usd: number;
-}
+} & CallUsageTotals
 
 export function createCallUsageTotals(): CallUsageTotals {
   return { calls: 0, ...createUsageTotals() };
@@ -130,7 +130,7 @@ const PER_CRITERION_BASE_CALLS = 2;
  */
 const PER_CRITERION_TOOL_CALLS = 2;
 
-export interface JudgeRunEstimate {
+export type JudgeRunEstimate = {
   evals: number;
   inputTokens: number;
   outputTokens: number;

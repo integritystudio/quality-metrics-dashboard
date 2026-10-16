@@ -5,7 +5,7 @@
 import { Link } from 'wouter';
 import { CHEVRON_RIGHT } from '../../lib/symbols.js';
 
-interface NavCardProps {
+type NavCardProps = {
   label: string;
   description: string;
   href?: string;

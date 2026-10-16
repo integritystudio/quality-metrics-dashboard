@@ -6,7 +6,7 @@ import { formatScore } from '../lib/quality-utils.js';
 import { HEATMAP_ROW_HEADER_WIDTH, HEATMAP_COL_HEADER_HEIGHT, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
 import type { CorrelationFeature } from '../types.js';
 
-interface CorrelationHeatmapProps {
+type CorrelationHeatmapProps = {
   correlations: CorrelationFeature[];
   metrics: string[];
   onCellClick?: (rowMetric: string, colMetric: string) => void;

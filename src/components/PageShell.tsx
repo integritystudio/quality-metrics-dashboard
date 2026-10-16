@@ -5,7 +5,7 @@ import { Link } from 'wouter';
 export const DEFAULT_BACK_HREF = '/';
 export const DEFAULT_BACK_LABEL = 'Back to dashboard';
 
-interface PageShellProps {
+type PageShellProps = {
   isLoading: boolean;
   error: Error | null | undefined;
   skeletonHeight?: number;

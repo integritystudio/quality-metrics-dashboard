@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-interface IssueCalloutProps {
+type IssueCalloutProps = {
   severity: 'warning' | 'critical';
   title: string;
   children: ReactNode;

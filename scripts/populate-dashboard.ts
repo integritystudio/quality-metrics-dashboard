@@ -135,7 +135,7 @@ if (!skipSync && !existsSync(DIST_DIR)) {
   process.exit(1);
 }
 
-interface StepResult { name: string; ms: number }
+type StepResult = { name: string; ms: number }
 const results: StepResult[] = [];
 
 type StepOutcome =
@@ -174,7 +174,7 @@ function runStep(name: string, script: string, extraArgs: string[] = [], capture
  * Run a stage that needs the network, waiting out transient failures (DNS,
  * reset connections) on the schedule sized for the evening outages.
  */
-function runWithNetworkRetry(name: string, script: string, extraArgs: string[] = []): Promise<StepOutcome> {
+async function runWithNetworkRetry(name: string, script: string, extraArgs: string[] = []): Promise<StepOutcome> {
   return runWithRetry<StepOutcome>({
     attempt: () => runStep(name, script, extraArgs, true),
     shouldRetry: outcome => !outcome.ok && isTransientNetworkFailure(outcome.stderr),

@@ -2,7 +2,7 @@ import { POLL_INTERVAL_MS } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 import type { QualityLiveData } from '../types.js';
 
-export interface UseQualityLiveResult {
+export type UseQualityLiveResult = {
   data: QualityLiveData | null;
   isLoading: boolean;
   error: Error | null;

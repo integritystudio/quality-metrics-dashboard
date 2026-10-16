@@ -6,7 +6,7 @@ import { BarIndicator } from '../BarIndicator.js';
 import { PERCENT_MAX, QUOTA_BAR_HEIGHT } from '../../lib/admin-customer-constants.js';
 import type { QuotaTone } from '../../lib/admin-customer.js';
 
-interface QuotaBarProps {
+type QuotaBarProps = {
   /** 0–1, already clamped. */
   ratio: number;
   tone: QuotaTone;

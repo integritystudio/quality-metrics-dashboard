@@ -29,7 +29,7 @@ export const JUDGE_API_KEY_ENV_PRECEDENCE = [JUDGE_API_KEY_ENV, DEFAULT_API_KEY_
 
 export type JudgeApiKeySource = (typeof JUDGE_API_KEY_ENV_PRECEDENCE)[number];
 
-export interface JudgeApiKey {
+export type JudgeApiKey = {
   apiKey: string;
   /** Environment variable NAME the key was read from — safe to log. */
   source: JudgeApiKeySource;
@@ -109,7 +109,7 @@ export async function pickWorkingJudgeApiKey(
 let workingKey: Promise<JudgeApiKey | undefined> | undefined;
 
 /** `pickWorkingJudgeApiKey` on process.env, probed once per process. */
-export function resolveWorkingJudgeApiKey(probe: JudgeKeyProbe = probeWithCountTokens): Promise<JudgeApiKey | undefined> {
+export async function resolveWorkingJudgeApiKey(probe: JudgeKeyProbe = probeWithCountTokens): Promise<JudgeApiKey | undefined> {
   workingKey ??= pickWorkingJudgeApiKey(process.env, probe);
   return workingKey;
 }

@@ -52,38 +52,38 @@ export type LogWireRow = LogRow;
 
 // ── Fixture server ────────────────────────────────────────────────────────────
 
-export interface FixtureServer {
+export type FixtureServer = {
   /** Listening port. */
   readonly port: number;
   /** Base URL — set `process.env.OBTOOL_API_URL` to this value. */
   readonly url: string;
   /** Set evaluation rows returned by GET /v1/evaluations, narrowed by its `evaluationName` and `traceId` params (and its window, under `dateWindow`). */
-  setEvals(rows: EvalWireRow[]): void;
+  setEvals: (rows: EvalWireRow[]) => void;
   /** Set trace span rows returned by GET /v1/traces, narrowed by its `sessionId` param (and its window, under `dateWindow`). */
-  setTraces(rows: TraceWireRow[]): void;
+  setTraces: (rows: TraceWireRow[]) => void;
   /** Set log rows returned by the next GET /v1/logs. */
-  setLogs(rows: LogWireRow[]): void;
+  setLogs: (rows: LogWireRow[]) => void;
   /**
    * Make every request whose path starts with `prefix` return HTTP 500.
    * Used for error-path tests that need a collaborator to fail.
    */
-  failPath(prefix: string): void;
+  failPath: (prefix: string) => void;
   /**
    * Make requests to `path` whose query has `param=value` return HTTP 500, for
    * error paths where one of several parallel reads must fail.
    */
-  failQuery(path: string, param: string, value: string): void;
+  failQuery: (path: string, param: string, value: string) => void;
   /**
    * Paths requested since the last reset, query strings stripped. For reads a
    * caller swallows on failure, where `failPath` cannot show they were skipped.
    */
-  requestedPaths(): string[];
+  requestedPaths: () => string[];
   /** Requests since the last reset, with their query strings. */
-  requests(): FixtureRequest[];
+  requests: () => FixtureRequest[];
   /** Clear rows, fail-paths and requested paths. Call in beforeEach. */
-  reset(): void;
+  reset: () => void;
   /** Shut down the server. Call in afterAll. */
-  close(): Promise<void>;
+  close: () => Promise<void>;
 }
 
 /** GET /v1/evaluations query params the fixture applies, as obtool-api does. */
@@ -106,7 +106,7 @@ const END_DATE_PARAM = 'endDate';
 const SESSION_ID_PARAM = 'sessionId';
 const HTTP_BAD_REQUEST = 400;
 
-export interface FixtureServerOptions {
+export type FixtureServerOptions = {
   /**
    * Narrow evaluation, trace and log reads to their `startDate`/`endDate` window
    * as obtool-api does: from midnight UTC of `startDate` up to, not including,
@@ -142,7 +142,7 @@ function inDateWindow(timestampNs: string, query: URLSearchParams): boolean {
 }
 
 /** A request the fixture received: its path and parsed query string. */
-export interface FixtureRequest {
+export type FixtureRequest = {
   path: string;
   query: URLSearchParams;
 }

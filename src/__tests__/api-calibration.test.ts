@@ -86,7 +86,7 @@ describe('GET /api/calibration', () => {
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json() as CalibrationResponse;
     expect(body.distributions).toHaveProperty('relevance');
-    const relDist = body.distributions['relevance'];
+    const relDist = body.distributions.relevance;
     expect(relDist).toHaveProperty('p10');
     expect(relDist).toHaveProperty('p25');
     expect(relDist).toHaveProperty('p50');
@@ -123,7 +123,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
     const data = makeCalibrationData();
     // A p50-less distribution: the shape the pre-schema loose response type
     // accepted, and that empiricalCDF would have read as NaN downstream.
-    const { p50: _p50, ...withoutP50 } = defined(data.distributions['relevance']);
+    const { p50: _p50, ...withoutP50 } = defined(data.distributions.relevance);
     const res = await requestCalibration({
       'meta:calibration': { ...data, distributions: { relevance: withoutP50 } },
     });
@@ -144,7 +144,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
     const res = await requestCalibration({
       'meta:calibration': {
         ...data,
-        distributions: { relevance: { ...data.distributions['relevance'], p50: '0.67' } },
+        distributions: { relevance: { ...data.distributions.relevance, p50: '0.67' } },
       },
     });
 
@@ -164,7 +164,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
 
     expect(res.status).toBe(HTTP_OK);
     const body = await res.json() as CalibrationResponse;
-    expect(body.distributions['evaluation_latency']?.p90).toBe(1_500);
+    expect(body.distributions.evaluation_latency?.p90).toBe(1_500);
   });
 
   it('strips unknown keys instead of rejecting, so a newer producer cannot 500 an older worker', async () => {

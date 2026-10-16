@@ -12,8 +12,8 @@ import { readFileSync, existsSync, createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 /** Structural schema interface compatible with both Zod v3 and Zod v4 schemas. */
-interface ParseableSchema<T> {
-  safeParse(data: unknown): { success: true; data: T } | { success: false; error: { message: string } };
+type ParseableSchema<T> = {
+  safeParse: (data: unknown) => { success: true; data: T } | { success: false; error: { message: string } };
 }
 
 /**

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
 import { apiFetch } from '../lib/api-client.js';
 
-interface TraceSpanResponse {
+type TraceSpanResponse = {
   traceId: string;
   spanId: string;
   name: string;
@@ -15,7 +15,7 @@ interface TraceSpanResponse {
   attributes?: Record<string, unknown>;
 }
 
-interface TraceResponse {
+type TraceResponse = {
   traceId: string;
   spans: TraceSpanResponse[];
   evaluations: EvaluationResult[];

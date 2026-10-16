@@ -1,6 +1,6 @@
 export type WorkflowShape = 'single_agent' | 'linear' | 'branching' | 'cyclic';
 
-export interface WorkflowNode {
+export type WorkflowNode = {
   id: string;
   label: string;
   evaluationScore: number | null;
@@ -28,7 +28,7 @@ export interface WorkflowNode {
   clusterMemberCount?: number;
 }
 
-export interface WorkflowEdge {
+export type WorkflowEdge = {
   id: string;
   source: string;
   target: string;
@@ -43,7 +43,7 @@ export interface WorkflowEdge {
   label?: string;
 }
 
-export interface WorkflowGraph {
+export type WorkflowGraph = {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   rootNodeId: string | null;

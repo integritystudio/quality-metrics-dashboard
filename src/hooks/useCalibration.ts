@@ -4,7 +4,7 @@ import { STALE_TIME } from '../lib/constants.js';
 import { isWorkerNoData, WORKER_ERR_NO_CALIBRATION_DATA } from '../lib/worker-contract.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export interface MetricCalibration {
+export type MetricCalibration = {
   distribution: PercentileDistribution;
   sampleSize: number;
 }

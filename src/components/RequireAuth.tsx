@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { Redirect, useLocation } from 'wouter';
 import { useAuth } from '../contexts/AuthContext.js';
 
-interface RequireAuthProps {
+type RequireAuthProps = {
   children: ReactNode;
 }
 

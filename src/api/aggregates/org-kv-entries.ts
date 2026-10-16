@@ -185,7 +185,7 @@ export function dashboardEntry(key: string, view: object): KVEntry {
 }
 
 function spanSessionId(span: { attributes?: Record<string, unknown> | undefined }): string | undefined {
-  return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.['session_id']) as string | undefined;
+  return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.session_id) as string | undefined;
 }
 
 /** Groups by metric with canaries dropped, the input every aggregate is built from. */
@@ -199,7 +199,7 @@ function hasTraceId<T extends { traceId?: string | undefined }>(row: T): row is 
 }
 
 /** In-memory cross-session accumulator for a single agent. Never serialized directly. */
-interface AgentAccumulator {
+type AgentAccumulator = {
   totalInvocations: number;
   totalErrors: number;
   rateLimitEvents: number;
@@ -244,7 +244,7 @@ export function addRecentSession<T extends { date: string | null }>(sessions: T[
   }
 }
 
-export interface OrgComputation {
+export type OrgComputation = {
   /** All computed entries under their BARE (unprefixed) keys. */
   allEntries: KVEntry[];
   evalsByTrace: Map<string, EvaluationResult[]>;
@@ -305,15 +305,15 @@ async function computeCodeQuality(backend: OrgReadBackend, now: Date) {
 }
 
 /** One org's evaluation read, and the windows sliced from it in memory. */
-interface OrgEvaluations {
+type OrgEvaluations = {
   /** At most QUERY_LIMIT rows, newest first. */
   evals: EvaluationResult[];
   /** The read held more than QUERY_LIMIT rows, so the oldest were dropped. */
   truncated: boolean;
   /** Rows with `startNs <= timestamp < endNs`. */
-  inWindow(startNs: bigint, endNs: bigint): EvaluationResult[];
+  inWindow: (startNs: bigint, endNs: bigint) => EvaluationResult[];
   /** The rows a separate `[startMs, endMs]` read would return; the server rounds both bounds to whole UTC days. */
-  between(startMs: number, endMs?: number): EvaluationResult[];
+  between: (startMs: number, endMs?: number) => EvaluationResult[];
 }
 
 type EvaluationsByName = Map<string, EvaluationResult[]>;
@@ -673,7 +673,7 @@ function computeSessionAndAgentEntries(
   return { sessionEntries, agentEntries: buildAgentEntries(agentCrossSession, now) };
 }
 
-export interface OrgKvOptions {
+export type OrgKvOptions = {
   /** The query window in days; periods longer than it are skipped. */
   maxDays: number;
   /** The owner's `meta:calibration`, from derive's local state; omitted for every other org. */

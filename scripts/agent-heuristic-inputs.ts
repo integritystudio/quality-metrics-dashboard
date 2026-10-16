@@ -30,7 +30,7 @@ const ASSISTANT_ROLE = 'assistant';
  */
 const TOOL_RESULT_PRESENT = true;
 
-interface ToolUse { id: string; name: string; arguments: Record<string, unknown> }
+type ToolUse = { id: string; name: string; arguments: Record<string, unknown> }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

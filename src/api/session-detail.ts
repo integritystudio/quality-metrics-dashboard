@@ -54,7 +54,7 @@ export function isSpanError(span: ExtractableSpan): boolean {
   );
 }
 
-export interface GitCommit {
+export type GitCommit = {
   subject: string;
   body: string;
   files: string;
@@ -99,7 +99,7 @@ export type SessionLog = {
  */
 export type MultiAgentEvaluator<M> = (stepScores: StepScore[], agentMap: Map<number, string>) => M;
 
-export interface SessionDetailInput<E extends SessionEvaluation> {
+export type SessionDetailInput<E extends SessionEvaluation> = {
   sessionId: string;
   spans: SessionSpan[];
   evaluations: E[];
@@ -110,7 +110,7 @@ export interface SessionDetailInput<E extends SessionEvaluation> {
   evaluationsTruncated?: boolean;
 }
 
-export interface AgentActivityEntry {
+export type AgentActivityEntry = {
   agentName: string;
   invocations: number;
   errors: number;

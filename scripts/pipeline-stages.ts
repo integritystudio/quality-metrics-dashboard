@@ -161,7 +161,7 @@ export const DERIVE_DEFAULT_DAYS = 7;
 /** populate flag that overrides derive's scope for one run. */
 const DERIVE_DAYS_FLAG = '--derive-days=';
 
-interface StageScope {
+type StageScope = {
   daysFlag: string;
   defaultDays: number;
 }
@@ -247,7 +247,7 @@ export function isTransientNetworkFailure(stderr: string): boolean {
   return TRANSIENT_NETWORK_PATTERNS.some(pattern => pattern.test(stderr));
 }
 
-export interface RetryOptions<T> {
+export type RetryOptions<T> = {
   /** Runs one attempt. Attempt numbers start at 1. */
   attempt: (attemptNumber: number) => Promise<T> | T;
   /** Whether this outcome is worth another attempt. */

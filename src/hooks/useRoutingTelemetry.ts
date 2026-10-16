@@ -1,12 +1,12 @@
 import type { Period } from '../types.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export interface RoutingTelemetrySummary {
+export type RoutingTelemetrySummary = {
   routedSpans: number;
   fallbackRate: number;
 }
 
-export interface RoutingTelemetryModelPairGroup {
+export type RoutingTelemetryModelPairGroup = {
   pair: string;
   requestedModel: string;
   actualModel: string;
@@ -14,7 +14,7 @@ export interface RoutingTelemetryModelPairGroup {
   count: number;
 }
 
-export interface RoutingTelemetryStrategyGroup {
+export type RoutingTelemetryStrategyGroup = {
   strategy: string;
   count: number;
   fallbackCount: number;
@@ -23,7 +23,7 @@ export interface RoutingTelemetryStrategyGroup {
 
 export type RoutingTelemetryGroup = RoutingTelemetryModelPairGroup | RoutingTelemetryStrategyGroup;
 
-export interface RoutingTelemetryResponse {
+export type RoutingTelemetryResponse = {
   period: string;
   totalSpansScanned: number;
   summary: RoutingTelemetrySummary;

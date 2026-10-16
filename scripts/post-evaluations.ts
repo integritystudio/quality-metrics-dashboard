@@ -32,7 +32,7 @@ import type { AccountIndex } from './account-stamps.js';
 import { sleep } from './sleep.js';
 import { increment, pushTo } from './collections.js';
 
-export interface PostOptions {
+export type PostOptions = {
   dryRun: boolean;
   /** Routes unstamped records; an empty index sends them all to the webhook. */
   accounts: AccountIndex;
@@ -40,7 +40,7 @@ export interface PostOptions {
   nowMs?: number;
 }
 
-export interface PostSummary {
+export type PostSummary = {
   /** Accepted by ingest (or, on a dry run, would have been sent). */
   sent: number;
   byDestination: Record<string, number>;
@@ -127,6 +127,6 @@ export async function postEvaluationRecords(
 export function formatPostSummary(summary: PostSummary): string {
   return `sent=${summary.sent} byDestination[${formatCounts(summary.byDestination)}] skipped[${formatCounts(summary.skipped)}]`
     + ` withheld=${summary.withheld} routedBy[${formatCounts(summary.routedBy)}]${
-     Object.keys(summary.heldForKey).length ? ` heldForKey[${formatCounts(summary.heldForKey)}]` : ''
-     }${summary.failure ? ` failure=${summary.failure}` : ''}`;
+      Object.keys(summary.heldForKey).length ? ` heldForKey[${formatCounts(summary.heldForKey)}]` : ''
+    }${summary.failure ? ` failure=${summary.failure}` : ''}`;
 }

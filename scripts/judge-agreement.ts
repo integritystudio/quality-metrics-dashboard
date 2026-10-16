@@ -109,14 +109,14 @@ const OVERALL_ROW = 'overall';
 export type ParsedArgs = OneShotArgs & { limit: number };
 
 /** Normalized (0–1) scores by evaluation name, one entry per configuration. */
-export interface TurnScores {
+export type TurnScores = {
   perCriterion: Record<string, number>;
   consolidated: Record<string, number>;
 }
 
 type Configuration = keyof TurnScores;
 
-export interface CriterionAgreement {
+export type CriterionAgreement = {
   paired: number;
   exactMatches: number;
   exactMatchRate: number | null;
@@ -125,26 +125,26 @@ export interface CriterionAgreement {
   consolidatedOnly: number;
 }
 
-export interface AgreementSummary {
+export type AgreementSummary = {
   byCriterion: Record<string, CriterionAgreement>;
   overall: CriterionAgreement;
 }
 
-export interface TurnOutcome extends TurnScores {
+export type TurnOutcome = {
   sessionId: string;
   timestamp: string;
   hasTools: boolean;
   expected: string[];
   error?: string;
-}
+} & TurnScores
 
-export interface SampleSummary {
+export type SampleSummary = {
   turns: Turn[];
   transcriptsScanned: number;
   skippedOversize: number;
 }
 
-export interface SpendEstimate {
+export type SpendEstimate = {
   perCriterionInputTokens: number;
   perCriterionCalls: number;
   consolidatedInputTokens: number;

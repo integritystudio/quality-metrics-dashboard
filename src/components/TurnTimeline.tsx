@@ -8,7 +8,7 @@ const UNKNOWN_AGENT = 'unknown';
 // The timeline scrolls sideways: bring the first focused turn to the row's start without jumping the page.
 const FOCUS_SCROLL_OPTIONS: ScrollIntoViewOptions = { block: 'nearest', inline: 'start' };
 
-interface TurnTimelineProps {
+type TurnTimelineProps = {
   turns: TurnLevelResult[];
   agentNames: string[];
   /** Highlights this agent's turns and scrolls the first one into view. */

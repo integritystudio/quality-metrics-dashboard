@@ -25,12 +25,12 @@ export class CliArgError extends Error {
 }
 
 /** The flags a script reads: `values` take an argument, `switches` do not. */
-export interface CliSpec {
+export type CliSpec = {
   values?: readonly string[];
   switches?: readonly string[];
 }
 
-export interface CliParseOptions {
+export type CliParseOptions = {
   /**
    * Ignore flags missing from the spec (the default): several scripts share a
    * command line, each reading its own flags. `false` rejects them, and any
@@ -39,12 +39,12 @@ export interface CliParseOptions {
   allowUnknown?: boolean;
 }
 
-export interface CliArgs {
+export type CliArgs = {
   readonly positionals: readonly string[];
   /** Whether a declared switch was given. */
-  has(flag: string): boolean;
+  has: (flag: string) => boolean;
   /** A declared value flag's argument; `undefined` when the flag is absent. */
-  value(flag: string): string | undefined;
+  value: (flag: string) => string | undefined;
 }
 
 /** `--limit` and `--source=` → `limit` and `source`. */
@@ -150,7 +150,7 @@ const FATAL_EXIT_CODE = 1;
 
 export const CHECK_EXIT = { PASS: 0, FAIL: 1, ERROR: 2 } as const;
 
-export interface RunIfMainOptions {
+export type RunIfMainOptions = {
   fatalExitCode?: number;
 }
 

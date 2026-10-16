@@ -47,7 +47,7 @@ const columns = columnHelper.columns([
   columnHelper.display({ id: 'source', header: 'Source' }),
 ]);
 
-interface IdListColumnProps {
+type IdListColumnProps = {
   label: string;
   ids: string[];
   totalCount: number;
@@ -84,7 +84,7 @@ function errorRateTone(rate: number): StatTone {
   return 'critical';
 }
 
-interface AgentActivityPanelProps {
+type AgentActivityPanelProps = {
   agents: AgentStat[];
 }
 

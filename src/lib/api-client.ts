@@ -34,7 +34,7 @@ export function setStoredOrgId(orgId: string): void {
   }
 }
 
-export function apiFetch(
+export async function apiFetch(
   url: string,
   token: string,
   activeOrgId: string | null,

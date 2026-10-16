@@ -71,16 +71,16 @@ metricsRoutes.get('/metrics/:name/evaluations', validQuery(MetricEvaluationsQuer
   const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
   const evaluations = (scoreLabel ? allEvaluations.filter(e => resolveScoreLabel(e) === scoreLabel) : allEvaluations)
     .slice().sort((a, b) => {
-    if (sortBy === 'score_asc' || sortBy === 'score_desc') {
-      const aVal = a.scoreValue ?? null;
-      const bVal = b.scoreValue ?? null;
-      if (aVal === null && bVal === null) return 0;
-      if (aVal === null) return 1;
-      if (bVal === null) return -1;
-      return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
-    }
-    return a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0;
-  });
+      if (sortBy === 'score_asc' || sortBy === 'score_desc') {
+        const aVal = a.scoreValue ?? null;
+        const bVal = b.scoreValue ?? null;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return sortBy === 'score_asc' ? aVal - bVal : bVal - aVal;
+      }
+      return a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0;
+    });
 
   const total = evaluations.length;
   const page = evaluations.slice(offset, offset + limit);

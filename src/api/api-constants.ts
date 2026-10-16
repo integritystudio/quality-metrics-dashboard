@@ -68,10 +68,10 @@ export function isoToNs(iso: string): bigint {
 /** Structural result of {@link jsonSafe}: every `bigint` becomes a decimal `string`. */
 export type JsonSafe<T> =
   T extends bigint ? string
-  : T extends Array<infer U> ? Array<JsonSafe<U>>
-  : T extends Date ? T
-  : T extends object ? { [K in keyof T]: JsonSafe<T[K]> }
-  : T;
+    : T extends Array<infer U> ? Array<JsonSafe<U>>
+      : T extends Date ? T
+        : T extends object ? { [K in keyof T]: JsonSafe<T[K]> }
+          : T;
 
 /** Plain objects are walked; class instances (Date, Map, …) are passed through untouched. */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -193,9 +193,9 @@ export type SpanAttrType = 'string' | 'number' | 'boolean';
 
 type SpanAttrValue<K extends SpanAttrType> =
   K extends 'string' ? string :
-  K extends 'number' ? number :
-  K extends 'boolean' ? boolean :
-  never;
+    K extends 'number' ? number :
+      K extends 'boolean' ? boolean :
+        never;
 
 /**
  * Extracts and validates a span attribute by primitive type.

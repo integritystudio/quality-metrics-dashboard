@@ -110,7 +110,7 @@ export function normalizeScore(score: number): number {
 }
 
 /** Canonical evaluation record. Also used by derive-evaluations.ts. */
-export interface EvalRecord {
+export type EvalRecord = {
   timestamp: string;
   evaluationName: string;
   scoreValue: number;

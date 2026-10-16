@@ -40,7 +40,7 @@ function orgPath(orgId: string, subPath: string): string | null {
 }
 
 /** A GET against the gateway with the bearer token and nothing else. */
-export function gatewayFetch(path: string, token: string, signal: AbortSignal): Promise<Response> {
+export async function gatewayFetch(path: string, token: string, signal: AbortSignal): Promise<Response> {
   return fetch(`${API_GATEWAY_URL}${path}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${token}` },

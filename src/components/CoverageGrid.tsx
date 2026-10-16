@@ -13,7 +13,7 @@ import { EmptyState } from './EmptyState.js';
  * derived from `counts` rather than shipped: the dense cell list they replace
  * did not fit KV's value limit at production cardinality.
  */
-interface CoverageGridProps {
+type CoverageGridProps = {
   matrix: CoverageMatrix;
 }
 

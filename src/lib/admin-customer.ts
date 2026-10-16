@@ -21,7 +21,7 @@ export function pickActiveOrg<T extends { id: string }>(orgs: readonly T[], pref
   return orgs.find((org) => org.id === preferredId) ?? orgs[0] ?? null;
 }
 
-export interface DailyUsage {
+export type DailyUsage = {
   date: string;
   total: number;
 }
@@ -33,7 +33,7 @@ export function aggregateUsageByDate(buckets: readonly UsageBucket[]): DailyUsag
     .map(([date, total]) => ({ date, total }));
 }
 
-export interface MetricTotal {
+export type MetricTotal = {
   metricKey: string;
   totalQuantity: number;
   requestCount: number;

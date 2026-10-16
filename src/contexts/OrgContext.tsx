@@ -21,7 +21,7 @@ import { apiFetch, getStoredOrgId, setStoredOrgId } from '../lib/api-client.js';
 import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 import type { OrgMembershipSummary } from '../types/auth.js';
 
-interface OrgContextValue {
+type OrgContextValue = {
   activeOrgId: string | null;
   memberships: OrgMembershipSummary[];
   isStaff: boolean;

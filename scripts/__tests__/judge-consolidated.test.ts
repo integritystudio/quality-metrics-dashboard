@@ -67,7 +67,7 @@ function keyFor(turn: Turn, name: string): string {
   return judgedByKey(turn.sessionId, name, TURN_KEY, HAIKU_MODEL);
 }
 
-interface RecordedCall {
+type RecordedCall = {
   prompt: string;
   options: ConsolidatedGenerateOptions | undefined;
 }
@@ -322,8 +322,8 @@ describe('evaluateTurnConsolidated', () => {
     expect(defined(byName[RELEVANCE_EVAL_NAME]).scoreValue).toBe(0.75);
     expect(defined(byName[RELEVANCE_EVAL_NAME]).explanation).toBe(`${RELEVANCE_EVAL_NAME} reasoning`);
     expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(0.25);
-    expect(defined(byName['hallucination']).scoreValue).toBe(0.75);
-    expect(defined(byName['hallucination']).explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
+    expect(defined(byName.hallucination).scoreValue).toBe(0.75);
+    expect(defined(byName.hallucination).explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
   });
 
   it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
@@ -337,9 +337,9 @@ describe('evaluateTurnConsolidated', () => {
     expect((defined(defined(schemaCalls[0]).options).schema as { required: string[] }).required).toContain('hallucination');
     expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(0.25);
     // 5 = no fabrication on HALLUCINATION_CRITERIA, stored higher-is-worse.
-    expect(defined(byName['hallucination']).scoreValue).toBe(0);
-    expect(defined(byName['hallucination']).explanation).toBe('hallucination reasoning');
-    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue + defined(byName['hallucination']).scoreValue).not.toBe(1);
+    expect(defined(byName.hallucination).scoreValue).toBe(0);
+    expect(defined(byName.hallucination).explanation).toBe('hallucination reasoning');
+    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue + defined(byName.hallucination).scoreValue).not.toBe(1);
   });
 
   it('does not skip a criterion another model judged, since the dedup key is per judge model', () => {

@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react';
 import { CUSTOMER_VIEW } from '../../lib/admin-customer-strings.js';
 
-interface CustomerCardProps {
+type CustomerCardProps = {
   title: string;
   isLoading: boolean;
   trailing?: ReactNode;

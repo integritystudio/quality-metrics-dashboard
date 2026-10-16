@@ -138,7 +138,7 @@ describe('OrgSwitcher', () => {
   });
 });
 
-interface OrgEcho {
+type OrgEcho = {
   org: string | undefined;
 }
 

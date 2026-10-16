@@ -2,7 +2,7 @@ import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export interface SessionInfo {
+export type SessionInfo = {
   projectName: string;
   workingDirectory: string;
   gitRepository: string;
@@ -16,7 +16,7 @@ export interface SessionInfo {
   uncommittedAtStart: number;
 }
 
-export interface TokenSnapshot {
+export type TokenSnapshot = {
   messages: number;
   inputTokens: number;
   outputTokens: number;
@@ -25,7 +25,7 @@ export interface TokenSnapshot {
   model: string;
 }
 
-export interface TokenTotals {
+export type TokenTotals = {
   input: number;
   output: number;
   cacheRead: number;
@@ -34,7 +34,7 @@ export interface TokenTotals {
   models: Record<string, number>;
 }
 
-export interface SessionAgentStat {
+export type SessionAgentStat = {
   agentName: string;
   invocations: number;
   errors: number;
@@ -47,18 +47,18 @@ export interface SessionAgentStat {
   emptyCount: number;
 }
 
-export interface FileAccessEntry {
+export type FileAccessEntry = {
   path: string;
   count: number;
 }
 
-export interface GitCommit {
+export type GitCommit = {
   subject: string;
   body: string;
   files: string;
 }
 
-export interface CodeStructureEntry {
+export type CodeStructureEntry = {
   file: string;
   lines: number;
   exports: number;
@@ -68,12 +68,12 @@ export interface CodeStructureEntry {
   tool: string;
 }
 
-export interface AlertSummary {
+export type AlertSummary = {
   totalFired: number;
   stopEvents: number;
 }
 
-export interface DataSources {
+export type DataSources = {
   traces: {
     count: number;
     traceIds: number;
@@ -95,13 +95,13 @@ export interface DataSources {
   total: number;
 }
 
-export interface Timespan {
+export type Timespan = {
   start: string;
   end: string;
   durationHours: number;
 }
 
-export interface HookLatency {
+export type HookLatency = {
   count: number;
   avg: number;
   p50: number;
@@ -109,7 +109,7 @@ export interface HookLatency {
   max: number;
 }
 
-export interface EvaluationBreakdownEntry {
+export type EvaluationBreakdownEntry = {
   name: string;
   count: number;
   avg: number | null;
@@ -117,7 +117,7 @@ export interface EvaluationBreakdownEntry {
   max: number | null;
 }
 
-export interface SessionDetailResponse {
+export type SessionDetailResponse = {
   sessionId: string;
   dataSources: DataSources;
   timespan: Timespan | null;

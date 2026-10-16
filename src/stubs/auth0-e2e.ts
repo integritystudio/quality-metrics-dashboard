@@ -15,9 +15,9 @@ export function useAuth0() {
     isLoading: false,
     isAuthenticated: true,
     user: { email: 'test@example.com', sub: 'test-user-id' },
-    getAccessTokenSilently: () => Promise.resolve(TEST_TOKEN),
-    getIdTokenClaims: () => Promise.resolve({ __raw: TEST_ID_TOKEN }),
-    logout: () => Promise.resolve(),
-    loginWithRedirect: () => Promise.resolve(),
+    getAccessTokenSilently: async () => Promise.resolve(TEST_TOKEN),
+    getIdTokenClaims: async () => Promise.resolve({ __raw: TEST_ID_TOKEN }),
+    logout: async () => Promise.resolve(),
+    loginWithRedirect: async () => Promise.resolve(),
   };
 }

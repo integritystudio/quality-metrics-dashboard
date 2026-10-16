@@ -38,7 +38,7 @@ const CLI_PREFIX = '[judge:cloud]';
 /** Pre-EVAL-WEBHOOK-EVENT-TIME rows kept the client's event time here; their timestamp is receipt time. */
 const LEGACY_EVENT_TIME_ATTR = 'evaluatedAtMs';
 
-export interface CloudJudgeDiscovery {
+export type CloudJudgeDiscovery = {
   transcripts: TranscriptInfo[];
   /** Built from the cloud spans; anchors turns and routes their posts. */
   accounts: AccountIndex;
@@ -112,7 +112,7 @@ async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<E
       { rows: `${evaluator} rows`, truncates: 'the dedup set' },
       CLI_PREFIX,
       // No end bound: a receipt-time row is dated after its turn, never before.
-      (backend) => backend.queryEvaluations({ source: 'table', evaluator, startDate: msToNs(fromMs), limit: CLOUD_EVALUATION_LIMIT }),
+      async (backend) => backend.queryEvaluations({ source: 'table', evaluator, startDate: msToNs(fromMs), limit: CLOUD_EVALUATION_LIMIT }),
     );
     // Element by element: spreading a 200k-row page into push() overflows the call stack.
     for (const { rows: found } of perAccount) for (const row of found) rows.push(row);

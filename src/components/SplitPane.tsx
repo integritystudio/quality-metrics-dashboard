@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
 
-interface SplitPaneProps {
+type SplitPaneProps = {
   left: ReactNode;
   right: ReactNode;
   initialSplit?: number;

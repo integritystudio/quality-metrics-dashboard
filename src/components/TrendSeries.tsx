@@ -15,7 +15,7 @@ import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_
 import { formatScore } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
-interface TrendSeriesProps {
+type TrendSeriesProps = {
   data: TrendBucket[];
   metricName: string;
 }

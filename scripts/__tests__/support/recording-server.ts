@@ -23,7 +23,7 @@ const EMPTY_JSON_BODY = '{}';
 /** `alpnProtocol` of a request that arrived without TLS. */
 export const NO_ALPN = 'none';
 
-export interface RecordedRequest {
+export type RecordedRequest = {
   method: string;
   /** Path with its query string, as sent. */
   path: string;
@@ -34,7 +34,7 @@ export interface RecordedRequest {
 }
 
 /** Answer with an HTTP response. */
-export interface HttpReply {
+export type HttpReply = {
   status: number;
   headers?: Record<string, string>;
   body?: string;
@@ -46,14 +46,14 @@ export const DROP_CONNECTION = Symbol('drop-connection');
 export type Reply = HttpReply | typeof DROP_CONNECTION;
 export type Responder = (request: RecordedRequest) => Reply;
 
-export interface RecordingServer {
+export type RecordingServer = {
   readonly url: string;
   /** Requests received since the last reset, in arrival order. */
   readonly requests: readonly RecordedRequest[];
-  respondWith(responder: Responder): void;
+  respondWith: (responder: Responder) => void;
   /** Forget recorded requests and go back to answering 200 `{}`. */
-  reset(): void;
-  close(): Promise<void>;
+  reset: () => void;
+  close: () => Promise<void>;
 }
 
 const answerOk: Responder = () => ({
@@ -82,9 +82,9 @@ export function inOrder(first: Reply, ...rest: Reply[]): Responder {
 }
 
 /** What `handle` needs of a response, common to `node:http` and `node:http2`'s compat API. */
-interface ReplyChannel {
-  writeHead(status: number, headers?: Record<string, string>): unknown;
-  end(body: string): unknown;
+type ReplyChannel = {
+  writeHead: (status: number, headers?: Record<string, string>) => unknown;
+  end: (body: string) => unknown;
 }
 
 export async function startRecordingServer(options: { tls?: boolean } = {}): Promise<RecordingServer> {
@@ -140,7 +140,7 @@ async function listenPlain(
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://${LOOPBACK_HOST}:${port}`,
-    close() {
+    async close() {
       server.closeAllConnections();
       return new Promise<void>((resolve, reject) => server.close(err => (err ? reject(err) : resolve())));
     },

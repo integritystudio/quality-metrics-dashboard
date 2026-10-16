@@ -28,20 +28,22 @@ const TONE_FILL: Record<QuotaTone, string> = {
 const Y_TICK_COUNT = USAGE_CHART_GRID_LINES + 1;
 const UNITS_LABEL = 'units';
 
-interface TonedDailyUsage extends DailyUsage {
+type TonedDailyUsage = {
   fill: string;
-}
+} & DailyUsage
 
-interface TonedBarShapeProps extends BarShapeProps {
+// Recharts types `payload` as `any`; Omit before intersecting so the narrowing
+// survives (an intersection with `any` is `any`, where `extends` overrode it).
+type TonedBarShapeProps = Omit<BarShapeProps, 'payload'> & {
   payload?: TonedDailyUsage;
-}
+};
 
 /** Per-bar colour from the datum (Recharts 3 deprecates `Cell` in favour of `shape`). */
 function tonedBar(props: TonedBarShapeProps) {
   return <Rectangle {...props} fill={props.payload?.fill} />;
 }
 
-interface DailyUsageChartProps {
+type DailyUsageChartProps = {
   buckets: readonly UsageBucket[];
   /** The org's monthly limit, or 0 when there is none; drives the reference line and bar colours. */
   monthlyLimit: number;

@@ -80,31 +80,31 @@ describe('MIN_QUANTILE_SAMPLE_SIZE', () => {
 
 describe('METRIC_SCALE_STRATEGY', () => {
   it('maps relevance to quantile', () => {
-    expect(METRIC_SCALE_STRATEGY['relevance']).toBe('quantile');
+    expect(METRIC_SCALE_STRATEGY.relevance).toBe('quantile');
   });
 
   it('maps faithfulness to binary', () => {
-    expect(METRIC_SCALE_STRATEGY['faithfulness']).toBe('binary');
+    expect(METRIC_SCALE_STRATEGY.faithfulness).toBe('binary');
   });
 
   it('maps coherence to uniform', () => {
-    expect(METRIC_SCALE_STRATEGY['coherence']).toBe('uniform');
+    expect(METRIC_SCALE_STRATEGY.coherence).toBe('uniform');
   });
 
   it('maps hallucination to log', () => {
-    expect(METRIC_SCALE_STRATEGY['hallucination']).toBe('log');
+    expect(METRIC_SCALE_STRATEGY.hallucination).toBe('log');
   });
 
   it('maps task_completion to step', () => {
-    expect(METRIC_SCALE_STRATEGY['task_completion']).toBe('step');
+    expect(METRIC_SCALE_STRATEGY.task_completion).toBe('step');
   });
 
   it('maps tool_correctness to categorical', () => {
-    expect(METRIC_SCALE_STRATEGY['tool_correctness']).toBe('categorical');
+    expect(METRIC_SCALE_STRATEGY.tool_correctness).toBe('categorical');
   });
 
   it('maps evaluation_latency to percentile_rank', () => {
-    expect(METRIC_SCALE_STRATEGY['evaluation_latency']).toBe('percentile_rank');
+    expect(METRIC_SCALE_STRATEGY.evaluation_latency).toBe('percentile_rank');
   });
 });
 

@@ -28,7 +28,7 @@ async function getHttp1Fetch(): Promise<SdkFetch> {
   // The cast covers one method: the parent's `@types/node` types the global
   // `Response` from `undici-types` 8, which has `textStream()`, and this app's
   // undici 7 `Response` does not. No caller uses it. Drop it with undici 8.
-  const wrapped: SdkFetch = (input, init) =>
+  const wrapped: SdkFetch = async (input, init) =>
     fetch(input, { ...init, dispatcher }) as Promise<Response>;
   http1Fetch = wrapped;
   return wrapped;

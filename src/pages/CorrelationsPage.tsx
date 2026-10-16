@@ -8,7 +8,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
 import type { CorrelationFeature, Period } from '../types.js';
 
-interface CorrelationsResponse {
+type CorrelationsResponse = {
   correlations: CorrelationFeature[];
   metrics: string[];
 }

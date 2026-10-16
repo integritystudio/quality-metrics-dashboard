@@ -2,7 +2,7 @@ import { createContext, use, useMemo, type ReactNode } from 'react';
 import { useCalibration, getMetricCalibration, type MetricCalibration } from '../hooks/useCalibration.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 
-interface CalibrationContextValue {
+type CalibrationContextValue = {
   data: CalibrationResponse | undefined;
   isLoading: boolean;
 }

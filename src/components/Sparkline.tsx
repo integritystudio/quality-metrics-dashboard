@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { extent } from 'd3-array';
 import { scaleLinear } from 'd3-scale';
 
-interface SparklineProps {
+type SparklineProps = {
   /** Array of score values (nulls allowed for gaps) */
   data: Array<number | null>;
   /** SVG width in px */

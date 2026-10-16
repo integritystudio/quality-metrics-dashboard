@@ -38,12 +38,12 @@ import type {
 export type WireEvaluation = JsonSafe<EvaluationResult>;
 
 /** Every route funnels failures through `sanitizeErrorForResponse` into this shape. */
-export interface ErrorResponse {
+export type ErrorResponse = {
   error: string;
 }
 
 /** `GET /dashboard` and `GET /dashboard?role=…` both add these to their payload. */
-interface DashboardExtras {
+type DashboardExtras = {
   /**
    * Present on the unscoped dashboard and the executive role view only.
    *
@@ -61,13 +61,13 @@ export type DashboardResponse = JsonSafe<QualityDashboardSummary> & DashboardExt
 export type RoleViewResponse = JsonSafe<RoleView> & DashboardExtras;
 
 /** `GET /health` — mirrors `checkHealth()` in data-loader. */
-export interface HealthResponse {
+export type HealthResponse = {
   status: string;
   hasData: boolean;
 }
 
 /** `GET /quality/live` — `lastUpdated` is a decimal-nanos string or an ISO date. */
-export interface QualityLiveResponse {
+export type QualityLiveResponse = {
   metrics: Array<{ name: string; score: number; evaluatorType: string; timestamp: string }>;
   sessionCount: number;
   lastUpdated: string;
@@ -79,7 +79,7 @@ export type MetricDetailResponse = JsonSafe<MetricDetailResult> & {
 };
 
 /** One row of `GET /metrics/:name/evaluations`, projected from `EvaluationResult`. */
-interface MetricEvaluationRowRaw {
+type MetricEvaluationRowRaw = {
   score: number;
   explanation: EvaluationResult['explanation'];
   traceId: EvaluationResult['traceId'];
@@ -100,7 +100,7 @@ interface MetricEvaluationRowRaw {
 export type MetricEvaluationRow = JsonSafe<MetricEvaluationRowRaw>;
 
 /** `GET /metrics/:name/evaluations`. */
-export interface MetricEvaluationsResponse {
+export type MetricEvaluationsResponse = {
   rows: MetricEvaluationRow[];
   total: number;
   limit: number;
@@ -109,7 +109,7 @@ export interface MetricEvaluationsResponse {
 }
 
 /** One `GET /trends/:name` bucket — mirrors the route's `trendData` entries. */
-export interface TrendBucket {
+export type TrendBucket = {
   startTime: string;
   endTime: string;
   count: number;
@@ -120,7 +120,7 @@ export interface TrendBucket {
 }
 
 /** `GET /trends/:name`. */
-export interface TrendDetailResponse {
+export type TrendDetailResponse = {
   metric: string;
   period: string;
   bucketCount: number;
@@ -131,7 +131,7 @@ export interface TrendDetailResponse {
 }
 
 /** A span as it appears on the wire: `bigint` nanos encoded to decimal strings. */
-export interface WireSpan {
+export type WireSpan = {
   traceId: string;
   spanId: string;
   name: string;
@@ -143,14 +143,14 @@ export interface WireSpan {
 }
 
 /** `GET /traces/:traceId`. */
-export interface TraceDetailResponse {
+export type TraceDetailResponse = {
   traceId: string;
   spans: WireSpan[];
   evaluations: WireEvaluation[];
 }
 
 /** One entry of `GET /agents`. */
-export interface AgentSummary {
+export type AgentSummary = {
   agentName: string;
   invocations: number;
   errors: number;
@@ -169,7 +169,7 @@ export interface AgentSummary {
 }
 
 /** `GET /agents`. */
-export interface AgentListResponse {
+export type AgentListResponse = {
   period: string;
   startDate: string;
   endDate: string;
@@ -177,7 +177,7 @@ export interface AgentListResponse {
 }
 
 /** `GET /agents/:sessionId`. */
-export interface AgentDetailResponse {
+export type AgentDetailResponse = {
   sessionId: string;
   spans: WireSpan[];
   evaluation: JsonSafe<MultiAgentEvaluation> | null;
@@ -199,19 +199,19 @@ export type AgentGraphResponse = Pick<AgentDetailResponse, 'sessionId' | 'evalua
  */
 
 /** `GET /evaluations/trace/:traceId`. */
-export interface TraceEvaluationsResponse {
+export type TraceEvaluationsResponse = {
   evaluations: WireEvaluation[];
 }
 
 /** `GET /compliance/sla`. */
-export interface SlaComplianceResponse {
+export type SlaComplianceResponse = {
   period: string;
   results: Array<JsonSafe<SLAComplianceResult>>;
   noSLAsConfigured: boolean;
 }
 
 /** `GET /compliance/verifications`. */
-export interface VerificationsResponse {
+export type VerificationsResponse = {
   period: string;
   count: number;
   verifications: Array<JsonSafe<HumanVerificationEvent>>;
@@ -221,7 +221,7 @@ export interface VerificationsResponse {
 export type CoverageResponse = JsonSafe<CoverageMatrix> & { period: string };
 
 /** `GET /correlations`. */
-export interface CorrelationsResponse {
+export type CorrelationsResponse = {
   correlations: CorrelationFeature[];
   metrics: string[];
 }

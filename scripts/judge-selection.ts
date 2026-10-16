@@ -33,7 +33,7 @@ export const WEBHOOK_SECRET_ENV = 'INJECT_HMAC_SECRET';
 
 export type TurnSkip = 'judged' | 'withheld' | 'held-for-key';
 
-export interface SelectOptions {
+export type SelectOptions = {
   /** Most turns to select; applied after every skip. */
   limit: number;
   /** Skip turns whose records could not be delivered this run. */
@@ -41,7 +41,7 @@ export interface SelectOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-export interface TurnSelection {
+export type TurnSelection = {
   selected: Turn[];
   discovered: number;
   judged: number;
@@ -114,6 +114,6 @@ export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, o
 export function formatTurnSelection(s: TurnSelection): string {
   const held = Object.entries(s.heldForKey).map(([k, v]) => `${k}=${v}`).join(' ');
   return `discovered=${s.discovered} judged=${s.judged} withheld=${s.withheld}${
-     held ? ` heldForKey[${held}]` : ''
-     } pending=${s.pending} selected=${s.selected.length}`;
+    held ? ` heldForKey[${held}]` : ''
+  } pending=${s.pending} selected=${s.selected.length}`;
 }

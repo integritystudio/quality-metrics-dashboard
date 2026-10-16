@@ -96,21 +96,21 @@ export class BatchWallClockExceededError extends Error {
  * the run was ended by the wall clock so callers can inspect it without
  * consulting the `console.warn` output.
  */
-export interface FlushResult {
+export type FlushResult = {
   settled: number;
   abandoned: number;
   overrun?: BatchWallClockExceededError;
 }
 
 /** The four calls this provider makes. `client.messages.batches` satisfies it; so does a fake. */
-export interface BatchClient {
-  create(params: { requests: BatchRequest[] }): Promise<MessageBatch>;
-  retrieve(batchId: string): Promise<MessageBatch>;
-  results(batchId: string): Promise<AsyncIterable<BatchResultLine>>;
-  cancel(batchId: string): Promise<MessageBatch>;
+export type BatchClient = {
+  create: (params: { requests: BatchRequest[] }) => Promise<MessageBatch>;
+  retrieve: (batchId: string) => Promise<MessageBatch>;
+  results: (batchId: string) => Promise<AsyncIterable<BatchResultLine>>;
+  cancel: (batchId: string) => Promise<MessageBatch>;
 }
 
-export interface BatchProviderOptions {
+export type BatchProviderOptions = {
   model: string;
   maxTokens: number;
   temperature: number;
@@ -125,8 +125,8 @@ export interface BatchProviderOptions {
   onUsage?: (usage: JudgeTokenUsage) => void;
 }
 
-export interface BatchLLMProvider extends LLMProvider {
-  generate(prompt: string, options?: BatchGenerateOptions): Promise<GenerateResult>;
+export type BatchLLMProvider = {
+  generate: (prompt: string, options?: BatchGenerateOptions) => Promise<GenerateResult>;
   /**
    * Ship everything queued and settle every promise handed out, in as many
    * rounds as it takes. Running out of wall clock does not reject it: by then
@@ -134,7 +134,7 @@ export interface BatchLLMProvider extends LLMProvider {
    * {@link BatchWallClockExceededError}. The result carries the wall-clock
    * stats so callers do not have to scrape `console.warn` output.
    */
-  flush(): Promise<FlushResult>;
+  flush: () => Promise<FlushResult>;
   /**
    * The error that broke the run, once one has. Set by whichever flush hit it —
    * including the idle auto-flush, which nobody awaits — so a caller that only
@@ -142,7 +142,7 @@ export interface BatchLLMProvider extends LLMProvider {
    * a deadline, not a failure, and never sets it.
    */
   readonly failure: Error | undefined;
-}
+} & LLMProvider
 
 /**
  * `generate()` options. `jsonSchema` is the structured-output option a sibling
@@ -165,7 +165,7 @@ function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
 
-interface Pending {
+type Pending = {
   resolve: (result: GenerateResult) => void;
   reject: (error: Error) => void;
 }
@@ -192,7 +192,7 @@ class MessageBatchProvider implements BatchLLMProvider {
     this.cancelGraceMs = options.cancelGraceMs ?? BATCH_CANCEL_GRACE_MS;
   }
 
-  generate(prompt: string, options?: BatchGenerateOptions): Promise<GenerateResult> {
+  async generate(prompt: string, options?: BatchGenerateOptions): Promise<GenerateResult> {
     const over = this.failure ?? this.overrun;
     if (over) return Promise.reject(over);
     const customId = `${CUSTOM_ID_PREFIX}-${++this.sequence}`;
@@ -204,7 +204,7 @@ class MessageBatchProvider implements BatchLLMProvider {
     return promise;
   }
 
-  flush(): Promise<FlushResult> {
+  async flush(): Promise<FlushResult> {
     this.disarmIdleFlush();
     if (this.failure) return Promise.reject(this.failure);
     this.draining ??= this.drain().finally(() => {

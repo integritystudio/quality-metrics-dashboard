@@ -1,7 +1,7 @@
 import { ScoreChip } from './Chip.js';
 import type { HandoffEvaluation } from '../types.js';
 
-interface HandoffCardProps {
+type HandoffCardProps = {
   handoff: HandoffEvaluation;
 }
 

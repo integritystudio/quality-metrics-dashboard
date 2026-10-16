@@ -21,7 +21,7 @@ function CohortBadge({ cohort }: { cohort: SurvivalCohort }) {
   );
 }
 
-interface SurvivalTableProps {
+type SurvivalTableProps = {
   title: string;
   note: string;
   rows: AgentWindowStats[];

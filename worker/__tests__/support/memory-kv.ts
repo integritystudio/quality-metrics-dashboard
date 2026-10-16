@@ -9,17 +9,17 @@ type KvValueType = 'text' | 'json' | 'arrayBuffer' | 'stream';
 type KvGetOptions = KvValueType | { type?: KvValueType };
 type KvPutValue = string | ArrayBuffer | ArrayBufferView | ReadableStream;
 
-interface KvPutOptions {
+type KvPutOptions = {
   metadata?: unknown;
 }
 
-interface KvListOptions {
+type KvListOptions = {
   prefix?: string;
   cursor?: string;
   limit?: number;
 }
 
-interface KvListKey {
+type KvListKey = {
   name: string;
   metadata?: unknown;
 }
@@ -28,7 +28,7 @@ type KvListResult =
   | { keys: KvListKey[]; list_complete: true; cacheStatus: null }
   | { keys: KvListKey[]; list_complete: false; cursor: string; cacheStatus: null };
 
-interface StoredEntry {
+type StoredEntry = {
   value: string;
   metadata: unknown;
 }

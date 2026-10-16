@@ -5,7 +5,7 @@ type ShortcutKey = string;
 /** Two-key combo: `"prefix suffix"` */
 type ComboKey = `${string} ${string}`;
 
-interface Shortcut {
+type Shortcut = {
   key: ShortcutKey;
   description: string;
   scope: string;
@@ -20,7 +20,7 @@ function comboPrefix(key: ComboKey): string {
   return key.split(' ')[0] ?? '';
 }
 
-interface KeyboardNavContextValue {
+type KeyboardNavContextValue = {
   shortcuts: Shortcut[];
   register: (key: ShortcutKey, description: string, scope: string, action: () => void) => () => void;
   overlayOpen: boolean;

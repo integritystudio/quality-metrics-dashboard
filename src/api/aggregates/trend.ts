@@ -33,7 +33,7 @@ const TREND_PADDING_MIN_MS = 60_000;
 
 type Percentiles = ReturnType<typeof computePercentileDistribution>;
 
-export interface TrendBucket {
+export type TrendBucket = {
   startTime: string;
   endTime: string;
   count: number;
@@ -43,7 +43,7 @@ export interface TrendBucket {
   dynamics: MetricDynamics | null;
 }
 
-export interface TrendView {
+export type TrendView = {
   metric: string;
   period: Period;
   bucketCount: number;
@@ -54,7 +54,7 @@ export interface TrendView {
 }
 
 /** A bucket's window and scores, the input the degradation signals consume. */
-export interface ScoredBucket {
+export type ScoredBucket = {
   startTime: string;
   endTime: string;
   scores: number[];

@@ -25,7 +25,7 @@ export function jwksUrlFor(domain: string): string {
   return `https://${domain}/.well-known/jwks.json`;
 }
 
-export interface TokenClaims {
+export type TokenClaims = {
   sub?: string;
   issuer?: string;
   audience?: string;
@@ -33,15 +33,15 @@ export interface TokenClaims {
   expiresAt?: number | string | Date;
 }
 
-export interface TestIssuer {
+export type TestIssuer = {
   readonly domain: string;
   readonly issuer: string;
   readonly kid: string;
-  sign(claims?: TokenClaims): Promise<string>;
+  sign: (claims?: TokenClaims) => Promise<string>;
   /** A JWS over `payload` verbatim, signed with this tenant's key: for payloads that are not a claims set. */
-  signPayload(payload: string): Promise<string>;
+  signPayload: (payload: string) => Promise<string>;
   /** Answers this tenant's JWKS URL with its public key and hands every other request on. */
-  serveJwks(fetchImpl: FetchLike): FetchLike;
+  serveJwks: (fetchImpl: FetchLike) => FetchLike;
 }
 
 /** `kid` defaults to a fresh id; pass another issuer's to forge tokens under its key id. */

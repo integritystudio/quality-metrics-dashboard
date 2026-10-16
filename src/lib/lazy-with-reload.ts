@@ -18,7 +18,7 @@ import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 export const CHUNK_RELOAD_KEY = 'obs.chunkReloadPending';
 const CHUNK_RELOAD_MARK = '1';
 
-export interface ChunkReloadEnv {
+export type ChunkReloadEnv = {
   /** Survives the reload; undefined when the browser refuses storage. */
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined;
   reload: () => void;
@@ -59,13 +59,13 @@ function clearReloadClaim(storage: ChunkReloadEnv['storage']): void {
  * settles, so Suspense keeps its fallback until the reload lands; on a
  * rejection after that reload it rethrows.
  */
-export function importWithReload<T>(load: () => Promise<T>, env: ChunkReloadEnv = browserEnv()): Promise<T> {
+export async function importWithReload<T>(load: () => Promise<T>, env: ChunkReloadEnv = browserEnv()): Promise<T> {
   return load().then(
     (module) => {
       clearReloadClaim(env.storage);
       return module;
     },
-    (error: unknown) => {
+    async (error: unknown) => {
       if (!claimReload(env.storage)) throw error;
       env.reload();
       return new Promise<T>(() => {});
@@ -79,5 +79,5 @@ export function lazyWithReload<T extends ComponentType<any>>(
   load: () => Promise<{ default: T }>,
   env?: ChunkReloadEnv,
 ): LazyExoticComponent<T> {
-  return lazy(() => importWithReload(load, env));
+  return lazy(async () => importWithReload(load, env));
 }

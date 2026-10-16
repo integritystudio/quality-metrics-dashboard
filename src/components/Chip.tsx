@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { scoreColor, type ScoreDirection } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
-interface ColoredChipProps {
+type ColoredChipProps = {
   color: string;
   title?: string | undefined;
   className?: string | undefined;
@@ -22,7 +22,7 @@ export function ColoredChip({ color, title, className, style, children }: Colore
   );
 }
 
-interface ScoreChipProps {
+type ScoreChipProps = {
   score: number;
   direction?: ScoreDirection;
   title?: string;

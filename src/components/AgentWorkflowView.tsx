@@ -10,7 +10,7 @@ import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';
 
-interface AgentWorkflowViewProps {
+type AgentWorkflowViewProps = {
   graph: WorkflowGraph;
   evaluation?: MultiAgentEvaluation;
   onNodeClick?: (nodeId: string) => void;

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StatusBadge } from './Indicators.js';
 
-interface HealthBannerProps {
+type HealthBannerProps = {
   status: string;
   message: ReactNode;
   children?: ReactNode;

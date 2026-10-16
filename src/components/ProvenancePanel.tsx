@@ -4,14 +4,14 @@ import { formatScore } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { timestampToMs } from '../lib/timestamps.js';
 
-interface EvaluatorTypeCounts {
+type EvaluatorTypeCounts = {
   rule: number;
   llm: number;
   seed: number;
   canary: number;
 }
 
-interface ProvenancePanelProps {
+type ProvenancePanelProps = {
   evaluationName: string;
   scoreValue?: number | undefined;
   scoreLabel?: string | undefined;

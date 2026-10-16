@@ -847,7 +847,7 @@ describe('evaluateTurn', () => {
     const evals = await evaluateTurn(judge, turn, new Set());
 
     // Relevance should fail, coherence should succeed
-    expect(evalFailures['relevance']).toBe(1);
+    expect(evalFailures.relevance).toBe(1);
     expect(evals.some(e => e.evaluationName === 'coherence')).toBe(true);
   });
 
@@ -939,8 +939,8 @@ describe('evaluateTurn faithfulness and hallucination', () => {
 
     // One shared failure, two metrics missing — recording it once would leave the
     // hallucination series looking merely absent rather than failed.
-    expect(evalFailures['faithfulness']).toBe(1);
-    expect(evalFailures['hallucination']).toBe(1);
+    expect(evalFailures.faithfulness).toBe(1);
+    expect(evalFailures.hallucination).toBe(1);
     expect(evals.map(e => e.evaluationName)).not.toContain('hallucination');
   });
 });

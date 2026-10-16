@@ -25,7 +25,7 @@ export type OrgMembershipRole = 'owner' | 'admin' | 'member' | 'billing_admin' |
 /** The four dashboard roles derived from a membership role (org-rbac.ts). */
 export type DashboardRole = 'owner' | 'admin' | 'read' | 'e2e-dashboard-reader';
 
-export interface OrgMembershipSummary {
+export type OrgMembershipSummary = {
   orgId: string;
   slug: string;
   name: string;
@@ -33,7 +33,7 @@ export interface OrgMembershipSummary {
   dashboardRole: DashboardRole;
 }
 
-export interface AppSession {
+export type AppSession = {
   /** Server-side only. Not populated on the client — /api/me never returns internal IDs. */
   authUserId?: string;
   /** Server-side only. Not populated on the client — /api/me never returns internal IDs. */

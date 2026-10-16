@@ -111,8 +111,8 @@ export async function loadEvaluationsByTraceIds(
   const end = endDate ?? defEnd;
   const limiter = pLimit(TRACE_QUERY_CONCURRENCY);
   const settled = await Promise.allSettled(
-    uniqueIds.map(traceId =>
-      limiter(() => be.queryEvaluations({ traceId, startDate: isoToNs(start), endDate: isoToNs(end), limit: LIMIT_EVALS_PER_TRACE }))
+    uniqueIds.map(async traceId =>
+      limiter(async () => be.queryEvaluations({ traceId, startDate: isoToNs(start), endDate: isoToNs(end), limit: LIMIT_EVALS_PER_TRACE }))
     )
   );
   const all: EvaluationResult[] = [];
@@ -201,7 +201,7 @@ export async function loadLogsBySessionId(
   return queryLogsWithDefaultRange({ sessionId }, startDate, endDate);
 }
 
-export interface SessionEvaluations {
+export type SessionEvaluations = {
   /** At most {@link LIMIT_EVALS_SESSION} rows, in the order the backend returned them. */
   evaluations: EvaluationResult[];
   /** True when the session has more evaluations in the window than `evaluations` holds. */

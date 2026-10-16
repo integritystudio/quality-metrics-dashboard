@@ -20,7 +20,7 @@ const ERR_COPY_FAILED = 'Copy failed. Select the key above and copy it manually.
 const COPY_FEEDBACK_MS = 2000;
 
 /** A rotation's new token, held above the key table: the rotated row leaves the list once it refetches. */
-interface RotatedKey {
+type RotatedKey = {
   previousPrefix: string;
   token: string;
 }
@@ -99,7 +99,7 @@ function useAdminFetch() {
   };
 }
 
-interface RowMutation {
+type RowMutation = {
   path: string;
   method: string;
   body?: unknown;

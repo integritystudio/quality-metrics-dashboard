@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-interface DetailPageHeaderProps {
+type DetailPageHeaderProps = {
   title: string;
   id?: string;
   children?: ReactNode;

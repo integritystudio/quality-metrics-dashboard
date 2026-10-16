@@ -27,13 +27,13 @@ export const MAX_TOOL_RESULTS_PER_TURN = 20;
 
 export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 
-export interface TranscriptInfo {
+export type TranscriptInfo = {
   path: string;
   sessionId: string;
   traceId: string;
 }
 
-export interface Turn {
+export type Turn = {
   sessionId: string;
   traceId: string;
   timestamp: string;
@@ -213,11 +213,11 @@ export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, se
   return transcripts;
 }
 
-export interface TextBlock { type: 'text'; text: string }
+export type TextBlock = { type: 'text'; text: string }
 
-export interface ToolResultBlock { type: 'tool_result'; content: string | ContentBlock[] }
+export type ToolResultBlock = { type: 'tool_result'; content: string | ContentBlock[] }
 
-export interface ToolUseBlock { type: 'tool_use'; id: string; name: string }
+export type ToolUseBlock = { type: 'tool_use'; id: string; name: string }
 
 export type ContentBlock = TextBlock | ToolResultBlock | ToolUseBlock;
 

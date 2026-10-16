@@ -50,14 +50,14 @@ export type AgentStatsEvaluation = {
   scoreValue?: number | null | undefined;
 };
 
-export interface EvalMetricSummary {
+export type EvalMetricSummary = {
   avg: number;
   min: number;
   max: number;
   count: number;
 }
 
-export interface AgentStat {
+export type AgentStat = {
   agentName: string;
   invocations: number;
   errors: number;
@@ -76,7 +76,7 @@ export interface AgentStat {
   evalSummary: Record<string, EvalMetricSummary>;
 }
 
-export interface AgentStatsResponse {
+export type AgentStatsResponse = {
   period: Period;
   /** Null when the Worker serves the empty envelope before the first sync run. */
   startDate: string | null;
@@ -84,7 +84,7 @@ export interface AgentStatsResponse {
   agents: AgentStat[];
 }
 
-export interface AgentStatsWindow {
+export type AgentStatsWindow = {
   periodDays: number;
   windowStart: Date;
   /** Date-only: the response contract and the daily bucket keys. */

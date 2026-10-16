@@ -9,7 +9,7 @@ import { ROLES, DEFAULT_ROLE } from '../lib/constants.js';
 
 const VALID_ROLES = new Set<FeatureRoleType>(ROLES);
 
-interface RoleContextValue {
+type RoleContextValue = {
   role: FeatureRoleType;
   config: RoleFeatureConfig;
   hasFeature: (feature: keyof RoleFeatureConfig) => boolean;

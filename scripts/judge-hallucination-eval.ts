@@ -128,7 +128,7 @@ export type ParsedArgs = OneShotArgs & { referencePath: string };
 export type HallucinationTurn = Pick<QualityTurn, 'sessionId' | 'timestamp' | 'hasTools' | 'expected' | 'reference'>
   & Record<Configuration, Record<string, number>>;
 
-export interface ComplementCount {
+export type ComplementCount = {
   /** Turns with both faithfulness and hallucination. */
   paired: number;
   /** Of those, how many sum to 1. */

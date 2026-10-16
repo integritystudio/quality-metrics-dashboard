@@ -51,14 +51,14 @@ export type { Period } from './lib/constants.js';
 
 export type OverallStatus = 'healthy' | 'warning' | 'critical' | 'no_data';
 
-export interface LiveMetric {
+export type LiveMetric = {
   name: string;
   score: number;
   evaluatorType: string;
   timestamp: string;
 }
 
-export interface QualityLiveData {
+export type QualityLiveData = {
   metrics: LiveMetric[];
   sessionCount: number;
   lastUpdated: string;

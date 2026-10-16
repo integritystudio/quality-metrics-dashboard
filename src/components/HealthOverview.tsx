@@ -4,7 +4,7 @@ import { TIME_MS, PERIOD_MS } from '../lib/constants.js';
 import { HealthBanner } from './HealthBanner.js';
 import { StatDisplay } from './StatDisplay.js';
 
-interface PipelineHealth {
+type PipelineHealth = {
   evalVolume: number;
   lastEvalAge: string | null;
   evalRate: string;

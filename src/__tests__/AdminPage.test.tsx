@@ -59,7 +59,7 @@ function orgSession(role: DashboardRole): AppSession {
   };
 }
 
-interface RecordedRequest {
+type RecordedRequest = {
   method: string;
   path: string;
   headers: Record<string, string>;
@@ -381,7 +381,7 @@ describe('AdminPage — organization members (active org)', () => {
   });
 });
 
-interface MutationCase {
+type MutationCase = {
   name: string;
   mode: { orgRole: DashboardRole } | 'legacy';
   members?: AdminMember[];

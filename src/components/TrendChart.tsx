@@ -19,7 +19,7 @@ import {
 import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
-interface TrendChartProps {
+type TrendChartProps = {
   trend?: MetricTrend | undefined;
   dynamics?: MetricDynamics | undefined;
   warningThreshold?: number | undefined;

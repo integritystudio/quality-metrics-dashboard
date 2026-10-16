@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { formatTimestamp } from '../lib/quality-utils.js';
 import { timestampToMs } from '../lib/timestamps.js';
 
-interface TimestampCellProps {
+type TimestampCellProps = {
   timestamp: string | number | bigint;
   className?: string;
 }

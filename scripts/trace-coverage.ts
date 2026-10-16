@@ -45,14 +45,14 @@ const CLI_PREFIX = '[trace-coverage]';
 
 
 /** One local span, reduced to what the comparison needs. */
-export interface LocalSpan {
+export type LocalSpan = {
   key: string;
   ref: AccountRef;
   startMs: number;
   sessionId: string;
 }
 
-export interface DayCoverage {
+export type DayCoverage = {
   day: string;
   local: number;
   matched: number;
@@ -60,7 +60,7 @@ export interface DayCoverage {
   cloudOnly: number;
 }
 
-export interface AccountCoverage {
+export type AccountCoverage = {
   ref: string;
   days: DayCoverage[];
   local: number;
@@ -69,7 +69,7 @@ export interface AccountCoverage {
   missingBySession: Array<{ sessionId: string; missing: number }>;
 }
 
-export interface CoverageWindow {
+export type CoverageWindow = {
   fromMs: number;
   toMs: number;
 }
@@ -209,7 +209,7 @@ function printAccount(result: AccountCoverage): void {
   }
 }
 
-interface CliOptions {
+type CliOptions = {
   days: number;
   settleMinutes: number;
   minCoverage: number;

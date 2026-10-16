@@ -32,20 +32,20 @@ export function RoleSelector() {
   return (
     <nav aria-label="Dashboard views">
       <div className="tab-nav" role="tablist">
-      {tabs.map((tab) => {
-        const active = location === tab.path;
-        return (
-          <button
-            key={tab.path}
-            role="tab"
-            aria-selected={active}
-            className="tab-btn"
-            onClick={() => setLocation(tab.path)}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
+        {tabs.map((tab) => {
+          const active = location === tab.path;
+          return (
+            <button
+              key={tab.path}
+              role="tab"
+              aria-selected={active}
+              className="tab-btn"
+              onClick={() => setLocation(tab.path)}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

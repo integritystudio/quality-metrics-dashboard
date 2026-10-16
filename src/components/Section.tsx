@@ -13,7 +13,7 @@ export function ViewSection({ title, children }: { title: ReactNode; children: R
 
 export type SectionHealth = 'ok' | 'warn' | 'crit' | 'neutral';
 
-export interface SectionProps {
+export type SectionProps = {
   title: string;
   badge?: string;
   health?: SectionHealth;
@@ -25,10 +25,10 @@ export function Section({ title, badge, health = 'neutral', defaultOpen = false,
   const railColor = health === 'ok'
     ? 'var(--status-healthy)'
     : health === 'warn'
-    ? 'var(--status-warning)'
-    : health === 'crit'
-    ? 'var(--status-critical)'
-    : 'var(--border-accent)';
+      ? 'var(--status-warning)'
+      : health === 'crit'
+        ? 'var(--status-critical)'
+        : 'var(--border-accent)';
 
   return (
     <details open={defaultOpen} className="mb-1" style={{ '--section-rail-color': railColor } as CSSProperties}>

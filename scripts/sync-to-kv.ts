@@ -74,7 +74,7 @@ import { msToNs } from './hrt.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 
-interface CloudflareConfig {
+type CloudflareConfig = {
   accountId: string;
   namespaceId: string;
 }
@@ -287,7 +287,7 @@ const TRACE_PRIORITY_WEIGHTS = {
   referencedByWorst: 0.2,  // linked from metric detail cards
 } as const;
 
-export interface BudgetAllocation {
+export type BudgetAllocation = {
   highPriorityBudget: number;
   traceBudget: number;
 }
@@ -361,7 +361,7 @@ function previewKeys(keys: string[]): string {
   return keys.length > FAILED_KEY_PREVIEW_COUNT ? `${shown}…` : shown;
 }
 
-interface EnvelopedKVPair {
+type EnvelopedKVPair = {
   key: string;
   value: string;
   expiration_ttl?: number;
@@ -452,7 +452,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
         lastConnectionError = err;
         console.warn(
           `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ${
-          describeFetchError(err.cause ?? err)}`,
+            describeFetchError(err.cause ?? err)}`,
         );
         continue;
       }
@@ -613,7 +613,7 @@ async function main(): Promise<void> {
   }
   console.log(
     `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}${
-    HOME_ORG_ID ? ` orgScoping=on home=${HOME_ORG_ID}` : ' orgScoping=off (HOME_ORG_ID unset — legacy bare keys only)'}`,
+      HOME_ORG_ID ? ` orgScoping=on home=${HOME_ORG_ID}` : ' orgScoping=off (HOME_ORG_ID unset — legacy bare keys only)'}`,
   );
 
   const now = new Date();
@@ -638,7 +638,7 @@ async function main(): Promise<void> {
     hitCap ||= res.hitCap;
     perOrgSummaries.push(
       `${orgId ?? 'legacy'}: entries=${res.allEntries.length} evals=${res.evalCount} spans=${res.spanCount} periods=[${res.periodCounts}]${
-      res.hitCap ? ' CAP-HIT' : ''}`,
+        res.hitCap ? ' CAP-HIT' : ''}`,
     );
 
     for (const e of res.allEntries) {
@@ -792,10 +792,10 @@ async function main(): Promise<void> {
   console.log(
     `[sync-to-kv] Done: computed=${allEntries.length} changed=${changed.length} ` +
     `unchanged=${allEntries.length - changed.length} written=${writtenKeys.size} deferred=${actualDeferred}${
-    dryRun ? ' (dry-run, no KV writes)' : '' 
+      dryRun ? ' (dry-run, no KV writes)' : '' 
     } | kvWrites[${writeCounter}]` +
     ` | traces=${traceIds.length} | per-org: ${perOrgSummaries.join(' · ')}${
-    hitCap ? ' | WARNING: query hit page cap — results may be truncated' : ''}`,
+      hitCap ? ' | WARNING: query hit page cap — results may be truncated' : ''}`,
   );
 }
 

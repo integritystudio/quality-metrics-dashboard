@@ -177,7 +177,7 @@ export type ShippedIndex = Record<string, string[]>;
 /** The cohorts the webhook's `cohort` field accepts, read from the same schema the ingest validator uses. */
 const WEBHOOK_COHORTS: ReadonlySet<string> = new Set(evaluationCohortSchema.options);
 
-export interface EvaluationPayload {
+export type EvaluationPayload = {
   evaluationName: string;
   evaluator: string;
   evaluatorType: string;
@@ -518,7 +518,7 @@ function signature(payload: string, secret: string): string {
   return `${WEBHOOK_SIGNATURE_PREFIX}${createHmac('sha256', secret).update(payload).digest('hex')}`;
 }
 
-interface SendRequest { url: string; headers: Record<string, string>; body: string }
+type SendRequest = { url: string; headers: Record<string, string>; body: string }
 
 export function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secret: string): SendRequest {
   const body = JSON.stringify({ evaluations: batch });
@@ -538,7 +538,7 @@ export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey
   };
 }
 
-interface SendResult { ok: boolean; detail: string; retryable: boolean }
+type SendResult = { ok: boolean; detail: string; retryable: boolean }
 
 /** `{ k=v … }` summary for a counts record; yields `'none'` for an empty map. */
 export function formatCounts(counts: Record<string, number>): string {
@@ -615,7 +615,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
  * is read from the environment, so callers must have checked the key is set
  * (the held-for-key rule); the webhook needs `secret`.
  */
-export function sendBatch(
+export async function sendBatch(
   destination: string,
   payloads: EvaluationPayload[],
   baseUrl: string,
@@ -633,7 +633,7 @@ export function sendBatch(
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
 export async function postBatch(request: SendRequest): Promise<SendResult> {
   const last = await runWithRetry<SendResult>({
-    attempt: () => postBatchOnce(request),
+    attempt: async () => postBatchOnce(request),
     shouldRetry: (result) => !result.ok && result.retryable,
     delaysMs: SEND_RETRY_DELAYS_MS,
     onRetry: (waitMs, failedAttempt, totalAttempts, result) => {
@@ -648,7 +648,7 @@ export async function postBatch(request: SendRequest): Promise<SendResult> {
 
 const ONLY_KEYS_ARG = '--only-keys';
 
-interface Options {
+type Options = {
   dryRun: boolean;
   windowDays: number;
   maxAgeMs: number;
@@ -816,7 +816,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${formatCounts(skips)}]` +
     ` byDestination[${formatCounts(sentByDestination)}] withheld=${withheld}` +
     ` routedBy[${formatCounts(routedBy)}]${
-    Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : '' 
+      Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : '' 
     }${parseErrors ? ` parseErrors=${parseErrors}` : '' 
     }${manifest ? ` onlyKeys[matched=${matchedKeys.size} of ${manifest.size} notInManifest=${notInManifest}]` : ''}`,
   );

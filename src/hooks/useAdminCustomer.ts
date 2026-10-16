@@ -40,7 +40,7 @@ function gatewayRetry(failureCount: number, error: unknown): boolean {
   return isRetryableGatewayError(error) && failureCount < GATEWAY_MAX_RETRIES;
 }
 
-interface GatewayQueryOptions<T> {
+type GatewayQueryOptions<T> = {
   refetchInterval?: number;
   refetchOnWindowFocus?: boolean;
   /**

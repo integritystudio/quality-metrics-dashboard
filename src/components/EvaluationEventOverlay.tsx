@@ -6,7 +6,7 @@ import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { formatScore } from '../lib/quality-utils.js';
 import type { EvaluationResult } from '../types.js';
 
-interface EvaluationEventOverlayProps {
+type EvaluationEventOverlayProps = {
   evaluations: EvaluationResult[];
   traceId?: string;
 }

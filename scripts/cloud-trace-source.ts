@@ -26,7 +26,7 @@ export const CLOUD_SPAN_LIMIT = 500_000;
 const CLI_PREFIX = '[derive:cloud]';
 const STATUS_CODE_NAMES = statusCodeSchema.unwrap().options;
 
-export interface LoadedSpans {
+export type LoadedSpans = {
   /** Ascending by start time, span id breaking ties. */
   spans: LocalTraceSpan[];
   /** Account stamp by span id. */
@@ -70,7 +70,7 @@ export function accountBackend(apiKey: string): CloudBackend {
   return new CloudBackend({ apiKey, fetch: http1Fetch });
 }
 
-export function queryAccountTraces(
+export async function queryAccountTraces(
   backend: CloudBackend,
   fromMs: number,
   toMs: number,
@@ -80,7 +80,7 @@ export function queryAccountTraces(
 }
 
 /** Wording for the log line and truncation error, e.g. `{ rows: 'spans', truncates: 'the scope' }`. */
-export interface AccountQueryLabel {
+export type AccountQueryLabel = {
   rows: string;
   truncates: string;
 }
@@ -169,7 +169,7 @@ export async function loadCloudSpans(
     CLOUD_SPAN_LIMIT,
     { rows: 'spans', truncates: 'the scope' },
     logPrefix,
-    (backend) => queryAccountTraces(backend, fromMs, toMs),
+    async (backend) => queryAccountTraces(backend, fromMs, toMs),
   );
   const merged = mergeAccountSpans(perAccount.map(({ ref, rows }) => ({ ref, spans: rows })), dates);
   if (merged.duplicates > 0) console.warn(`${logPrefix} ${merged.duplicates} spans readable by more than one key; kept the first`);

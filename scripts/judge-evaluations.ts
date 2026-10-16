@@ -172,7 +172,7 @@ function createEvalRecord(
 /** The slice of the SDK client the judge provider calls; a test passes a fake. */
 export type JudgeMessagesClient = {
   messages: {
-    create(params: AnthropicSdk.MessageCreateParamsNonStreaming): Promise<Pick<AnthropicSdk.Message, 'content'> & { usage?: ProviderUsage }>;
+    create: (params: AnthropicSdk.MessageCreateParamsNonStreaming) => Promise<Pick<AnthropicSdk.Message, 'content'> & { usage?: ProviderUsage }>;
   };
 };
 
@@ -251,14 +251,14 @@ export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
   return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < CANARY_TURN_RATE;
 }
 
-export interface SeedResult {
+export type SeedResult = {
   evals: EvalRecord[];
   canaryCount: number;
 }
 
 type ScoreRange = readonly [min: number, max: number];
 
-interface SeedMetric {
+type SeedMetric = {
   evalName: string;
   label: string;
   /** Prefix of the hashed input, so each metric draws its own score. */
@@ -313,7 +313,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
   return { evals, canaryCount };
 }
 
-export interface EvaluateTurnOptions {
+export type EvaluateTurnOptions = {
   /**
    * Issue every criterion at once instead of one after another. Required by
    * the batch provider, whose calls resolve only when the batch does: awaiting
@@ -336,7 +336,7 @@ export async function evaluateTurn(
   // Every criterion catches its own failure, so a collected promise can only
   // fulfil; the allSettled at the end is the guard, not the error path.
   const inFlight: Array<Promise<void>> = [];
-  const score = (criterion: () => Promise<void>): Promise<void> => {
+  const score = async (criterion: () => Promise<void>): Promise<void> => {
     if (!options.concurrent) return criterion();
     inFlight.push(criterion());
     return Promise.resolve();
@@ -351,7 +351,7 @@ export async function evaluateTurn(
   const fallbackReason = (label: string, value: number): string =>
     `${label}: ${value.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;
   /** One criterion, unless already judged; a failure is tracked and logged, never thrown. */
-  const scoreCriterion = (
+  const scoreCriterion = async (
     evalName: string,
     label: string,
     run: () => Promise<{ score: number; reason?: string | undefined }>,
@@ -368,9 +368,9 @@ export async function evaluateTurn(
   };
 
   await scoreCriterion(RELEVANCE_EVAL_NAME, 'Relevance',
-    () => judge.evaluateRelevance(turn.userText, turn.assistantText, toolContext));
+    async () => judge.evaluateRelevance(turn.userText, turn.assistantText, toolContext));
   await scoreCriterion(COHERENCE_EVAL_NAME, 'Coherence',
-    () => judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText }));
+    async () => judge.gEval(COHERENCE_CRITERIA, { input: turn.userText, output: turn.assistantText }));
 
   if (turn.toolResults.length > 0) {
     // One QAG sweep answers both. 'faithfulness' counts the statements the tool
@@ -398,9 +398,9 @@ export async function evaluateTurn(
     if (!isJudged(TOOL_CORRECTNESS_CRITERIA.name)) {
       const tcTestCase = { input: turn.userText, output: turn.assistantText, context: toolContext };
       await scoreCriterion(TOOL_CORRECTNESS_CRITERIA.name, 'Tool correctness',
-        () => judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase));
+        async () => judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase));
       for (const config of [TOOL_SELECTION_CRITERIA, TOOL_ARGUMENTS_CRITERIA, TOOL_INTEGRATION_CRITERIA]) {
-        await scoreCriterion(config.name, config.name, () => judge.gEval(config, tcTestCase));
+        await scoreCriterion(config.name, config.name, async () => judge.gEval(config, tcTestCase));
       }
     }
   }
@@ -426,14 +426,14 @@ export async function evaluateTurnsBatched(
   turns: Turn[],
   existingKeys: Set<string>,
 ): Promise<EvalRecord[][]> {
-  const inFlight = turns.map(turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true }));
+  const inFlight = turns.map(async turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true }));
   await provider.flush();
   const perTurn = await Promise.all(inFlight);
   if (provider.failure) throw provider.failure;
   return perTurn;
 }
 
-export interface TurnDiscovery {
+export type TurnDiscovery = {
   /** Anchored, then restricted to the date scope. */
   turns: Turn[];
   /** The index the turns were anchored with; it also routes their posts. */
@@ -451,7 +451,7 @@ export async function discoverTurns(dateScope: ReadonlySet<string>): Promise<Tur
   const cloud = await discoverFromCloud(dateScope);
 
   const concurrencyLimit = pLimit(CONCURRENCY);
-  const turnArrays = await concurrencyLimit.map(cloud.transcripts, info => extractTurns(info));
+  const turnArrays = await concurrencyLimit.map(cloud.transcripts, async info => extractTurns(info));
   // Anchored before the scope and the limit cut, so each turn's window is
   // bounded by the real next turn rather than by whichever turns survived.
   const extracted = turnArrays.flat();
@@ -569,7 +569,7 @@ export async function processBatch<T, R>(
 ): Promise<R[]> {
   const limit = pLimit(concurrency);
   const settled = await Promise.allSettled(
-    items.map(item => limit(async () => {
+    items.map(async item => limit(async () => {
       const result = await fn(item);
       if (delayMs > 0) await sleep(delayMs);
       return result;
@@ -613,11 +613,11 @@ async function judgeTurns(
   const usage = createUsageTotals();
   const batchProvider = batch
     ? await createBatchProvider({
-        model: HAIKU_MODEL,
-        maxTokens: JUDGE_MAX_TOKENS,
-        temperature: JUDGE_DEFAULT_TEMPERATURE,
-        onUsage: (u) => addUsage(usage, u),
-      })
+      model: HAIKU_MODEL,
+      maxTokens: JUDGE_MAX_TOKENS,
+      temperature: JUDGE_DEFAULT_TEMPERATURE,
+      onUsage: (u) => addUsage(usage, u),
+    })
     : undefined;
   const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
   const judge = createLLMJudge(llm, batchProvider !== undefined);
@@ -633,10 +633,10 @@ async function judgeTurns(
   } else {
     const evaluate = consolidated
       ? await createConsolidatedTurnEvaluator(existingKeys, {
-          apiKey: judgeKey.apiKey,
-          onUsage: (u) => addUsage(usage, u),
-        })
-      : (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
+        apiKey: judgeKey.apiKey,
+        onUsage: (u) => addUsage(usage, u),
+      })
+      : async (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
     allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
   }
 

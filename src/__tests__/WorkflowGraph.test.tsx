@@ -2,21 +2,21 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-interface MockNode {
+type MockNode = {
   id: string;
   type: string;
   position: { x: number; y: number };
   data: Record<string, unknown>;
 }
 
-interface MockEdge {
+type MockEdge = {
   id: string;
   source: string;
   target: string;
   label?: string;
 }
 
-interface ReactFlowProps {
+type ReactFlowProps = {
   nodes?: MockNode[];
   edges?: MockEdge[];
   onNodeClick?: (event: unknown, node: MockNode) => void;

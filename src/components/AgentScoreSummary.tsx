@@ -1,6 +1,6 @@
 import { ScoreBadge } from './ScoreBadge.js';
 
-interface AgentScoreSummaryProps {
+type AgentScoreSummaryProps = {
   handoffScore: number;
   avgRelevance: number;
   completeness: number;

@@ -16,7 +16,7 @@ function MetadataRow({ label, value, mono }: { label: string; value?: ReactNode;
   );
 }
 
-interface ScoreBadgeProps {
+type ScoreBadgeProps = {
   score: number | null;
   metricName: string;
   direction?: ScoreDirection | undefined;

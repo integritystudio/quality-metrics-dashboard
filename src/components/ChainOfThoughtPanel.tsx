@@ -1,6 +1,6 @@
 import { MetaItem } from './MetaItem.js';
 
-interface ChainOfThoughtPanelProps {
+type ChainOfThoughtPanelProps = {
   explanation?: string | undefined;
   evaluator?: string | undefined;
 }

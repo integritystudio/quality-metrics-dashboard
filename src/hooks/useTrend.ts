@@ -2,7 +2,7 @@ import type { Period, MetricTrend, MetricDynamics } from '../types.js';
 import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export interface PercentileSnapshot {
+export type PercentileSnapshot = {
   p10: number;
   p25: number;
   p50: number;
@@ -10,7 +10,7 @@ export interface PercentileSnapshot {
   p90: number;
 }
 
-export interface TrendBucket {
+export type TrendBucket = {
   startTime: string;
   endTime: string;
   count: number;
@@ -20,7 +20,7 @@ export interface TrendBucket {
   dynamics: MetricDynamics | null;
 }
 
-export interface TrendResponse {
+export type TrendResponse = {
   metric: string;
   period: string;
   bucketCount: number;

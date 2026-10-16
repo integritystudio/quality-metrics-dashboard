@@ -131,36 +131,36 @@ const PARAM_LABELS: Record<GEvalConfig['evaluationParams'][number], string> = {
 
 export type JsonSchemaObject = Record<string, unknown>;
 
-export interface ConsolidatedGenerateOptions {
+export type ConsolidatedGenerateOptions = {
   /** When set, the call is made with `output_config.format` = this JSON schema. */
   schema?: JsonSchemaObject;
   temperature?: number;
 }
 
-export interface ConsolidatedResponse {
+export type ConsolidatedResponse = {
   text: string;
   usage?: JudgeTokenUsage;
 }
 
 /** Text provider that can also constrain output to a JSON schema. */
-export interface ConsolidatedProvider {
-  generate(prompt: string, options?: ConsolidatedGenerateOptions): Promise<ConsolidatedResponse>;
+export type ConsolidatedProvider = {
+  generate: (prompt: string, options?: ConsolidatedGenerateOptions) => Promise<ConsolidatedResponse>;
 }
 
 /** Evaluation steps per criterion name, shared across a run. Promises dedupe concurrent misses. */
 export type EvaluationStepsCache = Map<string, Promise<string>>;
 
-export interface CriterionVerdict {
+export type CriterionVerdict = {
   reasoning: string;
   score: number;
 }
 
-export interface PreparedCriterion {
+export type PreparedCriterion = {
   config: GEvalConfig;
   steps: string;
 }
 
-export interface ConsolidatedSelection {
+export type ConsolidatedSelection = {
   /** Criteria the prompt and schema carry, in prompt order. */
   criteria: GEvalConfig[];
   /** Evaluation names to emit records for, in the per-criterion path's order. */
@@ -171,7 +171,7 @@ export interface ConsolidatedSelection {
  * Opt-in variants of the consolidated call. Production passes none, so its
  * records are unchanged; judge-hallucination-eval.ts scores the variant.
  */
-export interface ConsolidatedCriteriaOptions {
+export type ConsolidatedCriteriaOptions = {
   /**
    * Model this run judges with. The dedup check skips only the criteria this
    * model already scored (`judgedByKey`), so a second model re-scores what Haiku
@@ -186,7 +186,7 @@ export interface ConsolidatedCriteriaOptions {
   directHallucination?: boolean;
 }
 
-export interface ParsedConsolidatedResponse {
+export type ParsedConsolidatedResponse = {
   verdicts: Map<string, CriterionVerdict>;
   failures: Map<string, Error>;
 }
@@ -344,7 +344,7 @@ async function generateEvaluationSteps(provider: ConsolidatedProvider, config: G
   return normalized.text;
 }
 
-export function cachedEvaluationSteps(
+export async function cachedEvaluationSteps(
   provider: ConsolidatedProvider,
   config: GEvalConfig,
   cache: EvaluationStepsCache,
@@ -452,7 +452,7 @@ export async function evaluateTurnConsolidated(
   // turn alone, as it would on the per-criterion path.
   const prepared: PreparedCriterion[] = [];
   const stepOutcomes = await Promise.all(
-    selection.criteria.map(config => cachedEvaluationSteps(provider, config, stepsCache).then(
+    selection.criteria.map(async config => cachedEvaluationSteps(provider, config, stepsCache).then(
       steps => ({ config, steps }),
       (reason: unknown) => ({ config, reason }),
     )),
@@ -522,7 +522,7 @@ export async function scoreCriterion(
 // Anthropic provider
 // ---------------------------------------------------------------------------
 
-export interface ConsolidatedProviderOptions {
+export type ConsolidatedProviderOptions = {
   /** Explicit key; when absent the SDK resolves ANTHROPIC_API_KEY itself. */
   apiKey?: string;
   /** Called with every response's usage — how judge-agreement.ts totals tokens. */
@@ -562,7 +562,7 @@ export async function createConsolidatedTurnEvaluator(
 ): Promise<(turn: Turn) => Promise<EvalRecord[]>> {
   const provider = await createConsolidatedProvider(options);
   const stepsCache: EvaluationStepsCache = new Map();
-  return (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache);
+  return async (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache);
 }
 
 // ---------------------------------------------------------------------------
@@ -602,7 +602,7 @@ export async function evaluateTurnsConsolidatedBatched(
 ): Promise<EvalRecord[][]> {
   const provider = adaptBatchProvider(batch);
   const stepsCache: EvaluationStepsCache = new Map();
-  const inFlight = turns.map(turn => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache));
+  const inFlight = turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache));
   await batch.flush();
   const perTurn = await Promise.all(inFlight);
   if (batch.failure) throw batch.failure;

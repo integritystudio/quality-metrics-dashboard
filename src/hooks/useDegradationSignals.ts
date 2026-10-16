@@ -1,7 +1,7 @@
 import type { Period } from '../types.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export interface DegradationSignal {
+export type DegradationSignal = {
   featureVersion: string;
   varianceTrend: 'increasing' | 'stable' | 'decreasing';
   varianceRatio: number;
@@ -25,12 +25,12 @@ export interface DegradationSignal {
   confirmed: boolean;
 }
 
-export interface DegradationReport {
+export type DegradationReport = {
   metricName: string;
   signal: DegradationSignal;
 }
 
-export interface DegradationSignalsResponse {
+export type DegradationSignalsResponse = {
   period: string;
   reports: DegradationReport[];
   computedAt: string | null;

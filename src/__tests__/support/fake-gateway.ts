@@ -15,7 +15,7 @@ import { defined } from './defined.js';
 export type GatewayRoute = 'directory' | 'billing' | 'usage' | 'quota' | 'entitlements';
 export type GatewayRefusal = { status: number; body?: unknown } | 'network-error';
 
-export interface GatewayRequest {
+export type GatewayRequest = {
   method: string;
   url: string;
   path: string;

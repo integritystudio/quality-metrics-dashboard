@@ -66,17 +66,17 @@ const elk = new ELK();
  * Validates the minimum fields needed for rendering; avoids silent mismatches if ReactFlow
  * passes unexpected data to a node component.
  */
-interface WorkflowNodeWithMeta extends WorkflowNode {
+type WorkflowNodeWithMeta = {
   /** True when this node is not in the active filter selection. */
   dimmed?: boolean;
   /** True when this node is on the highlighted critical path. */
   critical?: boolean;
   /** Present when the node is interactive; invoked on click-equivalent keyboard activation. */
   onActivate?: (() => void) | undefined;
-}
+} & WorkflowNode
 
 /** Data shape for a collapsed cluster node. */
-interface ClusterNodeData {
+type ClusterNodeData = {
   clusterId: string;
   memberCount: number;
   hasError: boolean;
@@ -104,12 +104,12 @@ function isWorkflowNode(value: unknown): value is WorkflowNodeWithMeta {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v['id'] === 'string' &&
-    typeof v['label'] === 'string' &&
-    typeof v['toolCallCount'] === 'number' &&
-    typeof v['turnCount'] === 'number' &&
-    typeof v['durationMs'] === 'number' &&
-    typeof v['hasError'] === 'boolean'
+    typeof v.id === 'string' &&
+    typeof v.label === 'string' &&
+    typeof v.toolCallCount === 'number' &&
+    typeof v.turnCount === 'number' &&
+    typeof v.durationMs === 'number' &&
+    typeof v.hasError === 'boolean'
   );
 }
 
@@ -117,9 +117,9 @@ function isClusterNodeData(value: unknown): value is ClusterNodeData {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v['clusterId'] === 'string' &&
-    typeof v['memberCount'] === 'number' &&
-    typeof v['hasError'] === 'boolean'
+    typeof v.clusterId === 'string' &&
+    typeof v.memberCount === 'number' &&
+    typeof v.hasError === 'boolean'
   );
 }
 
@@ -267,7 +267,7 @@ async function computeLayout(
         return {
           id: elkNode.id,
           position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-          data: data as unknown as Record<string, unknown>,
+          data,
           type: 'clusterNode',
         };
       }
@@ -367,7 +367,7 @@ const ClusterNodeComponent = memo(function ClusterNode({ data }: NodeProps) {
 
 const NODE_TYPES = { agentNode: AgentNodeComponent, clusterNode: ClusterNodeComponent };
 
-interface WorkflowGraphProps {
+type WorkflowGraphProps = {
   graph: WorkflowGraph;
   onNodeClick?: ((nodeId: string) => void) | undefined;
   height?: number | undefined;
@@ -382,6 +382,9 @@ interface WorkflowGraphProps {
 export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
   const containerStyle = { '--workflow-graph-height': `${height}px` } as React.CSSProperties;
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  // The explicit <Edge> is not redundant despite matching the default: without it
+  // the empty literal infers never[] and every setEdges call fails to typecheck.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-arguments -- see above
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<ReadonlySet<string>>(() => new Set());

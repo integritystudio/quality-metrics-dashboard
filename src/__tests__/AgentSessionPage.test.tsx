@@ -64,7 +64,7 @@ describe('AgentSessionPage', () => {
     const { fetchSpy } = await renderAt(routes.agentSession(SESSION_ID));
     const [url, init] = defined(fetchSpy.mock.calls[0]);
     expect(url).toBe(`/api/agents/${SESSION_ID}`);
-    expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+    expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
   });
 
   it('links "View Workflow" to /workflows/{sessionId}', async () => {

@@ -105,7 +105,7 @@ describe('WorkflowPage', () => {
       await screen.findByTestId(WORKFLOW_VIEW);
       const [url, init] = defined(fetchSpy.mock.calls[0]);
       expect(url).toBe('/api/agents/my-session-id/graph');
-      expect(headersOf(init)['Authorization']).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+      expect(headersOf(init).Authorization).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
     });
 
     it('URL-encodes the session id in the request path', async () => {

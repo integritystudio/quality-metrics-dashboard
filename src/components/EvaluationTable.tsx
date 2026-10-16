@@ -38,7 +38,7 @@ import { ColoredChip } from './Chip.js';
 import { ScoreBadge } from './ScoreBadge.js';
 import { SortableHeaderCell } from './SortableHeaderCell.js';
 
-export interface EvalRow {
+export type EvalRow = {
   score: number | null;
   explanation?: string | undefined;
   traceId?: string | undefined;

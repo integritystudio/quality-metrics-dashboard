@@ -116,7 +116,7 @@ describe('AuthContext: authenticated state', () => {
     const meCalls = (fetchSpy.mock.calls as Array<[string, RequestInit | undefined]>)
       .filter(([url]) => url === ME_URL);
     expect(meCalls.length).toBeGreaterThan(0);
-    const authHeader = (meCalls[0]?.[1]?.headers as Record<string, string>)['Authorization'];
+    const authHeader = (meCalls[0]?.[1]?.headers as Record<string, string>).Authorization;
     expect(authHeader).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -193,7 +193,7 @@ describe('AuthContext: login activity', () => {
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({ activity_type: LOGIN_ACTIVITY });
     const headers = init?.headers as Record<string, string>;
-    expect(headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
+    expect(headers.Authorization).toBe(`Bearer ${ACCESS_TOKEN}`);
     expect(headers).not.toHaveProperty(ORG_ID_HEADER);
     expect(sessionStorage.getItem(SESSION_LOGIN_KEY)).not.toBeNull();
   });

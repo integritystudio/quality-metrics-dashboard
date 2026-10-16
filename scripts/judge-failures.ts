@@ -101,7 +101,7 @@ export const RATE_COMPARISON_MIN_ATTEMPTS = 50;
 export const JUDGE_RUN_STATE_FILE = join(TELEMETRY_DIR, '.judge-run-state.json');
 
 /** What a run spent, for the summary line. */
-export interface JudgeSpend {
+export type JudgeSpend = {
   /** Totals folded from every `response.usage` the run saw. */
   usage: JudgeTokenUsage;
   /** What estimateJudgeRun said before the run spent anything. */
@@ -110,7 +110,7 @@ export interface JudgeSpend {
   keySource: JudgeApiKeySource;
 }
 
-export interface JudgeRunSummary {
+export type JudgeRunSummary = {
   attempted: number;
   succeeded: number;
   failed: number;

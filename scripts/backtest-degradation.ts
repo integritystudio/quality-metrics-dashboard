@@ -101,7 +101,7 @@ function loadIncidents(): LabeledIncident[] {
 
 // ---- Time-series construction ----
 
-export interface DailyBucket {
+export type DailyBucket = {
   timestamp: number;
   scores: number[];
 }

@@ -11,7 +11,7 @@ import { PageShell } from '../PageShell.js';
 import { useAdminOrgDirectory } from '../../hooks/useAdminCustomer.js';
 import { ADMIN_VIEW } from '../../lib/admin-customer-strings.js';
 
-interface CustomerPageScaffoldProps {
+type CustomerPageScaffoldProps = {
   title: string;
   /** The Flutter page's fixed subtitle; absent on the hub. */
   subtitle?: string;

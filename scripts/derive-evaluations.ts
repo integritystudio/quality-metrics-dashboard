@@ -250,12 +250,12 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   });
 }
 
-interface TaskState {
+type TaskState = {
   statuses: Set<string>;
   lastSpan: LocalTraceSpan;
 }
 
-interface SessionTaskData {
+type SessionTaskData = {
   tasks: Map<string, TaskState>;  // taskId -> state
   creates: number;   // fallback counters for old trace data
   updates: number;
@@ -351,7 +351,7 @@ export function deriveTaskCompletionPerSession(): EvalRecord[] {
   return evals;
 }
 
-interface AgentSessionData {
+type AgentSessionData = {
   pre: number;
   lastSpan: LocalTraceSpan;
   /** Ordered agent names per post-tool span, used for handoff detection */
@@ -512,7 +512,7 @@ export async function deriveAgentHeuristics(
       const input = await readMultiTurnInput(path);
       return input
         ? heuristicRecords(span, sessionId, input, `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`)
-            .map(r => ({ ...r, stableEvaluationKey: `session:${r.sessionId}:${r.evaluationName}` }))
+          .map(r => ({ ...r, stableEvaluationKey: `session:${r.sessionId}:${r.evaluationName}` }))
         : [];
     }));
   }
@@ -635,7 +635,7 @@ const DRIFT_MIN_TOOL_SPANS = 20;
 /** A day's tool spans may lack a success flag up to this share; past it the flag has most likely been renamed. */
 const DRIFT_MAX_MISSING_SUCCESS_SHARE = 0.5;
 
-interface DayInput {
+type DayInput = {
   agentEvidence: number;
   agentMatched: number;
   toolSpans: number;

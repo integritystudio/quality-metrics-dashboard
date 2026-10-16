@@ -88,7 +88,7 @@ function findAuditLogCall(calls: unknown[][]) {
   );
 }
 
-interface RoleMutation {
+type RoleMutation = {
   action: string;
   path: string;
   init: RequestInit;

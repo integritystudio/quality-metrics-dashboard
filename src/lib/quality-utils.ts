@@ -20,7 +20,7 @@ export type ScoreDirection = 'maximize' | 'minimize';
 export type ScoreColorBand = 'excellent' | 'good' | 'adequate' | 'poor' | 'failing';
 export type LabelFilterCategory = 'Pass' | 'Review' | 'Fail';
 
-export interface LabelOrdinal {
+export type LabelOrdinal = {
   ordinal: number;
   category: LabelFilterCategory;
   mapped: boolean;
@@ -43,7 +43,7 @@ export function agentColorScale(agentNames: readonly string[]): (agentName: stri
   return scaleOrdinal<string, string, string>(AGENT_PALETTE).domain(agentNames).unknown(AGENT_PALETTE[0]);
 }
 
-export interface RoleFeatureConfig {
+export type RoleFeatureConfig = {
   showCQI: boolean;
   showCQIBreakdown: boolean;
   showVariance: boolean;
@@ -332,7 +332,7 @@ export function formatCompactCount(n: number): string {
   return COMPACT_COUNT.format(n);
 }
 
-export interface PercentileDistribution {
+export type PercentileDistribution = {
   p10: number; p25: number; p50: number; p75: number; p90: number;
 }
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-interface SectionBlockProps {
+type SectionBlockProps = {
   label: string;
   className?: string; // appended after "mb-3"
   children: ReactNode;

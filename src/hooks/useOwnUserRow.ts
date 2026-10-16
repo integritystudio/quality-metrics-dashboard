@@ -20,7 +20,7 @@ export function useOwnUserRow() {
   const { isAuthenticated, getIdTokenClaims } = useAuth0();
   const config = supabaseConfigFromEnv(import.meta.env);
   // eslint-disable-next-line @tanstack/query/exhaustive-deps -- config is build-time env, constant for the page's life
-  return useQuery<OwnUserRow | null, Error>({
+  return useQuery<OwnUserRow | null>({
     queryKey: OWN_USER_ROW_QUERY_KEY,
     enabled: config !== null && isAuthenticated,
     staleTime: STALE_TIME.DEFAULT,

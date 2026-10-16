@@ -21,7 +21,7 @@ export const OWN_USER_SELECT = 'id,email,name,email_verified,login_count,last_lo
 /** The PostgREST query for the caller's own row: RLS supplies the `where`. */
 export const OWN_USER_PATH = `users?select=${OWN_USER_SELECT}&limit=1`;
 
-export interface SupabaseConfig {
+export type SupabaseConfig = {
   url: string;
   anonKey: string;
 }
@@ -37,7 +37,7 @@ export function supabaseConfigFromEnv(env: Record<string, string | undefined>): 
 }
 
 /** A read-only PostgREST request authenticated with the Auth0 ID token. */
-export function postgrestFetch(
+export async function postgrestFetch(
   config: SupabaseConfig,
   path: string,
   idToken: string,

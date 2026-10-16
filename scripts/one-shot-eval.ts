@@ -41,7 +41,7 @@ export function oneShotArgError(err: unknown): string {
   return err.kind === 'unknown' ? `${err.message} ${NO_FORCE_HINT}` : err.message;
 }
 
-export interface OneShotArgs {
+export type OneShotArgs = {
   yes: boolean;
   error?: string;
 }
@@ -64,7 +64,7 @@ export function parseOneShotArgs<T extends object>(
   return parsed;
 }
 
-export interface RunGuardConfig {
+export type RunGuardConfig = {
   /** Created when a run starts; its presence refuses every later start. */
   markerFilename: string;
   /** Results are `<resultsPrefix><YYYY-MM-DD>.json`. */
@@ -78,7 +78,7 @@ export interface RunGuardConfig {
 /** A run's own marker fields; begin() writes `startedAt` and `pid`, so a payload cannot carry them. */
 export type MarkerPayload = Record<string, unknown> & { startedAt?: never; pid?: never };
 
-export interface RunGuard {
+export type RunGuard = {
   listResultsFiles: (docsDir: string) => string[];
   resultsFilePath: (docsDir: string, date: Date) => string;
   /** Why the run must not start, or undefined when it may. */
@@ -175,7 +175,7 @@ export function turnProgress(logPrefix: string, total: number): (detail?: string
   };
 }
 
-export interface TurnErrors {
+export type TurnErrors = {
   sessionId: string;
   timestamp: string;
   errors: string[];
@@ -216,6 +216,6 @@ export function scoresByName(records: readonly EvalRecord[]): Record<string, num
 }
 
 /** The pipeline's own provider (structured score output included), with the usage hook. */
-export function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
+export async function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
   return createAnthropicProvider(apiKey, createUsageTotals(), onUsage);
 }

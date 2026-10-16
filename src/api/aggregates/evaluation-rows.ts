@@ -11,7 +11,7 @@
 import { resolveScoreLabelWithSource } from '../parent/qfe-label-ordinals.js';
 import type { EvaluationResult } from '../../types.js';
 
-export interface EvaluationRow {
+export type EvaluationRow = {
   score: number;
   explanation: string | undefined;
   traceId: string | undefined;

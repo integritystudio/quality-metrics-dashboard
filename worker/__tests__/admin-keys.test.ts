@@ -294,8 +294,8 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
     await rotateRequest(VALID_KEY_UUID);
 
     const headers = capturedFnInit?.headers as Record<string, string> | undefined;
-    expect(headers?.['Authorization']).toBe('Bearer test-service-role-key');
-    expect(headers?.['apikey']).toBe('test-service-role-key');
+    expect(headers?.Authorization).toBe('Bearer test-service-role-key');
+    expect(headers?.apikey).toBe('test-service-role-key');
     expect(JSON.stringify(headers)).not.toContain(token);
     expect(JSON.parse(capturedFnInit?.body as string)).toEqual({ keyId: VALID_KEY_UUID, userId: MOCK_APP_USER_ID });
   });
