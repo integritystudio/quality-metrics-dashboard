@@ -51,8 +51,20 @@ jobs:
           # resolves back into the parent checkout, exactly as on a dev machine
           # where ../dist sits inside the parent repo.
           ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
+          # tsconfig also maps @obtool-api/types to ../services/obtool-api/src/types.ts,
+          # and that file imports the parent's ../src. Both are type-only, so the test
+          # run never noticed them missing — but the lint step below is type-aware, and
+          # without these two the alias resolves to an error type and src/__tests__/
+          # support/fixture-server.ts fails with 11 no-unsafe-*/no-redundant-type
+          # -constituents errors (measured 2026-10-16).
+          ln -s "${RUNNER_TEMP}/parent/services" "${GITHUB_WORKSPACE}/../services"
+          ln -s "${RUNNER_TEMP}/parent/src" "${GITHUB_WORKSPACE}/../src"
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+      # Type-aware, so it runs after the parent build above, and gated at
+      # --max-warnings 0 (see docs/BACKLOG.md DASH-LINT-PARENT-PARITY).
+      - name: Lint
+        run: npm run lint
       - name: Run src and worker tests
         run: doppler run --project integrity-studio --config prd -- npm test src/ worker/
         env:
