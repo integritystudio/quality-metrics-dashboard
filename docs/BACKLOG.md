@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures` and `no-unmodified-loop-condition` by hand on 2026-10-17. 623 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params` and `max-depth` by hand on 2026-10-17. 610 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 
@@ -67,13 +67,13 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`no-duplicate-imports`~~ (landed) | 26 | 0 | 8 / 18 |
 | ~~`import/no-extraneous-dependencies`~~ (landed) | 25 | 0 | 25 / 0 |
 | `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
-| `max-params` 4 (warn) | 11 | 0 | 8 / 3 |
+| ~~`max-params` 4~~ (landed) | 11 | 0 | 8 / 3 |
 | `vitest/no-conditional-expect` | 9 | 0 | 0 / 9 |
 | `@typescript-eslint/strict-void-return` | 5 | 0 | 2 / 3 |
 | `regexp/no-super-linear-move` | 4 | 0 | 1 / 3 |
 | `no-promise-executor-return` | 3 | 0 | 1 / 2 |
 | ~~`@typescript-eslint/no-unnecessary-type-arguments`~~ (landed) | 3 | 3 | 3 / 0 |
-| `max-depth` 4 (warn) | 2 | 0 | 2 / 0 |
+| ~~`max-depth` 4~~ (landed) | 2 | 0 | 2 / 0 |
 | ~~`no-unmodified-loop-condition`~~ (landed) | 1 | 0 | 0 / 1 |
 | ~~`@typescript-eslint/unified-signatures`~~ (landed) | 1 | 0 | 1 / 0 |
 
@@ -160,6 +160,33 @@ of the real hit below.
   from any `while (!flag)` whose flag a callback sets, and prefer extending the existing disable to
   rewriting a correct loop.
 
+**`max-params` 4 and `max-depth` 4 landed 2026-10-17** at the parent's levels, in a `Complexity controls`
+block over `src/`, `worker/` and `scripts/` — the home the remaining complexity rules (`complexity` 12,
+`no-await-in-loop`, `sonarjs/no-duplicate-string`) should join. Proved live with a throwaway 5-parameter
+function and a 5-deep `if` nest under `src/`, `worker/`, `scripts/` and both test trees: all 10 hits fired.
+All 13 real hits were fixed by hand (11 `max-params`, 2 `max-depth`); `--fix` offers nothing for either.
+- **The parent's `warn` is this repo's `error`.** Both rules are `warn` there, and that severity was kept
+  for parity, but `npm run lint` runs under `--max-warnings 0` — so there is no "adopt at warn and defer
+  the hits" option here. Every hit had to go before the rule could land, which is what makes the
+  remaining `complexity`/`no-await-in-loop`/`no-duplicate-string` rows (86 hits) a sweep, not a flag flip.
+- 🔴 **`exactOptionalPropertyTypes: true` breaks the obvious `max-params` fix.** Grouping optional
+  parameters into an object type is the standard remedy, but `spans?: boolean` no longer accepts a
+  caller's `boolean | undefined` variable: as a separate argument it was an omitted one, and as a
+  property it is a present `undefined`. Each grouped optional property must be spelled
+  `?: T | undefined` (`computeDataSources`'s `Truncation`, `computeLayout`'s `LayoutOptions`). `tsc`
+  catches it, so this costs a round trip rather than correctness — expect it on every future grouping.
+- **`max-depth` counts statements, not braces**: eslint pushes a level for each `if`/`for`/`while`/`try`
+  whether or not it is braced, so dropping the braces around a single statement does not help. Both hits
+  were real nesting — `readJsonlWithValidationSync`'s per-line `if (result.success) { … }` became an
+  inverted `continue` guard, and `upload-evaluations`'s skip branch moved its inner `if` into a
+  `recordSkip` helper. `main` there is already `try` → `for file` → `for line`, so any new conditional in
+  that loop starts at depth 4 and has one level of headroom.
+- The `max-params` fixes were parameter grouping, not signature shuffling, so each one is visible at the
+  call sites: `createEvalRecord(turn, {…})` (7 → 2, and the OBP16 comment now says "separate fields"),
+  `queryEachAccount(env, spec, query)` (`AccountQueryLabel` grew into `AccountQuerySpec` with the limit
+  and log prefix it was always passed beside), `summarizeJudgeRun(succeeded, { byMetric, byClass }, …)`
+  (20 test call sites), and `evaluateTurnConsolidated(…, { stepsCache, criteria })`.
+
 `@stylistic/eslint-plugin` was added as a devDependency for `@stylistic/indent`.
 `promise-function-async` is off in test files, matching the parent's block and its reasoning (async stubs
 for Promise-returning interfaces); with it on there it fires 154 extra times.
@@ -221,8 +248,8 @@ in a comment on the type itself.
 - **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` (warn) and, in tests,
   `local/no-magic-numbers-ignore-fixtures`. The rule is defined inline in the parent's CJS config and not
   exported, so it must be extracted into a shared module or copied.
-- **Complexity.** `complexity` 12, `max-depth` 4, `max-params` 4, `no-await-in-loop`, `sonarjs/no-duplicate-string`
-  (all warn).
+- **Complexity.** `complexity` 12, `no-await-in-loop`, `sonarjs/no-duplicate-string` (all warn);
+  ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
   2026-10-17.
 - **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
