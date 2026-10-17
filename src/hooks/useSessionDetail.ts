@@ -1,21 +1,18 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
+// The shapes the API computes, imported rather than restated so the two cannot drift
+// (type-only, so none of src/api's Node-only code reaches the bundle).
+import type {
+  AlertSummary,
+  CodeStructureEntry,
+  FileAccessEntry,
+  GitCommit,
+  SessionInfo,
+  Timespan,
+  TokenTotals,
+} from '../api/session-detail.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
-
-export type SessionInfo = {
-  projectName: string;
-  workingDirectory: string;
-  gitRepository: string;
-  gitBranch: string;
-  nodeVersion: string;
-  resumeCount: number;
-  initialMessageCount: number;
-  initialContextTokens: number;
-  finalMessageCount: number;
-  taskCount: number;
-  uncommittedAtStart: number;
-}
 
 export type TokenSnapshot = {
   messages: number;
@@ -24,15 +21,6 @@ export type TokenSnapshot = {
   cacheRead: number;
   cacheCreation: number;
   model: string;
-}
-
-export type TokenTotals = {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheCreation: number;
-  messages: number;
-  models: Record<string, number>;
 }
 
 export type SessionAgentStat = {
@@ -48,32 +36,13 @@ export type SessionAgentStat = {
   emptyCount: number;
 }
 
-export type FileAccessEntry = {
-  path: string;
-  count: number;
-}
-
-export type GitCommit = {
-  subject: string;
-  body: string;
-  files: string;
-}
-
-export type CodeStructureEntry = {
-  file: string;
-  lines: number;
-  exports: number;
-  functions: number;
-  hasTypes: boolean;
-  score: number;
-  tool: string;
-}
-
-export type AlertSummary = {
-  totalFired: number;
-  stopEvents: number;
-}
-
+/**
+ * Deliberately NOT the API's `DataSources`: that type describes what the writer emits
+ * (`truncated` present only when true), while this one describes what a reader may
+ * receive. A payload can arrive with `truncated: false` from a producer that writes the
+ * flag either way, which the writer-side union rejects — see the `is false` case in
+ * SessionDetailPage.test.tsx. Keep the two separate.
+ */
 export type DataSources = {
   traces: {
     count: number;
@@ -96,12 +65,6 @@ export type DataSources = {
   total: number;
 }
 
-export type Timespan = {
-  start: string;
-  end: string;
-  durationHours: number;
-}
-
 export type HookLatency = {
   count: number;
   avg: number;
@@ -117,6 +80,8 @@ export type EvaluationBreakdownEntry = {
   min: number | null;
   max: number | null;
 }
+
+export type { AlertSummary, CodeStructureEntry, FileAccessEntry, GitCommit, SessionInfo, Timespan, TokenTotals };
 
 export type SessionDetailResponse = {
   sessionId: string;
