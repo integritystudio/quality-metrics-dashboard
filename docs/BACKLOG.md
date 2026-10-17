@@ -52,7 +52,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | Rule | Hits | `--fix` | src / test |
 |---|---|---|---|
 | ~~`@typescript-eslint/consistent-type-definitions`~~ (landed) | 261 | 261 | 218 / 43 |
-| `@typescript-eslint/explicit-function-return-type` (warn) | 253 | 0 | 247 / 6 |
+| ~~`@typescript-eslint/explicit-function-return-type`~~ (46 of 253 landed) | 253 | 0 | 247 / 6 |
 | ~~`@stylistic/indent`~~ (landed) | 215 | 215 | 215 / 0 |
 | `local/no-magic-numbers-ignore-bitwise` (warn) | 160 | 0 | 158 / 2 |
 | `unicorn/no-array-sort` | 65 | 0 | 38 / 27 |
@@ -88,6 +88,23 @@ autofixes were not behaviour-preserving and were corrected by hand — note both
 `@stylistic/eslint-plugin` was added as a devDependency for `@stylistic/indent`.
 `promise-function-async` is off in test files, matching the parent's block and its reasoning (async stubs
 for Promise-returning interfaces); with it on there it fires 154 extra times.
+
+**`explicit-function-return-type` is on for `src/api`, `src/hooks` and `src/lib` only** (landed
+2026-10-16, at `error`; the parent has it tree-wide at `warn`). 46 sites annotated there. It is
+deliberately **not** applied to `src/components` or `src/pages`, which hold 156 of the 235 `src/` hits:
+only 3 of 127 `.tsx` files import React and the codebase has no `JSX.Element` annotation anywhere, so
+adopting it there means adding `import type { JSX } from 'react'` to ~120 files to satisfy the linter.
+Revisit only if those imports become wanted for another reason. What the 46 cost:
+- `src/hooks` (20): every hook returns `UseQueryResult<T>`. Write it **without** the `Error` argument —
+  it is the default `TError`, and spelling it trips `no-unnecessary-type-arguments`.
+- `src/api/session-detail.ts` (15): its `compute*` helpers returned anonymous object shapes, so the file
+  gained named exported types (`DataSources`, `SessionInfo`, `TokenMetrics`, `SessionDetail<M, E>`, …).
+  That is the bulk of the work and the main reason the rule is not free.
+- `src/api/data-loader.ts` + `routes/sessions.ts` (4): the trace loaders are `Promise<TraceSpan[]>`.
+- Two exemptions, both documented in place: `queryValidator` (hono's `validator` returns a
+  ~1500-character conditional type that cannot be restated; approximating it erases
+  `c.req.valid('query')`'s typing) carries a disable, and `validQuery` borrows it exactly with
+  `ReturnType<typeof queryValidator<T>>` rather than restating it.
 
 **Free today — zero hits, adoptable with no sweep:** `import/no-cycle` (the TypeScript resolver was
 verified alive: the only unresolved specifier in the tree is the `web-worker` Vite alias, so the graph is
