@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed. 676 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports` by hand on 2026-10-17. 650 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
@@ -63,7 +63,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | `no-await-in-loop` (warn) | 32 | 0 | 25 / 7 |
 | ~~`@typescript-eslint/method-signature-style`~~ (landed) | 31 | 31 | 13 / 18 |
 | `unicorn/no-array-callback-reference` | 25 | 0 | 16 / 9 |
-| `no-duplicate-imports` | 25 | 0 | 7 / 18 |
+| ~~`no-duplicate-imports`~~ (landed) | 26 | 0 | 8 / 18 |
 | `import/no-extraneous-dependencies` | 25 | 0 | 25 / 0 |
 | `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
 | `max-params` 4 (warn) | 11 | 0 | 8 / 3 |
@@ -85,6 +85,18 @@ autofixes were not behaviour-preserving and were corrected by hand — note both
 - `no-unnecessary-type-arguments` stripped `<Edge>` from `useEdgesState<Edge>([])` in `WorkflowGraph.tsx`.
   The argument matches the default but is load-bearing: without it the empty literal infers `never[]` and
   every `setEdges` call fails to typecheck. Restored behind a one-line disable.
+
+**`no-duplicate-imports` landed 2026-10-17** at the parent's bare `error` (defaults:
+`includeExports: false`, `allowSeparateTypeImports: false`), in `typeSafetyRules`, so `src/`, `worker/`
+and `scripts/` alike. All 26 hits were the same shape — a separate `import type { … }` beside a value
+import of the same module — and were merged into the value import as inline `type` specifiers. 16 of
+them were `import type { FixtureServer }` under `src/__tests__`. No behaviour change: `verbatimModuleSyntax`
+erases an inline `type` specifier exactly as it erases an `import type` statement.
+- The option **`allowSeparateTypeImports: true` would have made all 26 pass untouched**, but it is not
+  what the parent sets, and the split is the thing worth catching.
+- `@typescript-eslint/consistent-type-imports` does **not** pull them back apart: its default
+  `fixStyle: 'separate-type-imports'` only governs how it rewrites an *unmarked* type import, and a
+  marked specifier in a mixed import satisfies it. The parent runs both rules together for the same reason.
 
 `@stylistic/eslint-plugin` was added as a devDependency for `@stylistic/indent`.
 `promise-function-async` is off in test files, matching the parent's block and its reasoning (async stubs
@@ -152,7 +164,7 @@ real and the pass is not silent), `no-eval`, `no-new-func`, `no-unreachable`, `n
 - **Complexity.** `complexity` 12, `max-depth` 4, `max-params` 4, `no-await-in-loop`, `sonarjs/no-duplicate-string`
   (all warn).
 - **Imports.** `import/no-cycle` and `import/no-extraneous-dependencies` (via `eslint-plugin-import-x` and
-  `eslint-import-resolver-typescript`), `no-duplicate-imports`.
+  `eslint-import-resolver-typescript`).
 - **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
 - **Core.** `no-eval`, `no-new-func`, `no-promise-executor-return` (source only), `no-unreachable-loop`,
   `no-unmodified-loop-condition`, `no-unreachable` (off here via tseslint's `eslint-recommended`).
