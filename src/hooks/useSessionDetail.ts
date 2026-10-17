@@ -3,38 +3,20 @@ import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 // The shapes the API computes, imported rather than restated so the two cannot drift
 // (type-only, so none of src/api's Node-only code reaches the bundle).
 import type {
+  AgentActivityEntry,
   AlertSummary,
   CodeStructureEntry,
+  EvalBreakdownEntry,
   FileAccessEntry,
   GitCommit,
+  HookLatencyEntry,
   SessionInfo,
   Timespan,
+  TokenProgressionEntry,
   TokenTotals,
 } from '../api/session-detail.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
-
-export type TokenSnapshot = {
-  messages: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheRead: number;
-  cacheCreation: number;
-  model: string;
-}
-
-export type SessionAgentStat = {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  hasRateLimit: boolean;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  avgOutputSize: number;
-  avgDurationMs: number;
-  truncatedCount: number;
-  emptyCount: number;
-}
 
 /**
  * Deliberately NOT the API's `DataSources`: that type describes what the writer emits
@@ -65,23 +47,19 @@ export type DataSources = {
   total: number;
 }
 
-export type HookLatency = {
-  count: number;
-  avg: number;
-  p50: number;
-  p95: number;
-  max: number;
-}
-
-export type EvaluationBreakdownEntry = {
-  name: string;
-  count: number;
-  avg: number | null;
-  min: number | null;
-  max: number | null;
-}
-
-export type { AlertSummary, CodeStructureEntry, FileAccessEntry, GitCommit, SessionInfo, Timespan, TokenTotals };
+export type {
+  AgentActivityEntry,
+  AlertSummary,
+  CodeStructureEntry,
+  EvalBreakdownEntry,
+  FileAccessEntry,
+  GitCommit,
+  HookLatencyEntry,
+  SessionInfo,
+  Timespan,
+  TokenProgressionEntry,
+  TokenTotals,
+};
 
 export type SessionDetailResponse = {
   sessionId: string;
@@ -89,11 +67,11 @@ export type SessionDetailResponse = {
   timespan: Timespan | null;
   sessionInfo: SessionInfo | null;
   tokenTotals: TokenTotals;
-  tokenProgression: TokenSnapshot[];
+  tokenProgression: TokenProgressionEntry[];
   toolUsage: Record<string, number>;
   mcpUsage: Record<string, number>;
   spanBreakdown: Record<string, number>;
-  hookLatency: Record<string, HookLatency>;
+  hookLatency: Record<string, HookLatencyEntry>;
   errors: {
     byCategory: Record<string, number>;
     details: Array<{
@@ -103,12 +81,12 @@ export type SessionDetailResponse = {
       filePath?: string;
     }>;
   };
-  agentActivity: SessionAgentStat[];
+  agentActivity: AgentActivityEntry[];
   fileAccess: FileAccessEntry[];
   gitCommits: GitCommit[];
   alertSummary: AlertSummary;
   codeStructure: CodeStructureEntry[];
-  evaluationBreakdown: EvaluationBreakdownEntry[];
+  evaluationBreakdown: EvalBreakdownEntry[];
   logSummary: {
     bySeverity: Record<string, number>;
     logs: unknown[];
