@@ -28,7 +28,8 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle` and `unified-signatures` by hand on 2026-10-17. 624 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures` and `no-unmodified-loop-condition` by hand on 2026-10-17.
+623 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
@@ -73,7 +74,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | `no-promise-executor-return` | 3 | 0 | 1 / 2 |
 | ~~`@typescript-eslint/no-unnecessary-type-arguments`~~ (landed) | 3 | 3 | 3 / 0 |
 | `max-depth` 4 (warn) | 2 | 0 | 2 / 0 |
-| `no-unmodified-loop-condition` | 1 | 0 | 0 / 1 |
+| ~~`no-unmodified-loop-condition`~~ (landed) | 1 | 0 | 0 / 1 |
 | ~~`@typescript-eslint/unified-signatures`~~ (landed) | 1 | 0 | 1 / 0 |
 
 **Swept and landed 2026-10-16** (the six struck rows above, 605 hits, `npm run lint --fix`). Two of the
@@ -135,14 +136,29 @@ inherit it from the `src/`+`worker/` block.
 - The single hit was `toDateOnly` in `src/api/api-constants.ts`: `(d: Date): string` and
   `(d: string): string` overloads above a `(d: Date | string): string` implementation. Both arms
   returned `string`, so the pair narrowed nothing the implementation signature does not; both were
-  deleted and the implementation signature exported directly. All 19 call sites pass a `Date` or a
-  `string`, and `typecheck` + `typecheck:scripts` are unchanged.
+  deleted and the implementation signature exported directly. All 13 call sites across 7 files pass a
+  `Date` or a `string`, and `typecheck` + `typecheck:scripts` are unchanged.
 - **The rule reports only when two signatures differ in exactly one parameter and agree on everything
   else, return type included** — so a merge it asks for is type-equivalent by construction. That does
   not generalise to collapsing overloads by hand: overloads with differing return types are
   load-bearing and the rule stays silent on them.
 - Proved live three ways: it reported the real hit above before the fix, and a throwaway overload pair
   fired under both `scripts/` and `src/__tests__/`.
+
+**`no-unmodified-loop-condition` landed 2026-10-17** at the parent's bare `error`, in `typeSafetyRules`
+beside the other high-signal core rules it sits with there (`eqeqeq`, `no-self-compare`,
+`no-constructor-return`). Proved live with a throwaway `while (n > 0)` under `src/` and `worker/`, on top
+of the real hit below.
+- 🔴 **The single hit was a false positive, and the same blind spot the file already documents.**
+  `runClock` in `scripts/__tests__/judge-batch-provider.test.ts` loops on `while (!settled)`, where
+  `settled` is flipped by the `done` callback in `work.then(done, done)`. Neither eslint's loop
+  analysis nor TypeScript's flow analysis follows a mutation through a callback reference, so the
+  line already carried a `no-unnecessary-condition` disable for the identical reason; the new rule
+  joined it rather than the loop being restructured. The loop is correct —
+  `vi.advanceTimersByTimeAsync` drains microtasks, so `done` runs.
+- So this rule's value here is **future** code, not a defect it found. Expect the same false positive
+  from any `while (!flag)` whose flag a callback sets, and prefer extending the existing disable to
+  rewriting a correct loop.
 
 `@stylistic/eslint-plugin` was added as a devDependency for `@stylistic/indent`.
 `promise-function-async` is off in test files, matching the parent's block and its reasoning (async stubs
@@ -211,7 +227,8 @@ in a comment on the type itself.
   2026-10-17.
 - **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
 - **Core.** `no-eval`, `no-new-func`, `no-promise-executor-return` (source only), `no-unreachable-loop`,
-  `no-unmodified-loop-condition`, `no-unreachable` (off here via tseslint's `eslint-recommended`).
+  ~~`no-unmodified-loop-condition`~~ (landed 2026-10-17), `no-unreachable` (off here via tseslint's
+  `eslint-recommended`).
 - **unicorn.** `no-array-sort`, `no-array-callback-reference`, `prefer-number-properties` (partly covered here by
   `no-restricted-globals` and `radix`).
 - **regexp.** `regexp/no-super-linear-move`.
