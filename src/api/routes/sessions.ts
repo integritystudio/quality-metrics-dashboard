@@ -1,4 +1,3 @@
-import type { TraceSpan } from '../../types.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds, formatISO } from 'date-fns';
@@ -18,6 +17,7 @@ import {
   loadTracesByFilter,
   TRUNCATION_PROBE_ROWS,
 } from '../data-loader.js';
+import type { LoadedSpan } from '../data-loader.js';
 import { MAX_QUERY_LIMIT } from '../parent/constants.js';
 import { handleRouteError, validQuery } from '../route-errors.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
@@ -36,7 +36,7 @@ async function loadSessionSpans(
   sessionId: string,
   startDate?: string,
   endDate?: string,
-): Promise<{ spans: TraceSpan[]; truncated: boolean }> {
+): Promise<{ spans: LoadedSpan[]; truncated: boolean }> {
   const now = new Date();
   const end = endDate ?? formatISO(now, { representation: 'date' });
   const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });

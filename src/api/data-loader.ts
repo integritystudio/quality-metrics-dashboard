@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import { group } from 'd3-array';
 import { CloudBackend } from './parent/backends.js';
-import type { EvaluationResult, HumanVerificationEvent, TraceSpan } from '../types.js';
+import type { EvaluationResult, HumanVerificationEvent } from '../types.js';
 import { queryVerifications as queryVerificationsLib } from './parent/verification-events.js';
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
@@ -122,6 +122,13 @@ export async function loadEvaluationsByTraceIds(
   return all;
 }
 
+/**
+ * One span as the loaders return it. `queryTraces` projects nine fields, so this is
+ * narrower than the full span schema, whose other fields the projection never sends.
+ * Derived from the tool rather than restated so the two cannot drift.
+ */
+export type LoadedSpan = Awaited<ReturnType<typeof queryTracesTool>>['traces'][number];
+
 function traceQueryDates(startDate?: string, endDate?: string): { start: string; end: string } {
   const { start: defStart, end: defEnd } = lookbackRange(DEFAULT_LOOKBACK_30D);
   // queryTracesTool validates startDate/endDate as ISO 8601 datetime (not date-only).
@@ -132,12 +139,12 @@ function traceQueryDates(startDate?: string, endDate?: string): { start: string;
   };
 }
 
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string): Promise<TraceSpan[]> {
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string): Promise<LoadedSpan[]> {
   const { start, end } = traceQueryDates(startDate, endDate);
   return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
 }
 
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string): Promise<TraceSpan[]> {
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string): Promise<LoadedSpan[]> {
   const { start, end } = traceQueryDates(startDate, endDate);
   return (await queryTracesTool({ attributeFilter: { [SESSION_ATTRIBUTES.ID]: sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
 }
@@ -152,7 +159,7 @@ export async function loadTracesByFilter(
   startDate: string,
   endDate: string,
   limit: number,
-): Promise<TraceSpan[]> {
+): Promise<LoadedSpan[]> {
   return (await queryTracesTool({ attributeFilter, startDate, endDate, limit }, { backend: getBackend() })).traces;
 }
 
