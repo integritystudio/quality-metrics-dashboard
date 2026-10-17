@@ -123,6 +123,125 @@ export type AgentActivityEntry = {
   emptyCount: number;
 }
 
+/** `truncated` is present only when true, so a complete read keeps the shape older KV values have. */
+export type TruncationFlag = { truncated: true } | { truncated?: never };
+
+export type DataSources = {
+  traces: { count: number; traceIds: number } & TruncationFlag;
+  logs: { count: number };
+  evaluations: { count: number } & TruncationFlag;
+  total: number;
+};
+
+export type Timespan = { start: string; end: string; durationHours: number };
+
+export type SessionInfo = {
+  projectName: string;
+  workingDirectory: string;
+  gitRepository: string;
+  gitBranch: string;
+  nodeVersion: string;
+  resumeCount: number;
+  initialMessageCount: number;
+  initialContextTokens: number;
+  finalMessageCount: number;
+  taskCount: number;
+  uncommittedAtStart: number;
+};
+
+export type TokenProgressionEntry = {
+  messages: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheRead: number;
+  cacheCreation: number;
+  model: string;
+};
+
+export type TokenTotals = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+  messages: number;
+  models: Record<string, number>;
+};
+
+export type TokenMetrics = { tokenProgression: TokenProgressionEntry[]; tokenTotals: TokenTotals };
+
+export type UsageCounts = { toolUsage: Record<string, number>; mcpUsage: Record<string, number> };
+
+export type HookLatencyEntry = { count: number; avg: number; p50: number; p95: number; max: number };
+
+export type SpanLatency = {
+  spanBreakdown: Record<string, number>;
+  hookLatency: Record<string, HookLatencyEntry>;
+};
+
+export type ErrorDetail = { spanName: string; tool?: string; errorType?: string; filePath?: string | undefined };
+
+export type ErrorSummary = { byCategory: Record<string, number>; details: ErrorDetail[] };
+
+export type AgentSpanTotals = {
+  invocations: number;
+  errors: number;
+  hasRateLimit: boolean;
+  rateLimitEvents: number;
+  totalOutputSize: number;
+  durationSum: number;
+  durationCount: number;
+  truncatedCount: number;
+  emptyCount: number;
+};
+
+export type EvalBreakdownEntry = {
+  name: string;
+  count: number;
+  avg: number | null;
+  min: number | null;
+  max: number | null;
+};
+
+export type FileAccessEntry = { path: string; count: number };
+
+export type AlertSummary = { totalFired: number; stopEvents: number };
+
+export type CodeStructureEntry = {
+  file: string;
+  lines: number;
+  exports: number;
+  functions: number;
+  hasTypes: boolean;
+  score: number;
+  tool: string;
+};
+
+export type LogSummary = { bySeverity: Record<string, number>; logs: SafeLogEntry[] };
+
+/** Key order is part of the KV value — see the note in {@link computeSessionDetail}. */
+export type SessionDetail<M, E> = {
+  sessionId: string;
+  dataSources: DataSources;
+  timespan: Timespan | null;
+  sessionInfo: SessionInfo | null;
+  tokenTotals: TokenTotals;
+  tokenProgression: TokenProgressionEntry[];
+  toolUsage: Record<string, number>;
+  mcpUsage: Record<string, number>;
+  spanBreakdown: Record<string, number>;
+  hookLatency: Record<string, HookLatencyEntry>;
+  errors: ErrorSummary;
+  agentActivity: AgentActivityEntry[];
+  fileAccess: FileAccessEntry[];
+  gitCommits: GitCommit[];
+  alertSummary: AlertSummary;
+  codeStructure: CodeStructureEntry[];
+  evaluationBreakdown: EvalBreakdownEntry[];
+  logSummary: LogSummary;
+  multiAgentEvaluation: M;
+  evaluations: E[];
+};
+
 // Max ms value safe for Date.toISOString() — ±100,000,000 days from epoch (ECMAScript spec).
 const DATE_ISO_SAFE_MAX_MS = 8_640_000_000_000_000;
 
@@ -144,7 +263,7 @@ function hookSpans(spans: SessionSpan[], hookName: string): SessionSpan[] {
 }
 
 /** `truncated` is written only when set, so a complete read keeps the shape older KV values have. */
-function truncationFlag(truncated: boolean | undefined) {
+function truncationFlag(truncated: boolean | undefined): TruncationFlag {
   return truncated ? { truncated: true } : {};
 }
 
@@ -154,7 +273,7 @@ function computeDataSources(
   evaluations: SessionEvaluation[],
   spansTruncated?: boolean,
   evaluationsTruncated?: boolean,
-) {
+): DataSources {
   const traceIds = new Set<string>();
   for (const s of spans) {
     if (s.traceId) traceIds.add(s.traceId);
@@ -167,7 +286,7 @@ function computeDataSources(
   };
 }
 
-function computeTimespan(evaluations: SessionEvaluation[], logs: SessionLog[]) {
+function computeTimespan(evaluations: SessionEvaluation[], logs: SessionLog[]): Timespan | null {
   let tsMin = Infinity;
   let tsMax = -Infinity;
   for (const row of [...evaluations, ...logs]) {
@@ -183,7 +302,7 @@ function computeTimespan(evaluations: SessionEvaluation[], logs: SessionLog[]) {
   } : null;
 }
 
-function computeSessionInfo(spans: SessionSpan[]) {
+function computeSessionInfo(spans: SessionSpan[]): SessionInfo | null {
   const sessionStarts = hookSpans(spans, HOOK_NAME.SESSION_START);
   const first = sessionStarts.at(0);
   if (!first) return null;
@@ -203,7 +322,7 @@ function computeSessionInfo(spans: SessionSpan[]) {
   };
 }
 
-function computeTokenMetrics(spans: SessionSpan[]) {
+function computeTokenMetrics(spans: SessionSpan[]): TokenMetrics {
   const tokenProgression = hookSpans(spans, HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
       messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
@@ -230,7 +349,7 @@ function computeTokenMetrics(spans: SessionSpan[]) {
   return { tokenProgression, tokenTotals };
 }
 
-function computeUsageCounts(spans: SessionSpan[]) {
+function computeUsageCounts(spans: SessionSpan[]): UsageCounts {
   const toolUsage: Record<string, number> = {};
   const mcpUsage: Record<string, number> = {};
   for (const s of spans) {
@@ -245,7 +364,7 @@ function computeUsageCounts(spans: SessionSpan[]) {
   return { toolUsage, mcpUsage };
 }
 
-function computeSpanLatency(spans: SessionSpan[]) {
+function computeSpanLatency(spans: SessionSpan[]): SpanLatency {
   const spanBreakdown = Object.fromEntries(rollup(spans, group => group.length, s => s.name));
   const hookDurations = rollup(
     spans.filter(s => (s.durationMs ?? 0) > 0),
@@ -265,9 +384,9 @@ function computeSpanLatency(spans: SessionSpan[]) {
   return { spanBreakdown, hookLatency };
 }
 
-function computeErrorSummary(spans: SessionSpan[]) {
+function computeErrorSummary(spans: SessionSpan[]): ErrorSummary {
   const byCategory: Record<string, number> = {};
-  const details: Array<{ spanName: string; tool?: string; errorType?: string; filePath?: string | undefined }> = [];
+  const details: ErrorDetail[] = [];
   for (const s of spans) {
     if (!isSpanError(s)) continue;
     const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
@@ -283,7 +402,7 @@ function computeErrorSummary(spans: SessionSpan[]) {
   return { byCategory, details };
 }
 
-function summarizeAgentSpans(group: SessionSpan[]) {
+function summarizeAgentSpans(group: SessionSpan[]): AgentSpanTotals {
   const a = {
     invocations: 0, errors: 0, hasRateLimit: false, rateLimitEvents: 0,
     totalOutputSize: 0, durationSum: 0, durationCount: 0,
@@ -325,7 +444,7 @@ function computeAgentActivity(spans: SessionSpan[]): AgentActivityEntry[] {
   }));
 }
 
-function computeEvalBreakdown(evaluations: SessionEvaluation[]) {
+function computeEvalBreakdown(evaluations: SessionEvaluation[]): EvalBreakdownEntry[] {
   const evalByName = rollup(
     evaluations,
     group => ({ count: group.length, scores: group.map(ev => ev.scoreValue).filter(isValidScore) }),
@@ -344,7 +463,7 @@ function computeEvalBreakdown(evaluations: SessionEvaluation[]) {
   });
 }
 
-function computeFileAccess(spans: SessionSpan[]) {
+function computeFileAccess(spans: SessionSpan[]): FileAccessEntry[] {
   const fileCount: Record<string, number> = {};
   for (const s of spans) {
     const fp = spanAttr(s, 'file.path', 'string');
@@ -356,7 +475,7 @@ function computeFileAccess(spans: SessionSpan[]) {
     .slice(0, FILE_ACCESS_TOP_N);
 }
 
-function computeAlertSummary(spans: SessionSpan[]) {
+function computeAlertSummary(spans: SessionSpan[]): AlertSummary {
   const alertSpans = hookSpans(spans, HOOK_NAME.ALERT_EVALUATION);
   return {
     totalFired: sum(alertSpans, s => renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number')),
@@ -364,7 +483,7 @@ function computeAlertSummary(spans: SessionSpan[]) {
   };
 }
 
-function computeCodeStructure(spans: SessionSpan[]) {
+function computeCodeStructure(spans: SessionSpan[]): CodeStructureEntry[] {
   return hookSpans(spans, HOOK_NAME.CODE_STRUCTURE).map(s => ({
     file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
     lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
@@ -376,7 +495,7 @@ function computeCodeStructure(spans: SessionSpan[]) {
   }));
 }
 
-function computeLogSummary(logs: SessionLog[]) {
+function computeLogSummary(logs: SessionLog[]): LogSummary {
   const bySeverity: Record<string, number> = {};
   for (const l of logs) increment(bySeverity, l.severity);
   return {
@@ -416,7 +535,7 @@ export function sessionStepScores(spans: SessionSpan[]): StepScore[] {
 export function computeSessionDetail<E extends SessionEvaluation, M>(
   { sessionId, spans, evaluations, logs = [], spansTruncated, evaluationsTruncated }: SessionDetailInput<E>,
   evaluateMultiAgent: MultiAgentEvaluator<M>,
-) {
+): SessionDetail<M, E> {
   const { tokenProgression, tokenTotals } = computeTokenMetrics(spans);
   const { toolUsage, mcpUsage } = computeUsageCounts(spans);
   const { spanBreakdown, hookLatency } = computeSpanLatency(spans);

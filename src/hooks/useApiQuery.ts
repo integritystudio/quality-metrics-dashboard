@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { HttpStatus, STALE_TIME } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
@@ -52,7 +52,7 @@ export function useApiQuery<TRaw, T = TRaw>(
     select?: (raw: TRaw) => T;
     onNotFound?: (body: unknown) => TRaw | undefined;
   } = {},
-) {
+): UseQueryResult<T> {
   const { enabled = true, staleTime = STALE_TIME.DEFAULT, retry, refetchInterval, retryDelay, select, onNotFound } = options;
   const { getAccessToken } = useAuth();
   // Org scoping (P6): the active org is part of EVERY query key so an org

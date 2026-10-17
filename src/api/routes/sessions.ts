@@ -1,3 +1,4 @@
+import type { TraceSpan } from '../../types.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds, formatISO } from 'date-fns';
@@ -31,7 +32,11 @@ sessionRoutes.onError(handleRouteError);
  */
 export const LIMIT_SESSION_SPANS = MAX_QUERY_LIMIT - TRUNCATION_PROBE_ROWS;
 
-async function loadSessionSpans(sessionId: string, startDate?: string, endDate?: string) {
+async function loadSessionSpans(
+  sessionId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<{ spans: TraceSpan[]; truncated: boolean }> {
   const now = new Date();
   const end = endDate ?? formatISO(now, { representation: 'date' });
   const start = startDate ?? formatISO(subMilliseconds(now, PERIOD_MS['30d']), { representation: 'date' });

@@ -1,10 +1,11 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { CodeQualityResponse } from '../api/routes/code-quality.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export type { CodeQualityResponse };
 
-export function useCodeQuality() {
+export function useCodeQuality(): UseQueryResult<CodeQualityResponse> {
   return useApiQuery<CodeQualityResponse>(
     ['code-quality'],
     () => `/api/code-quality`,

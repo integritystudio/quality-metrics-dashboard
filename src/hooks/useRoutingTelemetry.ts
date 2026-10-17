@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { Period } from '../types.js';
 import { useApiQuery } from './useApiQuery.js';
 
@@ -34,7 +35,7 @@ export type RoutingTelemetryResponse = {
   groups: RoutingTelemetryGroup[];
 }
 
-export function useRoutingTelemetry(period: Period) {
+export function useRoutingTelemetry(period: Period): UseQueryResult<RoutingTelemetryResponse> {
   return useApiQuery<RoutingTelemetryResponse>(
     ['routing-telemetry', period],
     () => `/api/routing-telemetry?${new URLSearchParams({ period })}`,

@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
 import { POLL_INTERVAL_MS, STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
@@ -27,7 +28,7 @@ export function isNoDataSummary(data: QualityDashboardSummary | RoleView): data 
   return !('role' in data) && data.overallStatus === 'no_data';
 }
 
-export function useDashboard(period: Period, role?: RoleViewType) {
+export function useDashboard(period: Period, role?: RoleViewType): UseQueryResult<QualityDashboardSummary | RoleView> {
   return useApiQuery<QualityDashboardSummary | RoleView>(
     ['dashboard', period, role],
     () => {

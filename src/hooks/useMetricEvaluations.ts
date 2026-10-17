@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { EvalRow } from '../components/EvaluationTable.js';
 import type { Period } from '../types.js';
 import { DEFAULT_PAGE_LIMIT, DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
@@ -21,7 +22,7 @@ export function useMetricEvaluations(
     sortBy?: SortBy;
     enabled?: boolean;
   } = {},
-) {
+): UseQueryResult<EvaluationsResponse> {
   return useApiQuery<EvaluationsResponse>(
     ['metric-evaluations', name, period, limit, offset, scoreLabel, sortBy],
     () => {

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useAuth0 } from '../lib/auth0.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { OWN_USER_PATH, postgrestFetch, supabaseConfigFromEnv } from '../lib/postgrest-client.js';
@@ -16,7 +16,7 @@ const ERR_NO_ID_TOKEN = 'NO_ID_TOKEN';
  * has no `role` claim (this client is not listed in the Action's secret) and will not
  * acquire one by asking again. `null` means the read worked and found no row.
  */
-export function useOwnUserRow() {
+export function useOwnUserRow(): UseQueryResult<OwnUserRow | null> {
   const { isAuthenticated, getIdTokenClaims } = useAuth0();
   const config = supabaseConfigFromEnv(import.meta.env);
   // eslint-disable-next-line @tanstack/query/exhaustive-deps -- config is build-time env, constant for the page's life

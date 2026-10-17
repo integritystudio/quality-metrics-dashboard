@@ -1,7 +1,8 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export function useTraceEvaluations(traceId: string | undefined) {
+export function useTraceEvaluations(traceId: string | undefined): UseQueryResult<EvaluationResult[]> {
   return useApiQuery<{ evaluations?: EvaluationResult[] }, EvaluationResult[]>(
     ['trace-evaluations', traceId],
     () => `/api/evaluations/trace/${encodeURIComponent(traceId ?? '')}`,

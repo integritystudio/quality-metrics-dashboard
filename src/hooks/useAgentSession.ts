@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 import type { WorkflowGraph } from '../types/workflow-graph.js';
 import { STALE_TIME } from '../lib/constants.js';
@@ -27,7 +28,7 @@ export type AgentWorkflowResponse = Pick<AgentSessionResponse, 'sessionId' | 'ev
  * The workflow view reads `/graph`, not the full session. A node click then
  * fetches the session page's payload cold, instead of sharing this cache entry.
  */
-export function useAgentWorkflow(sessionId: string | undefined) {
+export function useAgentWorkflow(sessionId: string | undefined): UseQueryResult<AgentWorkflowResponse> {
   return useApiQuery<AgentWorkflowResponse>(
     ['agent-workflow', sessionId],
     () => {
@@ -38,7 +39,7 @@ export function useAgentWorkflow(sessionId: string | undefined) {
   );
 }
 
-export function useAgentSession(sessionId: string | undefined) {
+export function useAgentSession(sessionId: string | undefined): UseQueryResult<AgentSessionResponse> {
   return useApiQuery<AgentSessionResponse>(
     ['agent-session', sessionId],
     () => {

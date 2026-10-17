@@ -1,3 +1,5 @@
+import type { MultiAgentEvaluation } from '../../types.js';
+import type { WorkflowGraph } from '../../types/workflow-graph.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
@@ -50,8 +52,12 @@ agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
 
 type SessionSpans = Awaited<ReturnType<typeof loadTracesBySessionId>>;
 
+type SessionSpanIndex = { agentMap: Map<number, string>; traceIds: Set<string> };
+
+type SessionWorkflow = { evaluation: MultiAgentEvaluation; graph: WorkflowGraph };
+
 /** Maps each span index to its agent name, and collects the session's trace ids. */
-function indexSessionSpans(spans: SessionSpans) {
+function indexSessionSpans(spans: SessionSpans): SessionSpanIndex {
   const traceIds = new Set<string>();
   for (const span of spans) {
     if (span.traceId) traceIds.add(span.traceId);
@@ -63,7 +69,7 @@ function indexSessionSpans(spans: SessionSpans) {
  * The session's multi-agent evaluation, and the workflow graph built from it. Step scores
  * come from the session detail's rules, so this graph matches the one the KV sync precomputes.
  */
-function deriveSessionWorkflow(spans: SessionSpans, agentMap: Map<number, string>) {
+function deriveSessionWorkflow(spans: SessionSpans, agentMap: Map<number, string>): SessionWorkflow {
   const evaluation = computeMultiAgentEvaluation(sessionStepScores(spans), agentMap);
   return { evaluation, graph: buildWorkflowGraph(evaluation, spans) };
 }

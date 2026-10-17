@@ -39,6 +39,7 @@ import {
   CODE_QUALITY_KV_KEY,
   CODE_QUALITY_LOOKBACK_DAYS,
   summarizeCodeQuality,
+  type CodeQualityResponse,
 } from '../code-quality-summary.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../session-detail.js';
 import { agentStatsKey, agentStatsWindow, computeAgentStats, isAgentFinalizeSpan } from './agent-stats.js';
@@ -285,7 +286,7 @@ export function buildTraceEntries(
  * this KV key is the only way `/api/code-quality` reaches production; the dev
  * API route computes the same summary from a live query.
  */
-async function computeCodeQuality(backend: OrgReadBackend, now: Date) {
+async function computeCodeQuality(backend: OrgReadBackend, now: Date): Promise<CodeQualityResponse> {
   const startDate = msToNs(now.getTime() - CODE_QUALITY_LOOKBACK_DAYS * TIME_MS.DAY);
   const endDate = msToNs(now.getTime());
   const [checkpointSpans, invocationSpans] = await Promise.all([
@@ -578,8 +579,8 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
       .slice(0, MAX_RECENT_SESSIONS);
     const lastSeen = acc.lastSeenDate;
     const totalSessions = acc.totalSessionCount;
-    const perInvocation = (total: number) => (acc.totalInvocations > 0 ? total / acc.totalInvocations : 0);
-    const rate = (count: number) => +perInvocation(count).toFixed(RATE_DISPLAY_PRECISION);
+    const perInvocation = (total: number): number => (acc.totalInvocations > 0 ? total / acc.totalInvocations : 0);
+    const rate = (count: number): number => +perInvocation(count).toFixed(RATE_DISPLAY_PRECISION);
 
     const detail = {
       agentName,

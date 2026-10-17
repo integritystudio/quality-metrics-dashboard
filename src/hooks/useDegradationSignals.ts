@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { Period } from '../types.js';
 import { useApiQuery } from './useApiQuery.js';
 
@@ -36,7 +37,7 @@ export type DegradationSignalsResponse = {
   computedAt: string | null;
 }
 
-export function useDegradationSignals(period: Period) {
+export function useDegradationSignals(period: Period): UseQueryResult<DegradationSignalsResponse> {
   return useApiQuery<DegradationSignalsResponse>(
     ['degradation-signals', period],
     () => `/api/degradation-signals?${new URLSearchParams({ period })}`,

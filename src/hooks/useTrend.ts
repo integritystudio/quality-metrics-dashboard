@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { Period, MetricTrend, MetricDynamics } from '../types.js';
 import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
@@ -31,7 +32,7 @@ export type TrendResponse = {
 }
 
 /** The Worker serves the synced `trend:<name>:<period>` key, which holds DEFAULT_TREND_BUCKETS buckets whatever `buckets` says. */
-export function useTrend(metricName: string, period: Period, buckets: number = DEFAULT_TREND_BUCKETS) {
+export function useTrend(metricName: string, period: Period, buckets: number = DEFAULT_TREND_BUCKETS): UseQueryResult<TrendResponse> {
   return useApiQuery<TrendResponse>(
     ['trend', metricName, period, buckets],
     () => `/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,

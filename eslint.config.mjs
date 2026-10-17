@@ -227,6 +227,7 @@ export default tseslint.config(
       // anything, and `new Promise(r => setTimeout(r, ms))` is the sleep idiom.
       // Off in the parent's test block for the same reason.
       '@typescript-eslint/promise-function-async': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
       // A stray `.only` silently skips the rest of the suite.
       'vitest/no-focused-tests': 'error',
       'vitest/no-identical-title': 'error',
@@ -287,6 +288,16 @@ export default tseslint.config(
     plugins: { '@stylistic': stylistic },
     rules: {
       '@stylistic/indent': ['error', 2, { SwitchCase: 1 }],
+    },
+  },
+  // Return types where they document a contract: API payloads, route handlers and
+  // query-hook results. Deliberately NOT applied to src/components or src/pages —
+  // there it would only add `: JSX.Element` plus a `JSX` import to ~120 component
+  // files (DASH-LINT-PARENT-PARITY). The parent applies it tree-wide, at warn.
+  {
+    files: ['src/api/**/*.ts', 'src/hooks/**/*.{ts,tsx}', 'src/lib/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'error',
     },
   },
   // Declaration files augment existing global/module interfaces, and declaration

@@ -26,7 +26,7 @@ export type LabelOrdinal = {
   mapped: boolean;
 }
 
-import { scaleLinear, scaleOrdinal, scaleThreshold } from 'd3-scale';
+import { scaleLinear, scaleOrdinal, scaleThreshold, type ScaleThreshold } from 'd3-scale';
 import {
   type Role,
   AGENT_PALETTE,
@@ -125,7 +125,7 @@ export function scoreColor(value: number, direction?: ScoreDirection): string {
 const SCORE_BANDS_ASCENDING: ScoreColorBand[] = ['failing', 'poor', 'adequate', 'good', 'excellent'];
 const SCORE_BAND_LOWER_BOUNDS = [0.4, 0.6, 0.8, 0.9];
 
-function bandScale(lowerBounds: number[]) {
+function bandScale(lowerBounds: number[]): ScaleThreshold<number, ScoreColorBand, ScoreColorBand> {
   return scaleThreshold<number, ScoreColorBand>()
     .domain(lowerBounds)
     .range(SCORE_BANDS_ASCENDING)

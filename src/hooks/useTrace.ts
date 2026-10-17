@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
 import { STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
@@ -21,7 +21,7 @@ type TraceResponse = {
   evaluations: EvaluationResult[];
 }
 
-export function useTrace(traceId: string | undefined) {
+export function useTrace(traceId: string | undefined): UseQueryResult<TraceResponse> {
   const { getAccessToken } = useAuth();
   // On-choke-point (P6): org id in the key and X-Org-Id on the wire, matching
   // useApiQuery — this hook fetches outside useApiQuery and must not drift.

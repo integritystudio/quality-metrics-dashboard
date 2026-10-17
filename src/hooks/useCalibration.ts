@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { PercentileDistribution } from '../lib/quality-utils.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import { STALE_TIME } from '../lib/constants.js';
@@ -13,7 +14,7 @@ export type MetricCalibration = {
  * The org's calibration, or `undefined` while loading or when none has been synced:
  * a new org has none, and the worker's 404 for that is no data, not an error.
  */
-export function useCalibration() {
+export function useCalibration(): UseQueryResult<CalibrationResponse | undefined> {
   return useApiQuery<CalibrationResponse | null, CalibrationResponse | undefined>(
     ['calibration'],
     () => `/api/calibration`,

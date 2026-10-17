@@ -21,7 +21,7 @@ const QUERY_FIELD_ERRORS: Readonly<Record<string, string>> = {
 };
 
 /** Route middleware validating the query string; `c.req.valid('query')` reads the result. */
-export function validQuery<T extends z.ZodType>(schema: T) {
+export function validQuery<T extends z.ZodType>(schema: T): ReturnType<typeof queryValidator<T>> {
   return queryValidator(schema, QUERY_FIELD_ERRORS, ErrorMessage.InvalidQuery);
 }
 
@@ -29,7 +29,7 @@ export function validQuery<T extends z.ZodType>(schema: T) {
 export const PeriodQuery = z.object({ period: PeriodSchema });
 
 /** An empty `?field=` reads as absent, so an optional field takes its default. */
-export function blankAsAbsent<T extends z.ZodType>(schema: T) {
+export function blankAsAbsent<T extends z.ZodType>(schema: T): z.ZodPreprocess<T> {
   return z.preprocess((value) => (value === '' ? undefined : value), schema);
 }
 

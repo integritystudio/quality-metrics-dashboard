@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
@@ -151,7 +152,7 @@ export type SessionDetailResponse = {
   evaluations: EvaluationResult[];
 }
 
-export function useSessionDetail(sessionId: string | undefined) {
+export function useSessionDetail(sessionId: string | undefined): UseQueryResult<SessionDetailResponse> {
   return useApiQuery<SessionDetailResponse>(
     ['session-detail', sessionId],
     () => `/api/sessions/${encodeURIComponent(sessionId ?? '')}`,

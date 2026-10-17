@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import { group } from 'd3-array';
 import { CloudBackend } from './parent/backends.js';
-import type { EvaluationResult, HumanVerificationEvent } from '../types.js';
+import type { EvaluationResult, HumanVerificationEvent, TraceSpan } from '../types.js';
 import { queryVerifications as queryVerificationsLib } from './parent/verification-events.js';
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
@@ -132,12 +132,12 @@ function traceQueryDates(startDate?: string, endDate?: string): { start: string;
   };
 }
 
-export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string) {
+export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string): Promise<TraceSpan[]> {
   const { start, end } = traceQueryDates(startDate, endDate);
   return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
 }
 
-export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string) {
+export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string): Promise<TraceSpan[]> {
   const { start, end } = traceQueryDates(startDate, endDate);
   return (await queryTracesTool({ attributeFilter: { [SESSION_ATTRIBUTES.ID]: sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
 }
@@ -152,7 +152,7 @@ export async function loadTracesByFilter(
   startDate: string,
   endDate: string,
   limit: number,
-) {
+): Promise<TraceSpan[]> {
   return (await queryTracesTool({ attributeFilter, startDate, endDate, limit }, { backend: getBackend() })).traces;
 }
 

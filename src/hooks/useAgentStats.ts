@@ -1,3 +1,4 @@
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { Period } from '../types.js';
 import type { AgentStat, EvalMetricSummary, AgentStatsResponse } from '../api/aggregates/agent-stats.js';
 import { STALE_TIME, ErrorMessage } from '../lib/constants.js';
@@ -14,7 +15,7 @@ function assertAgentStatsResponse(data: unknown): asserts data is AgentStatsResp
   }
 }
 
-export function useAgentStats(period: Period) {
+export function useAgentStats(period: Period): UseQueryResult<AgentStatsResponse> {
   return useApiQuery<unknown, AgentStatsResponse>(
     ['agent-stats', period],
     () => `/api/agents?period=${encodeURIComponent(period)}`,
