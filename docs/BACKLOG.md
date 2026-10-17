@@ -28,9 +28,9 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures` and `no-unmodified-loop-condition` by hand on 2026-10-17.
-623 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures` and `no-unmodified-loop-condition` by hand on 2026-10-17. 623 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
+| DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
 here against `../src/server.ts` and a parent test under the parent's `eslint.config.cjs`. The cheap subset
@@ -250,6 +250,19 @@ at the parent's versions; the dashboard installs standalone in CI.
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
+
+**DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
+entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version
+its own range excludes — a major downgrade npm reports as satisfied. Dev- and test-only (jsdom is the
+vitest DOM environment and nothing under `src/`, `worker/` or `scripts/` imports `undici` directly; it
+is declared only so the override's `$undici` reference resolves), and the suites pass, so this is a
+record rather than a defect. Two things follow from it:
+- The override exists for a security floor (b21a7be, "compromised undici"), so it should not simply be
+  dropped to let jsdom have 8.x. Raising it to `^8` means checking `miniflare`, whose edge is 7.29.1.
+- **The `$undici` form couples the override to the devDependency.** Removing the devDependency breaks
+  the reference, and bumping it moves every transitive copy with it. That is the point — it is what
+  keeps one version in the tree — but it means the devDependency is load-bearing despite being
+  imported nowhere. Do not "clean it up" as unused.
 
 **DASH-ERRORDETAIL-OPTIONAL.** `src/api/session-detail.ts` `ErrorDetail` declares
 `tool?: string; errorType?: string`, but `computeErrorSummary` sets both on every pushed entry, each with
