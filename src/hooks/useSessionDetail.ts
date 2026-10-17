@@ -47,20 +47,6 @@ export type DataSources = {
   total: number;
 }
 
-export type {
-  AgentActivityEntry,
-  AlertSummary,
-  CodeStructureEntry,
-  EvalBreakdownEntry,
-  FileAccessEntry,
-  GitCommit,
-  HookLatencyEntry,
-  SessionInfo,
-  Timespan,
-  TokenProgressionEntry,
-  TokenTotals,
-};
-
 export type SessionDetailResponse = {
   sessionId: string;
   dataSources: DataSources;
