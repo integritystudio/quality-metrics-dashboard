@@ -19,6 +19,7 @@ import { agentRoutes } from '../api/routes/agents.js';
 import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../lib/hook-attributes.js';
 import { defined } from './support/defined.js';
 
 let fixture: FixtureServer;
@@ -54,12 +55,12 @@ function makeAgentSpanWire(
       // real span, not from HOOK_NAME: the fixture said 'agent-post-tool' for six
       // weeks after the hooks renamed it, and passed against a route that matched
       // nothing in production (AGENT-POST-TOOL-READERS-DEAD).
-      'integritystudio.hook.name': 'agent.operation.finalize',
+      [HOOK_ATTRIBUTES.NAME]: 'agent.operation.finalize',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
-      'integritystudio.agent.has_error': false,
-      'integritystudio.agent.has_rate_limit': false,
-      'integritystudio.agent.output_size': 500,
-      'integritystudio.agent.source_type': 'active',
+      [AGENT_ATTRIBUTES.HAS_ERROR]: false,
+      [AGENT_ATTRIBUTES.HAS_RATE_LIMIT]: false,
+      [AGENT_ATTRIBUTES.OUTPUT_SIZE]: 500,
+      [AGENT_ATTRIBUTES.SOURCE_TYPE]: 'active',
       [SESSION_ATTRIBUTES.ID]: 'sess-001',
       ...attrs,
     },
@@ -119,8 +120,8 @@ describe('GET /agents', () => {
 
   it('computes errorRate correctly', async () => {
     fixture.setTraces([
-      makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { 'integritystudio.agent.has_error': true }),
-      makeAgentSpanWire('trace-002', 'span-002', 'general-purpose', { 'integritystudio.agent.has_error': false }),
+      makeAgentSpanWire('trace-001', 'span-001', 'general-purpose', { [AGENT_ATTRIBUTES.HAS_ERROR]: true }),
+      makeAgentSpanWire('trace-002', 'span-002', 'general-purpose', { [AGENT_ATTRIBUTES.HAS_ERROR]: false }),
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
@@ -214,7 +215,8 @@ describe('GET /agents/:sessionId/graph', () => {
   // failed by a has_error attribute scored 1 here and 0 in the graph KV serves.
   // No numeric-status row: CloudBackend turns status code 2 into 'ERROR' before the route reads it.
   it.each([
-    'integritystudio.agent.has_error',
+    AGENT_ATTRIBUTES.HAS_ERROR,
+    // No constant yet: the `integritystudio.tool.*` keys are still spelled inline (DASH-VENDOR-ATTR-LITERALS).
     'integritystudio.tool.has_error',
   ])('scores a step that failed by %s as 0, as the KV graph does', async (errorAttribute) => {
     fixture.setTraces([

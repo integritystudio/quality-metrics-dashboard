@@ -25,6 +25,7 @@ import { type EvalRecord } from '../eval-record.js';
 import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
@@ -543,7 +544,7 @@ function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
     endTime: [1790553614, 236463666],
     duration: [0, 1463666],
     status: { code: 1 },
-    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', 'integritystudio.hook.name': 'builtin-post-tool', ...attributes },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', [HOOK_ATTRIBUTES.NAME]: 'builtin-post-tool', ...attributes },
   };
 }
 
@@ -628,7 +629,7 @@ function mcpToolSpan(attributes: Record<string, unknown>): TraceSpan {
   return {
     ...renamedToolSpan({}),
     name: 'hook:mcp-post-tool',
-    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', 'integritystudio.hook.name': 'mcp-post-tool', ...attributes },
+    attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', [HOOK_ATTRIBUTES.NAME]: 'mcp-post-tool', ...attributes },
   };
 }
 
@@ -706,8 +707,8 @@ function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId:
       [SESSION_ATTRIBUTES.ID]: 'sess-agents',
       [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
-      'integritystudio.agent.type': agentName,
-      'integritystudio.hook.name': `agent.operation.${phase}`,
+      [AGENT_ATTRIBUTES.TYPE]: agentName,
+      [HOOK_ATTRIBUTES.NAME]: `agent.operation.${phase}`,
     },
   };
 }
@@ -783,9 +784,9 @@ describe('handoff_correctness scores agent failures correctly', () => {
         [SESSION_ATTRIBUTES.ID]: 'sess-failure',
         [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent',
         [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
-        'integritystudio.agent.type': agentName,
-        'integritystudio.hook.name': `agent.operation.${phase}`,
-        ...(extra.hasError !== undefined && { 'integritystudio.agent.has_error': extra.hasError }),
+        [AGENT_ATTRIBUTES.TYPE]: agentName,
+        [HOOK_ATTRIBUTES.NAME]: `agent.operation.${phase}`,
+        ...(extra.hasError !== undefined && { [AGENT_ATTRIBUTES.HAS_ERROR]: extra.hasError }),
       },
       status: { code: extra.statusCode ?? OTEL_STATUS_OK },
     };
@@ -986,8 +987,8 @@ describe('deriveAgentHeuristics', () => {
       spanId: 'span-stop',
       ...overrides,
       attributes: {
-        'integritystudio.agent.transcript_path': transcriptPath,
-        'integritystudio.agent.type': 'code-reviewer',
+        [AGENT_ATTRIBUTES.TRANSCRIPT_PATH]: transcriptPath,
+        [AGENT_ATTRIBUTES.TYPE]: 'code-reviewer',
       },
     });
   }

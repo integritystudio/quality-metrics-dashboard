@@ -9,7 +9,8 @@ import { HOOK_NAME, PARAM_ID_RE, isValidParam, jsonSafe } from '../api-constants
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
 import { handleRouteError, validQuery } from '../route-errors.js';
-import { HOOK_NAME_ATTRIBUTE, agentStatsWindow, computeAgentStats } from '../aggregates/agent-stats.js';
+import { agentStatsWindow, computeAgentStats } from '../aggregates/agent-stats.js';
+import { HOOK_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 const DEFAULT_AGENTS_PERIOD: Period = '30d';
@@ -38,7 +39,7 @@ agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
   // and then fails Zod at runtime, which made this route a guaranteed 500.
   // Pass the datetimes; the date-only values stay for the evaluations read.
   const agentSpans = await loadTracesByFilter(
-    { [HOOK_NAME_ATTRIBUTE]: HOOK_NAME.AGENT_FINALIZE },
+    { [HOOK_ATTRIBUTES.NAME]: HOOK_NAME.AGENT_FINALIZE },
     windowStart.toISOString(),
     now.toISOString(),
     LIMIT_AGENT_SPANS,

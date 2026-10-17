@@ -30,6 +30,7 @@ import { increment } from '../lib/collections.js';
 import { SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
 import type { StepScore } from '../types.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 /** Minimal shape required by the span-extraction helpers. */
 export type ExtractableSpan = {
@@ -48,7 +49,7 @@ export type ExtractableSpan = {
 export function isSpanError(span: ExtractableSpan): boolean {
   return (
     spanAttr(span, 'integritystudio.tool.has_error', 'boolean') === true ||
-    spanAttr(span, 'integritystudio.agent.has_error', 'boolean') === true ||
+    spanAttr(span, AGENT_ATTRIBUTES.HAS_ERROR, 'boolean') === true ||
     span.status?.code === OTEL_STATUS_ERROR_CODE ||
     span.status?.code === 'ERROR'
   );
@@ -259,7 +260,7 @@ function isValidScore(v: number | null | undefined): v is number {
 }
 
 function hookSpans(spans: SessionSpan[], hookName: string): SessionSpan[] {
-  return spans.filter(s => spanAttr(s, 'integritystudio.hook.name', 'string') === hookName);
+  return spans.filter(s => spanAttr(s, HOOK_ATTRIBUTES.NAME, 'string') === hookName);
 }
 
 /** `truncated` is written only when set, so a complete read keeps the shape older KV values have. */
@@ -355,8 +356,8 @@ function computeUsageCounts(spans: SessionSpan[]): UsageCounts {
   const toolUsage: Record<string, number> = {};
   const mcpUsage: Record<string, number> = {};
   for (const s of spans) {
-    if (spanAttr(s, 'integritystudio.hook.trigger', 'string') !== 'PostToolUse') continue;
-    const type = spanAttr(s, 'integritystudio.hook.type', 'string');
+    if (spanAttr(s, HOOK_ATTRIBUTES.TRIGGER, 'string') !== 'PostToolUse') continue;
+    const type = spanAttr(s, HOOK_ATTRIBUTES.TYPE, 'string');
     if (type === 'builtin') {
       increment(toolUsage, spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? 'unknown');
     } else if (type === 'mcp') {
@@ -391,7 +392,7 @@ function computeErrorSummary(spans: SessionSpan[]): ErrorSummary {
   const details: ErrorDetail[] = [];
   for (const s of spans) {
     if (!isSpanError(s)) continue;
-    const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, 'integritystudio.agent.type', 'string') ?? 'unknown';
+    const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, AGENT_ATTRIBUTES.TYPE, 'string') ?? 'unknown';
     const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
     increment(byCategory, `${tool} -> ${errType}`);
     details.push({
@@ -412,16 +413,16 @@ function summarizeAgentSpans(group: SessionSpan[]): AgentSpanTotals {
   };
   for (const s of group) {
     a.invocations++;
-    if (spanAttr(s, 'integritystudio.agent.has_error', 'boolean')) a.errors++;
-    if (spanAttr(s, 'integritystudio.agent.has_rate_limit', 'boolean')) {
+    if (spanAttr(s, AGENT_ATTRIBUTES.HAS_ERROR, 'boolean')) a.errors++;
+    if (spanAttr(s, AGENT_ATTRIBUTES.HAS_RATE_LIMIT, 'boolean')) {
       a.hasRateLimit = true;
       a.rateLimitEvents++;
     }
-    a.totalOutputSize += spanAttr(s, 'integritystudio.agent.output_size', 'number') ?? 0;
+    a.totalOutputSize += spanAttr(s, AGENT_ATTRIBUTES.OUTPUT_SIZE, 'number') ?? 0;
     const dur = s.durationMs ?? 0;
     if (dur > 0) { a.durationSum += dur; a.durationCount++; }
-    if (spanAttr(s, 'integritystudio.agent.output.truncated', 'boolean')) a.truncatedCount++;
-    if (spanAttr(s, 'integritystudio.agent.output.empty', 'boolean')) a.emptyCount++;
+    if (spanAttr(s, AGENT_ATTRIBUTES.OUTPUT_TRUNCATED, 'boolean')) a.truncatedCount++;
+    if (spanAttr(s, AGENT_ATTRIBUTES.OUTPUT_EMPTY, 'boolean')) a.emptyCount++;
   }
   return a;
 }

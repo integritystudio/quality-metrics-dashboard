@@ -57,6 +57,7 @@ import { knownLabelSchema } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';
 import { resolveTranscriptPath, scanTranscriptDirs } from './judge-turns.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
+import { AGENT_ATTRIBUTES } from '../src/lib/hook-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /**
@@ -125,13 +126,6 @@ const MCP_ATTR = {
   ERROR_TYPE: ['integritystudio.mcp.error_type', 'mcp.error_type'],
   SERVER: ['integritystudio.mcp.server', 'mcp.server'],
 } as const satisfies Record<string, readonly [string, string]>;
-
-/** Agent hook attribute keys, canonical; `attrsOf` maps the pre-rename `agent.*` spellings onto them. */
-const AGENT_ATTR = {
-  TYPE: 'integritystudio.agent.type',
-  HAS_ERROR: 'integritystudio.agent.has_error',
-  TRANSCRIPT_PATH: 'integritystudio.agent.transcript_path',
-} as const;
 
 /** A renamed attribute's value: the canonical key first, then the legacy one. */
 function renamedValue(attrs: Record<string, unknown>, [canonical, legacy]: readonly [string, string]): unknown {
@@ -239,7 +233,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   let hookType: string;
   if (span.name === BUILTIN_POST_TOOL_SPAN) hookType = `builtin/${attrString(attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME], 'unknown')}`;
   else if (span.name === MCP_POST_TOOL_SPAN) hookType = `mcp/${attrString(renamedValue(attrs, MCP_ATTR.TOOL), 'unknown')}`;
-  else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs[AGENT_ATTR.TYPE], 'unknown')}`;
+  else if (span.name === AGENT_FINALIZE_SPAN) hookType = `agent/${attrString(attrs[AGENT_ATTRIBUTES.TYPE], 'unknown')}`;
   else hookType = span.name.replace(HOOK_SPAN_PREFIX, '');
 
   return ruleRecord(span, attrString(attrs[SESSION_ATTRIBUTES.ID]), {
@@ -374,7 +368,7 @@ function trackAgentActivity(span: LocalTraceSpan): void {
     const attrs = attrsOf(span);
     // Score on the agent's own error flag (set from Agent tool `is_error`); fall
     // back to span status so a hook crash is also counted as a failure.
-    const hasError = attrs[AGENT_ATTR.HAS_ERROR] === true || span.status?.code === OTEL_STATUS_ERROR_CODE;
+    const hasError = attrs[AGENT_ATTRIBUTES.HAS_ERROR] === true || span.status?.code === OTEL_STATUS_ERROR_CODE;
     const score = hasError ? 0 : 1;
     entry.agentSequence.push({ agentName, score, span });
   }
@@ -490,10 +484,10 @@ export async function deriveAgentHeuristics(
     if (!last || byStartThenSpanId(last, span) < 0) lastSpanBySession.set(sessionId, span);
 
     if (span.name !== SUBAGENT_STOP_SPAN) continue;
-    const recordedPath = attrs[AGENT_ATTR.TRANSCRIPT_PATH];
+    const recordedPath = attrs[AGENT_ATTRIBUTES.TRANSCRIPT_PATH];
     const path = typeof recordedPath === 'string' ? resolveTranscriptPath(recordedPath) : null;
     if (!path) continue;
-    const agentType = attrString(attrs[AGENT_ATTR.TYPE], 'unknown');
+    const agentType = attrString(attrs[AGENT_ATTRIBUTES.TYPE], 'unknown');
     jobs.push(limit(async () => {
       const input = await readSingleTurnInput(path);
       return input

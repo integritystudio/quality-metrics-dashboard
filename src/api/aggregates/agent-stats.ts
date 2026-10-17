@@ -28,6 +28,7 @@ import {
 } from '../api-constants.js';
 import { increment } from '../../lib/collections.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 /** One KV key per period; the Worker restates the prefix because it cannot import this module. */
 export const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
@@ -35,9 +36,6 @@ export const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
 export function agentStatsKey(period: Period): string {
   return `${AGENT_STATS_KEY_PREFIX}${period}`;
 }
-
-/** The span attribute the agents read filters on; its value is `HOOK_NAME.AGENT_FINALIZE`. */
-export const HOOK_NAME_ATTRIBUTE = 'integritystudio.hook.name';
 
 export type AgentStatsSpan = SpanLike & {
   traceId?: string | undefined;
@@ -99,7 +97,7 @@ export function agentStatsWindow(period: Period, now: Date): AgentStatsWindow {
 }
 
 export function isAgentFinalizeSpan(span: SpanLike): boolean {
-  return attrStr(span, HOOK_NAME_ATTRIBUTE, '') === HOOK_NAME.AGENT_FINALIZE;
+  return attrStr(span, HOOK_ATTRIBUTES.NAME, '') === HOOK_NAME.AGENT_FINALIZE;
 }
 
 type AgentAcc = {
@@ -165,9 +163,9 @@ export function computeAgentStats(
       const idx = bucketIndex.get(toDateOnly(new Date(timestampToMs(span.startTimeUnixNano))));
       if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
     }
-    if (spanAttr(span, 'integritystudio.agent.has_error', 'boolean')) entry.errors++;
-    if (spanAttr(span, 'integritystudio.agent.has_rate_limit', 'boolean')) entry.rateLimitCount++;
-    entry.totalOutputSize += attrNum(span, 'integritystudio.agent.output_size');
+    if (spanAttr(span, AGENT_ATTRIBUTES.HAS_ERROR, 'boolean')) entry.errors++;
+    if (spanAttr(span, AGENT_ATTRIBUTES.HAS_RATE_LIMIT, 'boolean')) entry.rateLimitCount++;
+    entry.totalOutputSize += attrNum(span, AGENT_ATTRIBUTES.OUTPUT_SIZE);
     const sid = attrStr(span, SESSION_ATTRIBUTES.ID, '');
     if (sid) entry.sessions.add(sid);
     if (span.traceId) {
@@ -176,7 +174,7 @@ export function computeAgentStats(
       if (!agentSet) traceToAgents.set(span.traceId, agentSet = new Set());
       agentSet.add(name);
     }
-    const rawSrc = attrStr(span, 'integritystudio.agent.source_type');
+    const rawSrc = attrStr(span, AGENT_ATTRIBUTES.SOURCE_TYPE);
     increment(entry.sourceTypes, KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other');
   }
 

@@ -8,6 +8,7 @@ import { join, basename } from 'node:path';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import { otelLogEntrySchema, transcriptEntrySchema } from '../../src/lib/validation/dashboard-schemas.js';
 import { streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
+import { HOOK_ATTRIBUTES } from '../src/lib/hook-attributes.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
@@ -154,7 +155,7 @@ export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   for (const filepath of listTelemetryJsonl(LOGS_FILE_PREFIX)) {
     for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
       const attrs = entry.attributes;
-      if (attrs?.['integritystudio.hook.name'] !== HOOK_NAME.TOKEN_METRICS) continue;
+      if (attrs?.[HOOK_ATTRIBUTES.NAME] !== HOOK_NAME.TOKEN_METRICS) continue;
 
       const tPath = transcriptPathOf(attrs);
       if (!tPath) continue;

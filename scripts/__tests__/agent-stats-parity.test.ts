@@ -8,8 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
-import { agentStatsKey, HOOK_NAME_ATTRIBUTE, type AgentStatsResponse } from '../../src/api/aggregates/agent-stats.js';
+import { agentStatsKey, type AgentStatsResponse } from '../../src/api/aggregates/agent-stats.js';
 import { HOOK_NAME } from '../../src/api/api-constants.js';
 import { agentRoutes } from '../../src/api/routes/agents.js';
 import { spanToWire, type TraceWireRow } from '../../src/__tests__/support/fixture-server.js';
@@ -34,18 +35,18 @@ function agentSpan({ agentName, iso, traceId, sessionId, attrs = {} }: AgentSpan
     kind: 'INTERNAL',
     startTimeUnixNano: isoToNs(iso),
     attributes: {
-      [HOOK_NAME_ATTRIBUTE]: HOOK_NAME.AGENT_FINALIZE,
+      [HOOK_ATTRIBUTES.NAME]: HOOK_NAME.AGENT_FINALIZE,
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
       [SESSION_ATTRIBUTES.ID]: sessionId,
-      'integritystudio.agent.source_type': 'active',
-      'integritystudio.agent.output_size': 500,
+      [AGENT_ATTRIBUTES.SOURCE_TYPE]: 'active',
+      [AGENT_ATTRIBUTES.OUTPUT_SIZE]: 500,
       ...attrs,
     },
   });
 }
 
 const spans: TraceWireRow[] = [
-  agentSpan({ agentName: 'general-purpose', iso: '2026-10-07T12:00:00.000Z', traceId: 'trace-a', sessionId: 'sess-1', attrs: { 'integritystudio.agent.has_error': true } }),
+  agentSpan({ agentName: 'general-purpose', iso: '2026-10-07T12:00:00.000Z', traceId: 'trace-a', sessionId: 'sess-1', attrs: { [AGENT_ATTRIBUTES.HAS_ERROR]: true } }),
   agentSpan({ agentName: 'Explore', iso: '2026-10-07T12:30:00.000Z', traceId: 'trace-a', sessionId: 'sess-1' }),
   agentSpan({ agentName: 'general-purpose', iso: '2026-10-06T09:00:00.000Z', traceId: 'trace-b', sessionId: 'sess-2' }),
   // Older than 7d, inside 30d.

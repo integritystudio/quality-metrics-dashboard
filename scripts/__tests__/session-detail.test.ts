@@ -10,6 +10,7 @@ import { computeMultiAgentEvaluation } from '../../../src/lib/quality/quality-mu
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { evaluation } from './support/evaluations.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 
 function detailOf(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated?: boolean) {
   return computeSessionDetail(
@@ -49,7 +50,7 @@ describe('computeSessionDetail multi-agent attribution', () => {
 // 'unknown' with no error details or file access. Spans reach this function
 // through CloudBackend, which canonicalizes both eras, so it reads canonical.
 describe('computeSessionDetail after the builtin.* rename', () => {
-  const postTool = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
+  const postTool = { [HOOK_ATTRIBUTES.TYPE]: 'builtin', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse' };
 
   it('counts tool usage by gen_ai.tool.name', () => {
     const detail = detailOf([
@@ -88,10 +89,10 @@ describe('computeSessionDetail after the agent hook rename', () => {
   const finalize = (agentName: string, hasError: boolean) => ({
     name: 'hook:agent.operation.finalize',
     attributes: {
-      'integritystudio.hook.name': 'agent.operation.finalize',
+      [HOOK_ATTRIBUTES.NAME]: 'agent.operation.finalize',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
-      'integritystudio.agent.has_error': hasError,
-      'integritystudio.agent.output_size': 400,
+      [AGENT_ATTRIBUTES.HAS_ERROR]: hasError,
+      [AGENT_ATTRIBUTES.OUTPUT_SIZE]: 400,
     },
   });
 
@@ -131,14 +132,14 @@ describe('computeSessionDetail across the integritystudio.* key rename', () => {
     Object.fromEntries(Object.entries(attrs).map(([key, value]) => [key, typeof value === 'number' ? value + DECOY_OFFSET : `stale-${String(value)}`]));
 
   function hookSpan(hookName: string, attributes: Attributes) {
-    return { name: `hook:${hookName}`, traceId: 't1', attributes: { 'integritystudio.hook.name': hookName, ...attributes } };
+    return { name: `hook:${hookName}`, traceId: 't1', attributes: { [HOOK_ATTRIBUTES.NAME]: hookName, ...attributes } };
   }
 
   function sessionSpans(write: (attrs: Attributes) => Attributes) {
     return [
       hookSpan('session-start', write(SESSION_START)),
       hookSpan('token-metrics-extraction', write(TOKEN_METRICS)),
-      hookSpan('mcp-post-tool', { 'integritystudio.hook.type': 'mcp', 'integritystudio.hook.trigger': 'PostToolUse', ...write(MCP_POST_TOOL) }),
+      hookSpan('mcp-post-tool', { [HOOK_ATTRIBUTES.TYPE]: 'mcp', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse', ...write(MCP_POST_TOOL) }),
       hookSpan('telemetry-alert-evaluation', write(ALERT_EVALUATION)),
     ];
   }

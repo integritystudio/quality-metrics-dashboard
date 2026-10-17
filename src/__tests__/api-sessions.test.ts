@@ -16,6 +16,7 @@ import type { SessionDetailResponse } from '../hooks/useSessionDetail.js';
 import { makeEvaluation } from './support/fixtures.js';
 import { ErrorMessage } from '../lib/constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
 type SessionDetailBody = JsonSafe<SessionDetailResponse>;
@@ -116,7 +117,7 @@ describe('GET /sessions/:sessionId', () => {
   });
 
   it('builds tool usage from span attributes', async () => {
-    const toolAttrs = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
+    const toolAttrs = { [HOOK_ATTRIBUTES.TYPE]: 'builtin', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse' };
     fixture.setTraces([
       makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
       { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }), span_id: 'span-002', trace_id: 'trace-002' },
@@ -133,7 +134,7 @@ describe('GET /sessions/:sessionId', () => {
   // reading the legacy keys, so post-rename sessions showed every tool as
   // 'unknown'. CloudBackend canonicalizes both eras; the route reads canonical.
   it('builds tool usage from post-rename canonical keys and legacy keys alike', async () => {
-    const toolAttrs = { 'integritystudio.hook.type': 'builtin', 'integritystudio.hook.trigger': 'PostToolUse' };
+    const toolAttrs = { [HOOK_ATTRIBUTES.TYPE]: 'builtin', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse' };
     fixture.setTraces([
       makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' }),
       { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' }), span_id: 'span-002', trace_id: 'trace-002' },
@@ -188,13 +189,13 @@ describe('GET /sessions/:sessionId', () => {
   it('builds agent activity from the finalize hook spans', async () => {
     const finalize = {
       'builtin.tool': undefined,
-      'integritystudio.hook.name': 'agent.operation.finalize',
+      [HOOK_ATTRIBUTES.NAME]: 'agent.operation.finalize',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'Explore',
-      'integritystudio.agent.output_size': 300,
+      [AGENT_ATTRIBUTES.OUTPUT_SIZE]: 300,
     };
     fixture.setTraces([
       makeSessionSpanWire('hook:agent.operation.finalize', finalize),
-      { ...makeSessionSpanWire('hook:agent.operation.finalize', { ...finalize, 'integritystudio.agent.has_error': true }), span_id: 'span-002' },
+      { ...makeSessionSpanWire('hook:agent.operation.finalize', { ...finalize, [AGENT_ATTRIBUTES.HAS_ERROR]: true }), span_id: 'span-002' },
     ]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
@@ -362,7 +363,7 @@ describe('GET /sessions/:sessionId across the integritystudio.* key rename', () 
 
   function hookSpanWire(hookName: string, spanId: string, attributes: Attributes) {
     return {
-      ...makeSessionSpanWire(`hook:${hookName}`, { 'builtin.tool': undefined, 'integritystudio.hook.name': hookName, ...attributes }),
+      ...makeSessionSpanWire(`hook:${hookName}`, { 'builtin.tool': undefined, [HOOK_ATTRIBUTES.NAME]: hookName, ...attributes }),
       span_id: spanId,
     };
   }
@@ -371,7 +372,7 @@ describe('GET /sessions/:sessionId across the integritystudio.* key rename', () 
     fixture.setTraces([
       hookSpanWire('session-start', 'span-start', write(SESSION_START)),
       hookSpanWire('token-metrics-extraction', 'span-tokens', write(TOKEN_METRICS)),
-      hookSpanWire('mcp-post-tool', 'span-mcp', { 'integritystudio.hook.type': 'mcp', 'integritystudio.hook.trigger': 'PostToolUse', ...write(MCP_POST_TOOL) }),
+      hookSpanWire('mcp-post-tool', 'span-mcp', { [HOOK_ATTRIBUTES.TYPE]: 'mcp', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse', ...write(MCP_POST_TOOL) }),
       hookSpanWire('telemetry-alert-evaluation', 'span-alert', write(ALERT_EVALUATION)),
     ]);
   }
