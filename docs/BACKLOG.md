@@ -31,7 +31,7 @@ No open items.
 | DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params` and `max-depth` by hand on 2026-10-17. 610 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
-| DASH-VENDOR-ATTR-LITERALS | `integritystudio.*` keys outside agent/hook are still spelled inline | P3 | Follow-on from the `AGENT_ATTRIBUTES`/`HOOK_ATTRIBUTES` consolidation (2026-10-17). Source: session 2026-10-17 |
+| DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
 here against `../src/server.ts` and a parent test under the parent's `eslint.config.cjs`. The cheap subset
@@ -284,9 +284,19 @@ span-attribute keys one home, because the fixtures and the readers had each spel
 canonical-key rename (one row in `hooks/lib/attribute-aliases.ts`) would have left the tests green while
 production read `undefined`. 11 keys, ~45 call sites across 3 readers and 6 test files; semconv keys stay
 in `otel-attributes.ts`, which is re-export-only by contract, so these vendor keys could not go there.
-The same defect remains for every other `integritystudio.*` namespace `src/api/session-detail.ts` reads
-inline — `tool.*`, `git.*`, `project.*`, `context.*`, `tokens.*`, `mcp.*`, `alerts.*`,
-`code.structure.*` — about 30 literals, several of them also spelled in fixtures.
+**Done 2026-10-17** — the rest followed the same day. `hook-attributes.ts` now holds 12 groups / 48 keys
+(`agent`, `hook`, `tool`, `mcp`, `tokens`, `context`, `git`, `project`, `task`, `alerts`, `transcript`,
+`code` + `code.structure`), and every reader and fixture imports them: ~110 literals across 6 production
+modules and 13 test files. The `integritystudio.evaluation.*` keys stay in `scripts/eval-record.ts` —
+that module documents the on-disk record contract and its deliberate divergences from the hooks' own
+`EVALUATION_ATTRS`, so it keeps the definitions and the four fixture files now import them from it.
+What is deliberately still a literal:
+- `scripts/__tests__/derive-evaluations.test.ts` `'integritystudio.tool.succeeded'` — a key derive does
+  **not** read, which is the point: the test proves `detectInputDrift` fires on a renamed success flag.
+  A constant there would defeat it.
+- the legacy half of every `renamedAttr(span, canonical, legacy, type)` pair (`'tokens.input'`,
+  `'mcp.success'`, …). Those spellings are frozen history and have no canonical constant by design.
+- `integritystudio.us.auth0.com` in `auth0-env-validation.test.ts` is an Auth0 domain, not an attribute.
 - 🔴 **Both groups declare a `TYPE`** (`integritystudio.agent.type`, `integritystudio.hook.type`), so
   `{ ...AGENT_ATTRIBUTES, ...HOOK_ATTRIBUTES }` silently drops the agent one. Concatenate entries, never
   merge the objects; `scripts/__tests__/hook-attributes.test.ts` caught this on its first run.
@@ -297,7 +307,14 @@ inline — `tool.*`, `git.*`, `project.*`, `context.*`, `tokens.*`, `mcp.*`, `al
   these keys, and the parent and the hooks "intentionally share no code"
   (`../src/lib/observability/instrumentation.ts`), so there is nothing importable to assert against.
 - `HOOK_NAME_ATTRIBUTE` was retired from `src/api/aggregates/agent-stats.ts`: a shared key constant
-  living in an aggregate module is how the duplication started.
+  living in an aggregate module is how the duplication started. `CODE_EVENT_ATTR` went the same way out
+  of `src/api/code-quality-summary.ts`, which had been spelling `integritystudio.code.event` **twice in
+  one file** — once as that export and once inside its private `ATTR` table. That table is now the two
+  semconv agent keys alone; the seven code keys come from `CODE_ATTRIBUTES`.
+- **The test covers the module by namespace import**, `Object.values(hookAttributes).flatMap(...)`, so a
+  group added later is checked without editing it: 48 keys × canonical + namespace, plus one
+  cross-group uniqueness check. Collisions are the reason it concatenates instead of spreading —
+  `TYPE` is in both agent and hook, `SUCCESS`/`ERROR_TYPE` in both tool and mcp.
 
 **DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
 entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version
