@@ -141,8 +141,6 @@ export function isValidParam(value: string | undefined, re: RegExp): boolean {
   return !!value && re.test(value);
 }
 
-export function toDateOnly(d: Date): string;
-export function toDateOnly(d: string): string;
 export function toDateOnly(d: Date | string): string {
   return (typeof d === 'string' ? d : d.toISOString()).split('T')[0] ?? '';
 }

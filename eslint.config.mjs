@@ -9,8 +9,22 @@ import eslintReact from '@eslint-react/eslint-plugin';
 import stylistic from '@stylistic/eslint-plugin';
 import unicorn from 'eslint-plugin-unicorn';
 import vitest from '@vitest/eslint-plugin';
+import importX from 'eslint-plugin-import-x';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 
 const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts'];
+
+// Files that ship nothing: a devDependency import here is correct. Mirrors the
+// parent's list, narrowed to the trees this package actually has.
+const DEV_DEPENDENCY_FILES = [
+  '**/*.test.{ts,tsx}',
+  '**/__tests__/**',
+  '**/*fixtures*.ts',
+  'e2e/**',
+  'scripts/**',
+  '**/vitest*.ts',
+  '**/*.config.*',
+];
 
 const noUnusedVarsRule = ['error', {
   argsIgnorePattern: '^_',
@@ -62,6 +76,9 @@ const typeSafetyRules = {
   '@typescript-eslint/dot-notation': 'error',
   '@typescript-eslint/no-unnecessary-type-arguments': 'error',
   '@typescript-eslint/no-extraneous-class': 'error',
+  // Separate signatures that a union parameter would state once hide from the
+  // reader that the same body serves both.
+  '@typescript-eslint/unified-signatures': 'error',
   '@typescript-eslint/prefer-literal-enum-member': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
   // Two statements for one module hide half the dependency; a type-only import
@@ -301,6 +318,45 @@ export default tseslint.config(
     files: ['src/api/**/*.ts', 'src/hooks/**/*.{ts,tsx}', 'src/lib/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'error',
+    },
+  },
+  // Import graph rules. eslint-plugin-import does not support ESLint 10, so this
+  // is its maintained fork, registered under the `import` name to match the parent.
+  // The TypeScript resolver maps the `./x.js` specifiers to their `./x.ts` sources;
+  // the extensions/parsers settings are load-bearing, because without `.ts` in them
+  // the plugin skips every imported TS file, builds no graph, and both rules pass
+  // silently. Adds ~1s to a full lint.
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    plugins: { import: importX },
+    settings: {
+      'import-x/extensions': importX.flatConfigs.typescript.settings['import-x/extensions'],
+      'import-x/parsers': importX.flatConfigs.typescript.settings['import-x/parsers'],
+      'import-x/external-module-folders': importX.flatConfigs.typescript.settings['import-x/external-module-folders'],
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: ['tsconfig.json', 'tsconfig.scripts.json'],
+          noWarnOnMultipleProjects: true,
+        }),
+      ],
+    },
+    rules: {
+      // A cycle surfaces at runtime as a TDZ crash that depends on load order,
+      // not as a type error. Type-only imports are not edges — they are erased,
+      // so they cannot TDZ.
+      'import/no-cycle': ['error', { ignoreExternal: true }],
+      // A package that resolves only through the parent's node_modules works here
+      // and breaks in the standalone CI install, so every import must be declared
+      // in this package.json.
+      'import/no-extraneous-dependencies': ['error', {
+        devDependencies: DEV_DEPENDENCY_FILES,
+        // `@parent/*` resolves to `../dist/*`, whose nearest package.json names
+        // the parent package, so the rule reports it under that name. The parent
+        // build output is reached by alias on purpose and must never become a
+        // package.json dependency; the boundary files that may use it are fixed
+        // by no-restricted-imports above.
+        whitelist: ['observability-toolkit'],
+      }],
     },
   },
   // Declaration files augment existing global/module interfaces, and declaration
