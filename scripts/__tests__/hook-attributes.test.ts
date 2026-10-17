@@ -14,14 +14,17 @@
  */
 import { describe, expect, it } from 'vitest';
 import { canonicalAttrKey } from '../../../src/lib/observability/attribute-aliases.js';
-import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import * as hookAttributes from '../../src/lib/hook-attributes.js';
 
 /**
- * Concatenated, never spread into one object: both groups declare a `TYPE`, so
- * `{ ...AGENT_ATTRIBUTES, ...HOOK_ATTRIBUTES }` drops the agent one silently.
- * Keys, not entries, so two `TYPE`s cannot give two tests the same title.
+ * Every group the module exports, so a group added later is covered without
+ * touching this file. Flattened by concatenation, never by spreading the groups
+ * into one object: several of them declare the same name (`TYPE` in both
+ * `AGENT_ATTRIBUTES` and `HOOK_ATTRIBUTES`, `SUCCESS`/`ERROR_TYPE` in both
+ * `TOOL_ATTRIBUTES` and `MCP_ATTRIBUTES`), and a spread would drop one key per
+ * collision silently.
  */
-const ALL_KEYS = [...Object.values(AGENT_ATTRIBUTES), ...Object.values(HOOK_ATTRIBUTES)];
+const ALL_KEYS = Object.values(hookAttributes).flatMap(group => Object.values(group));
 const VENDOR_PREFIX = 'integritystudio.';
 
 describe('hook span attribute keys', () => {

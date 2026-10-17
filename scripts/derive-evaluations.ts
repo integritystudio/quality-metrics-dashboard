@@ -57,7 +57,7 @@ import { knownLabelSchema } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';
 import { resolveTranscriptPath, scanTranscriptDirs } from './judge-turns.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
-import { AGENT_ATTRIBUTES } from '../src/lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, MCP_ATTRIBUTES, TASK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../src/lib/hook-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /**
@@ -121,10 +121,10 @@ function attrsOf(span: LocalTraceSpan): Record<string, unknown> {
  * so `attrsOf` leaves an older span on the unprefixed key.
  */
 const MCP_ATTR = {
-  SUCCESS: ['integritystudio.mcp.success', 'mcp.success'],
-  TOOL: ['integritystudio.mcp.tool', 'mcp.tool'],
-  ERROR_TYPE: ['integritystudio.mcp.error_type', 'mcp.error_type'],
-  SERVER: ['integritystudio.mcp.server', 'mcp.server'],
+  SUCCESS: [MCP_ATTRIBUTES.SUCCESS, 'mcp.success'],
+  TOOL: [MCP_ATTRIBUTES.TOOL, 'mcp.tool'],
+  ERROR_TYPE: [MCP_ATTRIBUTES.ERROR_TYPE, 'mcp.error_type'],
+  SERVER: [MCP_ATTRIBUTES.SERVER, 'mcp.server'],
 } as const satisfies Record<string, readonly [string, string]>;
 
 /** A renamed attribute's value: the canonical key first, then the legacy one. */
@@ -186,7 +186,7 @@ function isToolSpan(span: LocalTraceSpan): boolean {
 
 /** The success flag a tool span records, under the key its hook writes; not a boolean when absent. */
 function toolSuccessOf(span: LocalTraceSpan, attrs: Record<string, unknown>): unknown {
-  return span.name === BUILTIN_POST_TOOL_SPAN ? attrs['integritystudio.tool.success'] : renamedValue(attrs, MCP_ATTR.SUCCESS);
+  return span.name === BUILTIN_POST_TOOL_SPAN ? attrs[TOOL_ATTRIBUTES.SUCCESS] : renamedValue(attrs, MCP_ATTR.SUCCESS);
 }
 
 export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
@@ -197,7 +197,7 @@ export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
 
   const success = toolSuccessOf(span, attrs);
   const tool = attrString(isBuiltin ? attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME] : renamedValue(attrs, MCP_ATTR.TOOL), 'unknown');
-  const errorType = attrString(isBuiltin ? attrs['integritystudio.tool.error_type'] : renamedValue(attrs, MCP_ATTR.ERROR_TYPE));
+  const errorType = attrString(isBuiltin ? attrs[TOOL_ATTRIBUTES.ERROR_TYPE] : renamedValue(attrs, MCP_ATTR.ERROR_TYPE));
   const server = isMcp ? attrString(renamedValue(attrs, MCP_ATTR.SERVER)) : '';
 
   const score = success === true ? 1.0 : 0.0;
@@ -284,8 +284,8 @@ export function trackTaskActivity(span: LocalTraceSpan): void {
   if (tool === 'TaskCreate') entry.creates++;
   if (tool === 'TaskUpdate') entry.updates++;
 
-  const taskStatus = attrs['integritystudio.task.status'];
-  const taskId = attrs['integritystudio.task.id'];
+  const taskStatus = attrs[TASK_ATTRIBUTES.STATUS];
+  const taskId = attrs[TASK_ATTRIBUTES.ID];
 
   if (typeof taskStatus === 'string' && taskStatus in STATUS_SCORES) {
     const id = typeof taskId === 'string' ? taskId : `anon-${span.spanId}`;

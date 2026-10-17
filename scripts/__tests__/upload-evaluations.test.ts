@@ -21,11 +21,12 @@ import {
 } from '../upload-evaluations.js';
 import { buildAccountIndex } from '../account-stamps.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
-import { EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, LEGACY_SCORE_UNIT_ATTR, toOTelRecord } from '../eval-record.js';
+import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, LEGACY_SCORE_UNIT_ATTR, toOTelRecord } from '../eval-record.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
 import { defined } from '../../src/__tests__/support/defined.js';
+import { TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;
@@ -46,9 +47,9 @@ function record(attrs: Record<string, unknown>, extra: Record<string, unknown> =
 describe('mapRecord', () => {
   it('maps a quality-evaluation hook record, reading trace/span ids from attributes', () => {
     const { payload, skip } = mapRecord(record({
-      'integritystudio.evaluation.producer': 'hook:stop-quality-evaluation',
-      'integritystudio.evaluation.evaluator.kind': 'llm',
-      'integritystudio.evaluation.cohort': 'normal',
+      [EVALUATION_ATTRS.PRODUCER]: 'hook:stop-quality-evaluation',
+      [EVALUATION_ATTRS.EVALUATOR_KIND]: 'llm',
+      [EVALUATION_ATTRS.COHORT]: 'normal',
       [SESSION_ATTRIBUTES.ID]: 'sess-1',
       'trace.id': 'trace-1',
       'span.id': 'span-1',
@@ -72,7 +73,7 @@ describe('mapRecord', () => {
   });
 
   it('does not send a cohort outside the webhook enum, which would reject the batch', () => {
-    const { payload } = mapRecord(record({ 'integritystudio.evaluation.cohort': 'production' }), NOW, MAX_AGE_MS);
+    const { payload } = mapRecord(record({ [EVALUATION_ATTRS.COHORT]: 'production' }), NOW, MAX_AGE_MS);
 
     expect(payload).toBeDefined();
     expect(payload).not.toHaveProperty('cohort');
@@ -95,8 +96,8 @@ describe('mapRecord', () => {
 
   it('sends the judge model as its own field, not inside metadata', () => {
     const { payload } = mapRecord(record({
-      'integritystudio.evaluation.evaluator.kind': 'llm',
-      'integritystudio.evaluation.judge.model': 'claude-haiku-4-5-20251001',
+      [EVALUATION_ATTRS.EVALUATOR_KIND]: 'llm',
+      [EVALUATION_ATTRS.JUDGE_MODEL]: 'claude-haiku-4-5-20251001',
       [SESSION_ATTRIBUTES.ID]: 'sess-1',
     }), NOW, MAX_AGE_MS);
 
@@ -121,7 +122,7 @@ describe('mapRecord', () => {
 
   it('reads the score unit from its integritystudio key, over the old gen_ai key', () => {
     const { payload } = mapRecord(record({
-      'integritystudio.evaluation.score.unit': 'seconds',
+      [EVALUATION_ATTRS.SCORE_UNIT]: 'seconds',
       [LEGACY_SCORE_UNIT_ATTR]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
@@ -154,7 +155,7 @@ describe('mapRecord', () => {
   });
 
   it('drops canary records marked by cohort', () => {
-    const { skip } = mapRecord(record({ 'integritystudio.evaluation.cohort': 'canary' }), NOW, MAX_AGE_MS);
+    const { skip } = mapRecord(record({ [EVALUATION_ATTRS.COHORT]: 'canary' }), NOW, MAX_AGE_MS);
     expect(skip).toBe('canary');
   });
 
@@ -517,7 +518,7 @@ describe('payloadManifestKey', () => {
       startTime: [1_790_553_614, 235_000_000] as [number, number],
       endTime: [1_790_553_614, 236_463_666] as [number, number],
       duration: [0, 1_463_666] as [number, number],
-      attributes: { [SESSION_ATTRIBUTES.ID]: 's1', [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true },
+      attributes: { [SESSION_ATTRIBUTES.ID]: 's1', [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', [TOOL_ATTRIBUTES.SUCCESS]: true },
     };
     const line = JSON.stringify(toOTelRecord(defined(deriveToolCorrectness(span))));
 

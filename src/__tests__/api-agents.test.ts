@@ -19,7 +19,7 @@ import { agentRoutes } from '../api/routes/agents.js';
 import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
-import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
 import { defined } from './support/defined.js';
 
 let fixture: FixtureServer;
@@ -216,8 +216,7 @@ describe('GET /agents/:sessionId/graph', () => {
   // No numeric-status row: CloudBackend turns status code 2 into 'ERROR' before the route reads it.
   it.each([
     AGENT_ATTRIBUTES.HAS_ERROR,
-    // No constant yet: the `integritystudio.tool.*` keys are still spelled inline (DASH-VENDOR-ATTR-LITERALS).
-    'integritystudio.tool.has_error',
+    TOOL_ATTRIBUTES.HAS_ERROR,
   ])('scores a step that failed by %s as 0, as the KV graph does', async (errorAttribute) => {
     fixture.setTraces([
       makeAgentSpanWire('trace-001', 'span-001', 'general-purpose'),

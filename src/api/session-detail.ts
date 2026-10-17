@@ -30,7 +30,7 @@ import { increment } from '../lib/collections.js';
 import { SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
 import type { StepScore } from '../types.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attributes.js';
-import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, ALERT_ATTRIBUTES, CODE_STRUCTURE_ATTRIBUTES, CONTEXT_ATTRIBUTES, GIT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, PROJECT_ATTRIBUTES, TASK_ATTRIBUTES, TOKEN_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 /** Minimal shape required by the span-extraction helpers. */
 export type ExtractableSpan = {
@@ -48,7 +48,7 @@ export type ExtractableSpan = {
  */
 export function isSpanError(span: ExtractableSpan): boolean {
   return (
-    spanAttr(span, 'integritystudio.tool.has_error', 'boolean') === true ||
+    spanAttr(span, TOOL_ATTRIBUTES.HAS_ERROR, 'boolean') === true ||
     spanAttr(span, AGENT_ATTRIBUTES.HAS_ERROR, 'boolean') === true ||
     span.status?.code === OTEL_STATUS_ERROR_CODE ||
     span.status?.code === 'ERROR'
@@ -63,7 +63,7 @@ export type GitCommit = {
 
 /** Parse a git commit from a post-commit-review span; returns `null` when no command is present. */
 export function extractGitCommit(span: ExtractableSpan): GitCommit | null {
-  const raw = spanAttr(span, 'integritystudio.git.command', 'string') ?? '';
+  const raw = spanAttr(span, GIT_ATTRIBUTES.COMMAND, 'string') ?? '';
   if (!raw) return null;
   const filesMatch = raw.match(/git add ((?:[^&]|&[^&])+?)&&/);
   const files = filesMatch ? (filesMatch[1] ?? '').trim() : '';
@@ -311,29 +311,29 @@ function computeSessionInfo(spans: SessionSpan[]): SessionInfo | null {
   if (!first) return null;
   const last = sessionStarts.at(-1) ?? first;
   return {
-    projectName: renamedAttr(first, 'integritystudio.project.name', 'project.name', 'string') ?? 'unknown',
+    projectName: renamedAttr(first, PROJECT_ATTRIBUTES.NAME, 'project.name', 'string') ?? 'unknown',
     workingDirectory: renamedAttr(first, 'process.working_directory', 'working.directory') ?? '',
     gitRepository: gitRepositoryLabel(first),
     gitBranch: spanAttr(first, 'vcs.ref.head.name', 'string') ?? '',
     nodeVersion: renamedAttr(first, 'process.runtime.version', 'node.version') ?? '',
     resumeCount: sessionStarts.length,
-    initialMessageCount: renamedAttr(first, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
-    initialContextTokens: renamedAttr(first, 'integritystudio.context.estimated_tokens', 'context.estimated_tokens', 'number') ?? 0,
-    finalMessageCount: renamedAttr(last, 'integritystudio.context.message_count', 'context.message_count', 'number') ?? 0,
-    taskCount: renamedAttr(first, 'integritystudio.tasks.active', 'tasks.active', 'number') ?? 0,
-    uncommittedAtStart: spanAttr(first, 'integritystudio.git.uncommitted', 'number') ?? 0,
+    initialMessageCount: renamedAttr(first, CONTEXT_ATTRIBUTES.MESSAGE_COUNT, 'context.message_count', 'number') ?? 0,
+    initialContextTokens: renamedAttr(first, CONTEXT_ATTRIBUTES.ESTIMATED_TOKENS, 'context.estimated_tokens', 'number') ?? 0,
+    finalMessageCount: renamedAttr(last, CONTEXT_ATTRIBUTES.MESSAGE_COUNT, 'context.message_count', 'number') ?? 0,
+    taskCount: renamedAttr(first, TASK_ATTRIBUTES.ACTIVE, 'tasks.active', 'number') ?? 0,
+    uncommittedAtStart: spanAttr(first, GIT_ATTRIBUTES.UNCOMMITTED, 'number') ?? 0,
   };
 }
 
 function computeTokenMetrics(spans: SessionSpan[]): TokenMetrics {
   const tokenProgression = hookSpans(spans, HOOK_NAME.TOKEN_METRICS)
     .map(s => ({
-      messages: renamedAttr(s, 'integritystudio.tokens.messages', 'tokens.messages', 'number') ?? 0,
-      inputTokens: renamedAttr(s, 'integritystudio.tokens.input', 'tokens.input', 'number') ?? 0,
-      outputTokens: renamedAttr(s, 'integritystudio.tokens.output', 'tokens.output', 'number') ?? 0,
-      cacheRead: renamedAttr(s, 'integritystudio.tokens.cache_read', 'tokens.cache_read', 'number') ?? 0,
-      cacheCreation: renamedAttr(s, 'integritystudio.tokens.cache_creation', 'tokens.cache_creation', 'number') ?? 0,
-      model: renamedAttr(s, 'integritystudio.tokens.model', 'tokens.model', 'string') ?? '',
+      messages: renamedAttr(s, TOKEN_ATTRIBUTES.MESSAGES, 'tokens.messages', 'number') ?? 0,
+      inputTokens: renamedAttr(s, TOKEN_ATTRIBUTES.INPUT, 'tokens.input', 'number') ?? 0,
+      outputTokens: renamedAttr(s, TOKEN_ATTRIBUTES.OUTPUT, 'tokens.output', 'number') ?? 0,
+      cacheRead: renamedAttr(s, TOKEN_ATTRIBUTES.CACHE_READ, 'tokens.cache_read', 'number') ?? 0,
+      cacheCreation: renamedAttr(s, TOKEN_ATTRIBUTES.CACHE_CREATION, 'tokens.cache_creation', 'number') ?? 0,
+      model: renamedAttr(s, TOKEN_ATTRIBUTES.MODEL, 'tokens.model', 'string') ?? '',
     }))
     .sort((a, b) => a.messages - b.messages);
 
@@ -361,7 +361,7 @@ function computeUsageCounts(spans: SessionSpan[]): UsageCounts {
     if (type === 'builtin') {
       increment(toolUsage, spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? 'unknown');
     } else if (type === 'mcp') {
-      increment(mcpUsage, renamedAttr(s, 'integritystudio.mcp.tool', 'mcp.tool', 'string') ?? 'unknown');
+      increment(mcpUsage, renamedAttr(s, MCP_ATTRIBUTES.TOOL, 'mcp.tool', 'string') ?? 'unknown');
     }
   }
   return { toolUsage, mcpUsage };
@@ -393,7 +393,7 @@ function computeErrorSummary(spans: SessionSpan[]): ErrorSummary {
   for (const s of spans) {
     if (!isSpanError(s)) continue;
     const tool = spanAttr(s, GENAI_TOOL_ATTRIBUTES.TOOL_NAME, 'string') ?? spanAttr(s, AGENT_ATTRIBUTES.TYPE, 'string') ?? 'unknown';
-    const errType = spanAttr(s, 'integritystudio.tool.error_type', 'string') ?? 'unknown';
+    const errType = spanAttr(s, TOOL_ATTRIBUTES.ERROR_TYPE, 'string') ?? 'unknown';
     increment(byCategory, `${tool} -> ${errType}`);
     details.push({
       spanName: s.name,
@@ -481,20 +481,20 @@ function computeFileAccess(spans: SessionSpan[]): FileAccessEntry[] {
 function computeAlertSummary(spans: SessionSpan[]): AlertSummary {
   const alertSpans = hookSpans(spans, HOOK_NAME.ALERT_EVALUATION);
   return {
-    totalFired: sum(alertSpans, s => renamedAttr(s, 'integritystudio.alerts.triggered_count', 'alerts.triggered_count', 'number')),
+    totalFired: sum(alertSpans, s => renamedAttr(s, ALERT_ATTRIBUTES.TRIGGERED_COUNT, 'alerts.triggered_count', 'number')),
     stopEvents: alertSpans.length,
   };
 }
 
 function computeCodeStructure(spans: SessionSpan[]): CodeStructureEntry[] {
   return hookSpans(spans, HOOK_NAME.CODE_STRUCTURE).map(s => ({
-    file: spanAttr(s, 'integritystudio.code.structure.file', 'string') ?? '',
-    lines: spanAttr(s, 'integritystudio.code.structure.lines', 'number') ?? 0,
-    exports: spanAttr(s, 'integritystudio.code.structure.exports', 'number') ?? 0,
-    functions: spanAttr(s, 'integritystudio.code.structure.functions', 'number') ?? 0,
-    hasTypes: spanAttr(s, 'integritystudio.code.structure.has_types', 'boolean') ?? false,
-    score: spanAttr(s, 'integritystudio.code.structure.score', 'number') ?? 0,
-    tool: spanAttr(s, 'integritystudio.code.structure.tool', 'string') ?? '',
+    file: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.FILE, 'string') ?? '',
+    lines: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.LINES, 'number') ?? 0,
+    exports: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.EXPORTS, 'number') ?? 0,
+    functions: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.FUNCTIONS, 'number') ?? 0,
+    hasTypes: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.HAS_TYPES, 'boolean') ?? false,
+    score: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.SCORE, 'number') ?? 0,
+    tool: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.TOOL, 'string') ?? '',
   }));
 }
 

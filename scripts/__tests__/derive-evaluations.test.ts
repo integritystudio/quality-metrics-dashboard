@@ -25,7 +25,7 @@ import { type EvalRecord } from '../eval-record.js';
 import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
-import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, TASK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
@@ -550,7 +550,7 @@ function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
 
 describe('deriveToolCorrectness across the builtin.* rename', () => {
   it.each([
-    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true }],
+    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', [TOOL_ATTRIBUTES.SUCCESS]: true }],
     ['legacy', { 'builtin.tool': 'Bash', 'builtin.success': true }],
   ])('scores a successful call 1 from %s keys', (_era, attributes) => {
     const record = deriveToolCorrectness(renamedToolSpan(attributes));
@@ -560,7 +560,7 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
   });
 
   it.each([
-    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', 'integritystudio.tool.success': false, 'integritystudio.tool.error_type': 'file_not_read' }],
+    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', [TOOL_ATTRIBUTES.SUCCESS]: false, [TOOL_ATTRIBUTES.ERROR_TYPE]: 'file_not_read' }],
     ['legacy', { 'builtin.tool': 'Edit', 'builtin.success': false, 'builtin.error_type': 'file_not_read' }],
   ])('scores a failed call 0 with its error type from %s keys', (_era, attributes) => {
     const record = deriveToolCorrectness(renamedToolSpan(attributes));
@@ -581,7 +581,7 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
 
 describe('task tracking across the builtin.* rename', () => {
   it.each([
-    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'TaskUpdate', 'integritystudio.task.id': 't1', 'integritystudio.task.status': 'completed' }],
+    ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'TaskUpdate', [TASK_ATTRIBUTES.ID]: 't1', [TASK_ATTRIBUTES.STATUS]: 'completed' }],
     ['legacy', { 'builtin.tool': 'TaskUpdate', 'builtin.task_id': 't1', 'builtin.task_status': 'completed' }],
   ])('scores a completed task 1 from %s keys', (_era, attributes) => {
     trackTaskActivity(renamedToolSpan(attributes));
@@ -595,7 +595,7 @@ describe('task tracking across the builtin.* rename', () => {
 
 describe('deriveEvaluationLatency across the builtin.* rename', () => {
   it('names the tool from the canonical key', () => {
-    const record = deriveEvaluationLatency(renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true }));
+    const record = deriveEvaluationLatency(renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', [TOOL_ATTRIBUTES.SUCCESS]: true }));
 
     expect(record?.explanation).toMatch(/^Hook builtin\/Bash executed in /);
   });
@@ -604,9 +604,9 @@ describe('deriveEvaluationLatency across the builtin.* rename', () => {
 describe('deriveAll across the builtin.* rename', () => {
   it('scores a day of mostly successful post-rename calls as mostly successful', () => {
     const spans = [
-      renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read', 'integritystudio.tool.success': true }),
-      { ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', 'integritystudio.tool.success': true }), spanId: 'span-002' },
-      { ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', 'integritystudio.tool.success': false }), spanId: 'span-003' },
+      renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read', [TOOL_ATTRIBUTES.SUCCESS]: true }),
+      { ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', [TOOL_ATTRIBUTES.SUCCESS]: true }), spanId: 'span-002' },
+      { ...renamedToolSpan({ [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', [TOOL_ATTRIBUTES.SUCCESS]: false }), spanId: 'span-003' },
     ];
 
     const scores = deriveAll({ spans, accounts: new Map() })
@@ -635,7 +635,7 @@ function mcpToolSpan(attributes: Record<string, unknown>): TraceSpan {
 
 describe('deriveToolCorrectness across the mcp.* rename', () => {
   it.each([
-    ['canonical', { 'integritystudio.mcp.server': 'github', 'integritystudio.mcp.tool': 'get_me', 'integritystudio.mcp.success': true }],
+    ['canonical', { [MCP_ATTRIBUTES.SERVER]: 'github', [MCP_ATTRIBUTES.TOOL]: 'get_me', [MCP_ATTRIBUTES.SUCCESS]: true }],
     ['legacy', { 'mcp.server': 'github', 'mcp.tool': 'get_me', 'mcp.success': true }],
   ])('scores a successful call 1 from %s keys', (_era, attributes) => {
     const record = deriveToolCorrectness(mcpToolSpan(attributes));
@@ -645,7 +645,7 @@ describe('deriveToolCorrectness across the mcp.* rename', () => {
   });
 
   it.each([
-    ['canonical', { 'integritystudio.mcp.server': 'github', 'integritystudio.mcp.tool': 'create_issue', 'integritystudio.mcp.success': false, 'integritystudio.mcp.error_type': 'rate_limited' }],
+    ['canonical', { [MCP_ATTRIBUTES.SERVER]: 'github', [MCP_ATTRIBUTES.TOOL]: 'create_issue', [MCP_ATTRIBUTES.SUCCESS]: false, [MCP_ATTRIBUTES.ERROR_TYPE]: 'rate_limited' }],
     ['legacy', { 'mcp.server': 'github', 'mcp.tool': 'create_issue', 'mcp.success': false, 'mcp.error_type': 'rate_limited' }],
   ])('scores a failed call 0 with its error type from %s keys', (_era, attributes) => {
     const record = deriveToolCorrectness(mcpToolSpan(attributes));
@@ -656,10 +656,10 @@ describe('deriveToolCorrectness across the mcp.* rename', () => {
 
   it('reads the canonical key when a span carries both, even a canonical false', () => {
     const record = deriveToolCorrectness(mcpToolSpan({
-      'integritystudio.mcp.server': 'github',
-      'integritystudio.mcp.tool': 'create_issue',
-      'integritystudio.mcp.success': false,
-      'integritystudio.mcp.error_type': 'rate_limited',
+      [MCP_ATTRIBUTES.SERVER]: 'github',
+      [MCP_ATTRIBUTES.TOOL]: 'create_issue',
+      [MCP_ATTRIBUTES.SUCCESS]: false,
+      [MCP_ATTRIBUTES.ERROR_TYPE]: 'rate_limited',
       'mcp.server': 'gitlab',
       'mcp.tool': 'get_me',
       'mcp.success': true,
@@ -673,9 +673,9 @@ describe('deriveToolCorrectness across the mcp.* rename', () => {
 
 describe('deriveEvaluationLatency across the mcp.* rename', () => {
   it.each([
-    ['only the canonical key', { 'integritystudio.mcp.tool': 'get_me' }],
+    ['only the canonical key', { [MCP_ATTRIBUTES.TOOL]: 'get_me' }],
     ['only the legacy key', { 'mcp.tool': 'get_me' }],
-    ['both keys, canonical first', { 'integritystudio.mcp.tool': 'get_me', 'mcp.tool': 'stale' }],
+    ['both keys, canonical first', { [MCP_ATTRIBUTES.TOOL]: 'get_me', 'mcp.tool': 'stale' }],
   ])('names the tool from a span with %s', (_era, attributes) => {
     const record = deriveEvaluationLatency(mcpToolSpan(attributes));
 
@@ -881,7 +881,7 @@ describe('detectInputDrift', () => {
   }
 
   it('is quiet on a day whose spans derive reads', () => {
-    const spans = [...agentSpans('hook:agent.operation.finalize'), ...toolSpans(TOOL_SPANS_PER_DAY, { 'integritystudio.tool.success': true })];
+    const spans = [...agentSpans('hook:agent.operation.finalize'), ...toolSpans(TOOL_SPANS_PER_DAY, { [TOOL_ATTRIBUTES.SUCCESS]: true })];
 
     expect(detectInputDrift(spans, null)).toEqual([]);
   });
@@ -935,7 +935,7 @@ describe('detectInputDrift', () => {
   });
 
   it.each([
-    ['canonical', { 'integritystudio.mcp.success': true }],
+    ['canonical', { [MCP_ATTRIBUTES.SUCCESS]: true }],
     ['legacy', { 'mcp.success': true }],
   ])('reads the MCP success flag from %s keys', (_era, attributes) => {
     const mcp = toolSpans(TOOL_SPANS_PER_DAY, attributes).map(span => ({ ...span, name: 'hook:mcp-post-tool' }));
@@ -946,7 +946,7 @@ describe('detectInputDrift', () => {
   it('tolerates hooks that failed before recording, up to half the day', () => {
     const half = TOOL_SPANS_PER_DAY - 1;
     const spans = [
-      ...toolSpans(half, { 'integritystudio.tool.success': true }),
+      ...toolSpans(half, { [TOOL_ATTRIBUTES.SUCCESS]: true }),
       ...toolSpans(half, {}, half),
     ];
 

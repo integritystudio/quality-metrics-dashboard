@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { extractGitCommit, type ExtractableSpan } from '../api/session-detail.js';
+import { GIT_ATTRIBUTES } from '../lib/hook-attributes.js';
 
-const GIT_COMMAND_ATTRIBUTE = 'integritystudio.git.command';
+const GIT_COMMAND_ATTRIBUTE = GIT_ATTRIBUTES.COMMAND;
 
 function spanWithCommand(command: string): ExtractableSpan {
   return { name: 'post-commit-review', attributes: { [GIT_COMMAND_ATTRIBUTE]: command } };

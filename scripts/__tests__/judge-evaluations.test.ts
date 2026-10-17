@@ -31,6 +31,7 @@ import { CliArgError } from '../cli-args.js';
 import {
   normalizeScore,
   toOTelRecord,
+  EVALUATION_ATTRS,
   EVAL_SCORE_PRECISION,
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
@@ -68,6 +69,7 @@ import { makeTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { defined } from '../../src/__tests__/support/defined.js';
+import { TRANSCRIPT_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 
 // Test Data Factories
 
@@ -441,15 +443,15 @@ describe('transcriptPathOf', () => {
   const OLD_PATH = '/home/u/.claude/projects/slug/old-session.jsonl';
 
   it.each([
-    ['only the canonical key', { 'integritystudio.transcript.path': NEW_PATH }, NEW_PATH],
+    ['only the canonical key', { [TRANSCRIPT_ATTRIBUTES.PATH]: NEW_PATH }, NEW_PATH],
     ['only the legacy key', { 'transcript.path': OLD_PATH }, OLD_PATH],
-    ['both keys', { 'integritystudio.transcript.path': NEW_PATH, 'transcript.path': OLD_PATH }, NEW_PATH],
+    ['both keys', { [TRANSCRIPT_ATTRIBUTES.PATH]: NEW_PATH, 'transcript.path': OLD_PATH }, NEW_PATH],
   ])('reads the path from a record with %s', (_shape, attrs, expected) => {
     expect(transcriptPathOf(attrs)).toBe(expected);
   });
 
   it('skips a non-string canonical value for the legacy one', () => {
-    expect(transcriptPathOf({ 'integritystudio.transcript.path': 42, 'transcript.path': OLD_PATH })).toBe(OLD_PATH);
+    expect(transcriptPathOf({ [TRANSCRIPT_ATTRIBUTES.PATH]: 42, 'transcript.path': OLD_PATH })).toBe(OLD_PATH);
   });
 
   it('is undefined when neither key holds a string', () => {
@@ -651,10 +653,10 @@ describe('toOTelRecord', () => {
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('relevance');
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(0.85);
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('Test explanation');
-    expect(attrs['integritystudio.evaluation.producer']).toBe('dashboard:judge-evaluations');
-    expect(attrs['integritystudio.evaluation.evaluator.kind']).toBe('llm');
-    expect(attrs['integritystudio.evaluation.cohort']).toBe('normal');
-    expect(attrs['integritystudio.evaluation.judge.model']).toBe('claude-haiku-4-5-20251001');
+    expect(attrs[EVALUATION_ATTRS.PRODUCER]).toBe('dashboard:judge-evaluations');
+    expect(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).toBe('llm');
+    expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('normal');
+    expect(attrs[EVALUATION_ATTRS.JUDGE_MODEL]).toBe('claude-haiku-4-5-20251001');
     expect(attrs[SESSION_ATTRIBUTES.ID]).toBe('abc12345-session');
   });
 
@@ -683,7 +685,7 @@ describe('toOTelRecord', () => {
   it('writes the score unit under integritystudio.*, not gen_ai.*', () => {
     const record = toOTelRecord(makeEvalRecord({ scoreUnit: 'seconds' })) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['integritystudio.evaluation.score.unit']).toBe('seconds');
+    expect(attrs[EVALUATION_ATTRS.SCORE_UNIT]).toBe('seconds');
     expect(attrs[LEGACY_SCORE_UNIT_ATTR]).toBeUndefined();
   });
 
@@ -691,8 +693,8 @@ describe('toOTelRecord', () => {
     const { judgeModel: _noModel, ...canary } = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule' });
     const record = toOTelRecord(canary) as Record<string, unknown>;
     const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs['integritystudio.evaluation.cohort']).toBe('canary');
-    expect(attrs['integritystudio.evaluation.judge.model']).toBeUndefined();
+    expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('canary');
+    expect(attrs[EVALUATION_ATTRS.JUDGE_MODEL]).toBeUndefined();
   });
 });
 

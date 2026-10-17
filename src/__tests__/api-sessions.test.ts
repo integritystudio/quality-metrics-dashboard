@@ -16,7 +16,7 @@ import type { SessionDetailResponse } from '../hooks/useSessionDetail.js';
 import { makeEvaluation } from './support/fixtures.js';
 import { ErrorMessage } from '../lib/constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
-import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
 type SessionDetailBody = JsonSafe<SessionDetailResponse>;
@@ -152,8 +152,8 @@ describe('GET /sessions/:sessionId', () => {
       makeSessionSpanWire('hook:builtin-post-tool', {
         'builtin.tool': undefined,
         [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit',
-        'integritystudio.tool.has_error': true,
-        'integritystudio.tool.error_type': 'file_not_read',
+        [TOOL_ATTRIBUTES.HAS_ERROR]: true,
+        [TOOL_ATTRIBUTES.ERROR_TYPE]: 'file_not_read',
         'file.path': '/repo/src/a.ts',
       }),
     ]);

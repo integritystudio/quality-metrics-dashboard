@@ -23,7 +23,7 @@ import {
 
 // judge-evaluations exports
 import { seedEvaluations } from '../judge-evaluations.js';
-import { toOTelRecord, type EvalRecord } from '../eval-record.js';
+import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { type Turn } from '../judge-turns.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
@@ -96,9 +96,9 @@ describe('pipeline contract: derive → judge', () => {
     expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(1.0);
     expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('string');
-    expect(attrs['integritystudio.evaluation.producer']).toBe('rule');
-    expect(attrs['integritystudio.evaluation.evaluator.kind']).toBe('rule');
-    expect(attrs['integritystudio.evaluation.cohort']).toBe('normal');
+    expect(attrs[EVALUATION_ATTRS.PRODUCER]).toBe('rule');
+    expect(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).toBe('rule');
+    expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('normal');
     expect(attrs[SESSION_ATTRIBUTES.ID]).toBe('sess-pipeline');
   });
 
@@ -254,8 +254,8 @@ describe('pipeline contract: judge → sync-to-kv', () => {
       const evalName = attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] as string;
       expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
       expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
-      expect(evaluatorKindSchema.safeParse(attrs['integritystudio.evaluation.evaluator.kind']).success).toBe(true);
-      expect(evaluationCohortSchema.safeParse(attrs['integritystudio.evaluation.cohort']).success).toBe(true);
+      expect(evaluatorKindSchema.safeParse(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).success).toBe(true);
+      expect(evaluationCohortSchema.safeParse(attrs[EVALUATION_ATTRS.COHORT]).success).toBe(true);
     }
   });
 

@@ -3,7 +3,6 @@ import { loadTracesByFilter } from '../data-loader.js';
 import { TIME_MS } from '../../lib/constants.js';
 import {
   CODE_EVENT,
-  CODE_EVENT_ATTR,
   CODE_QUALITY_CHECKPOINT_LIMIT,
   CODE_QUALITY_INVOCATION_LIMIT,
   CODE_QUALITY_LOOKBACK_DAYS,
@@ -18,6 +17,7 @@ export type {
   SurvivalCohort,
 } from '../code-quality-summary.js';
 import { handleRouteError } from '../route-errors.js';
+import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 /**
  * Dev-server route: a live query. Production never reaches this — the Worker
@@ -32,8 +32,8 @@ codeQualityRoutes.get('/code-quality', async (c) => {
   const endIso = now.toISOString();
 
   const [checkpointSpans, invocationSpans] = await Promise.all([
-    loadTracesByFilter({ [CODE_EVENT_ATTR]: CODE_EVENT.CHECKPOINT }, startIso, endIso, CODE_QUALITY_CHECKPOINT_LIMIT),
-    loadTracesByFilter({ [CODE_EVENT_ATTR]: CODE_EVENT.GENERATED }, startIso, endIso, CODE_QUALITY_INVOCATION_LIMIT),
+    loadTracesByFilter({ [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.CHECKPOINT }, startIso, endIso, CODE_QUALITY_CHECKPOINT_LIMIT),
+    loadTracesByFilter({ [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.GENERATED }, startIso, endIso, CODE_QUALITY_INVOCATION_LIMIT),
   ]);
   return c.json(summarizeCodeQuality(checkpointSpans, invocationSpans));
 });

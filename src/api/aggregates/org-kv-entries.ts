@@ -32,7 +32,6 @@ import {
 } from '../api-constants.js';
 import {
   CODE_EVENT,
-  CODE_EVENT_ATTR,
   CODE_QUALITY_CHECKPOINT_LIMIT,
   CODE_QUALITY_INVOCATION_LIMIT,
   CODE_QUALITY_KV_KEY,
@@ -49,6 +48,7 @@ import { projectEvaluationRow } from './evaluation-rows.js';
 import { computeAllDashboardEntries } from './dashboard-summary.js';
 import { computeMetricDetailView, metricDetailKey, previousWindow } from './metric-detail.js';
 import { computeTrend, trendKey, type ScoredBucket } from './trend.js';
+import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 const LOG_PREFIX = '[org-kv-entries]';
 
@@ -291,11 +291,11 @@ async function computeCodeQuality(backend: OrgReadBackend, now: Date): Promise<C
   const [checkpointSpans, invocationSpans] = await Promise.all([
     backend.queryTraces({
       startDate, endDate, limit: CODE_QUALITY_CHECKPOINT_LIMIT,
-      attributeFilter: { [CODE_EVENT_ATTR]: CODE_EVENT.CHECKPOINT },
+      attributeFilter: { [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.CHECKPOINT },
     }),
     backend.queryTraces({
       startDate, endDate, limit: CODE_QUALITY_INVOCATION_LIMIT,
-      attributeFilter: { [CODE_EVENT_ATTR]: CODE_EVENT.GENERATED },
+      attributeFilter: { [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.GENERATED },
     }),
   ]);
   if (checkpointSpans.length === CODE_QUALITY_CHECKPOINT_LIMIT) {

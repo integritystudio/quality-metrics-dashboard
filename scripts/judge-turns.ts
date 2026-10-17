@@ -8,7 +8,7 @@ import { join, basename } from 'node:path';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
 import { otelLogEntrySchema, transcriptEntrySchema } from '../../src/lib/validation/dashboard-schemas.js';
 import { streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
-import { HOOK_ATTRIBUTES } from '../src/lib/hook-attributes.js';
+import { HOOK_ATTRIBUTES, TRANSCRIPT_ATTRIBUTES } from '../src/lib/hook-attributes.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
@@ -130,7 +130,7 @@ export function resolveTranscriptPath(originalPath: string): string | null {
 }
 
 /** The transcript path log attribute; the hooks moved it under `integritystudio.` on 2026-09-29. */
-export const TRANSCRIPT_PATH_ATTR = 'integritystudio.transcript.path';
+export const TRANSCRIPT_PATH_ATTR = TRANSCRIPT_ATTRIBUTES.PATH;
 
 export const LEGACY_TRANSCRIPT_PATH_ATTR = 'transcript.path';
 

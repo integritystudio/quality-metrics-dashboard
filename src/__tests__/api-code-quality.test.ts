@@ -13,6 +13,7 @@ import { createFixtureServer, spanToWire, type FixtureServer } from './support/f
 
 import { codeQualityRoutes, type CodeQualityResponse } from '../api/routes/code-quality.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
+import { CODE_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 const NS_PER_MS = 1_000_000n;
 const RECENT_NS = BigInt(Date.now()) * NS_PER_MS;
@@ -48,13 +49,13 @@ function checkpoint(attrs: Record<string, unknown>) {
     startTimeUnixNano: RECENT_NS,
     endTimeUnixNano: RECENT_NS + SPAN_DURATION_NS,
     attributes: {
-      'integritystudio.code.event': 'survival_checkpoint',
+      [CODE_ATTRIBUTES.EVENT]: 'survival_checkpoint',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: AGENT,
       [GENAI_AGENT_ATTRIBUTES.AGENT_VERSION]: VERSION,
-      'integritystudio.code.checkpoint_window': '21d',
-      'integritystudio.code.quality.survival_rate': 0.9,
-      'integritystudio.code.quality.churn_rate': 0.1,
-      'integritystudio.code.quality.deletion_rate': 0,
+      [CODE_ATTRIBUTES.CHECKPOINT_WINDOW]: '21d',
+      [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.9,
+      [CODE_ATTRIBUTES.CHURN_RATE]: 0.1,
+      [CODE_ATTRIBUTES.DELETION_RATE]: 0,
       ...attrs,
     },
   });
@@ -69,7 +70,7 @@ function invocation(attrs: Record<string, unknown>, agentName = AGENT) {
     startTimeUnixNano: RECENT_NS,
     endTimeUnixNano: RECENT_NS + SPAN_DURATION_NS,
     attributes: {
-      'integritystudio.code.event': 'generated',
+      [CODE_ATTRIBUTES.EVENT]: 'generated',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
       [GENAI_AGENT_ATTRIBUTES.AGENT_VERSION]: VERSION,
       ...attrs,
@@ -86,17 +87,17 @@ async function get(): Promise<CodeQualityResponse> {
 describe('GET /code-quality', () => {
   it('keeps scored code, baseline code and doc checkpoints in separate rows', async () => {
     fixture.setTraces([
-      checkpoint({ 'integritystudio.code.survival.cohort': 'scored', 'integritystudio.code.content_kind': 'code' }),
+      checkpoint({ [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'scored', [CODE_ATTRIBUTES.CONTENT_KIND]: 'code' }),
       checkpoint({
         [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: BASELINE_AGENT,
-        'integritystudio.code.survival.cohort': 'baseline',
-        'integritystudio.code.content_kind': 'code',
-        'integritystudio.code.quality.survival_rate': 0.5,
+        [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'baseline',
+        [CODE_ATTRIBUTES.CONTENT_KIND]: 'code',
+        [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.5,
       }),
       checkpoint({
-        'integritystudio.code.survival.cohort': 'scored',
-        'integritystudio.code.content_kind': 'doc',
-        'integritystudio.code.quality.survival_rate': 0,
+        [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'scored',
+        [CODE_ATTRIBUTES.CONTENT_KIND]: 'doc',
+        [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0,
       }),
     ]);
 
@@ -121,8 +122,8 @@ describe('GET /code-quality', () => {
 
   it('reads rates the cloud returns as strings, as the live API does', async () => {
     fixture.setTraces([checkpoint({
-      'integritystudio.code.quality.survival_rate': '0.75',
-      'integritystudio.code.quality.churn_rate': '0.25',
+      [CODE_ATTRIBUTES.SURVIVAL_RATE]: '0.75',
+      [CODE_ATTRIBUTES.CHURN_RATE]: '0.25',
     })]);
 
     const [row] = (await get()).survivalByAgentWindow;
@@ -132,8 +133,8 @@ describe('GET /code-quality', () => {
 
   it('labels baseline invocations in the version rollout', async () => {
     fixture.setTraces([
-      invocation({ 'integritystudio.code.survival.cohort': 'scored' }),
-      invocation({ 'integritystudio.code.survival.cohort': 'baseline' }, BASELINE_AGENT),
+      invocation({ [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'scored' }),
+      invocation({ [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'baseline' }, BASELINE_AGENT),
     ]);
 
     const byAgent = Object.fromEntries((await get()).versionRollout.map(r => [r.agentName, r.cohort]));

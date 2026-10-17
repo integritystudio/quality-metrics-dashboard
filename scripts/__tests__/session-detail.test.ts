@@ -10,7 +10,7 @@ import { computeMultiAgentEvaluation } from '../../../src/lib/quality/quality-mu
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { evaluation } from './support/evaluations.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
-import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 
 function detailOf(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated?: boolean) {
   return computeSessionDetail(
@@ -68,8 +68,8 @@ describe('computeSessionDetail after the builtin.* rename', () => {
       attributes: {
         ...postTool,
         [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit',
-        'integritystudio.tool.has_error': true,
-        'integritystudio.tool.error_type': 'file_not_read',
+        [TOOL_ATTRIBUTES.HAS_ERROR]: true,
+        [TOOL_ATTRIBUTES.ERROR_TYPE]: 'file_not_read',
         'file.path': '/repo/src/a.ts',
       },
     }], []);

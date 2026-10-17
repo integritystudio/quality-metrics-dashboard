@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 import { emptyAccountIndex, postEvaluationRecords } from '../post-evaluations.js';
-import { EVALUATION_RESULT_EVENT } from '../eval-record.js';
+import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
 import { evaluationId, MAX_BATCH_SIZE } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_PREFIX } from '../../../src/lib/core/obtool-contract.js';
@@ -26,7 +26,7 @@ function record(extra: Record<string, unknown> = {}): Record<string, unknown> {
     attributes: {
       [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'tool_correctness',
       [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1,
-      'integritystudio.evaluation.producer': 'rule',
+      [EVALUATION_ATTRS.PRODUCER]: 'rule',
     },
     ...extra,
   };

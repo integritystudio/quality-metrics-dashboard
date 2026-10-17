@@ -9,6 +9,7 @@ import { mean } from 'd3-array';
 import { CONTENT_KIND, SURVIVAL_COHORT, type ContentKind, type SurvivalCohort } from '../lib/constants.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { attrStr, timestampToMs, type SpanLike } from './api-constants.js';
+import { CODE_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 export const CODE_QUALITY_LOOKBACK_DAYS = 90;
 /**
@@ -23,20 +24,12 @@ export const CODE_QUALITY_KV_KEY = 'code-quality';
 
 /** `integritystudio.code.event` values — string, so the cloud filters them server-side. */
 export const CODE_EVENT = { CHECKPOINT: 'survival_checkpoint', GENERATED: 'generated' } as const;
-export const CODE_EVENT_ATTR = 'integritystudio.code.event';
 
 const KEY_SEP = '\x00';
 
 const ATTR = {
   AGENT_NAME: GENAI_AGENT_ATTRIBUTES.AGENT_NAME,
   AGENT_VERSION: GENAI_AGENT_ATTRIBUTES.AGENT_VERSION,
-  WINDOW: 'integritystudio.code.checkpoint_window',
-  COHORT: 'integritystudio.code.survival.cohort',
-  CONTENT_KIND: 'integritystudio.code.content_kind',
-  CODE_EVENT: 'integritystudio.code.event',
-  SURVIVAL_RATE: 'integritystudio.code.quality.survival_rate',
-  CHURN_RATE: 'integritystudio.code.quality.churn_rate',
-  DELETION_RATE: 'integritystudio.code.quality.deletion_rate',
 } as const;
 
 /**
@@ -51,11 +44,11 @@ function attrRate(span: SpanLike, key: string): number {
 }
 
 function cohortOf(span: SpanLike): SurvivalCohort {
-  return attrStr(span, ATTR.COHORT) === SURVIVAL_COHORT.BASELINE ? SURVIVAL_COHORT.BASELINE : SURVIVAL_COHORT.SCORED;
+  return attrStr(span, CODE_ATTRIBUTES.SURVIVAL_COHORT) === SURVIVAL_COHORT.BASELINE ? SURVIVAL_COHORT.BASELINE : SURVIVAL_COHORT.SCORED;
 }
 
 function contentKindOf(span: SpanLike): ContentKind {
-  return attrStr(span, ATTR.CONTENT_KIND) === CONTENT_KIND.DOC ? CONTENT_KIND.DOC : CONTENT_KIND.CODE;
+  return attrStr(span, CODE_ATTRIBUTES.CONTENT_KIND) === CONTENT_KIND.DOC ? CONTENT_KIND.DOC : CONTENT_KIND.CODE;
 }
 
 export type { ContentKind, SurvivalCohort };
@@ -114,7 +107,7 @@ export function summarizeCodeQuality(
   for (const span of checkpointSpans) {
     const agentName = attrStr(span, ATTR.AGENT_NAME);
     const agentVersion = attrStr(span, ATTR.AGENT_VERSION);
-    const checkpointWindow = attrStr(span, ATTR.WINDOW);
+    const checkpointWindow = attrStr(span, CODE_ATTRIBUTES.CHECKPOINT_WINDOW);
 
     if (agentName === 'unknown' || checkpointWindow === 'unknown') continue;
 
@@ -127,9 +120,9 @@ export function summarizeCodeQuality(
       windowAcc.set(key, entry);
     }
 
-    entry.survivalRates.push(attrRate(span, ATTR.SURVIVAL_RATE));
-    entry.churnRates.push(attrRate(span, ATTR.CHURN_RATE));
-    entry.deletionRates.push(attrRate(span, ATTR.DELETION_RATE));
+    entry.survivalRates.push(attrRate(span, CODE_ATTRIBUTES.SURVIVAL_RATE));
+    entry.churnRates.push(attrRate(span, CODE_ATTRIBUTES.CHURN_RATE));
+    entry.deletionRates.push(attrRate(span, CODE_ATTRIBUTES.DELETION_RATE));
 
     const spanMs = timestampToMs(span.startTimeUnixNano);
     if (Number.isFinite(spanMs) && spanMs > entry.latestMs) {
