@@ -29,6 +29,7 @@ No open items.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed. 676 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
 here against `../src/server.ts` and a parent test under the parent's `eslint.config.cjs`. The cheap subset
@@ -100,11 +101,43 @@ Revisit only if those imports become wanted for another reason. What the 46 cost
 - `src/api/session-detail.ts` (15): its `compute*` helpers returned anonymous object shapes, so the file
   gained named exported types (`DataSources`, `SessionInfo`, `TokenMetrics`, `SessionDetail<M, E>`, …).
   That is the bulk of the work and the main reason the rule is not free.
-- `src/api/data-loader.ts` + `routes/sessions.ts` (4): the trace loaders are `Promise<TraceSpan[]>`.
+- `src/api/data-loader.ts` + `routes/sessions.ts` (4): the trace loaders return
+  `Promise<LoadedSpan[]>`, where `LoadedSpan = Awaited<ReturnType<typeof queryTracesTool>>['traces'][number]`.
+  **They were annotated `Promise<TraceSpan[]>` first, and that was wrong** — see the hazard below.
 - Two exemptions, both documented in place: `queryValidator` (hono's `validator` returns a
   ~1500-character conditional type that cannot be restated; approximating it erases
   `c.req.valid('query')`'s typing) carries a disable, and `validQuery` borrows it exactly with
   `ReturnType<typeof queryValidator<T>>` rather than restating it.
+
+🔴 **Hazard for the remaining sites: a return type WIDER than the inferred one compiles silently.**
+Nothing catches it — not `tsc`, not the rule, not the tests. Annotating the trace loaders
+`Promise<TraceSpan[]>` looked right and passed everything, but `queryTraces` projects nine fields (the
+`traces: traces.map(…)` projection in the parent's `src/tools/query-traces.ts`) while `traceSpanSchema`
+carries eight more optional ones (`orgId`, `parentSpanId`, `statusCode`, `events`, `links`,
+`instrumentationScope`, `traceFlags`, `traceState`). The annotation made reading any of them compile and return `undefined`, where it had been
+a compile error. Fixed in ec83910 by **deriving** the type from the producer rather than naming a
+hand-picked one, so the two cannot drift. Prefer `Awaited<ReturnType<typeof f>>` / `Pick<…>` over naming
+a type that merely looks like the right one, and when naming one, check the producer's field list.
+Two annotations in the 2026-10-16 autofix sweep had the same shape of defect
+(`DailyUsageChart.tsx`, `WorkflowGraph.tsx`, recorded above).
+
+**Follow-on dedupe (b892da8, 07f7e0d, 93676cd).** Naming `session-detail.ts`'s shapes exposed that
+`src/hooks/useSessionDetail.ts` restated eleven of them — seven byte-identical (`SessionInfo`,
+`TokenTotals`, `FileAccessEntry`, `GitCommit`, `CodeStructureEntry`, `AlertSummary`, `Timespan`) and four
+identical under another name (`TokenSnapshot`≡`TokenProgressionEntry`, `HookLatency`≡`HookLatencyEntry`,
+`SessionAgentStat`≡`AgentActivityEntry`, `EvaluationBreakdownEntry`≡`EvalBreakdownEntry`), each pair
+confirmed property-by-property with the type checker before deleting. All eleven now
+come from `src/api/session-detail.ts`; the import is type-only, so none of `src/api`'s Node-only code
+reaches the bundle (verified: `api-constants` appears 0 times in `dist/assets/*.js`). The hook exports
+only `DataSources`, `SessionDetailResponse` and `useSessionDetail` now — the earlier re-export block was
+removed because nothing imported it, and `org-kv-entries.ts` already takes `AgentActivityEntry` straight
+from the canonical module.
+
+⚠️ **`DataSources` is deliberately NOT shared** — do not "finish" this dedupe. The API's version describes
+what the writer emits (`TruncationFlag` = `{ truncated: true } | { truncated?: never }`); the hook's
+describes what a reader may receive, which includes `truncated: false` from a producer that writes the
+flag either way. Sharing it breaks the `is false` case in `SessionDetailPage.test.tsx`. The rationale is
+in a comment on the type itself.
 
 **Free today — zero hits, adoptable with no sweep:** `import/no-cycle` (the TypeScript resolver was
 verified alive: the only unresolved specifier in the tree is the `web-worker` Vite alias, so the graph is
@@ -142,6 +175,15 @@ New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x`, `esli
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
+
+**DASH-ERRORDETAIL-OPTIONAL.** `src/api/session-detail.ts` `ErrorDetail` declares
+`tool?: string; errorType?: string`, but `computeErrorSummary` sets both on every pushed entry, each with
+a `?? 'unknown'` fallback, so neither is ever absent. Every consumer handles an `undefined` that cannot
+happen. The optionality predates the return-type work (it was already in the local
+`Array<{ … }>` annotation at `dcc09af:session-detail.ts:270`); extracting the named type copied it
+faithfully rather than introducing it. Tightening it to required also means tightening the mirrored
+`errors.details` in `src/hooks/useSessionDetail.ts`, which is why it was left alone. Type-only — the KV
+value and the wire payload do not change.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.12](changelog/3.0.12/CHANGELOG.md) (2026-10-12).
