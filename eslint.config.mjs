@@ -93,6 +93,8 @@ const typeSafetyRules = {
   'array-callback-return': ['error', { checkForEach: true }],
   'guard-for-in': 'error',
   'no-self-compare': 'error',
+  // A loop condition no iteration can change either spins forever or is dead.
+  'no-unmodified-loop-condition': 'error',
   'no-constructor-return': 'error',
   'default-case-last': 'error',
   'no-restricted-globals': ['error',
