@@ -13,8 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire, spanToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, spanToWire, type FixtureServer } from './support/fixture-server.js';
 
 import { agentRoutes } from '../api/routes/agents.js';
 import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';

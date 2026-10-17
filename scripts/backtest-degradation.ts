@@ -24,11 +24,9 @@ import {
   sweepDegradationParams,
   CURRENT_PRODUCTION_CONFIG,
   BACKTEST_SWEEP,
-} from '../../src/lib/quality/qfe-backtest.js';
-import type {
-  LabeledIncident,
-  BacktestSweepResult,
-  BacktestConfig,
+  type LabeledIncident,
+  type BacktestSweepResult,
+  type BacktestConfig,
 } from '../../src/lib/quality/qfe-backtest.js';
 import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS } from '../../src/lib/core/units.js';

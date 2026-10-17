@@ -1,5 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { Fragment, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { greatest, max, sum } from 'd3-array';
 import {
   createColumnHelper,

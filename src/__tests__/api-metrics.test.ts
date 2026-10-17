@@ -10,8 +10,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, type FixtureServer } from './support/fixture-server.js';
 
 import { metricsRoutes } from '../api/routes/metrics.js';
 import type { ErrorResponse, MetricDetailResponse, MetricEvaluationsResponse } from './support/api-responses.js';

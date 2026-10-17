@@ -9,11 +9,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, spanToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, spanToWire, type FixtureServer } from './support/fixture-server.js';
 
-import { codeQualityRoutes } from '../api/routes/code-quality.js';
-import type { CodeQualityResponse } from '../api/routes/code-quality.js';
+import { codeQualityRoutes, type CodeQualityResponse } from '../api/routes/code-quality.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 const NS_PER_MS = 1_000_000n;

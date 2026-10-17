@@ -9,8 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire, spanToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, spanToWire, type FixtureServer } from './support/fixture-server.js';
 
 import { traceRoutes } from '../api/routes/traces.js';
 import type { loadTracesByTraceId, loadEvaluationsByTraceId } from '../api/data-loader.js';

@@ -9,8 +9,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, type FixtureServer } from './support/fixture-server.js';
 
 // The parent caches TELEMETRY_DIR on first read, and the shell's value is the
 // developer's real telemetry; point it at a temp dir before anything imports.

@@ -7,8 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire, spanToWire, logToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, spanToWire, logToWire, type FixtureServer } from './support/fixture-server.js';
 
 import { sessionRoutes, LIMIT_SESSION_SPANS } from '../api/routes/sessions.js';
 import { LIMIT_EVALS_SESSION } from '../api/data-loader.js';

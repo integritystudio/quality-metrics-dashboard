@@ -13,8 +13,7 @@ import { OperatorView } from '../components/views/OperatorView.js';
 import type { MetricTrend, MetricDynamics, ExecutiveView as ExecutiveViewType } from '../types.js';
 import type { TrendBucket } from '../hooks/useTrend.js';
 import type { ErrorResponse, TrendDetailResponse } from './support/api-responses.js';
-import { createFixtureServer } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, type FixtureServer } from './support/fixture-server.js';
 import { defined } from './support/defined.js';
 
 // Note: ResizeObserver stub is installed globally in setup.ts

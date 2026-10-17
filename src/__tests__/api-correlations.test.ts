@@ -7,8 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, type FixtureServer } from './support/fixture-server.js';
 
 import { correlationRoutes } from '../api/routes/correlations.js';
 import { makeEvaluation } from './support/fixtures.js';

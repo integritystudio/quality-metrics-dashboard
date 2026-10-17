@@ -7,8 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, type FixtureServer } from './support/fixture-server.js';
 import { trendRoutes } from '../api/routes/trends.js';
 import type { TrendDetailResponse } from './support/api-responses.js';
 import { recentEvalNanos } from './support/fixtures.js';

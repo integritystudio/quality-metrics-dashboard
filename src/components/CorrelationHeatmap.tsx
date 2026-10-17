@@ -1,5 +1,4 @@
-import { useMemo } from 'react';
-import type { CSSProperties } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { formatScore } from '../lib/quality-utils.js';

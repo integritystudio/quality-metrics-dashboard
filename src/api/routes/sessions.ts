@@ -16,8 +16,8 @@ import {
   loadLogsBySessionId,
   loadTracesByFilter,
   TRUNCATION_PROBE_ROWS,
+  type LoadedSpan,
 } from '../data-loader.js';
-import type { LoadedSpan } from '../data-loader.js';
 import { MAX_QUERY_LIMIT } from '../parent/constants.js';
 import { handleRouteError, validQuery } from '../route-errors.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';

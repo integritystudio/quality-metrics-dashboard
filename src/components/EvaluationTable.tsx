@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, type CSSProperties } from 'react';
 import type { EvaluationResult } from '../types.js';
 import {
   createColumnHelper,
@@ -21,7 +21,6 @@ import {
   type SortFn,
   type FilterFn,
 } from '@tanstack/react-table';
-import type { CSSProperties } from 'react';
 import {
   labelToOrdinal,
   ordinalToCategory,

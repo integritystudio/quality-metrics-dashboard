@@ -9,8 +9,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, type FixtureServer } from './support/fixture-server.js';
 import { makeEvaluation } from './support/fixtures.js';
 import { LIMIT_EVALS_SESSION, loadEvaluationsBySessionId } from '../api/data-loader.js';
 

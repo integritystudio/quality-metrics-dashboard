@@ -11,8 +11,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createFixtureServer, evalToWire } from './support/fixture-server.js';
-import type { FixtureServer } from './support/fixture-server.js';
+import { createFixtureServer, evalToWire, type FixtureServer } from './support/fixture-server.js';
 import { loadEvaluationsByTraceIds } from '../api/data-loader.js';
 
 const EVALUATIONS_PATH = '/v1/evaluations';

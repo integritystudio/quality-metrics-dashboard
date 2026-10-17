@@ -64,6 +64,9 @@ const typeSafetyRules = {
   '@typescript-eslint/no-extraneous-class': 'error',
   '@typescript-eslint/prefer-literal-enum-member': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
+  // Two statements for one module hide half the dependency; a type-only import
+  // of a module already imported for values belongs on it as a `type` specifier.
+  'no-duplicate-imports': 'error',
   'prefer-template': 'error',
   'object-shorthand': ['error', 'always'],
   'unicorn/throw-new-error': 'error',

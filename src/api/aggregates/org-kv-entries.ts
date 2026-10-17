@@ -9,8 +9,7 @@
  */
 
 import { descending, group, minIndex, quantile } from 'd3-array';
-import type { CloudBackend } from '../parent/backends.js';
-import { queriedDateWindow } from '../parent/backends.js';
+import { queriedDateWindow, type CloudBackend } from '../parent/backends.js';
 import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js';
 import { computeRollingDegradationSignals, type DegradationState } from '../parent/qfe-backtest.js';
 import type { CalibrationState } from '../parent/qfe-percentiles.js';

@@ -27,9 +27,8 @@
  * with the per-criterion path, judge-quality-eval.ts distance from a reference.
  */
 
-import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import type { BatchLLMProvider } from './judge-batch-provider.js';
-import { sanitizeForPrompt, sanitizeContextArray, safeJSONParse } from '../../src/lib/judge/llm-as-judge.js';
+import { sanitizeForPrompt, sanitizeContextArray, safeJSONParse, type GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import { normalizeEvaluationSteps } from '../../src/lib/judge/llm-judge-geval.js';
 import {
   RELEVANCE_CRITERIA,

@@ -22,8 +22,7 @@
  *   fixture.failPath('/v1/evaluations'); // triggers 500 for error-path tests
  */
 
-import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse, Server } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { EvaluationRow, LogRow, TraceSpan } from '@obtool-api/types';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
