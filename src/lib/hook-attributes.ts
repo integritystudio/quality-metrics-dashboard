@@ -1,22 +1,15 @@
 /**
- * Vendor (`integritystudio.*`) span-attribute keys written by the Claude Code
- * hooks, for the code here that reads them and the fixtures that stand in for
- * them. Semconv keys (`gen_ai.*`, `session.id`) live in `otel-attributes.ts`,
- * which re-exports the parent's; these have no semconv counterpart, so they are
- * defined here rather than re-exported.
+ * Vendor (`integritystudio.*`) span-attribute keys, for every reader here and
+ * the fixtures that stand in for them. Semconv keys (`gen_ai.*`, `session.id`)
+ * come from `otel-attributes.ts` instead.
  *
- * The producer is `~/.claude/hooks/lib/` (`agent-sources.ts` for the identity
- * keys), a separate repo with no package relationship to this one — the parent
- * and the hooks "intentionally share no code"
- * (`../src/lib/observability/instrumentation.ts`), so parity with the emitter is
- * held by citation, as `scripts/eval-record.ts` holds it for the evaluation
- * keys. What this module buys is that every reader and every fixture here spell
- * a key once: a rename that reaches only one of them is now a compile error
- * instead of a reader that silently sees `undefined`.
+ * Canonical spellings only: a legacy key reads `undefined` off a canonicalized
+ * span. `canonicalizeAttributes` (parent) and `attrsOf` (`derive-evaluations.ts`)
+ * are what map the legacy forms onto these.
  *
- * Canonical spellings only. The pre-rename `agent.*` forms are mapped onto these
- * by the parent's `canonicalizeAttributes`, and in `derive-evaluations.ts` by its
- * own `attrsOf`; nothing should read a legacy key directly.
+ * The emitter is `~/.claude/hooks/lib/`, a separate repo this one cannot import,
+ * so parity with it is held by citation — as `scripts/eval-record.ts` holds it
+ * for the evaluation keys.
  */
 
 export const AGENT_ATTRIBUTES = {
