@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports` by hand on 2026-10-17. 650 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle` and `unified-signatures` by hand on 2026-10-17. 624 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
@@ -64,7 +64,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/method-signature-style`~~ (landed) | 31 | 31 | 13 / 18 |
 | `unicorn/no-array-callback-reference` | 25 | 0 | 16 / 9 |
 | ~~`no-duplicate-imports`~~ (landed) | 26 | 0 | 8 / 18 |
-| `import/no-extraneous-dependencies` | 25 | 0 | 25 / 0 |
+| ~~`import/no-extraneous-dependencies`~~ (landed) | 25 | 0 | 25 / 0 |
 | `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
 | `max-params` 4 (warn) | 11 | 0 | 8 / 3 |
 | `vitest/no-conditional-expect` | 9 | 0 | 0 / 9 |
@@ -74,7 +74,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/no-unnecessary-type-arguments`~~ (landed) | 3 | 3 | 3 / 0 |
 | `max-depth` 4 (warn) | 2 | 0 | 2 / 0 |
 | `no-unmodified-loop-condition` | 1 | 0 | 0 / 1 |
-| `@typescript-eslint/unified-signatures` | 1 | 0 | 1 / 0 |
+| ~~`@typescript-eslint/unified-signatures`~~ (landed) | 1 | 0 | 1 / 0 |
 
 **Swept and landed 2026-10-16** (the six struck rows above, 605 hits, `npm run lint --fix`). Two of the
 autofixes were not behaviour-preserving and were corrected by hand — note both before re-running a sweep:
@@ -97,6 +97,52 @@ erases an inline `type` specifier exactly as it erases an `import type` statemen
 - `@typescript-eslint/consistent-type-imports` does **not** pull them back apart: its default
   `fixStyle: 'separate-type-imports'` only governs how it rewrites an *unmarked* type import, and a
   marked specifier in a mixed import satisfies it. The parent runs both rules together for the same reason.
+
+**`import/no-cycle` and `import/no-extraneous-dependencies` landed 2026-10-17** at the parent's
+settings, in one config block over `src/`, `worker/` and `scripts/`. `eslint-plugin-import-x` (the maintained fork;
+`eslint-plugin-import` does not support ESLint 10) is registered under the `import` name and the
+TypeScript resolver is pointed at both tsconfigs. `DEV_DEPENDENCY_FILES` mirrors the parent's list,
+narrowed to the trees this package has.
+- **24 of the 25 hits were the `@parent` alias, not a real finding.** `@parent/*` resolves to
+  `../dist/*`, whose nearest `package.json` names the parent package, so the rule reported every
+  boundary file under `observability-toolkit`. Silenced with `whitelist: ['observability-toolkit']`
+  rather than by disabling the rule in those files, so they are still checked for every other package.
+  The parent build output is reached by alias on purpose and must never become a dependency here.
+- 🔴 **The 25th was real: `scripts/judge-anthropic-client.ts` imported `undici`, declared nowhere.**
+  It reached the tree only through `jsdom` and `wrangler` → `miniflare`, so a bump of either would
+  have broken the judge's HTTP/1.1 fetch at run time (the import is dynamic, so not at build time).
+  Declared `undici: ^7.30.0` as a devDependency, and the pre-existing security override
+  (`^7.24.4`, b21a7be, "compromised undici") repointed to `"$undici"` so it still forces one version
+  on every transitive copy — npm refuses a direct dependency that conflicts with a literal override
+  (`EOVERRIDE`). Verified: `npm ls undici` dedupes to a single 7.30.0.
+- ⚠️ **Two silent-pass shapes in `no-extraneous-dependencies`.** An import the resolver cannot
+  resolve is skipped (`if (!resolved) return` in the rule), so an uninstalled package is not a
+  finding — probing with a package that does not exist proves nothing. Type-only imports are skipped
+  too (`verifyTypeImports` defaults off). The rule was proved live three ways instead: an undeclared
+  but resolvable package in `src/` reports `missing`, a devDependency in `src/` reports `devDep`, and
+  the same import under `scripts/` is correctly silent.
+- **`import/no-cycle` found zero cycles**, as predicted, and costs ~1 s on a full lint (15.6 s vs
+  14.5 s wall). A clean run means nothing on its own — the extensions/parsers settings are what make
+  the plugin parse `.ts` at all, and without them it builds no graph and passes silently — so the
+  graph was proved real with a throwaway two-module cycle under `src/lib/`, which fired on both
+  files. A type-only cycle of the same shape is correctly silent: those imports are erased, so they
+  cannot TDZ. `@parent` resolves to `../dist`, which is not `node_modules`, so `ignoreExternal` does
+  not exclude it and the parent build output is walked.
+
+**`unified-signatures` landed 2026-10-17** at the parent's bare `error` (it gets the rule from
+`tseslint.configs.strict`), in `typeSafetyRules`, so `src/`, `worker/` and `scripts/` alike. Test files
+inherit it from the `src/`+`worker/` block.
+- The single hit was `toDateOnly` in `src/api/api-constants.ts`: `(d: Date): string` and
+  `(d: string): string` overloads above a `(d: Date | string): string` implementation. Both arms
+  returned `string`, so the pair narrowed nothing the implementation signature does not; both were
+  deleted and the implementation signature exported directly. All 19 call sites pass a `Date` or a
+  `string`, and `typecheck` + `typecheck:scripts` are unchanged.
+- **The rule reports only when two signatures differ in exactly one parameter and agree on everything
+  else, return type included** — so a merge it asks for is type-equivalent by construction. That does
+  not generalise to collapsing overloads by hand: overloads with differing return types are
+  load-bearing and the rule stays silent on them.
+- Proved live three ways: it reported the real hit above before the fix, and a throwaway overload pair
+  fired under both `scripts/` and `src/__tests__/`.
 
 `@stylistic/eslint-plugin` was added as a devDependency for `@stylistic/indent`.
 `promise-function-async` is off in test files, matching the parent's block and its reasoning (async stubs
@@ -151,9 +197,7 @@ describes what a reader may receive, which includes `truncated: false` from a pr
 flag either way. Sharing it breaks the `is false` case in `SessionDetailPage.test.tsx`. The rationale is
 in a comment on the type itself.
 
-**Free today — zero hits, adoptable with no sweep:** `import/no-cycle` (the TypeScript resolver was
-verified alive: the only unresolved specifier in the tree is the `web-worker` Vite alias, so the graph is
-real and the pass is not silent), `no-eval`, `no-new-func`, `no-unreachable`, `no-unreachable-loop`,
+**Free today — zero hits, adoptable with no sweep:** `no-eval`, `no-new-func`, `no-unreachable`, `no-unreachable-loop`,
 `unicorn/prefer-number-properties`, `@typescript-eslint/prefer-readonly`, `no-useless-constructor`,
 `no-useless-default-assignment`, `no-non-null-asserted-nullish-coalescing`, `vitest/no-disabled-tests`,
 `vitest/expect-expect`, `vitest/valid-expect`, and both option-drift changes
@@ -163,8 +207,8 @@ real and the pass is not silent), `no-eval`, `no-new-func`, `no-unreachable`, `n
   exported, so it must be extracted into a shared module or copied.
 - **Complexity.** `complexity` 12, `max-depth` 4, `max-params` 4, `no-await-in-loop`, `sonarjs/no-duplicate-string`
   (all warn).
-- **Imports.** `import/no-cycle` and `import/no-extraneous-dependencies` (via `eslint-plugin-import-x` and
-  `eslint-import-resolver-typescript`).
+- **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
+  2026-10-17.
 - **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
 - **Core.** `no-eval`, `no-new-func`, `no-promise-executor-return` (source only), `no-unreachable-loop`,
   `no-unmodified-loop-condition`, `no-unreachable` (off here via tseslint's `eslint-recommended`).
@@ -174,7 +218,8 @@ real and the pass is not silent), `no-eval`, `no-new-func`, `no-unreachable`, `n
 - **TypeScript.** `dot-notation`, `explicit-function-return-type` (warn), `method-signature-style: property`,
   `consistent-type-definitions: type`, `prefer-readonly`, `no-unnecessary-type-arguments`,
   `no-useless-default-assignment`, `promise-function-async` and `strict-void-return` (source only); from the
-  `strict` preset `unified-signatures`, `no-useless-constructor`, `no-non-null-asserted-nullish-coalescing`.
+  `strict` preset ~~`unified-signatures`~~ (landed 2026-10-17), `no-useless-constructor`,
+  `no-non-null-asserted-nullish-coalescing`.
 - **Option drift.** `no-deprecated` is `error` there, `warn` here; `ban-ts-comment` wants
   `minimumDescriptionLength: 10`; `no-unused-vars` here also exempts `_`-prefixed destructured array elements.
   Keep `scripts/`' `prefer-nullish-coalescing` `ignorePrimitives: { boolean: true }`: it guards the
@@ -182,8 +227,9 @@ real and the pass is not silent), `no-eval`, `no-new-func`, `no-unreachable`, `n
 - **Tests only.** `vitest/no-disabled-tests`, `expect-expect`, `no-conditional-expect`, `valid-expect` (`maxArgs: 2`);
   `no-unnecessary-type-assertion` stays off here on purpose (see the comment in `eslint.config.mjs`).
 
-New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x`, `eslint-import-resolver-typescript`,
-`eslint-plugin-sonarjs`, at the parent's versions; the dashboard installs standalone in CI.
+New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x` and
+`eslint-import-resolver-typescript` (all three installed), plus `eslint-plugin-sonarjs` still to come,
+at the parent's versions; the dashboard installs standalone in CI.
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
