@@ -31,6 +31,7 @@ No open items.
 | DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params` and `max-depth` by hand on 2026-10-17. 610 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
+| DASH-VENDOR-ATTR-LITERALS | `integritystudio.*` keys outside agent/hook are still spelled inline | P3 | Follow-on from the `AGENT_ATTRIBUTES`/`HOOK_ATTRIBUTES` consolidation (2026-10-17). Source: session 2026-10-17 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
 here against `../src/server.ts` and a parent test under the parent's `eslint.config.cjs`. The cheap subset
@@ -277,6 +278,26 @@ at the parent's versions; the dashboard installs standalone in CI.
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
+
+**DASH-VENDOR-ATTR-LITERALS.** `src/lib/hook-attributes.ts` (2026-10-17) gave the agent and hook
+span-attribute keys one home, because the fixtures and the readers had each spelled them inline — a
+canonical-key rename (one row in `hooks/lib/attribute-aliases.ts`) would have left the tests green while
+production read `undefined`. 11 keys, ~45 call sites across 3 readers and 6 test files; semconv keys stay
+in `otel-attributes.ts`, which is re-export-only by contract, so these vendor keys could not go there.
+The same defect remains for every other `integritystudio.*` namespace `src/api/session-detail.ts` reads
+inline — `tool.*`, `git.*`, `project.*`, `context.*`, `tokens.*`, `mcp.*`, `alerts.*`,
+`code.structure.*` — about 30 literals, several of them also spelled in fixtures.
+- 🔴 **Both groups declare a `TYPE`** (`integritystudio.agent.type`, `integritystudio.hook.type`), so
+  `{ ...AGENT_ATTRIBUTES, ...HOOK_ATTRIBUTES }` silently drops the agent one. Concatenate entries, never
+  merge the objects; `scripts/__tests__/hook-attributes.test.ts` caught this on its first run.
+- **What the test can and cannot prove.** `canonicalAttrKey(key) === key` fails a key that is a *legacy*
+  spelling, which is the error that would make a reader see `undefined`. It passes a key the alias table
+  has never heard of, so it is not a spell-check — the namespace assertion is what catches a typo'd
+  prefix. Parity with the emitter stays held by citation: `~/.claude/hooks/lib/agent-sources.ts` writes
+  these keys, and the parent and the hooks "intentionally share no code"
+  (`../src/lib/observability/instrumentation.ts`), so there is nothing importable to assert against.
+- `HOOK_NAME_ATTRIBUTE` was retired from `src/api/aggregates/agent-stats.ts`: a shared key constant
+  living in an aggregate module is how the duplication started.
 
 **DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
 entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version
