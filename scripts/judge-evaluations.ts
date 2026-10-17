@@ -127,20 +127,23 @@ const DRY_RUN_TOP_SESSIONS = 10;
 const MAX_TURN_LIMIT = 10_000;
 
 /**
- * Build one record.
- *
- * `kind` and `cohort` are separate arguments on purpose (OBP16), so a hashed
- * canary score can never be written as a judged one. `judgeModel` is omitted
- * for any score no model produced.
+ * `kind` and `cohort` are separate fields on purpose (OBP16), so a hashed canary
+ * score can never be written as a judged one. `judgeModel` is omitted for any
+ * score no model produced.
  */
+type EvalRecordFields = {
+  evaluationName: string;
+  scoreValue: number;
+  explanation: string;
+  kind: EvaluatorKind;
+  cohort: EvaluationCohort;
+  judgeModel?: string;
+}
+
+/** Build one record. */
 function createEvalRecord(
   turn: Turn,
-  evaluationName: string,
-  scoreValue: number,
-  explanation: string,
-  kind: EvaluatorKind,
-  cohort: EvaluationCohort,
-  judgeModel?: string,
+  { evaluationName, scoreValue, explanation, kind, cohort, judgeModel }: EvalRecordFields,
 ): EvalRecord {
   const evaluatorType = legacyEvaluatorType(kind);
   return {
@@ -299,14 +302,13 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
       const [min, max] = canary ? metric.canary : metric.normal;
       const drawn = hashToScore(`${metric.hashKey}:${turn.sessionId}:${turnKey}`, min, max);
       const score = metric.evalName === FAITHFULNESS_EVAL_NAME ? normalizeScore(1 - drawn) : drawn;
-      evals.push(createEvalRecord(
-        turn,
-        metric.evalName,
-        score,
-        `${metric.label} (${canary ? 'canary' : 'seeded'}) for session ${sessionPreview}`,
-        SYNTHETIC_EVALUATOR_KIND,
-        canary ? CANARY_COHORT : SEED_COHORT,
-      ));
+      evals.push(createEvalRecord(turn, {
+        evaluationName: metric.evalName,
+        scoreValue: score,
+        explanation: `${metric.label} (${canary ? 'canary' : 'seeded'}) for session ${sessionPreview}`,
+        kind: SYNTHETIC_EVALUATOR_KIND,
+        cohort: canary ? CANARY_COHORT : SEED_COHORT,
+      }));
     }
   }
 
@@ -345,7 +347,14 @@ export async function evaluateTurn(
   const isJudged = (evalName: string): boolean =>
     existingKeys.has(judgedByKey(turn.sessionId, evalName, turnKey, HAIKU_MODEL));
   const record = (evalName: string, value: number, reason: string): void => {
-    evals.push(createEvalRecord(turn, evalName, value, reason, LLM_EVALUATOR_KIND, NORMAL_COHORT, HAIKU_MODEL));
+    evals.push(createEvalRecord(turn, {
+      evaluationName: evalName,
+      scoreValue: value,
+      explanation: reason,
+      kind: LLM_EVALUATOR_KIND,
+      cohort: NORMAL_COHORT,
+      judgeModel: HAIKU_MODEL,
+    }));
   };
   const fail = (evalName: string, err: unknown): void => trackFailure(evalName, err, sessionPreview);
   const fallbackReason = (label: string, value: number): string =>
@@ -643,7 +652,12 @@ async function judgeTurns(
   const flatEvals = allEvals.flat();
 
   const prevState = readRunState();
-  const summary = summarizeJudgeRun(flatEvals.length, evalFailures, failureClasses, { usage, estimatedUsd, keySource: judgeKey.source }, prevState);
+  const summary = summarizeJudgeRun(
+    flatEvals.length,
+    { byMetric: evalFailures, byClass: failureClasses },
+    { usage, estimatedUsd, keySource: judgeKey.source },
+    prevState,
+  );
   (summary.exitCode === 0 ? console.log : console.error)(summary.line);
   // Every run that attempted something becomes the baseline, flagged or not:
   // keeping only clean runs let one flagged run hold the alarm on for good.

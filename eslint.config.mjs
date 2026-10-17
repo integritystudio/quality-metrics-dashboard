@@ -322,6 +322,15 @@ export default tseslint.config(
       '@typescript-eslint/explicit-function-return-type': 'error',
     },
   },
+  // Complexity controls, at the parent's levels. `warn` there is effectively an
+  // error here: `npm run lint` runs under --max-warnings 0 (DASH-LINT-PARENT-PARITY).
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    rules: {
+      'max-depth': ['warn', 4],
+      'max-params': ['warn', 4],
+    },
+  },
   // Import graph rules. eslint-plugin-import does not support ESLint 10, so this
   // is its maintained fork, registered under the `import` name to match the parent.
   // The TypeScript resolver maps the `./x.js` specifiers to their `./x.ts` sources;

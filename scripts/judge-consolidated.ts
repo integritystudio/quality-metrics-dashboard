@@ -432,12 +432,18 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
 // Turn evaluation
 // ---------------------------------------------------------------------------
 
+export type ConsolidatedTurnOptions = {
+  /** Shared across turns so each criterion's evaluation steps are generated once. */
+  stepsCache?: EvaluationStepsCache;
+  /** Which criteria this turn is scored on; forwarded to `selectCriteria`. */
+  criteria?: ConsolidatedCriteriaOptions;
+}
+
 export async function evaluateTurnConsolidated(
   provider: ConsolidatedProvider,
   turn: Turn,
   existingKeys: Set<string>,
-  stepsCache: EvaluationStepsCache = new Map(),
-  options: ConsolidatedCriteriaOptions = {},
+  { stepsCache = new Map(), criteria: options = {} }: ConsolidatedTurnOptions = {},
 ): Promise<EvalRecord[]> {
   const selection = selectCriteria(turn, existingKeys, options);
   if (selection.criteria.length === 0) return [];
@@ -561,7 +567,7 @@ export async function createConsolidatedTurnEvaluator(
 ): Promise<(turn: Turn) => Promise<EvalRecord[]>> {
   const provider = await createConsolidatedProvider(options);
   const stepsCache: EvaluationStepsCache = new Map();
-  return async (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache);
+  return async (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache });
 }
 
 // ---------------------------------------------------------------------------
@@ -601,7 +607,7 @@ export async function evaluateTurnsConsolidatedBatched(
 ): Promise<EvalRecord[][]> {
   const provider = adaptBatchProvider(batch);
   const stepsCache: EvaluationStepsCache = new Map();
-  const inFlight = turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, stepsCache));
+  const inFlight = turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache }));
   await batch.flush();
   const perTurn = await Promise.all(inFlight);
   if (batch.failure) throw batch.failure;

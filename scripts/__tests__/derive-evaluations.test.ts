@@ -775,11 +775,10 @@ describe('handoff_correctness scores agent failures correctly', () => {
     phase: 'prepare' | 'finalize',
     agentName: string,
     spanId: string,
-    startSec: number,
-    extra: { statusCode?: number; hasError?: boolean } = {},
+    extra: { startSec: number; statusCode?: number; hasError?: boolean },
   ): TraceSpan {
     return {
-      ...agentHookSpan(phase, agentName, spanId, startSec),
+      ...agentHookSpan(phase, agentName, spanId, extra.startSec),
       attributes: {
         [SESSION_ATTRIBUTES.ID]: 'sess-failure',
         [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent',
@@ -798,10 +797,10 @@ describe('handoff_correctness scores agent failures correctly', () => {
   // the sender score is visible in the test output.
   it('keeps handoff_correctness at 1 when only the sending agent fails (receiver score drives the transition)', () => {
     const spansWithSenderError = [
-      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
-      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10, { hasError: true }),
-      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
-      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30),
+      agentHookSpanWith('prepare', 'Explore', 'p1', { startSec: START_SEC }),
+      agentHookSpanWith('finalize', 'Explore', 'f1', { startSec: START_SEC + 10, hasError: true }),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', { startSec: START_SEC + 20 }),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', { startSec: START_SEC + 30 }),
     ];
     const handoffs = deriveAll({ spans: spansWithSenderError, accounts: new Map() })
       .filter(r => r.evaluationName === 'handoff_correctness');
@@ -812,10 +811,10 @@ describe('handoff_correctness scores agent failures correctly', () => {
 
   it('scores 0 for a handoff when the receiving agent has error flag set', () => {
     const spansReceiverFailed = [
-      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
-      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
-      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
-      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30, { hasError: true }),
+      agentHookSpanWith('prepare', 'Explore', 'p1', { startSec: START_SEC }),
+      agentHookSpanWith('finalize', 'Explore', 'f1', { startSec: START_SEC + 10 }),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', { startSec: START_SEC + 20 }),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', { startSec: START_SEC + 30, hasError: true }),
     ];
     const handoffs = deriveAll({ spans: spansReceiverFailed, accounts: new Map() })
       .filter(r => r.evaluationName === 'handoff_correctness');
@@ -826,10 +825,10 @@ describe('handoff_correctness scores agent failures correctly', () => {
 
   it('scores 0 when the hook itself throws (span status ERROR, no has_error attribute)', () => {
     const spansHookCrash = [
-      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
-      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
-      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
-      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30, { statusCode: OTEL_STATUS_ERROR_CODE }),
+      agentHookSpanWith('prepare', 'Explore', 'p1', { startSec: START_SEC }),
+      agentHookSpanWith('finalize', 'Explore', 'f1', { startSec: START_SEC + 10 }),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', { startSec: START_SEC + 20 }),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', { startSec: START_SEC + 30, statusCode: OTEL_STATUS_ERROR_CODE }),
     ];
     const handoffs = deriveAll({ spans: spansHookCrash, accounts: new Map() })
       .filter(r => r.evaluationName === 'handoff_correctness');
@@ -840,10 +839,10 @@ describe('handoff_correctness scores agent failures correctly', () => {
 
   it('scores 1 when the agent succeeds (no error flag, status OK)', () => {
     const spansSuccess = [
-      agentHookSpanWith('prepare', 'Explore', 'p1', START_SEC),
-      agentHookSpanWith('finalize', 'Explore', 'f1', START_SEC + 10),
-      agentHookSpanWith('prepare', 'code-reviewer', 'p2', START_SEC + 20),
-      agentHookSpanWith('finalize', 'code-reviewer', 'f2', START_SEC + 30),
+      agentHookSpanWith('prepare', 'Explore', 'p1', { startSec: START_SEC }),
+      agentHookSpanWith('finalize', 'Explore', 'f1', { startSec: START_SEC + 10 }),
+      agentHookSpanWith('prepare', 'code-reviewer', 'p2', { startSec: START_SEC + 20 }),
+      agentHookSpanWith('finalize', 'code-reviewer', 'f2', { startSec: START_SEC + 30 }),
     ];
     const handoffs = deriveAll({ spans: spansSuccess, accounts: new Map() })
       .filter(r => r.evaluationName === 'handoff_correctness');

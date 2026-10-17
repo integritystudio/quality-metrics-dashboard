@@ -9,20 +9,25 @@ import { defined } from '../../src/__tests__/support/defined.js';
  * Thin wrapper around the exported computeBudgetAllocation + prioritizeTraces
  * to test the full allocation pipeline without running the sync main().
  */
+/** The trace side of the allocation: what changed, its evaluations, and which ids are referenced. */
+type TraceInputs = {
+  changed: KVEntry[];
+  evalsByTrace: Map<string, EvaluationResult[]>;
+  referencedTraceIds: Set<string>;
+};
+
 function allocateBudget(
   highPriority: KVEntry[],
-  traceChanged: KVEntry[],
-  evalsByTrace: Map<string, EvaluationResult[]>,
-  referencedTraceIds: Set<string>,
+  traces: TraceInputs,
   writeBudget: number,
 ): { toWrite: KVEntry[]; deferred: number } {
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, writeBudget);
-  const prioritizedTraces = prioritizeTraces(traceChanged, evalsByTrace, referencedTraceIds);
+  const prioritizedTraces = prioritizeTraces(traces.changed, traces.evalsByTrace, traces.referencedTraceIds);
   const toWrite = [
     ...highPriority.slice(0, highPriorityBudget),
     ...prioritizedTraces.slice(0, traceBudget),
   ];
-  const changed = highPriority.length + traceChanged.length;
+  const changed = highPriority.length + traces.changed.length;
   const deferred = changed - toWrite.length;
   return { toWrite, deferred };
 }
@@ -163,7 +168,7 @@ describe('budget allocation', () => {
     const highPriority = makeHighPriorityEntries(400);
     const { entries: traceEntries, evalsByTrace } = makeTracePool(200);
 
-    const { toWrite, deferred } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, 450);
 
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
@@ -179,7 +184,7 @@ describe('budget allocation', () => {
     const highPriority = makeHighPriorityEntries(10);
     const { entries: traceEntries, evalsByTrace } = makeTracePool(500);
 
-    const { toWrite, deferred } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, 450);
 
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
@@ -194,7 +199,7 @@ describe('budget allocation', () => {
   it('handles zero changed traces gracefully', () => {
     const highPriority = makeHighPriorityEntries(20);
 
-    const { toWrite, deferred } = allocateBudget(highPriority, [], new Map(), new Set(), 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, { changed: [], evalsByTrace: new Map(), referencedTraceIds: new Set() }, 450);
 
     expect(toWrite).toHaveLength(20);
     expect(deferred).toBe(0);
@@ -204,7 +209,7 @@ describe('budget allocation', () => {
     const highPriority = makeHighPriorityEntries(10);
     const { entries: traceEntries, evalsByTrace } = makeTracePool(50);
 
-    const { toWrite } = allocateBudget(highPriority, traceEntries, evalsByTrace, new Set(), 50);
+    const { toWrite } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, 50);
 
     // budget=49, highPriorityBudget = max(0, min(10, 49-100)) = 0, rawTraceBudget = 49, traceBudget = 48 (rounded to even)
     // NOTE: when budget < MIN_TRACE_BUDGET, all slots go to traces; high-priority items receive nothing.

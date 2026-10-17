@@ -403,7 +403,7 @@ async function main(): Promise<void> {
     };
     try {
       outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set()));
-      outcome.consolidated = scoresByName(await evaluateTurnConsolidated(provider, turn, new Set(), stepsCache));
+      outcome.consolidated = scoresByName(await evaluateTurnConsolidated(provider, turn, new Set(), { stepsCache }));
     } catch (err) {
       outcome.error = describeUnknown(err);
     }

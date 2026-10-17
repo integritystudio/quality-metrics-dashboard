@@ -215,12 +215,17 @@ export function extractClusterIds(nodes: WorkflowNode[]): string[] {
   return [...seen].sort();
 }
 
+/** How the laid-out nodes are presented: which are dimmed, which are critical, what a click does. */
+type LayoutOptions = {
+  selectedAgents?: ReadonlySet<string> | undefined;
+  criticalPath?: ReadonlySet<string> | undefined;
+  onNodeActivate?: ((nodeId: string) => void) | undefined;
+};
+
 async function computeLayout(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
-  selectedAgents?: ReadonlySet<string>,
-  criticalPath?: ReadonlySet<string>,
-  onNodeActivate?: (nodeId: string) => void,
+  { selectedAgents, criticalPath, onNodeActivate }: LayoutOptions = {},
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const nodeDataMap = buildNodeDataMap(nodes);
 
@@ -423,7 +428,11 @@ export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAg
       graph.edges,
       collapsedClusters,
     );
-    computeLayout(visibleNodes, visibleEdges, selectedAgents, criticalPath, hasNodeClick ? activateNode : undefined)
+    computeLayout(visibleNodes, visibleEdges, {
+      selectedAgents,
+      criticalPath,
+      onNodeActivate: hasNodeClick ? activateNode : undefined,
+    })
       .then(({ nodes: rfNodes, edges: rfEdges }) => {
         if (!cancelled) {
           setLayoutError(null);

@@ -672,6 +672,15 @@ function parseArgs(argv: string[]): Options {
   };
 }
 
+/**
+ * Count a skipped record, and remember it as handled unless a later run could
+ * still ship it — `too-old` is the one skip a widened --max-age-hours reverses.
+ */
+function recordSkip(skips: Record<string, number>, delivered: string[], skip: MapSkip, fp: string): void {
+  increment(skips, skip);
+  if (skip !== 'too-old') delivered.push(fp);
+}
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   let opts: Options;
   try {
@@ -768,10 +777,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           continue;
         }
         if (mapped.skip) {
-          increment(skips, mapped.skip);
-          // Remember the decision so a permanently-unshippable record is not
-          // re-examined, and cannot be shipped later by a widened --max-age-hours.
-          if (mapped.skip !== 'too-old') delivered.push(fp);
+          recordSkip(skips, delivered, mapped.skip, fp);
           continue;
         }
         const manifestRef = key === undefined ? undefined : manifest?.get(key);

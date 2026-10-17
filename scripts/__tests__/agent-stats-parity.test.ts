@@ -18,7 +18,15 @@ import { serveParityFixture } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-08T01:08:00.000Z');
 
-function agentSpan(agentName: string, iso: string, traceId: string, sessionId: string, attrs: Record<string, unknown> = {}): TraceWireRow {
+type AgentSpanFixture = {
+  agentName: string;
+  iso: string;
+  traceId: string;
+  sessionId: string;
+  attrs?: Record<string, unknown>;
+};
+
+function agentSpan({ agentName, iso, traceId, sessionId, attrs = {} }: AgentSpanFixture): TraceWireRow {
   return spanToWire({
     traceId,
     spanId: `${traceId}-${iso}`,
@@ -37,11 +45,11 @@ function agentSpan(agentName: string, iso: string, traceId: string, sessionId: s
 }
 
 const spans: TraceWireRow[] = [
-  agentSpan('general-purpose', '2026-10-07T12:00:00.000Z', 'trace-a', 'sess-1', { 'integritystudio.agent.has_error': true }),
-  agentSpan('Explore', '2026-10-07T12:30:00.000Z', 'trace-a', 'sess-1'),
-  agentSpan('general-purpose', '2026-10-06T09:00:00.000Z', 'trace-b', 'sess-2'),
+  agentSpan({ agentName: 'general-purpose', iso: '2026-10-07T12:00:00.000Z', traceId: 'trace-a', sessionId: 'sess-1', attrs: { 'integritystudio.agent.has_error': true } }),
+  agentSpan({ agentName: 'Explore', iso: '2026-10-07T12:30:00.000Z', traceId: 'trace-a', sessionId: 'sess-1' }),
+  agentSpan({ agentName: 'general-purpose', iso: '2026-10-06T09:00:00.000Z', traceId: 'trace-b', sessionId: 'sess-2' }),
   // Older than 7d, inside 30d.
-  agentSpan('general-purpose', '2026-09-20T10:00:00.000Z', 'trace-c', 'sess-3'),
+  agentSpan({ agentName: 'general-purpose', iso: '2026-09-20T10:00:00.000Z', traceId: 'trace-c', sessionId: 'sess-3' }),
   // Not an agent-finalize span: never counted.
   spanToWire({ traceId: 'trace-z', spanId: 'z', name: 'session-span', kind: 'INTERNAL', startTimeUnixNano: isoToNs('2026-10-07T11:00:00.000Z'), attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-9' } }),
 ];

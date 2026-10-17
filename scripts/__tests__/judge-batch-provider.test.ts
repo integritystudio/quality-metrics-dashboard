@@ -580,8 +580,7 @@ describe('a consolidated --batch run cut short by the wall clock', () => {
 
     const summary = summarizeJudgeRun(
       perTurn.flat().length,
-      evalFailures,
-      failureClasses,
+      { byMetric: evalFailures, byClass: failureClasses },
       { usage: createUsageTotals(), estimatedUsd: 0, keySource: DEFAULT_API_KEY_ENV },
     );
     expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);

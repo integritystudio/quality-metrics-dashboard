@@ -1019,7 +1019,7 @@ describe('summarizeJudgeRun', () => {
   // main and exited 1, which cost the 09-29 and 09-30 06:00 runs their sync.
   it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, a soft code, when the batch wall clock abandoned evaluations', () => {
     // 60% abandoned would otherwise read as a high failure rate.
-    const summary = summarizeJudgeRun(40, { relevance: 30, coherence: 30 }, { ...noFailures, 'wall-clock': 60 }, noSpend);
+    const summary = summarizeJudgeRun(40, { byMetric: { relevance: 30, coherence: 30 }, byClass: { ...noFailures, 'wall-clock': 60 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(summary.exitCode)).toBe(true);
@@ -1029,20 +1029,20 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, not JUDGE_EXIT_NO_SCORES, when the wall clock abandoned every evaluation', () => {
-    const summary = summarizeJudgeRun(0, { relevance: 100 }, { ...noFailures, 'wall-clock': 100 }, noSpend);
+    const summary = summarizeJudgeRun(0, { byMetric: { relevance: 100 }, byClass: { ...noFailures, 'wall-clock': 100 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
   });
 
   it('JUDGE_EXIT_BILLING still wins over the wall clock', () => {
-    const summary = summarizeJudgeRun(3, { coherence: 20 }, { ...noFailures, billing: 10, 'wall-clock': 10 }, noSpend);
+    const summary = summarizeJudgeRun(3, { byMetric: { coherence: 20 }, byClass: { ...noFailures, billing: 10, 'wall-clock': 10 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
   });
 
   it('exits 0 with a one-line summary when scores were produced', () => {
     // 200 successes, 40 failures = 17% failure rate — well below the 50% threshold
-    const summary = summarizeJudgeRun(200, { coherence: 40 }, { ...noFailures, parse: 40 }, noSpend);
+    const summary = summarizeJudgeRun(200, { byMetric: { coherence: 40 }, byClass: { ...noFailures, parse: 40 } }, noSpend);
 
     expect(summary.exitCode).toBe(0);
     expect(summary.attempted).toBe(240);
@@ -1051,14 +1051,14 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('exits JUDGE_EXIT_NO_SCORES when evaluations were attempted and none succeeded', () => {
-    const summary = summarizeJudgeRun(0, { coherence: 100, relevance: 100 }, { ...noFailures, parse: 200 }, noSpend);
+    const summary = summarizeJudgeRun(0, { byMetric: { coherence: 100, relevance: 100 }, byClass: { ...noFailures, parse: 200 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
     expect(summary.line).toMatch(/NO SCORES PRODUCED/);
   });
 
   it('exits JUDGE_EXIT_BILLING when any call was refused for billing, even if others scored', () => {
-    const summary = summarizeJudgeRun(3, { coherence: 10 }, { ...noFailures, billing: 10 }, noSpend);
+    const summary = summarizeJudgeRun(3, { byMetric: { coherence: 10 }, byClass: { ...noFailures, billing: 10 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
     expect(summary.line).toMatch(/BILLING REFUSED/);
@@ -1066,7 +1066,7 @@ describe('summarizeJudgeRun', () => {
 
   it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when more than half the attempts fail', () => {
     // 46 succeeded, 490 failed = 91.4% failure — the 09-22 collapse
-    const summary = summarizeJudgeRun(46, { coherence: 490 }, { ...noFailures, 'schema-rejection': 490 }, noSpend);
+    const summary = summarizeJudgeRun(46, { byMetric: { coherence: 490 }, byClass: { ...noFailures, 'schema-rejection': 490 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/HIGH FAILURE RATE/);
@@ -1075,20 +1075,20 @@ describe('summarizeJudgeRun', () => {
 
   it('exits JUDGE_EXIT_HIGH_FAILURE_RATE exactly at the 50% threshold', () => {
     // 99 fail, 100 succeed → 49.7% failure rate → no alarm
-    expect(summarizeJudgeRun(100, { coherence: 99 }, noFailures, noSpend).exitCode).toBe(0);
+    expect(summarizeJudgeRun(100, { byMetric: { coherence: 99 }, byClass: noFailures }, noSpend).exitCode).toBe(0);
     // 101 fail, 100 succeed → 50.25% failure rate → alarm
-    expect(summarizeJudgeRun(100, { coherence: 101 }, noFailures, noSpend).exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
+    expect(summarizeJudgeRun(100, { byMetric: { coherence: 101 }, byClass: noFailures }, noSpend).exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
   });
 
   it('JUDGE_EXIT_NO_SCORES wins over JUDGE_EXIT_HIGH_FAILURE_RATE at 100% failure', () => {
     // 100% failure is the no-scores condition, checked before the rate check
-    const summary = summarizeJudgeRun(0, { coherence: 100 }, noFailures, noSpend);
+    const summary = summarizeJudgeRun(0, { byMetric: { coherence: 100 }, byClass: noFailures }, noSpend);
     expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
   });
 
   it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when the success rate falls more than 25 points versus the previous run', () => {
     // previous run: 100% of 536; this run: 60% of 500 — a 40-point fall, but only 40% failed
-    const summary = summarizeJudgeRun(300, { coherence: 200 }, noFailures, noSpend, { succeeded: 536, attempted: 536 });
+    const summary = summarizeJudgeRun(300, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 });
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/SUCCESS RATE DROP/);
@@ -1098,33 +1098,33 @@ describe('summarizeJudgeRun', () => {
 
   it('exits 0 when a smaller run has no failures, however far its count falls', () => {
     // The count-based check flagged this: fewer new turns, nothing failed
-    expect(summarizeJudgeRun(60, {}, noFailures, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    expect(summarizeJudgeRun(60, { byMetric: {}, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
   });
 
   it('exits 0 when a clean run is followed by the old 18-22% failure baseline', () => {
     // 100% → 78.2% is a 21.8-point fall: under the threshold
-    expect(summarizeJudgeRun(419, { coherence: 117 }, noFailures, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    expect(summarizeJudgeRun(419, { byMetric: { coherence: 117 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
   });
 
   it('skips the rate comparison when either run attempted too few evaluations', () => {
     // 60% success would be a drop from 100%, but 10 attempts is too few to compare
-    expect(summarizeJudgeRun(6, { coherence: 4 }, noFailures, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
-    expect(summarizeJudgeRun(300, { coherence: 200 }, noFailures, noSpend, { succeeded: 10, attempted: 10 }).exitCode).toBe(0);
+    expect(summarizeJudgeRun(6, { byMetric: { coherence: 4 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    expect(summarizeJudgeRun(300, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 10, attempted: 10 }).exitCode).toBe(0);
   });
 
   it('skips the rate comparison when there is no previous run', () => {
-    expect(summarizeJudgeRun(300, { coherence: 200 }, noFailures, noSpend, undefined).exitCode).toBe(0);
+    expect(summarizeJudgeRun(300, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, undefined).exitCode).toBe(0);
   });
 
   it('high failure rate check takes precedence over drop check', () => {
     // Both conditions would fire; rate check is tested first in code
-    const summary = summarizeJudgeRun(10, { coherence: 200 }, noFailures, noSpend, { succeeded: 500, attempted: 500 });
+    const summary = summarizeJudgeRun(10, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 500, attempted: 500 });
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/HIGH FAILURE RATE/);
   });
 
   it('exits 0 when nothing was attempted', () => {
-    expect(summarizeJudgeRun(0, {}, noFailures, noSpend).exitCode).toBe(0);
+    expect(summarizeJudgeRun(0, { byMetric: {}, byClass: noFailures }, noSpend).exitCode).toBe(0);
   });
 
   it('carries the usage totals, both cost figures and the key source name on the line', () => {
@@ -1133,7 +1133,7 @@ describe('summarizeJudgeRun', () => {
     };
     const estimatedUsd = 1.8;
 
-    const summary = summarizeJudgeRun(5, {}, noFailures, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
+    const summary = summarizeJudgeRun(5, { byMetric: {}, byClass: noFailures }, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
 
     const pricing = judgePricing();
     const actualUsd = (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input
@@ -1149,7 +1149,7 @@ describe('summarizeJudgeRun', () => {
 
   it('copies the totals rather than sharing the accumulator', () => {
     const usage = createUsageTotals();
-    const summary = summarizeJudgeRun(0, {}, noFailures, { ...noSpend, usage });
+    const summary = summarizeJudgeRun(0, { byMetric: {}, byClass: noFailures }, { ...noSpend, usage });
 
     addUsage(usage, { inputTokens: 1, outputTokens: 1, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 });
 

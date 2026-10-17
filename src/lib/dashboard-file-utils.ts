@@ -111,10 +111,9 @@ export function readJsonlWithValidationSync<T>(
       try {
         const parsed = JSON.parse(line) as unknown;
         const result = schema.safeParse(parsed);
-        if (result.success) {
-          results.push(result.data);
-          if (limit && results.length >= limit) break;
-        }
+        if (!result.success) continue;
+        results.push(result.data);
+        if (limit && results.length >= limit) break;
       } catch {
         // Silently skip invalid lines
       }

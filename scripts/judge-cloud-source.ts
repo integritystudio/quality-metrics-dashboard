@@ -108,9 +108,7 @@ async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<E
   for (const evaluator of JUDGE_PRODUCERS) {
     const perAccount = await queryEachAccount(
       env,
-      CLOUD_EVALUATION_LIMIT,
-      { rows: `${evaluator} rows`, truncates: 'the dedup set' },
-      CLI_PREFIX,
+      { limit: CLOUD_EVALUATION_LIMIT, rows: `${evaluator} rows`, truncates: 'the dedup set', logPrefix: CLI_PREFIX },
       // No end bound: a receipt-time row is dated after its turn, never before.
       async (backend) => backend.queryEvaluations({ source: 'table', evaluator, startDate: msToNs(fromMs), limit: CLOUD_EVALUATION_LIMIT }),
     );

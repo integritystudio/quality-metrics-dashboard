@@ -76,7 +76,7 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
   }
 
   const band = calibration
-    ? adaptiveScoreColorBand(score, metricName, direction, calibration.distribution, calibration.sampleSize)
+    ? adaptiveScoreColorBand(score, metricName, direction, calibration)
     : scoreColorBand(score, direction);
   const shape = SCORE_SHAPES[band];
   const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';

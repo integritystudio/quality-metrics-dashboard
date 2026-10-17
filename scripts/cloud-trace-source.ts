@@ -79,18 +79,21 @@ export async function queryAccountTraces(
   return backend.queryTraces({ startDate: msToNs(fromMs), endDate: msToNs(toMs), limit });
 }
 
-/** Wording for the log line and truncation error, e.g. `{ rows: 'spans', truncates: 'the scope' }`. */
-export type AccountQueryLabel = {
+/**
+ * The row bound that counts as truncation, and the wording for the log line and
+ * the truncation error, e.g. `{ limit, rows: 'spans', truncates: 'the scope' }`.
+ */
+export type AccountQuerySpec = {
+  limit: number;
   rows: string;
   truncates: string;
+  logPrefix: string;
 }
 
-/** Throws when an account returned `limit` rows: the read may then be truncated. */
+/** Throws when an account returned `spec.limit` rows: the read may then be truncated. */
 export async function queryEachAccount<T>(
   env: NodeJS.ProcessEnv,
-  limit: number,
-  label: AccountQueryLabel,
-  logPrefix: string,
+  spec: AccountQuerySpec,
   query: (backend: CloudBackend) => Promise<T[]>,
 ): Promise<Array<{ ref: string; rows: T[] }>> {
   const perAccount: Array<{ ref: string; rows: T[] }> = [];
@@ -98,10 +101,10 @@ export async function queryEachAccount<T>(
     const apiKey = asString(env[ref]);
     if (apiKey === undefined) continue;
     const rows = await query(accountBackend(apiKey));
-    if (rows.length >= limit) {
-      throw new Error(`${ref}: cloud returned ${limit} ${label.rows}, so ${label.truncates} may be truncated; narrow --days`);
+    if (rows.length >= spec.limit) {
+      throw new Error(`${ref}: cloud returned ${spec.limit} ${spec.rows}, so ${spec.truncates} may be truncated; narrow --days`);
     }
-    console.log(`${logPrefix} ${ref}: ${rows.length} ${label.rows}`);
+    console.log(`${spec.logPrefix} ${ref}: ${rows.length} ${spec.rows}`);
     perAccount.push({ ref, rows });
   }
   return perAccount;
@@ -166,9 +169,7 @@ export async function loadCloudSpans(
   const { fromMs, toMs } = dateScopeBounds(dates);
   const perAccount = await queryEachAccount(
     env,
-    CLOUD_SPAN_LIMIT,
-    { rows: 'spans', truncates: 'the scope' },
-    logPrefix,
+    { limit: CLOUD_SPAN_LIMIT, rows: 'spans', truncates: 'the scope', logPrefix },
     async (backend) => queryAccountTraces(backend, fromMs, toMs),
   );
   const merged = mergeAccountSpans(perAccount.map(({ ref, rows }) => ({ ref, spans: rows })), dates);

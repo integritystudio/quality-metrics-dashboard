@@ -114,13 +114,13 @@ describe('adaptiveScoreColorBand — quantile strategy', () => {
   it('uses empiricalCDF when distribution and sufficient sampleSize are provided', () => {
     // dist where p50=0.6 means 0.75 is well above median — should be good/excellent
     const dist = makeDist({ p10: 0.3, p25: 0.5, p50: 0.6, p75: 0.72, p90: 0.82 });
-    const result = adaptiveScoreColorBand(0.75, 'relevance', 'maximize', dist, 200);
+    const result = adaptiveScoreColorBand(0.75, 'relevance', 'maximize', { distribution: dist, sampleSize: 200 });
     expect(['excellent', 'good']).toContain(result);
   });
 
   it('falls back to uniform scoreColorBand when no distribution provided', () => {
     // 0.95 is excellent on uniform scale
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', undefined, 200);
+    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', undefined);
     expect(result).toBe('excellent');
   });
 
@@ -128,20 +128,20 @@ describe('adaptiveScoreColorBand — quantile strategy', () => {
     const dist = makeDist();
     // With sampleSize=50 (< 100), should fall back to uniform
     // 0.95 → excellent on uniform scale
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', dist, 50);
+    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', { distribution: dist, sampleSize: 50 });
     expect(result).toBe('excellent');
   });
 
   it('falls back to uniform when sampleSize is exactly MIN_QUANTILE_SAMPLE_SIZE - 1', () => {
     const dist = makeDist();
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', dist, 99);
+    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', { distribution: dist, sampleSize: 99 });
     expect(result).toBe('excellent');
   });
 
   it('uses quantile when sampleSize equals MIN_QUANTILE_SAMPLE_SIZE', () => {
     // High value with generous dist should produce a high band
     const dist = makeDist({ p10: 0.3, p25: 0.45, p50: 0.55, p75: 0.65, p90: 0.75 });
-    const result = adaptiveScoreColorBand(0.9, 'relevance', 'maximize', dist, 100);
+    const result = adaptiveScoreColorBand(0.9, 'relevance', 'maximize', { distribution: dist, sampleSize: 100 });
     expect(['excellent', 'good']).toContain(result);
   });
 });

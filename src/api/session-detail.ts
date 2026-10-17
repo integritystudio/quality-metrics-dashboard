@@ -267,21 +267,23 @@ function truncationFlag(truncated: boolean | undefined): TruncationFlag {
   return truncated ? { truncated: true } : {};
 }
 
+/** Which reads were cut short, each marking its derived fields partial. */
+type Truncation = { spans?: boolean | undefined; evaluations?: boolean | undefined };
+
 function computeDataSources(
   spans: SessionSpan[],
   logs: SessionLog[],
   evaluations: SessionEvaluation[],
-  spansTruncated?: boolean,
-  evaluationsTruncated?: boolean,
+  truncated: Truncation,
 ): DataSources {
   const traceIds = new Set<string>();
   for (const s of spans) {
     if (s.traceId) traceIds.add(s.traceId);
   }
   return {
-    traces: { count: spans.length, traceIds: traceIds.size, ...truncationFlag(spansTruncated) },
+    traces: { count: spans.length, traceIds: traceIds.size, ...truncationFlag(truncated.spans) },
     logs: { count: logs.length },
-    evaluations: { count: evaluations.length, ...truncationFlag(evaluationsTruncated) },
+    evaluations: { count: evaluations.length, ...truncationFlag(truncated.evaluations) },
     total: spans.length + logs.length + evaluations.length,
   };
 }
@@ -542,7 +544,7 @@ export function computeSessionDetail<E extends SessionEvaluation, M>(
   // Key order is part of the KV value: the sync's change hash covers it, so reordering rewrites every session key.
   return {
     sessionId,
-    dataSources: computeDataSources(spans, logs, evaluations, spansTruncated, evaluationsTruncated),
+    dataSources: computeDataSources(spans, logs, evaluations, { spans: spansTruncated, evaluations: evaluationsTruncated }),
     timespan: computeTimespan(evaluations, logs),
     sessionInfo: computeSessionInfo(spans),
     tokenTotals,

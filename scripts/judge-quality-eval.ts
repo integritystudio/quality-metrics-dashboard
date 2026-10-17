@@ -372,11 +372,16 @@ export async function createReferenceProvider(
  * name, with hallucination derived as 1 - faithfulness. A failed criterion is
  * absent and its error lands in `errors`.
  */
+/** The reference judge itself: built once, reused for every turn. */
+type ReferenceJudge = {
+  provider: ConsolidatedProvider;
+  stepsCache: EvaluationStepsCache;
+  canSpend: () => boolean;
+};
+
 async function scoreTurnWithReference(
-  provider: ConsolidatedProvider,
+  { provider, stepsCache, canSpend }: ReferenceJudge,
   turn: Turn,
-  stepsCache: EvaluationStepsCache,
-  canSpend: () => boolean,
   errors: string[],
 ): Promise<Record<string, number>> {
   const selection = selectCriteria(turn, new Set());
@@ -482,12 +487,13 @@ async function main(): Promise<void> {
   const provider = await createReferenceProvider(credential.apiKey, usage => addCallUsage(totals, usage));
   const canSpend = (): boolean => tokenUsageCostUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
   const stepsCache: EvaluationStepsCache = new Map();
+  const referenceJudge: ReferenceJudge = { provider, stepsCache, canSpend };
   const turnErrors: TurnErrors[] = [];
 
   const progress = turnProgress('[quality]', matched.length);
   const scored = await processBatch(matched, REFERENCE_CONCURRENCY, NO_BATCH_DELAY_MS, async (turn): Promise<QualityTurn> => {
     const errors: string[] = [];
-    const reference = await scoreTurnWithReference(provider, getOrThrow(byKey, turnKey(turn)), stepsCache, canSpend, errors);
+    const reference = await scoreTurnWithReference(referenceJudge, getOrThrow(byKey, turnKey(turn)), errors);
     if (errors.length > 0) turnErrors.push({ sessionId: turn.sessionId, timestamp: turn.timestamp, errors });
     progress(` (${formatUsd(tokenUsageCostUsd(totals, pricing))} so far)`);
     return { ...turn, reference };

@@ -139,11 +139,11 @@ export type JudgeRunSummary = {
  */
 export function summarizeJudgeRun(
   succeeded: number,
-  byMetric: Record<string, number>,
-  byClass: Record<JudgeFailureClass, number>,
+  failures: { byMetric: Record<string, number>; byClass: Record<JudgeFailureClass, number> },
   spend: JudgeSpend,
   prev?: JudgeRunState,
 ): JudgeRunSummary {
+  const { byMetric, byClass } = failures;
   const failed = sum(Object.values(byMetric));
   const attempted = succeeded + failed;
   const successRate = attempted > 0 ? succeeded / attempted : 0;

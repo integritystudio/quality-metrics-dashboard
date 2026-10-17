@@ -329,7 +329,7 @@ describe('evaluateTurnConsolidated', () => {
   it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
     const calls: RecordedCall[] = [];
     const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: 2, hallucination: 5 }, calls);
-    const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set(), new Map(), DIRECT);
+    const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set(), { criteria: DIRECT });
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
     const schemaCalls = calls.filter(c => c.options?.schema);
@@ -390,8 +390,8 @@ describe('evaluateTurnConsolidated', () => {
     const provider = createFakeProvider({}, calls);
     const cache: EvaluationStepsCache = new Map();
 
-    await evaluateTurnConsolidated(provider, makeTurn(), new Set(), cache);
-    await evaluateTurnConsolidated(provider, makeTurn({ timestamp: '2026-02-09T02:00:00.000Z' }), new Set(), cache);
+    await evaluateTurnConsolidated(provider, makeTurn(), new Set(), { stepsCache: cache });
+    await evaluateTurnConsolidated(provider, makeTurn({ timestamp: '2026-02-09T02:00:00.000Z' }), new Set(), { stepsCache: cache });
 
     const stepsCalls = calls.filter(c => !c.options?.schema);
     expect(stepsCalls).toHaveLength(2);

@@ -313,9 +313,9 @@ async function main(): Promise<void> {
     } else {
       try {
         outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set()));
-        outcome.consolidated = scoresByName(await evaluateTurnConsolidated(consolidated, turn, new Set(), caches.consolidated));
+        outcome.consolidated = scoresByName(await evaluateTurnConsolidated(consolidated, turn, new Set(), { stepsCache: caches.consolidated }));
         outcome.consolidatedDirect = scoresByName(
-          await evaluateTurnConsolidated(direct, turn, new Set(), caches.consolidatedDirect, DIRECT_OPTIONS),
+          await evaluateTurnConsolidated(direct, turn, new Set(), { stepsCache: caches.consolidatedDirect, criteria: DIRECT_OPTIONS }),
         );
         if (turn.toolResults.length > 0 && canSpend()) {
           const hallucination = await scoreReferenceHallucination(reference, turn, caches.reference);

@@ -373,20 +373,25 @@ export function empiricalCDF(value: number, dist: PercentileDistribution): numbe
     .clamp(true)(value);
 }
 
+/** The org's observed distribution for a metric, with the sample it was drawn from. */
+export type ScoreCalibration = {
+  distribution: PercentileDistribution;
+  sampleSize?: number;
+}
+
 export function adaptiveScoreColorBand(
   value: number,
   metric: string,
   direction: ScoreDirection = 'maximize',
-  distribution?: PercentileDistribution,
-  sampleSize?: number,
+  calibration?: ScoreCalibration,
 ): ScoreColorBand {
   const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
   switch (strategy) {
     case 'quantile': {
-      if (!distribution || (sampleSize !== undefined && sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
+      if (!calibration || (calibration.sampleSize !== undefined && calibration.sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
         return scoreColorBand(value, direction);
       }
-      return quantileBandOf(empiricalCDF(value, distribution));
+      return quantileBandOf(empiricalCDF(value, calibration.distribution));
     }
     case 'log': {
       const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
@@ -397,8 +402,8 @@ export function adaptiveScoreColorBand(
     case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
     case 'categorical': return scoreColorBand(value, direction);
     case 'percentile_rank': {
-      if (!distribution) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, distribution), 'maximize');
+      if (!calibration) return scoreColorBand(value, direction);
+      return scoreColorBand(empiricalCDF(value, calibration.distribution), 'maximize');
     }
     case 'uniform':
     default: return scoreColorBand(value, direction);
