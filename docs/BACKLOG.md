@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17. 548 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return` on 2026-10-18. 543 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -70,7 +70,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
 | ~~`max-params` 4~~ (landed) | 11 | 0 | 8 / 3 |
 | ~~`vitest/no-conditional-expect`~~ (landed) | 9 | 0 | 0 / 9 |
-| `@typescript-eslint/strict-void-return` | 5 | 0 | 2 / 3 |
+| ~~`@typescript-eslint/strict-void-return`~~ (landed) | 5 | 0 | 2 / 3 |
 | ~~`regexp/no-super-linear-move`~~ (landed) | 4 | 0 | 1 / 3 |
 | ~~`no-promise-executor-return`~~ (landed) | 3 | 0 | 1 / 2 |
 | ~~`@typescript-eslint/no-unnecessary-type-arguments`~~ (landed) | 3 | 3 | 3 / 0 |
@@ -238,6 +238,19 @@ every one, the executor rule in the source trees only, as configured.
   `promise-function-async` there. All three hits were the same shape: a concise arrow whose body
   *expression* returns a value the executor discards (`setTimeout`'s `Timeout`, `server.listen`'s and
   `server.close`'s `Server`). A block body is the whole fix; `allowVoid` is off here as there.
+
+**`@typescript-eslint/strict-void-return` landed 2026-10-18** at the parent's bare `error`, in
+`typeSafetyRules` (so `src/`, `worker/` and `scripts/`) and `off` in the `TEST_FILES` block, as the
+parent has it. Verified per tree with `eslint --print-config`: `2` for a `src/`, `worker/` and
+`scripts/` file, `0` for a file in each of the three test trees.
+- **The 5-hit count above is stale — it is 40 under typescript-eslint 8.71.2** (measured 2026-10-18,
+  vs 8.4x when the table was written; the rule has widened since). 39 of the 40 are in test trees,
+  all under `TEST_FILES`, so turning it off there — the parent's own choice, because
+  `mockImplementation(() => value)` and `act(() => render(...))` return into a void slot by
+  construction — left exactly one site to fix.
+- **The one source hit was an `&&` guard in a JSX handler**: `onClick={() => hasLinks &&
+  setExpanded(...)}` in `src/components/AgentActivityPanel.tsx` returns `false | void`. A block body
+  with an `if` is the whole fix. The rule offers suggestions only, never an autofix.
 - **`TEST_FILES` now includes `scripts/__tests__/**/*.ts`.** It had matched only `*.test.ts` there,
   despite the block's comment claiming it covers "support modules the src/ test override misses" — so
   the identical executor shape was an error under `scripts/__tests__/support/` and silent under
@@ -406,7 +419,8 @@ in a comment on the type itself.
 - **regexp.** ~~`regexp/no-super-linear-move`~~ (landed 2026-10-17).
 - **TypeScript.** `dot-notation`, `explicit-function-return-type` (warn), `method-signature-style: property`,
   `consistent-type-definitions: type`, `prefer-readonly`, `no-unnecessary-type-arguments`,
-  `no-useless-default-assignment`, `promise-function-async` and `strict-void-return` (source only); from the
+  `no-useless-default-assignment`, `promise-function-async` and ~~`strict-void-return`~~ (source only,
+  landed 2026-10-18); from the
   `strict` preset ~~`unified-signatures`~~ (landed 2026-10-17), `no-useless-constructor`,
   `no-non-null-asserted-nullish-coalescing`.
 - **Option drift.** `no-deprecated` is `error` there, `warn` here; `ban-ts-comment` wants
