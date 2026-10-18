@@ -254,10 +254,22 @@ every one, the executor rule in the source trees only, as configured.
   exists for — and were left alone. The 4 that were a discarded value rather than an idiom now use block
   bodies: `fixture-server.ts`'s `listen` and `close` — plumbing both test servers had spelled out
   separately, and which now comes from one `listenLoopback` helper beside the fixture server, as do
-  their statuses, header name and media types (`http-constants.ts`, where one server had named them
-  privately while the other wrote the same values inline) —
+  their statuses, header name and media types (`src/lib/http-constants.ts`, where one server had named
+  them privately while the other wrote the same values inline) —
   plus `page-harness.tsx`'s never-settling fetch stub and `judge-evaluations.test.ts`'s deferred-LLM
   registration, which returned `Array.prototype.push`'s new length.
+- **`src/lib/http-constants.ts` is now the one status and media-type home for `src/`.** Moving it out of
+  `src/__tests__/support/` put it beside `src/lib/constants.ts`, which already exported an `HttpStatus`
+  const enum with three of the same codes — two competing definitions in one directory. `constants.ts`
+  lost the enum, `http-constants.ts` gained the five codes `src/` uses beyond it (200, 201, 401, 403,
+  504) as a plain object. 16 `src/` files traded 28 private `HTTP_*` constants for imports, 10 more
+  repointed an existing `HttpStatus` import, and 13 inline media-type literals — 10 of them
+  `'Content-Type': 'application/json'` — became `CONTENT_TYPE_HEADER`/`ContentType`. The object is not
+  an enum, so `no-unsafe-enum-comparison` no longer needs `useApiQuery`'s widening alias, but a parameter whose
+  default is one of its members infers the literal type and needs an explicit `: number`
+  (`fake-gateway.ts`'s `json`). Left alone deliberately: `worker/index.ts` and
+  `worker/__tests__/support/http.ts` (the documented twins), and `scripts/`' own 15 constants across
+  5 files, whose codes (204, 429) this file does not carry.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
   regexp hits were `expect(source).toMatch(/^\s*<Route …/m)` in `coverage-tab.test.tsx`: under `m`,
   `\s` matches the line break that `^` is anchored to, so the quantifier can start at every position
