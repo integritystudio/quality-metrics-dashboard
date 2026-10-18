@@ -125,7 +125,7 @@ A staff-only clone of the Flutter customer dashboard (IntegrityLandingPage `lib/
 Run against the deployed worker with a real Auth0 JWT. Requires Doppler dev config.
 
 - **Setup** (`setup.ts`): acquires Auth0 JWT via ROPC (`VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`, `AUTH0_TEST_EMAIL/PASSWORD`), upserts `public.users`, assigns `e2e-dashboard-reader` role
-- **Teardown** (`teardown.ts`): removes `user_roles`, `user_activity`, `public.users` row — Auth0 user is permanent, never deleted
+- **Teardown** (`teardown.ts`): removes `user_roles`, `user_activity`, `public.users` row — Auth0 user is permanent, never deleted. A `23503` on the `users` delete is expected, not a failure: another suite's rows (an `api_keys` row from the provisioning e2e) reference it, `setup.ts` upserts the row anyway, and clearing the referencing rows would revoke credentials this suite never issued
 - **Sentry** (`sentry-reporter.ts`): captures `failed`/`timedOut` tests to Sentry (`SENTRY_DSN` from Doppler); no-ops if unset
 - Auth0 tenant: **dev** (`dev-njjmghdzm23uy0p7.us.auth0.com`), SPA `integritystudio-dashboard-dev` (`w4KMCpBAhSCnKjRlF7bWAycefJGwetya`). The production SPA has no `password` grant.
 - ⚠️ **A misconfigured client fails with the same `access_denied — Unauthorized` as a wrong password.** ROPC needs `token_endpoint_auth_method: "none"` (not `null`), the `password` grant, consent skip on the API and the connection enabled. Browser sign-in to the dev Worker also needs its origin in the client's URLs and refresh token rotation on. Full settings and symptoms: [`docs/auth/user-authentication.md` § Dev tenant configuration](docs/auth/user-authentication.md#dev-tenant-configuration-integration-tests-and-dev-worker).

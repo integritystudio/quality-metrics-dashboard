@@ -305,6 +305,26 @@ every one, the executor rule in the source trees only, as configured.
   with `Timed out waiting 30000ms from config.webServer` — which reads like a broken spec. Export both
   from `doppler secrets get … --plain -c dev` first; `--config dev` gives the documented 36 passed /
   7 skipped, since the data-coupled specs skip on an empty dev window.
+- **The integration suite is 20 passed / 3 failed / 1 skipped on dev, and all three failures predate the
+  constants work** (proved by re-running them against the pre-change spec). None is an ordering or
+  substitution fault:
+  - `GET /api/health returns 200 without auth` fails on the *next* line, `toHaveProperty('status', 'ok')`
+    receiving `no_data` — the empty dev KV, which only `services/e2e/scripts/seed-dev.ts` fills. The
+    chromium specs skip on `hasData: false`; this one has no such guard.
+  - the two `/api/admin/{users,roles}` tests assert 403 "because the test user has a dashboard.read role,
+    not dashboard.admin". That is no longer the gate: `worker/index.ts`'s `requireGlobalAdmin` reads
+    `isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, 'dashboard.admin')`,
+    and `[env.dev]` sets `ORG_SCOPING_ENABLED = "true"`. The dev test user is
+    `71226e17-8969-4699-bb77-836ca2351ecf`, **the first id in `[env.dev]`'s own `STAFF_USER_IDS`**, so 200
+    is correct and the assertions are stale. Fixing them means deciding what a non-staff dev user is, not
+    changing the worker.
+- **Teardown's `users` delete cannot succeed on dev and that is fine.** The row is referenced by an
+  `api_keys` row named `e2e-l1059-provision` (created 2026-09-28, unrevoked, a different org) left by the
+  provisioning e2e, so the delete returns Postgres `23503`. It used to print
+  `users cleanup failed: … violates foreign key constraint "api_keys_user_id_fkey"`, which read as a
+  cleanup bug; the delete order (`user_roles` → `user_activity` → `users`) was already right. Teardown now
+  reports the kept row and says so in its summary line instead of claiming it cleaned the user. Deleting
+  the referencing rows to force it through is the wrong fix — this suite never issued that key.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
   regexp hits were `expect(source).toMatch(/^\s*<Route …/m)` in `coverage-tab.test.tsx`: under `m`,
   `\s` matches the line break that `^` is anchored to, so the quantifier can start at every position
