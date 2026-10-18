@@ -253,6 +253,8 @@ export default tseslint.config(
       // A stray `.only` silently skips the rest of the suite.
       'vitest/no-focused-tests': 'error',
       'vitest/no-identical-title': 'error',
+      // An expect inside a branch may never execute; the test still passes.
+      'vitest/no-conditional-expect': 'error',
       // Fixture lookups are `| undefined` only because of noUncheckedIndexedAccess.
       '@typescript-eslint/restrict-template-expressions': ['error', {
         allowNumber: true,

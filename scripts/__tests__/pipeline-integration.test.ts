@@ -272,15 +272,12 @@ describe('pipeline contract: judge → sync-to-kv', () => {
     // Simulate sync-to-kv canary filter, which now keys on the cohort
     const filtered = evals.filter(ev => ev.cohort !== 'canary');
 
-    // All remaining should be the seed cohort
-    for (const ev of filtered) {
-      expect(ev.cohort).toBe('seed');
-    }
-    // At least some canaries were removed if canary rate ~2% of 100 turns
-    const hasCanaries = evals.some(ev => ev.cohort === 'canary');
-    if (hasCanaries) {
-      expect(filtered.length).toBeLessThan(evals.length);
-    }
+    // Canary assignment is a hash of the session id, so these 100 fixed ids
+    // always produce some — the filter is never exercised on an empty set.
+    const canaryCount = evals.filter(ev => ev.cohort === 'canary').length;
+    expect(canaryCount).toBeGreaterThan(0);
+    expect(filtered).toHaveLength(evals.length - canaryCount);
+    expect(new Set(filtered.map(ev => ev.cohort))).toEqual(new Set(['seed']));
   });
 
   it('deduplication prevents re-scoring already-evaluated turns', () => {

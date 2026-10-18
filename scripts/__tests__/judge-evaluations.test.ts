@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { max, min } from 'd3-array';
 import { writeFileSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -575,23 +576,24 @@ describe('seedEvaluations', () => {
     );
     const { evals } = seedEvaluations(turns, new Set());
 
-    for (const ev of evals) {
-      const turnKey = ev.timestamp.slice(0, 19);
-      if (isCanaryTurn(ev.sessionId, turnKey)) continue; // canaries have different ranges
+    const nonCanary = evals.filter(ev => !isCanaryTurn(ev.sessionId, ev.timestamp.slice(0, 19)));
 
-      if (ev.evaluationName === 'relevance') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70);
-        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
-      }
-      if (ev.evaluationName === 'coherence') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.75);
-        expect(ev.scoreValue).toBeLessThanOrEqual(1.0);
-      }
-      if (ev.evaluationName === 'hallucination') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.0);
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.09);
-      }
-    }
+    // faithfulness and tool_correctness are seeded too; their bands are not pinned here.
+    const bands: Array<[name: string, low: number, high: number]> = [
+      ['relevance', 0.70, 1.0],
+      ['coherence', 0.75, 1.0],
+      ['hallucination', 0.0, 0.09],
+    ];
+
+    const scored = new Set(nonCanary.map(ev => ev.evaluationName));
+    expect(bands.filter(([name]) => !scored.has(name)).map(([name]) => name)).toEqual([]);
+
+    const outOfBand = bands.flatMap(([name, low, high]) =>
+      nonCanary
+        .filter(ev => ev.evaluationName === name && (ev.scoreValue < low || ev.scoreValue > high))
+        .map(ev => `${name}=${ev.scoreValue}`)
+    );
+    expect(outOfBand).toEqual([]);
   });
 
   it('backfill: partial existingKeys (only hallucination) still seeds missing metrics (H1)', () => {
@@ -630,15 +632,15 @@ describe('seedEvaluations', () => {
     const { evals } = seedEvaluations(turns, new Set());
     const canaryEvals = evals.filter(e => e.explanation.includes('(canary)'));
 
-    expect(canaryEvals.length).toBeGreaterThan(0);
-    for (const ev of canaryEvals) {
-      if (ev.evaluationName === 'relevance') {
-        expect(ev.scoreValue).toBeLessThanOrEqual(0.35);
-      }
-      if (ev.evaluationName === 'hallucination') {
-        expect(ev.scoreValue).toBeGreaterThanOrEqual(0.50);
-      }
-    }
+    const canaryScoresFor = (name: string): number[] =>
+      canaryEvals.filter(ev => ev.evaluationName === name).map(ev => ev.scoreValue);
+    const relevance = canaryScoresFor('relevance');
+    const hallucination = canaryScoresFor('hallucination');
+
+    expect(relevance.length).toBeGreaterThan(0);
+    expect(hallucination.length).toBeGreaterThan(0);
+    expect(max(relevance)).toBeLessThanOrEqual(0.35);
+    expect(min(hallucination)).toBeGreaterThanOrEqual(0.50);
   });
 });
 
