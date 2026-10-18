@@ -268,8 +268,28 @@ every one, the executor rule in the source trees only, as configured.
   an enum, so `no-unsafe-enum-comparison` no longer needs `useApiQuery`'s widening alias, but a parameter whose
   default is one of its members infers the literal type and needs an explicit `: number`
   (`fake-gateway.ts`'s `json`). Left alone deliberately: `worker/index.ts` and
-  `worker/__tests__/support/http.ts` (the documented twins), and `scripts/`' own 15 constants across
-  5 files, whose codes (204, 429) this file does not carry.
+  `worker/__tests__/support/http.ts` (the twins), and `scripts/`' own 15 constants across 5 files.
+  Both were folded in afterwards — see the next entry.
+- **The worker twins were convention, not a boundary.** The documented reason for `worker/index.ts`
+  keeping its own `Http` object was that it "cannot safely import this package's constants", and that
+  reason is about *dependencies*, not location: `src/lib/constants.ts` pulls in date-fns and zod,
+  `api-constants.ts` is Node-only, but `http-constants.ts` imports nothing — and the worker already
+  reached it transitively through `postgrest-client.ts`. So the local `Http` (8 members, 75 call sites)
+  and the 12-member twin in `worker/__tests__/support/http.ts` both went; that support module now holds
+  only `jsonResponse`, and its 14 importers take `HttpStatus` from `src/lib/` directly. `scripts/`
+  followed: 15 status constants across 6 files, plus `NDJSON_CONTENT_TYPE` and `JSON_CONTENT_TYPE`,
+  which were the same named-here/inline-there split the test servers had. The shared file grew the five
+  codes those trees needed (204, 413, 429, 502, 503) and a `ContentType.Ndjson`.
+- 🔴 **A bare `'Content-Type'` → `CONTENT_TYPE_HEADER` rewrite in an object-key position type-checks and
+  is wrong.** `headers: { CONTENT_TYPE_HEADER: 'text/html' }` sends a header literally named
+  `CONTENT_TYPE_HEADER`; `HeadersInit` is `Record<string, string>`, so nothing complains. It needs
+  computed-key brackets. Caught in `spa-fallback.test.ts` by reading the diff, not by a failing test —
+  the assertion downstream only checked that the served type was HTML.
+- **`npx wrangler deploy --dry-run --outdir <tmp>` is the only check that proves the worker bundles a new
+  cross-tree import.** Vitest resolves `worker/index.ts` through vite, not through wrangler's esbuild, so
+  a green `npm test` says nothing about the deploy. Never run `npm run build` to check a worker change:
+  it overwrites `dist/` with whatever Auth0 config the current env holds, and the next `wrangler deploy`
+  uploads that `dist/` as the SPA.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
   regexp hits were `expect(source).toMatch(/^\s*<Route …/m)` in `coverage-tab.test.tsx`: under `m`,
   `\s` matches the line break that `^` is anchored to, so the quantifier can start at every position
