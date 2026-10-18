@@ -15,6 +15,7 @@ import { useApiQuery } from '../hooks/useApiQuery.js';
 import { useTrace } from '../hooks/useTrace.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper } from './support/query-harness.js';
 import { defined } from './support/defined.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../lib/http-constants.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
@@ -22,7 +23,6 @@ vi.mock('../contexts/AuthContext.js', () => ({
 
 const SLOW_ID = 'slow';
 const FAST_ID = 'fast';
-const HTTP_OK = 200;
 
 /** Hold requests for {@link SLOW_ID} open until aborted; answer every other request at once. */
 function stubSlowFirstFetch() {
@@ -30,7 +30,7 @@ function stubSlowFirstFetch() {
     if (!url.endsWith(SLOW_ID)) {
       return Promise.resolve(new Response(
         JSON.stringify({ traceId: FAST_ID, spans: [], evaluations: [] }),
-        { status: HTTP_OK, headers: { 'Content-Type': 'application/json' } },
+        { status: HttpStatus.Ok, headers: { [CONTENT_TYPE_HEADER]: ContentType.Json } },
       ));
     }
     return new Promise<Response>((_resolve, reject) => {

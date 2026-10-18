@@ -12,6 +12,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
+import { HttpStatus } from '../lib/http-constants.js';
 import {
   makeQueryWrapper,
   stubFetch,
@@ -20,9 +21,6 @@ import {
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve('test-access-token') }),
 }));
-
-const HTTP_NOT_FOUND = 404;
-const HTTP_INTERNAL_SERVER_ERROR = 500;
 
 /**
  * A tiny typed hook that exercises `onNotFound` in isolation.
@@ -47,7 +45,7 @@ afterEach(() => {
 
 describe('useApiQuery onNotFound', () => {
   it('resolves as data when onNotFound matches a 404 body', async () => {
-    stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HTTP_NOT_FOUND });
+    stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HttpStatus.NotFound });
 
     const { result } = renderHook(
       () => useTestQuery((body) => {
@@ -65,7 +63,7 @@ describe('useApiQuery onNotFound', () => {
   });
 
   it('falls through to an error when onNotFound returns undefined for a 404', async () => {
-    stubFetch({ error: 'some other reason' }, { status: HTTP_NOT_FOUND });
+    stubFetch({ error: 'some other reason' }, { status: HttpStatus.NotFound });
 
     const { result } = renderHook(
       () => useTestQuery(() => undefined),
@@ -74,12 +72,12 @@ describe('useApiQuery onNotFound', () => {
 
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
-    expect(result.current.error?.message).toContain(`API error: ${HTTP_NOT_FOUND}`);
+    expect(result.current.error?.message).toContain(`API error: ${HttpStatus.NotFound}`);
     expect(result.current.data).toBeUndefined();
   });
 
   it('surfaces a 404 as an error when no onNotFound is provided', async () => {
-    stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HTTP_NOT_FOUND });
+    stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HttpStatus.NotFound });
 
     const { result } = renderHook(
       () => useTestQuery(undefined),
@@ -88,12 +86,12 @@ describe('useApiQuery onNotFound', () => {
 
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
-    expect(result.current.error?.message).toContain(`API error: ${HTTP_NOT_FOUND}`);
+    expect(result.current.error?.message).toContain(`API error: ${HttpStatus.NotFound}`);
     expect(result.current.data).toBeUndefined();
   });
 
   it('does not invoke onNotFound for non-404 errors', async () => {
-    stubFetch({ error: 'crash' }, { status: HTTP_INTERNAL_SERVER_ERROR });
+    stubFetch({ error: 'crash' }, { status: HttpStatus.InternalServerError });
     const onNotFound = vi.fn(() => undefined as { status: string } | undefined);
 
     const { result } = renderHook(
@@ -104,12 +102,12 @@ describe('useApiQuery onNotFound', () => {
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
     expect(onNotFound).not.toHaveBeenCalled();
-    expect(result.current.error?.message).toContain(`API error: ${HTTP_INTERNAL_SERVER_ERROR}`);
+    expect(result.current.error?.message).toContain(`API error: ${HttpStatus.InternalServerError}`);
   });
 
   it('passes parsed JSON to onNotFound when the body is valid JSON', async () => {
     const body = { error: WORKER_ERR_NO_DATA, extra: 'field' };
-    stubFetch(body, { status: HTTP_NOT_FOUND });
+    stubFetch(body, { status: HttpStatus.NotFound });
     let captured: unknown;
     const onNotFound = (b: unknown): { status: string } | undefined => {
       captured = b;

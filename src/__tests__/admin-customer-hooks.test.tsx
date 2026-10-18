@@ -34,6 +34,7 @@ import { TEST_ACCESS_TOKEN, makeQueryWrapper } from './support/query-harness.js'
 import { startFakeGateway } from './support/fake-gateway.js';
 import { BILLING_ACTIVE, ORG_A, ORG_B, QUOTA_GROWTH, QUOTA_UNINITIALIZED, USAGE_SUMMARY } from './support/admin-customer-fixtures.js';
 import { assertDefined, defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 /** A staff session with an active org, so the X-Org-Id choke point has a value it could send. */
 const STAFF_SESSION: AppSession = {
@@ -53,11 +54,6 @@ vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ session: STAFF_SESSION, isLoading: false, getAccessToken }),
 }));
 
-const HTTP_UNAUTHORIZED = 401;
-const HTTP_FORBIDDEN = 403;
-const HTTP_NOT_FOUND = 404;
-const HTTP_SERVER_ERROR = 500;
-const HTTP_GATEWAY_TIMEOUT = 504;
 const SHORT_TIMEOUT_MS = 1;
 const LONG_TIMEOUT_MS = 60_000;
 
@@ -152,9 +148,9 @@ describe('what the client refuses to send', () => {
 
 describe('error wording (DashboardService)', () => {
   it.each([
-    [HTTP_UNAUTHORIZED, CUSTOMER_VIEW.errors.auth],
-    [HTTP_FORBIDDEN, CUSTOMER_VIEW.errors.forbidden],
-    [HTTP_NOT_FOUND, CUSTOMER_VIEW.errors.unexpected],
+    [HttpStatus.Unauthorized, CUSTOMER_VIEW.errors.auth],
+    [HttpStatus.Forbidden, CUSTOMER_VIEW.errors.forbidden],
+    [HttpStatus.NotFound, CUSTOMER_VIEW.errors.unexpected],
   ])('a %i is reported once, without a retry', async (status, message) => {
     const gateway = startFakeGateway({});
     gateway.control.refuse = { status };
@@ -190,7 +186,7 @@ describe('error wording (DashboardService)', () => {
 
   it('a 500 is retried twice, then reported as a server error', async () => {
     const gateway = startFakeGateway({});
-    gateway.control.refuse = { status: HTTP_SERVER_ERROR };
+    gateway.control.refuse = { status: HttpStatus.InternalServerError };
 
     const { result } = renderHook(() => useAdminBillingStatus(ORG_A.id), makeWrapper());
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
@@ -200,11 +196,11 @@ describe('error wording (DashboardService)', () => {
   });
 
   it('classifies 500 and 504 as retried server errors and 401/403/404 as final', () => {
-    expect(isRetryableGatewayError(gatewayErrorForStatus(HTTP_SERVER_ERROR))).toBe(true);
-    expect(isRetryableGatewayError(gatewayErrorForStatus(HTTP_GATEWAY_TIMEOUT))).toBe(true);
-    expect(isRetryableGatewayError(gatewayErrorForStatus(HTTP_UNAUTHORIZED))).toBe(false);
-    expect(isRetryableGatewayError(gatewayErrorForStatus(HTTP_FORBIDDEN))).toBe(false);
-    expect(isRetryableGatewayError(gatewayErrorForStatus(HTTP_NOT_FOUND))).toBe(false);
+    expect(isRetryableGatewayError(gatewayErrorForStatus(HttpStatus.InternalServerError))).toBe(true);
+    expect(isRetryableGatewayError(gatewayErrorForStatus(HttpStatus.GatewayTimeout))).toBe(true);
+    expect(isRetryableGatewayError(gatewayErrorForStatus(HttpStatus.Unauthorized))).toBe(false);
+    expect(isRetryableGatewayError(gatewayErrorForStatus(HttpStatus.Forbidden))).toBe(false);
+    expect(isRetryableGatewayError(gatewayErrorForStatus(HttpStatus.NotFound))).toBe(false);
     expect(isRetryableGatewayError(new GatewayError('network'))).toBe(true);
     expect(isRetryableGatewayError(new GatewayError('timeout'))).toBe(true);
     expect(isRetryableGatewayError(new Error('other'))).toBe(false);

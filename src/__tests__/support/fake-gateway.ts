@@ -11,6 +11,7 @@ import { vi } from 'vitest';
 import { API_GATEWAY_URL } from '../../lib/gateway.js';
 import { headersOf } from './query-harness.js';
 import { defined } from './defined.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../lib/http-constants.js';
 
 export type GatewayRoute = 'directory' | 'billing' | 'usage' | 'quota' | 'entitlements';
 export type GatewayRefusal = { status: number; body?: unknown } | 'network-error';
@@ -24,7 +25,6 @@ export type GatewayRequest = {
 
 type Responders = Partial<Record<GatewayRoute, (orgId: string) => unknown>>;
 
-const HTTP_OK = 200;
 const SWITCH_PATH = '/api/org/switch';
 const ADMIN_ORGS = '/v1/admin/orgs';
 
@@ -36,8 +36,8 @@ const ROUTE_PATTERNS: Array<[GatewayRoute, RegExp]> = [
   ['entitlements', /^\/v1\/admin\/orgs\/([^/]+)\/entitlements$/],
 ];
 
-function json(body: unknown, status = HTTP_OK): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+function json(body: unknown, status: number = HttpStatus.Ok): Response {
+  return new Response(JSON.stringify(body), { status, headers: { [CONTENT_TYPE_HEADER]: ContentType.Json } });
 }
 
 export function startFakeGateway(responders: Responders) {

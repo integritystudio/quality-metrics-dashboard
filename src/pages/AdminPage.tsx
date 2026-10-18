@@ -10,6 +10,7 @@ import { PageShell } from '../components/PageShell.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 import { RotateKeyResponseSchema, type AdminUser, type AdminRole, type AdminMember, type OrgMembershipRoleValue, type ApiKey } from '../lib/validation/auth-schemas.js';
+import { CONTENT_TYPE_HEADER, ContentType } from '../lib/http-constants.js';
 
 // The key was rotated, so the old one no longer works, but the response carried no token to show.
 const ERR_ROTATE_NO_TOKEN = 'Key rotated, but no new token was returned. Rotate it again to get one.';
@@ -92,7 +93,7 @@ function useAdminFetch() {
     const token = await getAccessToken();
     return apiFetch(path, token, activeOrgId, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
   };

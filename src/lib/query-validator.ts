@@ -1,7 +1,6 @@
 import { validator } from 'hono/validator';
 import type { z } from 'zod';
-
-const HTTP_BAD_REQUEST = 400;
+import { HttpStatus } from './http-constants.js';
 
 /**
  * Hono query validator shared by the Worker and the dev API server: answers 400 with the
@@ -25,7 +24,7 @@ export function queryValidator<T extends z.ZodType>(
     const result = schema.safeParse(firstValues);
     if (!result.success) {
       const field = String(result.error.issues[0]?.path[0] ?? '');
-      return c.json({ error: fieldErrors[field] ?? fallbackError }, HTTP_BAD_REQUEST);
+      return c.json({ error: fieldErrors[field] ?? fallbackError }, HttpStatus.BadRequest);
     }
     return result.data;
   });

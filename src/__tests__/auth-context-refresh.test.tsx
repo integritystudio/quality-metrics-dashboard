@@ -13,6 +13,7 @@ import { ORG_ID_HEADER } from '../lib/worker-contract.js';
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -40,9 +41,6 @@ vi.mock('../lib/auth0.js', () => ({
 const ACCESS_TOKEN = 'mock-access-token';
 const ME_URL = '/api/me';
 const ACTIVITY_URL = '/api/activity';
-const HTTP_OK = 200;
-const HTTP_CREATED = 201;
-const HTTP_UNAUTHORIZED = 401;
 const LOGIN_ACTIVITY = 'login';
 const NETWORK_ERROR_MESSAGE = 'Failed to fetch';
 
@@ -100,9 +98,9 @@ describe('AuthContext: authenticated state', () => {
 
     const fetchSpy = vi.fn().mockImplementation((url: string) => {
       if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: HTTP_OK }));
+        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: HttpStatus.Ok }));
       }
-      return Promise.resolve(new Response(null, { status: HTTP_OK }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     });
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -148,9 +146,9 @@ describe('AuthContext: authenticated state', () => {
 
     const fetchSpy = vi.fn().mockImplementation((url: string) => {
       if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HTTP_UNAUTHORIZED }));
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HttpStatus.Unauthorized }));
       }
-      return Promise.resolve(new Response(null, { status: HTTP_OK }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     });
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -165,13 +163,13 @@ describe('AuthContext: authenticated state', () => {
 
 describe('AuthContext: login activity', () => {
   function makeAuthenticatedFetch(activityResponse: () => Promise<Response> = () =>
-    Promise.resolve(new Response(null, { status: HTTP_CREATED }))) {
+    Promise.resolve(new Response(null, { status: HttpStatus.Created }))) {
     return vi.fn().mockImplementation((url: string) => {
       if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: HTTP_OK }));
+        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: HttpStatus.Ok }));
       }
       if (url === ACTIVITY_URL) return activityResponse();
-      return Promise.resolve(new Response(null, { status: HTTP_OK }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     });
   }
 
@@ -238,9 +236,9 @@ describe('AuthContext: login activity', () => {
     mockIsAuthenticated = true;
     const fetchSpy = vi.fn().mockImplementation((url: string) => {
       if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HTTP_UNAUTHORIZED }));
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HttpStatus.Unauthorized }));
       }
-      return Promise.resolve(new Response(null, { status: HTTP_OK }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     });
     vi.stubGlobal('fetch', fetchSpy);
 
@@ -262,9 +260,9 @@ describe('AuthContext: signOut', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: HTTP_OK }));
+        return Promise.resolve(new Response(JSON.stringify(makeMeResponse('user@test.com')), { status: HttpStatus.Ok }));
       }
-      return Promise.resolve(new Response(null, { status: HTTP_OK }));
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
     function SignOutTrigger() {

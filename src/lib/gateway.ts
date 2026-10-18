@@ -9,6 +9,7 @@
  * gateway's audience, so there is no second login.
  */
 import { CUSTOMER_VIEW } from './admin-customer-strings.js';
+import { HttpStatus } from './http-constants.js';
 
 /** Production api-gateway; the build sets VITE_API_GATEWAY_URL to point elsewhere (dev: api-gateway-dev). */
 export const DEFAULT_API_GATEWAY_URL = 'https://api.integritystudio.dev';
@@ -72,16 +73,14 @@ export class GatewayError extends Error {
   }
 }
 
-const HTTP_UNAUTHORIZED = 401;
-const HTTP_FORBIDDEN = 403;
 /** The two statuses `DashboardService` retries before reporting a server error. */
 const HTTP_RETRIED_STATUSES: ReadonlySet<number> = new Set([500, 504]);
 const TIMEOUT_ERROR_NAME = 'TimeoutError';
 
 /** `_sanitizeReadError` plus the retried-status branch: 401, 403, 500/504, and the rest as unexpected. */
 export function gatewayErrorForStatus(status: number): GatewayError {
-  if (status === HTTP_UNAUTHORIZED) return new GatewayError('auth', status);
-  if (status === HTTP_FORBIDDEN) return new GatewayError('forbidden', status);
+  if (status === HttpStatus.Unauthorized) return new GatewayError('auth', status);
+  if (status === HttpStatus.Forbidden) return new GatewayError('forbidden', status);
   if (HTTP_RETRIED_STATUSES.has(status)) return new GatewayError('server', status);
   return new GatewayError('unexpected', status);
 }

@@ -20,6 +20,7 @@ import {
   renderPage, stubPendingFetch,
 } from './support/page-harness.js';
 import { defined } from './support/defined.js';
+import { CONTENT_TYPE_HEADER, ContentType } from '../lib/http-constants.js';
 
 // jsdom + React cold-start can exceed the default 5000ms on the first render test.
 const TEST_TIMEOUT_MS = 30_000;
@@ -66,7 +67,7 @@ function makeResponse(matrix: CoverageMatrix = makeMatrix()): CoverageResponse {
 /** Answer each coverage URL with its own matrix, so a requery shows which one the page rendered. */
 function stubCoverageByUrl(bodies: Record<string, CoverageResponse>) {
   const fetchSpy = vi.fn((url: string, _init?: RequestInit) =>
-    Promise.resolve(new Response(JSON.stringify(bodies[url]), { headers: { 'Content-Type': 'application/json' } })),
+    Promise.resolve(new Response(JSON.stringify(bodies[url]), { headers: { [CONTENT_TYPE_HEADER]: ContentType.Json } })),
   );
   vi.stubGlobal('fetch', fetchSpy);
   return fetchSpy;

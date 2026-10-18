@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { ContentType } from '../lib/http-constants.js';
 import {
   OWN_USER_PATH,
   SUPABASE_API_KEY_HEADER,
@@ -52,7 +53,7 @@ describe('postgrestFetch', () => {
     expect(init.headers).toEqual({
       [SUPABASE_API_KEY_HEADER]: ANON_KEY,
       Authorization: `Bearer ${ID_TOKEN}`,
-      Accept: 'application/json',
+      Accept: ContentType.Json,
     });
     expect(init.signal).toBe(controller.signal);
   });

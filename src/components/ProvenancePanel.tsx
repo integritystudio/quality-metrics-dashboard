@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import { formatScore } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
 import { timestampToMs } from '../lib/timestamps.js';
+import { ContentType } from '../lib/http-constants.js';
 
 type EvaluatorTypeCounts = {
   rule: number;
@@ -51,7 +52,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
       scoreUnit,
       agentName,
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: ContentType.Json });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

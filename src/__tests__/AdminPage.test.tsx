@@ -18,6 +18,7 @@ import type { AdminMember, AdminRole, AdminUser, ApiKey, OrgMembershipRoleValue 
 import type { AppSession, DashboardRole } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf, makeQueryWrapper } from './support/query-harness.js';
 import { defined } from './support/defined.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../lib/http-constants.js';
 
 let currentSession: AppSession | null = null;
 const getAccessToken = () => Promise.resolve(TEST_ACCESS_TOKEN);
@@ -26,8 +27,6 @@ vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ session: currentSession, getAccessToken }),
 }));
 
-const HTTP_OK = 200;
-const HTTP_FORBIDDEN = 403;
 const ORG_ID = 'c0000000-0000-4000-8000-00000000000c';
 
 const VIEWER: AdminRole = { id: 'e0000000-0000-4000-8000-000000000001', name: 'viewer', permissions: [] };
@@ -97,8 +96,8 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
   const control: { refuse: Refusal | null } = { refuse: null };
 
   const json = (body: unknown) => new Response(JSON.stringify(body), {
-    status: HTTP_OK,
-    headers: { 'Content-Type': 'application/json' },
+    status: HttpStatus.Ok,
+    headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
   });
 
   const routes: Array<{ method: string; pattern: RegExp; handle: (ids: string[], body: unknown) => unknown }> = [
@@ -236,7 +235,7 @@ describe('AdminPage — user management (no active org)', () => {
     });
     expect(defined(request).headers).toMatchObject({
       Authorization: `Bearer ${TEST_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
+      [CONTENT_TYPE_HEADER]: ContentType.Json,
     });
     expect(defined(request).headers).not.toHaveProperty(ORG_ID_HEADER);
   });
@@ -426,7 +425,7 @@ describe('AdminPage — refused and failed mutations', () => {
   }
 
   it.each(MUTATIONS)('shows the worker\'s error text when $name is refused', async (mutation) => {
-    await renderWithRefusal(mutation, { status: HTTP_FORBIDDEN, body: 'Forbidden: not your org' });
+    await renderWithRefusal(mutation, { status: HttpStatus.Forbidden, body: 'Forbidden: not your org' });
 
     mutation.perform();
 
@@ -434,7 +433,7 @@ describe('AdminPage — refused and failed mutations', () => {
   });
 
   it.each(MUTATIONS)('shows "$defaultError" when $name is refused with an empty body', async (mutation) => {
-    await renderWithRefusal(mutation, { status: HTTP_FORBIDDEN, body: '' });
+    await renderWithRefusal(mutation, { status: HttpStatus.Forbidden, body: '' });
 
     mutation.perform();
 
@@ -592,7 +591,7 @@ describe('AdminPage — API keys section (org mode)', () => {
 
   it('shows an error when rotation is refused by the worker', async () => {
     const worker = startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
-    worker.control.refuse = { status: HTTP_FORBIDDEN, body: 'Key not found in active org' };
+    worker.control.refuse = { status: HttpStatus.Forbidden, body: 'Key not found in active org' };
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderAdminPage({ orgRole: 'admin' });
 
@@ -604,7 +603,7 @@ describe('AdminPage — API keys section (org mode)', () => {
 
   it('shows a fallback error when rotation is refused with empty body', async () => {
     const worker = startFakeWorker({ members: [BOB], keys: [TEST_KEY] });
-    worker.control.refuse = { status: HTTP_FORBIDDEN, body: '' };
+    worker.control.refuse = { status: HttpStatus.Forbidden, body: '' };
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderAdminPage({ orgRole: 'admin' });
 

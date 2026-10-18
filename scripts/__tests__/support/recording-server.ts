@@ -12,7 +12,7 @@ import type { Http2ServerRequest } from 'node:http2';
 import type { TLSSocket } from 'node:tls';
 import { ALPN_NONE, startAlpnServer } from '../../../../src/test-helpers/alpn-server.js';
 import { listenLoopback } from '../../../src/__tests__/support/listen-loopback.js';
-import { CONTENT_TYPE_HEADER, ContentType, Http } from '../../../src/__tests__/support/http-constants.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../../src/lib/http-constants.js';
 
 const EMPTY_JSON_BODY = '{}';
 /**
@@ -55,7 +55,7 @@ export type RecordingServer = {
 }
 
 const answerOk: Responder = () => ({
-  status: Http.Ok,
+  status: HttpStatus.Ok,
   headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
   body: EMPTY_JSON_BODY,
 });
@@ -66,7 +66,7 @@ const answerOk: Responder = () => ({
  */
 function replyToResponderError(err: unknown): HttpReply {
   return {
-    status: Http.InternalServerError,
+    status: HttpStatus.InternalServerError,
     headers: { [CONTENT_TYPE_HEADER]: ContentType.Text, 'x-should-retry': 'false' },
     body: `recording-server responder threw: ${err instanceof Error ? err.stack ?? err.message : String(err)}`,
   };

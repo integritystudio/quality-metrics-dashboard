@@ -2,13 +2,6 @@ import { subMilliseconds } from 'date-fns';
 import { z } from 'zod';
 import { DEFAULT_PERIOD, PeriodEnum, type Period } from './periods.js';
 
-/** HTTP status codes used in API error responses. */
-export const enum HttpStatus {
-  BadRequest = 400,
-  NotFound = 404,
-  InternalServerError = 500,
-}
-
 /** Reusable error messages for API and response validation. */
 export const enum ErrorMessage {
   InvalidResponseShape = 'Invalid response shape',

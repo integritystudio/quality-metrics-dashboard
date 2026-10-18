@@ -14,6 +14,7 @@ import { RolePage } from '../App.js';
 import { WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 import type { RoleViewType } from '../types.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper, stubFetch } from './support/query-harness.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 const ROLES: RoleViewType[] = ['executive', 'operator', 'auditor'];
 
@@ -24,8 +25,6 @@ vi.mock('../contexts/AuthContext.js', () => ({
     isLoading: false,
   }),
 }));
-
-const HTTP_NOT_FOUND = 404;
 
 function renderRolePage(role: RoleViewType) {
   return render(<RolePage role={role} period="30d" />, { wrapper: makeQueryWrapper().wrapper });
@@ -38,7 +37,7 @@ afterEach(() => {
 
 describe('RolePage for an org with no synced data', () => {
   it.each(ROLES)('shows the no-data state on the %s view', async (role) => {
-    stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HTTP_NOT_FOUND });
+    stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HttpStatus.NotFound });
 
     renderRolePage(role);
 

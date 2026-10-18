@@ -10,8 +10,8 @@ import { vi } from 'vitest';
 import { Router } from 'wouter';
 import { memoryLocation } from 'wouter/memory-location';
 import type { ReactNode } from 'react';
-import { HttpStatus } from '../../lib/constants.js';
 import { makeQueryWrapper } from './query-harness.js';
+import { HttpStatus } from '../../lib/http-constants.js';
 
 /** The heading `PageShell` renders over a failed query's message. */
 export const PAGE_SHELL_ERROR_HEADING = 'Failed to load';

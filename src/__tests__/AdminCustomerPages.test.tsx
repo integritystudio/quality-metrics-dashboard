@@ -27,6 +27,7 @@ import {
   QUOTA_GROWTH, QUOTA_UNINITIALIZED, USAGE_EMPTY, USAGE_SUMMARY,
 } from './support/admin-customer-fixtures.js';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let currentSession: AppSession | null = null;
 const getAccessToken = () => Promise.resolve(TEST_ACCESS_TOKEN);
@@ -34,8 +35,6 @@ const getAccessToken = () => Promise.resolve(TEST_ACCESS_TOKEN);
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ session: currentSession, isLoading: false, getAccessToken }),
 }));
-
-const HTTP_FORBIDDEN = 403;
 
 const STAFF_SESSION: AppSession = {
   email: 'staff@example.com',
@@ -138,7 +137,7 @@ describe('AdminCustomerHubPage (ADMIN-CV-HUB)', () => {
 
   it('shows the error with Try again, and loads after a retry', async () => {
     const gateway = startFakeGateway(ALL_FIXTURES);
-    gateway.control.refuse = { status: HTTP_FORBIDDEN };
+    gateway.control.refuse = { status: HttpStatus.Forbidden };
     renderAt(routes.adminCustomers(), <AdminCustomerHubPage />);
 
     expect(await screen.findByText(CUSTOMER_VIEW.errors.forbidden)).toBeInTheDocument();
@@ -275,7 +274,7 @@ describe('AdminCustomerBillingPage (ADMIN-CV-BILLING)', () => {
 
   it('replaces the card with the error and Try again on a failure', async () => {
     const gateway = startFakeGateway(ALL_FIXTURES);
-    gateway.control.refuse = { status: HTTP_FORBIDDEN };
+    gateway.control.refuse = { status: HttpStatus.Forbidden };
     gateway.control.refuseRoute = 'billing';
     renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
 
@@ -347,7 +346,7 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
     renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
     await screen.findByText(CUSTOMER_VIEW.usage.since('2026-10-01'));
 
-    gateway.control.refuse = { status: HTTP_FORBIDDEN };
+    gateway.control.refuse = { status: HttpStatus.Forbidden };
     gateway.control.refuseRoute = 'usage';
     fireEvent.click(screen.getByRole('button', { name: CUSTOMER_VIEW.common.refresh }));
     await waitFor(() => { expect(gateway.requestsFor('usage').length).toBeGreaterThan(1); });
@@ -357,7 +356,7 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
     cleanup();
 
     const failing = startFakeGateway(ALL_FIXTURES);
-    failing.control.refuse = { status: HTTP_FORBIDDEN };
+    failing.control.refuse = { status: HttpStatus.Forbidden };
     failing.control.refuseRoute = 'usage';
     renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
     expect(await screen.findByRole('alert')).toHaveTextContent(CUSTOMER_VIEW.errors.forbidden);

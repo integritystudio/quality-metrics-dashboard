@@ -2,10 +2,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getQualityMetric } from '../parent/quality-metrics.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PeriodSchema, PERIOD_MS, ErrorMessage, HttpStatus, DEFAULT_TREND_BUCKETS } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, ErrorMessage, DEFAULT_TREND_BUCKETS } from '../../lib/constants.js';
 import { PARAM_METRIC_NAME_RE, isValidParam } from '../api-constants.js';
 import { validQuery, handleRouteError } from '../route-errors.js';
 import { computeTrend } from '../aggregates/trend.js';
+import { HttpStatus } from '../../lib/http-constants.js';
 
 const BucketsSchema = z.coerce.number().int().min(3).max(30).default(DEFAULT_TREND_BUCKETS);
 

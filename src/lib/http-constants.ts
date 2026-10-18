@@ -1,16 +1,20 @@
 /**
- * Statuses, header names and media types the local test servers answer with,
- * spelled once so `fixture-server` and `recording-server` cannot drift: one had
- * named them privately while the other wrote the same values inline.
+ * HTTP statuses, header names and media types, spelled once for everything that
+ * can reach `src/lib/` — frontend, the Hono API server and both test trees — so
+ * a server and the code reading it cannot drift apart.
  *
- * The status names match `worker/index.ts`'s own `Http` object, which the
- * worker keeps local because it cannot safely import this package's constants.
+ * Two deliberate twins live outside this file's reach: `worker/index.ts` and its
+ * test support module, which cannot safely import this package's constants.
  */
-export const Http = {
+export const HttpStatus = {
   Ok: 200,
+  Created: 201,
   BadRequest: 400,
+  Unauthorized: 401,
+  Forbidden: 403,
   NotFound: 404,
   InternalServerError: 500,
+  GatewayTimeout: 504,
 } as const satisfies Record<string, number>;
 
 /**

@@ -9,8 +9,7 @@ import type { ErrorResponse } from './support/api-responses.js';
 // producer's contract — imported from the one place it is declared.
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import { defined } from './support/defined.js';
-
-const HTTP_OK = 200;
+import { HttpStatus } from '../lib/http-constants.js';
 
 // KV mock helper
 
@@ -117,7 +116,6 @@ describe('GET /api/calibration', () => {
  * there, and — just as importantly — what it deliberately lets through.
  */
 describe('GET /api/calibration: malformed KV payload', () => {
-  const HTTP_SERVER_ERROR = 500;
 
   it('returns 500 when a distribution is missing a percentile', async () => {
     const data = makeCalibrationData();
@@ -128,7 +126,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
       'meta:calibration': { ...data, distributions: { relevance: withoutP50 } },
     });
 
-    expect(res.status).toBe(HTTP_SERVER_ERROR);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
     expect(await res.json() as ErrorResponse).toHaveProperty('error');
   });
 
@@ -136,7 +134,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
     const { sampleCounts: _counts, ...withoutCounts } = makeCalibrationData();
     const res = await requestCalibration({ 'meta:calibration': withoutCounts });
 
-    expect(res.status).toBe(HTTP_SERVER_ERROR);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 
   it('returns 500 when a percentile is a string rather than a number', async () => {
@@ -148,7 +146,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
       },
     });
 
-    expect(res.status).toBe(HTTP_SERVER_ERROR);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 
   it('accepts percentiles outside 0–1, which unbounded metrics legitimately produce', async () => {
@@ -162,7 +160,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
       },
     });
 
-    expect(res.status).toBe(HTTP_OK);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as CalibrationResponse;
     expect(body.distributions.evaluation_latency?.p90).toBe(1_500);
   });
@@ -172,7 +170,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
       'meta:calibration': { ...makeCalibrationData(), futureField: { anything: true } },
     });
 
-    expect(res.status).toBe(HTTP_OK);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).not.toHaveProperty('futureField');
   });
 });

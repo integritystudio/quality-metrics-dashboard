@@ -24,6 +24,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
 import type { ReactNode } from 'react';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../lib/http-constants.js';
 
 /** The token the per-file `useAuth` mock must resolve; assert it on the header. */
 export const TEST_ACCESS_TOKEN = 'test-access-token';
@@ -51,17 +52,15 @@ export function makeQueryWrapper() {
   return { wrapper: QueryWrapper, queryClient };
 }
 
-const HTTP_OK = 200;
-
 /**
  * Replace `globalThis.fetch` with a stub returning one JSON response, and return
  * the spy so tests can assert on the URL and headers the hook actually sent.
  */
-export function stubFetch(body: unknown, { status = HTTP_OK }: { status?: number } = {}) {
+export function stubFetch(body: unknown, { status = HttpStatus.Ok }: { status?: number } = {}) {
   const fetchSpy = vi.fn((_url: string, _init?: RequestInit) =>
     Promise.resolve(new Response(JSON.stringify(body), {
       status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
     })),
   );
   vi.stubGlobal('fetch', fetchSpy);

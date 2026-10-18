@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { HttpStatus, PERIOD_MS, ErrorMessage } from '../../lib/constants.js';
+import { PERIOD_MS, ErrorMessage } from '../../lib/constants.js';
 import {
   PARAM_ID_RE,
   isValidParam,
@@ -21,6 +21,7 @@ import {
 import { MAX_QUERY_LIMIT } from '../parent/constants.js';
 import { handleRouteError, validQuery } from '../route-errors.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
+import { HttpStatus } from '../../lib/http-constants.js';
 
 export const sessionRoutes = new Hono();
 sessionRoutes.onError(handleRouteError);

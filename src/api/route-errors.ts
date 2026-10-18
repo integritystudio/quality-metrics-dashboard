@@ -1,8 +1,9 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { sanitizeErrorForResponse } from './parent/error-sanitizer.js';
-import { ErrorMessage, HttpStatus, PeriodSchema } from '../lib/constants.js';
+import { ErrorMessage, PeriodSchema } from '../lib/constants.js';
 import { queryValidator } from '../lib/query-validator.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 /** The 400 message for each query field a route validates. */
 const QUERY_FIELD_ERRORS: Readonly<Record<string, string>> = {

@@ -23,12 +23,11 @@ import {
   headersOf,
 } from './support/query-harness.js';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
 }));
-
-const HTTP_NOT_FOUND = 404;
 
 function makeCalibrationResponse(overrides: Partial<CalibrationResponse> = {}): CalibrationResponse {
   return {
@@ -87,7 +86,7 @@ describe('useCalibration', () => {
   // A new org has no calibration synced; the worker says so with a 404, and that is
   // no data, not a failure to retry.
   it('reads the worker\'s no-calibration 404 as no data: no error, no retry', async () => {
-    const fetchSpy = stubFetch({ error: WORKER_ERR_NO_CALIBRATION_DATA }, { status: HTTP_NOT_FOUND });
+    const fetchSpy = stubFetch({ error: WORKER_ERR_NO_CALIBRATION_DATA }, { status: HttpStatus.NotFound });
 
     const { result } = renderHook(() => useCalibration(), makeQueryWrapper());
     await waitFor(() => { expect(result.current.isSuccess).toBe(true); });
@@ -98,12 +97,12 @@ describe('useCalibration', () => {
   });
 
   it('surfaces any other 404 as an error, leaving data undefined', async () => {
-    const fetchSpy = stubFetch({ error: 'some other reason' }, { status: HTTP_NOT_FOUND });
+    const fetchSpy = stubFetch({ error: 'some other reason' }, { status: HttpStatus.NotFound });
 
     const { result } = renderHook(() => useCalibration(), makeQueryWrapper());
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
-    expect(result.current.error?.message).toContain(`API error: ${HTTP_NOT_FOUND}`);
+    expect(result.current.error?.message).toContain(`API error: ${HttpStatus.NotFound}`);
     expect(result.current.data).toBeUndefined();
     // The hook passes retry:1 — the initial attempt plus exactly one retry.
     expect(fetchSpy).toHaveBeenCalledTimes(2);

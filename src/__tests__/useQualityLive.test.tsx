@@ -19,13 +19,11 @@ import {
   headersOf,
 } from './support/query-harness.js';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN) }),
 }));
-
-const HTTP_UNAUTHORIZED = 401;
-const HTTP_SERVER_ERROR = 500;
 
 function makeQualityResponse(overrides: Partial<QualityLiveData> = {}): QualityLiveData {
   return {
@@ -96,24 +94,24 @@ describe('useQualityLive', () => {
   it('surfaces a 401 as an Error naming the status, with data=null, without retrying', async () => {
     // useApiQuery's defaultRetry gives up immediately on auth errors — no token
     // means a retry can only fail the same way. The hook never overrides it.
-    const fetchSpy = stubFetch({ error: 'unauthorized' }, { status: HTTP_UNAUTHORIZED });
+    const fetchSpy = stubFetch({ error: 'unauthorized' }, { status: HttpStatus.Unauthorized });
 
     const { result } = renderHook(() => useQualityLive(), makeQueryWrapper());
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
-    expect(result.current.error?.message).toContain(`API error: ${HTTP_UNAUTHORIZED}`);
+    expect(result.current.error?.message).toContain(`API error: ${HttpStatus.Unauthorized}`);
     expect(result.current.data).toBeNull();
     expect(result.current.isLoading).toBe(false);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it('retries a 500 before surfacing the error', async () => {
-    const fetchSpy = stubFetch({ error: 'boom' }, { status: HTTP_SERVER_ERROR });
+    const fetchSpy = stubFetch({ error: 'boom' }, { status: HttpStatus.InternalServerError });
 
     const { result } = renderHook(() => useQualityLive(), makeQueryWrapper());
     await waitFor(() => { expect(result.current.error).not.toBeNull(); });
 
-    expect(result.current.error?.message).toContain(`API error: ${HTTP_SERVER_ERROR}`);
+    expect(result.current.error?.message).toContain(`API error: ${HttpStatus.InternalServerError}`);
     expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);
   });
 

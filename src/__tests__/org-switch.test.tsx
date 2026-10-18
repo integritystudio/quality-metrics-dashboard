@@ -25,14 +25,13 @@ import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 import type { AppSession, OrgMembershipSummary } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf, makeQueryWrapper, stubFetch } from './support/query-harness.js';
 import { defined } from './support/defined.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../lib/http-constants.js';
 
 const ORG_A = 'a0000000-0000-4000-8000-00000000000a';
 const ORG_B = 'b0000000-0000-4000-8000-00000000000b';
 const SWITCH_URL = '/api/org/switch';
 const FAILURE_TEXT = 'Failed to switch organization';
 const NETWORK_ERROR_MESSAGE = 'Failed to fetch';
-const HTTP_OK = 200;
-const HTTP_FORBIDDEN = 403;
 
 function membership(orgId: string, name: string): OrgMembershipSummary {
   return { orgId, slug: name, name, membershipRole: 'member', dashboardRole: 'read' };
@@ -102,7 +101,7 @@ describe('OrgSwitcher', () => {
   });
 
   it('reports a rejected switch and keeps the current org', async () => {
-    stubFetch({ error: 'Forbidden' }, { status: HTTP_FORBIDDEN });
+    stubFetch({ error: 'Forbidden' }, { status: HttpStatus.Forbidden });
     const select = renderSwitcher();
 
     fireEvent.change(select, { target: { value: ORG_B } });
@@ -147,8 +146,8 @@ function stubOrgEchoFetch() {
   const fetchSpy = vi.fn((url: string, init?: RequestInit) => {
     const body = url === SWITCH_URL ? {} : { org: headersOf(init)[ORG_ID_HEADER] };
     return Promise.resolve(new Response(JSON.stringify(body), {
-      status: HTTP_OK,
-      headers: { 'Content-Type': 'application/json' },
+      status: HttpStatus.Ok,
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
     }));
   });
   vi.stubGlobal('fetch', fetchSpy);

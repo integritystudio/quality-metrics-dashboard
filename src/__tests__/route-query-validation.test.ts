@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { blankAsAbsent, validQuery } from '../api/route-errors.js';
-import { ErrorMessage, HttpStatus, PeriodSchema, RoleSchema } from '../lib/constants.js';
+import { ErrorMessage, PeriodSchema, RoleSchema } from '../lib/constants.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
-const HTTP_OK = 200;
 const ProbeQuery = z.object({ period: PeriodSchema, role: blankAsAbsent(RoleSchema.optional()) });
 const UnmappedQuery = z.object({ unmapped: z.string() });
 
@@ -19,7 +19,7 @@ async function get(path: string) {
 
 describe('route validQuery', () => {
   it('applies schema defaults when the query is empty', async () => {
-    expect(await get('/probe')).toEqual({ status: HTTP_OK, body: { period: '7d' } });
+    expect(await get('/probe')).toEqual({ status: HttpStatus.Ok, body: { period: '7d' } });
   });
 
   it("answers 400 with the failing field's message", async () => {
@@ -34,7 +34,7 @@ describe('route validQuery', () => {
   });
 
   it('treats an empty optional field as absent', async () => {
-    expect(await get('/probe?role=')).toEqual({ status: HTTP_OK, body: { period: '7d' } });
+    expect(await get('/probe?role=')).toEqual({ status: HttpStatus.Ok, body: { period: '7d' } });
   });
 
   it('falls back to the generic message for a field without one', async () => {

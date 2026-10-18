@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
-import { HttpStatus, ErrorMessage } from '../../lib/constants.js';
+import { ErrorMessage } from '../../lib/constants.js';
 import { PARAM_ID_RE, isValidParam, jsonSafe } from '../api-constants.js';
 import { loadTracesByTraceId, loadEvaluationsByTraceId } from '../data-loader.js';
 import { handleRouteError } from '../route-errors.js';
+import { HttpStatus } from '../../lib/http-constants.js';
 
 export const traceRoutes = new Hono();
 traceRoutes.onError(handleRouteError);

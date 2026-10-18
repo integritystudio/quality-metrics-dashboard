@@ -14,6 +14,8 @@
  * No `import.meta` in this module, so a Node script can import it to prove the read.
  */
 
+import { ContentType } from './http-constants.js';
+
 export const SUPABASE_REST_PATH = '/rest/v1';
 export const SUPABASE_API_KEY_HEADER = 'apikey';
 /** Columns of the caller's own `users` row the dashboard reads. */
@@ -50,7 +52,7 @@ export async function postgrestFetch(
     headers: {
       [SUPABASE_API_KEY_HEADER]: config.anonKey,
       Authorization: `Bearer ${idToken}`,
-      Accept: 'application/json',
+      Accept: ContentType.Json,
     },
     signal,
   });

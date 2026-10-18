@@ -5,10 +5,11 @@ import { getQualityMetric } from '../parent/quality-metrics.js';
 import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, isValidParam, jsonSafe } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, HttpStatus } from '../../lib/constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage } from '../../lib/constants.js';
 import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
 import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
 import { computeMetricDetailView, previousWindow } from '../aggregates/metric-detail.js';
+import { HttpStatus } from '../../lib/http-constants.js';
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(5);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(10);

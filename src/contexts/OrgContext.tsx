@@ -20,6 +20,7 @@ import { useAuth } from './AuthContext.js';
 import { apiFetch, getStoredOrgId, setStoredOrgId } from '../lib/api-client.js';
 import { APP_SESSION_QUERY_KEY } from '../lib/query-keys.js';
 import type { OrgMembershipSummary } from '../types/auth.js';
+import { CONTENT_TYPE_HEADER, ContentType } from '../lib/http-constants.js';
 
 type OrgContextValue = {
   activeOrgId: string | null;
@@ -57,7 +58,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       // would 403 the very request that escapes it.
       const res = await apiFetch(`/api/org/switch`, token, orgId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ orgId }),
       });
       if (!res.ok) return false;
