@@ -23,10 +23,10 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import type { EvaluationRow, LogRow, TraceSpan } from '@obtool-api/types';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { TIME_MS } from '../../lib/constants.js';
+import { listenLoopback } from './listen-loopback.js';
 
 // ── Wire-format row types ─────────────────────────────────────────────────────
 // Typed off obtool-api's own response rows (type-only import, erased at runtime),
@@ -222,9 +222,7 @@ export async function createFixtureServer(options: FixtureServerOptions = {}): P
     }
   });
 
-  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', () => resolve()); });
-  const { port } = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const { port, url: baseUrl, close } = await listenLoopback(server);
 
   return {
     get port() { return port; },
@@ -244,11 +242,7 @@ export async function createFixtureServer(options: FixtureServerOptions = {}): P
       failQueries = [];
       requested = [];
     },
-    close() {
-      return new Promise<void>((resolve, reject) => {
-        server.close((err) => (err ? reject(err) : resolve()));
-      });
-    },
+    close,
   };
 }
 

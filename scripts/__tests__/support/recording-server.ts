@@ -7,14 +7,12 @@
  * which one the client chose: on Node 26 the built-in fetch picks h2 and
  * `http1Fetch` picks HTTP/1.1 (UNDICI8-GLOBAL-FETCH-HTTP2).
  */
-import { createServer, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, type IncomingHttpHeaders, type IncomingMessage } from 'node:http';
 import type { Http2ServerRequest } from 'node:http2';
-import type { AddressInfo } from 'node:net';
 import type { TLSSocket } from 'node:tls';
 import { startAlpnServer } from '../../../../src/test-helpers/alpn-server.js';
+import { listenLoopback } from '../../../src/__tests__/support/listen-loopback.js';
 
-const LOOPBACK_HOST = '127.0.0.1';
-const EPHEMERAL_PORT = 0;
 const HTTP_OK = 200;
 const HTTP_INTERNAL_SERVER_ERROR = 500;
 const JSON_CONTENT_TYPE = 'application/json';
@@ -119,7 +117,7 @@ export async function startRecordingServer(options: { tls?: boolean } = {}): Pro
     });
   };
 
-  const { url, close } = options.tls ? await startAlpnServer(handle) : await listenPlain(handle);
+  const { url, close } = options.tls ? await startAlpnServer(handle) : await listenLoopback(createServer(handle));
   return {
     url,
     close,
@@ -128,21 +126,6 @@ export async function startRecordingServer(options: { tls?: boolean } = {}): Pro
     reset() {
       requests = [];
       responder = answerOk;
-    },
-  };
-}
-
-async function listenPlain(
-  handle: (req: IncomingMessage, res: ServerResponse) => void,
-): Promise<Pick<RecordingServer, 'url' | 'close'>> {
-  const server = createServer(handle);
-  await new Promise<void>(resolve => { server.listen(EPHEMERAL_PORT, LOOPBACK_HOST, resolve); });
-  const { port } = server.address() as AddressInfo;
-  return {
-    url: `http://${LOOPBACK_HOST}:${port}`,
-    async close() {
-      server.closeAllConnections();
-      return new Promise<void>((resolve, reject) => { server.close(err => (err ? reject(err) : resolve())); });
     },
   };
 }
