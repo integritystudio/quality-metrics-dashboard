@@ -13,7 +13,11 @@ export const Http = {
   InternalServerError: 500,
 } as const satisfies Record<string, number>;
 
-/** Lower-case, as Node and fetch normalize it either way. */
+/**
+ * Lower-case on the wire. Node's `setHeader` sends the casing it is given, but
+ * every reader is case-insensitive: `req.headers` arrives lower-cased and
+ * `Response.headers.get` ignores case.
+ */
 export const CONTENT_TYPE_HEADER = 'content-type';
 
 export const ContentType = {
