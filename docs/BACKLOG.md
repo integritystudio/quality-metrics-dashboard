@@ -290,6 +290,21 @@ every one, the executor rule in the source trees only, as configured.
   a green `npm test` says nothing about the deploy. Never run `npm run build` to check a worker change:
   it overwrites `dist/` with whatever Auth0 config the current env holds, and the next `wrangler deploy`
   uploads that `dist/` as the SPA.
+- 🔴 **`e2e/` is checked by nothing but a Playwright run.** It is absent from the root `tsconfig.json`'s
+  `include` (`["src", "worker", "../dist"]`) and from `npm run lint` (`src/ scripts/ worker/`), so an
+  edit there cannot fail a typecheck or a lint. To type-check it, write a throwaway config extending the
+  root one with `"include": ["e2e", "src", "worker", "../dist"]` **inside the repo** — from outside,
+  `types` cannot resolve and it fails with `TS2688 Cannot find type definition file for
+  '@cloudflare/workers-types'`. Two pre-existing errors in `navigation.spec.ts` (`timeout` not in
+  `TestDetails`) are the baseline. The 26 status literals and 4 media-type sites there now import from
+  `src/lib/http-constants.ts` as well; `'Access-Control-Allow-Headers': 'Authorization, Content-Type'` in
+  `admin-customers.spec.ts` was left alone, being a comma-joined CORS value rather than a header name.
+- **The chromium e2e suite needs the cloud pair exported, not `doppler run`.** Without
+  `OBTOOL_API_URL`/`OBTOOL_API_KEY` the local API answers `/api/health` with
+  `401 Missing or invalid Authorization header`, Playwright's health gate never opens, and the run dies
+  with `Timed out waiting 30000ms from config.webServer` — which reads like a broken spec. Export both
+  from `doppler secrets get … --plain -c dev` first; `--config dev` gives the documented 36 passed /
+  7 skipped, since the data-coupled specs skip on an empty dev window.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
   regexp hits were `expect(source).toMatch(/^\s*<Route …/m)` in `coverage-tab.test.tsx`: under `m`,
   `\s` matches the line break that `^` is anchored to, so the quantifier can start at every position
