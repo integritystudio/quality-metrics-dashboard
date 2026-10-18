@@ -175,12 +175,18 @@ same shape — a `for` over seeded evals with a per-metric `if (ev.evaluationNam
   `[name, low, high]`, then `expect(missing).toEqual([])` and `expect(outOfBand).toEqual([])` where each
   list is built with `filter`/`flatMap` and formatted `name=score`. A failure names the metric and the
   offending value, which the old `expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70)` inside a loop did not.
-- 🔴 **`Math.max(...xs)` is banned here** by `no-restricted-syntax` (stack overflow on large arrays; use
-  `d3-array`). d3's `max`/`min` return `undefined` on an empty array rather than `∓Infinity`, so they fail
-  an empty list instead of passing it — but the explicit `expect(scores.length).toBeGreaterThan(0)` lines
-  stay, because `expected undefined to be <= 0.35` does not say which metric vanished.
-- ⚠️ Destructuring the band tuple as `[name, min, max]` shadows d3's imported `min`/`max`
-  (`@typescript-eslint/no-shadow`). Named `low`/`high`.
+- 🔴 **Assert the complement, because NaN fails every comparison.** `score < low || score > high` is
+  **false** for NaN, so the positive form lets a NaN through both arms; `!(score >= low && score <= high)`
+  catches it. The same hole sank the first canary rewrite, which used `d3-array`'s `max`/`min`: those
+  **skip** NaN, so a partially-NaN series passes. Measured — a producer emitting NaN for a subset of
+  relevance scores passed all 128 tests in `judge-evaluations.test.ts` before this and reds two after.
+  The pre-existing `expect(ev.scoreValue).toBeGreaterThanOrEqual(low)` form had the same hole, so the
+  rule did not introduce it; the rewrite is where it got closed. Both tests now assert
+  `expect(violations).toEqual([])` over a `filter` of the negated predicate.
+- **`Math.max(...xs)` is banned here** by `no-restricted-syntax` (stack overflow on large arrays; use
+  `d3-array`) — which is what pushed the first attempt onto d3 and into the NaN hole above. The current
+  shape needs neither, so the import is gone. Keep `expect(scores.length).toBeGreaterThan(0)` regardless:
+  a `filter` over an empty array is `[]`, which passes.
 - Verified by mutating the producer four ways — relevance's normal band widened, `coherence` dropped from
   `SEED_METRICS`, relevance's canary band raised, `CANARY_TURN_RATE` set to 0 — each one reds exactly the
   rewritten test(s) that should catch it.
