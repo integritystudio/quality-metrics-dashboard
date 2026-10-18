@@ -9,10 +9,11 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
-import { HttpStatus, jsonResponse } from './support/http.js';
+import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
 import { defined } from '../../src/__tests__/support/defined.js';
+import { CONTENT_TYPE_HEADER, HttpStatus } from '../../src/lib/http-constants.js';
 
 const LAST_SYNC = '2026-03-16T00:00:00Z';
 
@@ -59,7 +60,7 @@ beforeEach(() => {
   mockAssets.fetch.mockResolvedValue(
     new Response(SPA_HTML, {
       status: HttpStatus.Ok,
-      headers: { 'Content-Type': 'text/html' },
+      headers: { [CONTENT_TYPE_HEADER]: 'text/html' },
     })
   );
 });
@@ -78,7 +79,7 @@ describe('SPA fallback: non-API routes serve index.html', () => {
   ])('GET $path returns 200 with an HTML body', async ({ path }) => {
     const res = await app.request(path, {}, makeEnv());
     expect(res.status).toBe(HttpStatus.Ok);
-    const contentType = res.headers.get('Content-Type') ?? '';
+    const contentType = res.headers.get(CONTENT_TYPE_HEADER) ?? '';
     expect(contentType).toMatch(/text\/html/);
     const body = await res.text();
     expect(body).toMatch(/<!DOCTYPE html>/i);
@@ -98,7 +99,7 @@ describe('API routes: unaffected by SPA fallback', () => {
   it('GET /api/health returns JSON (not HTML)', async () => {
     const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'meta:lastSync': LAST_SYNC })));
     expect(res.status).toBe(HttpStatus.Ok);
-    const contentType = res.headers.get('Content-Type') ?? '';
+    const contentType = res.headers.get(CONTENT_TYPE_HEADER) ?? '';
     expect(contentType).toMatch(/application\/json/);
   });
 

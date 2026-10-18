@@ -14,11 +14,9 @@
 
 import { createJudgeAnthropicClient } from './judge-anthropic-client.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
+import { HttpStatus } from '../src/lib/http-constants.js';
 
 const PROBE_MESSAGE = 'ping';
-
-const HTTP_UNAUTHORIZED = 401;
-const HTTP_FORBIDDEN = 403;
 
 /** Purpose-built judge key — preferred. */
 export const JUDGE_API_KEY_ENV = 'LLM_JUDGE_ANTHROPIC_KEY';
@@ -73,7 +71,7 @@ const probeWithCountTokens: JudgeKeyProbe = async apiKey => {
 
 function isCredentialRejection(error: unknown): boolean {
   const status = (error as { status?: unknown } | null)?.status;
-  return status === HTTP_UNAUTHORIZED || status === HTTP_FORBIDDEN;
+  return status === HttpStatus.Unauthorized || status === HttpStatus.Forbidden;
 }
 
 /**

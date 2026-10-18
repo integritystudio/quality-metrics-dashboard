@@ -91,6 +91,7 @@ import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
 import { getOrThrow, increment, pushTo } from './collections.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
+import { CONTENT_TYPE_HEADER, ContentType } from '../src/lib/http-constants.js';
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
 const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
@@ -157,7 +158,6 @@ const SCHEMA_URL_FIELD = 'schemaUrl';
 
 const WEBHOOK_PATH = '/v1/evaluations';
 const KEYED_PATH = '/v1/ingest/backfill?signal=evaluations';
-const NDJSON_CONTENT_TYPE = 'application/x-ndjson';
 /** Summary label for records sent through the org-less webhook. */
 export const WEBHOOK_DESTINATION = 'webhook';
 
@@ -524,7 +524,7 @@ export function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secr
   const body = JSON.stringify({ evaluations: batch });
   return {
     url: `${baseUrl}${WEBHOOK_PATH}`,
-    headers: { 'Content-Type': 'application/json', [WEBHOOK_SIGNATURE_HEADER]: signature(body, secret) },
+    headers: { [CONTENT_TYPE_HEADER]: ContentType.Json, [WEBHOOK_SIGNATURE_HEADER]: signature(body, secret) },
     body,
   };
 }
@@ -533,7 +533,7 @@ export function webhookRequest(baseUrl: string, batch: EvaluationPayload[], secr
 export function keyedRequest(baseUrl: string, batch: EvaluationPayload[], apiKey: string): SendRequest {
   return {
     url: `${baseUrl}${KEYED_PATH}`,
-    headers: { 'Content-Type': NDJSON_CONTENT_TYPE, Authorization: `Bearer ${apiKey}` },
+    headers: { [CONTENT_TYPE_HEADER]: ContentType.Ndjson, Authorization: `Bearer ${apiKey}` },
     body: `${batch.map((p) => JSON.stringify(p)).join('\n')}\n`,
   };
 }

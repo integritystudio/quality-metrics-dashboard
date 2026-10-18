@@ -3,13 +3,13 @@ import { ALPN_HTTP1_1 } from '../../../src/test-helpers/alpn-server.js';
 import { createJudgeAnthropicClient, responseText } from '../judge-anthropic-client.js';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 import { assertDefined } from '../../src/__tests__/support/defined.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 
 // Placeholder, not a credential: the local server only records it.
 const API_KEY = 'test-key-value';
 const MODEL = 'claude-haiku-4-5-20251001';
 const REPLY_TEXT = 'ok';
 const MAX_TOKENS = 16;
-const HTTP_OK = 200;
 
 const MESSAGE_RESPONSE = {
   id: 'msg_test',
@@ -28,8 +28,8 @@ describe('createJudgeAnthropicClient', () => {
   beforeAll(async () => {
     server = await startRecordingServer({ tls: true });
     server.respondWith(() => ({
-      status: HTTP_OK,
-      headers: { 'content-type': 'application/json' },
+      status: HttpStatus.Ok,
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
       body: JSON.stringify(MESSAGE_RESPONSE),
     }));
   });

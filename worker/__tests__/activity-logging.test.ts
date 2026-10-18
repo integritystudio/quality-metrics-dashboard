@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
-import { HttpStatus } from './support/http.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
 import { defined } from '../../src/__tests__/support/defined.js';
@@ -158,7 +158,7 @@ describe('POST /api/activity: request body', () => {
 
     const res = await app.request(
       '/api/activity',
-      { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body },
+      { method: 'POST', headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json }, body },
       makeEnv(),
       makeCtx(),
     );

@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HTTPException } from 'hono/http-exception';
 import app from '../index.js';
-import { HttpStatus } from './support/http.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
 

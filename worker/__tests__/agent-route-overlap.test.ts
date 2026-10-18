@@ -13,9 +13,10 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
-import { HttpStatus, jsonResponse } from './support/http.js';
+import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-agents-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000003';

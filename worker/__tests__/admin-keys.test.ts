@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
-import { HttpStatus } from './support/http.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
 

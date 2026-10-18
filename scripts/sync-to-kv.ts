@@ -72,7 +72,7 @@ import { DRY_RUN_FLAG, SYNC_BUDGET_FLAG } from './pipeline-stages.js';
 import { incrementIn, pushTo } from './collections.js';
 import { msToNs } from './hrt.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
-
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
 
 type CloudflareConfig = {
   accountId: string;
@@ -119,9 +119,6 @@ function getCloudflareConfig(): CloudflareConfig {
 /** The fetch the Cloudflare client accepts as its `fetch` option. */
 type SdkFetch = NonNullable<CloudflareClientOptions['fetch']>;
 
-const HTTP_OK = 200;
-const HTTP_NO_CONTENT = 204;
-const HTTP_TOO_MANY_REQUESTS = 429;
 /** Cloudflare API error code for the KV daily write limit (free tier only). */
 const KV_DAILY_WRITE_LIMIT_CODE = 10048;
 /** The SDK obeys this header over its own retry rules. */
@@ -157,14 +154,14 @@ async function isDailyWriteLimit(response: Response): Promise<boolean> {
  */
 export const kvSdkFetch: SdkFetch = async (url, init) => {
   const response = await http1Fetch(url, init);
-  if (response.status === HTTP_NO_CONTENT) {
+  if (response.status === HttpStatus.NoContent) {
     const headers = new Headers(response.headers);
     headers.delete('content-length');
-    headers.set('content-type', 'application/json');
-    headers.set(KV_ORIGINAL_STATUS_HEADER, String(HTTP_NO_CONTENT));
-    return new Response(NULL_RESULT_BODY, { status: HTTP_OK, headers });
+    headers.set(CONTENT_TYPE_HEADER, ContentType.Json);
+    headers.set(KV_ORIGINAL_STATUS_HEADER, String(HttpStatus.NoContent));
+    return new Response(NULL_RESULT_BODY, { status: HttpStatus.Ok, headers });
   }
-  if (response.status === HTTP_TOO_MANY_REQUESTS && await isDailyWriteLimit(response.clone())) {
+  if (response.status === HttpStatus.TooManyRequests && await isDailyWriteLimit(response.clone())) {
     const headers = new Headers(response.headers);
     // undici has already decoded the body, so the encoded length and encoding no longer describe it.
     headers.delete('content-length');
@@ -263,7 +260,6 @@ export const MIN_TRACE_BUDGET = 100;
 /** Budget headroom above MIN_TRACE_BUDGET for meta and dashboard entries before a warning. */
 const HIGH_PRIORITY_HEADROOM = 10;
 const RECOMMENDED_MIN_BUDGET = MIN_TRACE_BUDGET + HIGH_PRIORITY_HEADROOM;
-
 
 /**
  * The home org's `meta:calibration` entry, from the state derive writes (`CALIBRATION_STATE_DIR`).
@@ -429,7 +425,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
       // A null result carries no key info, so every batch key is credited. It comes
       // from a {"result": null} body or from a 204 that kvSdkFetch rewrote to one.
       if (result == null) {
-        const answer = response.headers.get(KV_ORIGINAL_STATUS_HEADER) === String(HTTP_NO_CONTENT)
+        const answer = response.headers.get(KV_ORIGINAL_STATUS_HEADER) === String(HttpStatus.NoContent)
           ? 'API answered HTTP 204 with no body'
           : 'API returned null result';
         console.warn(`[sync-to-kv] bulk put${batchLabel}: ${answer} — crediting all ${batch.length} keys as written`);

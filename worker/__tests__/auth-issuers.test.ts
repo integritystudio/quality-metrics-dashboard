@@ -8,9 +8,10 @@
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app, { acceptedIssuers } from '../index.js';
-import { HttpStatus, jsonResponse } from './support/http.js';
+import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, issuerFor, type TestIssuer } from './support/jwt.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const TENANT_DOMAIN = TEST_AUTH0_DOMAIN;
 const CUSTOM_DOMAIN = 'auth.test.integritystudio.ai';

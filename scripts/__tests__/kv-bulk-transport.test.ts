@@ -15,15 +15,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 import { kvSdkFetch, KV_ORIGINAL_STATUS_HEADER } from '../sync-to-kv.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 
-const HTTP_OK = 200;
-const HTTP_NO_CONTENT = 204;
-const HTTP_BAD_REQUEST = 400;
-const HTTP_TOO_MANY_REQUESTS = 429;
 const KV_DAILY_WRITE_LIMIT_CODE = 10048;
 const RATE_LIMIT_CODE = 10013;
 const AUTHENTICATION_ERROR_CODE = 10000;
-const JSON_CONTENT_TYPE = 'application/json';
 const SDK_SHOULD_RETRY_HEADER = 'x-should-retry';
 const RAY_HEADER = 'cf-ray';
 const RAY_ID = '8c1f0e2d3a4b5c6d-DFW';
@@ -49,7 +45,7 @@ let cloudflare: RecordingServer;
 function send(request: typeof BULK_PUT | typeof BULK_DELETE): Promise<Response> {
   return kvSdkFetch(`${cloudflare.url}${request.path}`, {
     method: request.method,
-    headers: { 'content-type': JSON_CONTENT_TYPE },
+    headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
     body: request.body,
   });
 }
@@ -81,7 +77,7 @@ describe('kvSdkFetch: request pass-through', () => {
 
 describe('kvSdkFetch: 204 conversion', () => {
   beforeEach(() => {
-    cloudflare.respondWith(() => ({ status: HTTP_NO_CONTENT, headers: { [RAY_HEADER]: RAY_ID } }));
+    cloudflare.respondWith(() => ({ status: HttpStatus.NoContent, headers: { [RAY_HEADER]: RAY_ID } }));
   });
 
   it.each([
@@ -90,15 +86,15 @@ describe('kvSdkFetch: 204 conversion', () => {
   ])('converts a %s 204 to 200 with {"result":null}', async (_name, request) => {
     const response = await send(request);
 
-    expect(response.status).toBe(HTTP_OK);
+    expect(response.status).toBe(HttpStatus.Ok);
     await expect(response.json()).resolves.toEqual({ result: null });
   });
 
   it('sets application/json content-type and marks the original status', async () => {
     const response = await send(BULK_PUT);
 
-    expect(response.headers.get('content-type')).toBe(JSON_CONTENT_TYPE);
-    expect(response.headers.get(KV_ORIGINAL_STATUS_HEADER)).toBe(String(HTTP_NO_CONTENT));
+    expect(response.headers.get(CONTENT_TYPE_HEADER)).toBe(ContentType.Json);
+    expect(response.headers.get(KV_ORIGINAL_STATUS_HEADER)).toBe(String(HttpStatus.NoContent));
   });
 
   it('keeps the original response headers', async () => {
@@ -113,8 +109,8 @@ describe('kvSdkFetch: daily write limit', () => {
 
   beforeEach(() => {
     cloudflare.respondWith(() => ({
-      status: HTTP_TOO_MANY_REQUESTS,
-      headers: { 'content-type': JSON_CONTENT_TYPE, [RAY_HEADER]: RAY_ID },
+      status: HttpStatus.TooManyRequests,
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json, [RAY_HEADER]: RAY_ID },
       body,
     }));
   });
@@ -128,7 +124,7 @@ describe('kvSdkFetch: daily write limit', () => {
   it('keeps the status, headers and body', async () => {
     const response = await send(BULK_PUT);
 
-    expect(response.status).toBe(HTTP_TOO_MANY_REQUESTS);
+    expect(response.status).toBe(HttpStatus.TooManyRequests);
     expect(response.headers.get(RAY_HEADER)).toBe(RAY_ID);
     await expect(response.text()).resolves.toBe(body);
   });
@@ -136,14 +132,14 @@ describe('kvSdkFetch: daily write limit', () => {
 
 describe('kvSdkFetch: pass-through for other responses', () => {
   it.each([
-    ['a 200 bulk result', HTTP_OK, '{"result":{"unsuccessful_keys":[]}}'],
-    ['a 400 authentication error', HTTP_BAD_REQUEST, errorBody(AUTHENTICATION_ERROR_CODE, 'Authentication error')],
-    ['a 429 that is not the daily limit', HTTP_TOO_MANY_REQUESTS, errorBody(RATE_LIMIT_CODE, 'Rate limited')],
-    ['a 429 whose body is not JSON', HTTP_TOO_MANY_REQUESTS, NON_JSON_BODY],
+    ['a 200 bulk result', HttpStatus.Ok, '{"result":{"unsuccessful_keys":[]}}'],
+    ['a 400 authentication error', HttpStatus.BadRequest, errorBody(AUTHENTICATION_ERROR_CODE, 'Authentication error')],
+    ['a 429 that is not the daily limit', HttpStatus.TooManyRequests, errorBody(RATE_LIMIT_CODE, 'Rate limited')],
+    ['a 429 whose body is not JSON', HttpStatus.TooManyRequests, NON_JSON_BODY],
   ])('returns %s unchanged', async (_name, status, body) => {
     cloudflare.respondWith(() => ({
       status,
-      headers: { 'content-type': JSON_CONTENT_TYPE, [RAY_HEADER]: RAY_ID },
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json, [RAY_HEADER]: RAY_ID },
       body,
     }));
 

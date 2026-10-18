@@ -27,6 +27,7 @@ import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 import { TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import { CONTENT_TYPE_HEADER, ContentType } from '../../src/lib/http-constants.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
 const MAX_AGE_MS = 36 * 3_600_000;
@@ -411,7 +412,7 @@ describe('account index (TKR7/TKR9)', () => {
     });
     const req = keyedRequest('https://ingest.example', [payload({ traceId: 'a' }), payload({ traceId: 'b' })], 'k');
     expect(req.url).toBe('https://ingest.example/v1/ingest/backfill?signal=evaluations');
-    expect(req.headers).toEqual({ 'Content-Type': 'application/x-ndjson', Authorization: 'Bearer k' });
+    expect(req.headers).toEqual({ [CONTENT_TYPE_HEADER]: ContentType.Ndjson, Authorization: 'Bearer k' });
     const lines = req.body.trimEnd().split('\n').map((l) => JSON.parse(l) as { traceId: string });
     expect(lines.map((l) => l.traceId)).toEqual(['a', 'b']);
   });

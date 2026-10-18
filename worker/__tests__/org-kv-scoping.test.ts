@@ -14,7 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import app from '../index.js';
 import { WORKER_ERR_NO_DATA } from '../../src/lib/worker-contract.js';
-import { HttpStatus } from './support/http.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
 
@@ -122,7 +122,7 @@ describe('/api/org/switch', () => {
     try {
       const res = await app.request('/api/org/switch', {
         method: 'POST',
-        headers: { ...bypassHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...bypassHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ orgId: BYPASS_ORG }),
       }, makeEnv({ ORG_SCOPING_ENABLED: 'true' }), makeCtx());
       expect(res.status).toBe(HttpStatus.Ok);
@@ -136,7 +136,7 @@ describe('/api/org/switch', () => {
   it('403s a switch to an org the session is not a member of', async () => {
     const res = await app.request('/api/org/switch', {
       method: 'POST',
-      headers: { ...bypassHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...bypassHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
       body: JSON.stringify({ orgId: 'deadbeef-dead-4bad-8bad-deadbeefdead' }),
     }, makeEnv({ ORG_SCOPING_ENABLED: 'true' }), makeCtx());
     expect(res.status).toBe(HttpStatus.Forbidden);
@@ -145,7 +145,7 @@ describe('/api/org/switch', () => {
   it('400s a non-uuid orgId', async () => {
     const res = await app.request('/api/org/switch', {
       method: 'POST',
-      headers: { ...bypassHeaders(), 'Content-Type': 'application/json' },
+      headers: { ...bypassHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
       body: JSON.stringify({ orgId: 'not-a-uuid' }),
     }, makeEnv({ ORG_SCOPING_ENABLED: 'true' }), makeCtx());
     expect(res.status).toBe(HttpStatus.BadRequest);

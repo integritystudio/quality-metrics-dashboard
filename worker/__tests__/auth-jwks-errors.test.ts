@@ -11,9 +11,10 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { SignJWT } from 'jose';
 import app from '../index.js';
-import { HttpStatus, jsonResponse } from './support/http.js';
+import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, jwksUrlFor, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const SECONDS_PER_MINUTE = 60;
 const MS_PER_SECOND = 1000;

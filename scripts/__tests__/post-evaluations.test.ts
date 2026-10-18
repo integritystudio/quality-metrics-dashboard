@@ -7,12 +7,12 @@ import { evaluationId, MAX_BATCH_SIZE } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_PREFIX } from '../../../src/lib/core/obtool-contract.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const NOW = Date.parse('2026-09-28T12:00:00.000Z');
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
 const API_KEY = 'test-api-key';
 const HMAC_SECRET = 'test-hmac-secret';
-const HTTP_BAD_REQUEST = 400;
 /** The ingest worker's routes: keyed backfill, and the HMAC webhook. */
 const KEYED_INGEST_PATH = '/v1/ingest/backfill?signal=evaluations';
 const WEBHOOK_INGEST_PATH = '/v1/evaluations';
@@ -120,7 +120,7 @@ describe('postEvaluationRecords', () => {
   });
 
   it('stops at a rejected batch and reports it', async () => {
-    ingest.respondWith(() => ({ status: HTTP_BAD_REQUEST, body: '{}' }));
+    ingest.respondWith(() => ({ status: HttpStatus.BadRequest, body: '{}' }));
 
     const summary = await post([record({ identityKeyRef: KEY_REF })]);
 

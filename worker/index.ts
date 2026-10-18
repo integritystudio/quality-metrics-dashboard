@@ -12,6 +12,7 @@ import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPe
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_API_KEY_HEADER, SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
 import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PERIOD_KEYS, PeriodEnum, type Period } from '../src/lib/periods.js';
 import { ROLES, RoleSchema } from '../src/lib/roles.js';
@@ -46,17 +47,6 @@ function getJwks(domain: string): ReturnType<typeof createRemoteJWKSet> {
   }
   return jwks;
 }
-
-const Http = {
-  Ok: 200,
-  NoContent: 204,
-  BadRequest: 400,
-  Unauthorized: 401,
-  Forbidden: 403,
-  NotFound: 404,
-  InternalServerError: 500,
-  ServiceUnavailable: 503,
-} as const satisfies Record<string, number>;
 
 /**
  * True when `jwtVerify` rejected the token itself — bad claims, signature, shape or `kid` — as
@@ -329,7 +319,7 @@ app.onError((err, c) => {
   // An HTTPException carries the response it means; only a genuine fault is a 500.
   if (err instanceof HTTPException) return err.getResponse();
   console.error(`[worker] unhandled error on ${c.req.method} ${c.req.path}:`, err instanceof Error ? err.message : String(err));
-  return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
 });
 
 app.use('/*', cors({
@@ -343,7 +333,7 @@ app.use('/*', cors({
   allowMethods: ['GET', 'POST', 'DELETE'],
   // X-Org-Id carries the client's chosen active org (P5/P6); membership-validated
   // server-side in the auth middleware, never trusted as-is.
-  allowHeaders: ['Authorization', 'Content-Type', ORG_ID_HEADER],
+  allowHeaders: ['Authorization', CONTENT_TYPE_HEADER, ORG_ID_HEADER],
 }));
 
 // Cache policy: private, no-store for all /api/* (responses may contain user-specific data)
@@ -381,7 +371,7 @@ app.use('/api/*', async (c, next) => {
     // '' / '[]'), so either being set means this binding leaked into prod.
     if ((c.env.HOME_ORG_ID ?? '') !== '' || parseStaffIds(c.env.STAFF_USER_IDS).size > 0) {
       console.error('[auth] ALLOW_TEST_BYPASS refused: production env markers present (HOME_ORG_ID/STAFF_USER_IDS)');
-      return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+      return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
     }
     const bypassOrgId = 'a0000000-0000-4000-8000-000000000001';
     c.set('session', {
@@ -407,7 +397,7 @@ app.use('/api/*', async (c, next) => {
     return next();
   }
 
-  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
 
   // One deadline shared across all auth fetches
   const signal = AbortSignal.timeout(AUTH_TIMEOUT_MS);
@@ -423,19 +413,19 @@ app.use('/api/*', async (c, next) => {
   } catch (err) {
     // A rejected token is 401. Anything else is a transient upstream problem —
     // 503, which the client retries (it never retries a 401).
-    if (isTokenRejection(err)) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+    if (isTokenRejection(err)) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
     console.error('[auth] JWKS fetch failed:', err instanceof Error ? err.message : String(err));
-    return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
+    return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
   }
   const auth0Id = typeof jwtPayload.sub === 'string' ? jwtPayload.sub : null;
-  if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
 
   const orgScopingEnabled = isOrgScopingEnabled(c.env);
   if (orgScopingEnabled && !c.env.HOME_ORG_ID) {
     // Fail loudly: an empty HOME_ORG_ID (the dev worker's deliberate value)
     // must never silently resolve or fall back into a production org.
     console.error('[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve');
-    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+    return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
   }
 
   // Fetch public.users row by auth0_id — required; users with no app record are rejected
@@ -449,12 +439,12 @@ app.use('/api/*', async (c, next) => {
   // user has no app record (401).
   if (userRes.error) {
     console.error('[auth] user lookup failed, status:', userRes.status || 'network error');
-    return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
+    return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
   }
   const [rawUser] = safeArray(userRes.data);
-  if (!rawUser) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  if (!rawUser) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
   const userResult = PublicUserSchema.safeParse(rawUser);
-  if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, Http.Unauthorized);
+  if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
   const appUserId = userResult.data.id;
   const email = userResult.data.email;
   const defaultOrgId = userResult.data.default_organization_id ?? null;
@@ -476,7 +466,7 @@ app.use('/api/*', async (c, next) => {
 
   if (rolesRes.error) {
     console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes.status || 'network error');
-    return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, Http.InternalServerError);
+    return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, HttpStatus.InternalServerError);
   }
   const rows = safeArray(rolesRes.data);
   const roles: string[] = [];
@@ -497,7 +487,7 @@ app.use('/api/*', async (c, next) => {
     // non-retried 403 (or, for staff, the home org).
     if (membershipsRes?.error) {
       console.error('[auth] membership fetch failed for user', appUserId, 'status:', membershipsRes.status || 'network error');
-      return c.json({ error: ERR_AUTH_UNAVAILABLE }, Http.ServiceUnavailable);
+      return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
     }
     const memberships = parseMemberships(membershipsRes?.data);
     const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
@@ -507,8 +497,8 @@ app.use('/api/*', async (c, next) => {
     const requestedOrg = c.req.header(ORG_ID_HEADER);
     let activeOrgId: string | undefined;
     if (requestedOrg) {
-      if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
-      if (!canEnterOrg(isStaff, memberships, requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+      if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+      if (!canEnterOrg(isStaff, memberships, requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
       activeOrgId = requestedOrg;
     }
     if (!activeOrgId && defaultOrgId && canEnterOrg(isStaff, memberships, defaultOrgId)) {
@@ -527,7 +517,7 @@ app.use('/api/*', async (c, next) => {
     // (AUTH-NO-ORG-LEGACY-SESSION). The on_user_created trigger gives every
     // new user a role, so the old roles-only fallback (Risk 13) handed every
     // user without an org a global session reading the home org's bare keys.
-    return c.json({ error: ERR_NO_ORG }, Http.Forbidden);
+    return c.json({ error: ERR_NO_ORG }, HttpStatus.Forbidden);
   }
 
   const permissions = [...permissionSet];
@@ -611,7 +601,7 @@ function hasPermission(session: AppSession, permission: DashboardPermission): bo
 /** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
 function requirePermission(permission: DashboardPermission) {
   return factory.createMiddleware(async (c, next) => {
-    if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+    if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
     return next();
   });
 }
@@ -662,7 +652,7 @@ function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): Headers
   return {
     [SUPABASE_API_KEY_HEADER]: env.SUPABASE_SERVICE_ROLE_KEY,
     'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    'Content-Type': 'application/json',
+    [CONTENT_TYPE_HEADER]: ContentType.Json,
   };
 }
 
@@ -686,7 +676,7 @@ function respondMe(c: AppContext, session: AppSession): Response {
   const meResult = MeResponseSchema.safeParse(buildMePayload(session));
   if (!meResult.success) {
     console.error(`[${c.req.path}] MeResponseSchema validation failed:`, meResult.error.issues);
-    return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+    return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
   }
   return c.json(meResult.data);
 }
@@ -700,17 +690,17 @@ app.get('/api/me', (c) => respondMe(c, c.get('session')));
 app.post('/api/org/switch', async (c) => {
   const session = c.get('session');
   const body = await readJsonBody(c.req, OrgSwitchRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
   const { orgId } = body;
 
   const isStaff = session.isStaff === true;
   const memberships = session.memberships ?? [];
-  if (!canEnterOrg(isStaff, memberships, orgId)) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  if (!canEnterOrg(isStaff, memberships, orgId)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   if (session.appUserId) {
     const { error } = await db(c.env).from('users')
       .update({ default_organization_id: orgId })
       .eq('id', session.appUserId);
-    if (error) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+    if (error) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
   }
 
   // Recompute the org-dependent session fields for the response; the next
@@ -720,26 +710,26 @@ app.post('/api/org/switch', async (c) => {
 
 app.post('/api/logout', (c) => {
   logActivity(c, 'logout');
-  return c.body(null, Http.NoContent);
+  return c.body(null, HttpStatus.NoContent);
 });
 
 app.post('/api/activity', async (c) => {
   const body = await readJsonBody(c.req, ActivityRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
   logActivity(c, body.activity_type);
-  return c.body(null, Http.NoContent);
+  return c.body(null, HttpStatus.NoContent);
 });
 
 app.get('/api/dashboard', requirePermission('dashboard.read'), validQuery(DashboardQuery), async (c) => {
   const session = c.get('session');
   const { period, role } = c.req.valid('query');
   if (role && !session.allowedViews.includes(role)) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   }
 
   const key = role ? `dashboard:${period}:${role}` : `dashboard:${period}`;
   const data = await getSessionKv<unknown>(c, key);
-  if (!data) return c.json({ error: WORKER_ERR_NO_DATA }, Http.NotFound);
+  if (!data) return c.json({ error: WORKER_ERR_NO_DATA }, HttpStatus.NotFound);
   logActivity(c, 'dashboard_view');
   return c.json(data);
 });
@@ -751,7 +741,7 @@ function scoreOf(row: Record<string, unknown>): number {
 
 app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), validQuery(MetricEvaluationsQuery), async (c) => {
   const name = c.req.param('name');
-  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, HttpStatus.BadRequest);
   const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
 
   const data = await getSessionKv<{ rows: Array<Record<string, unknown>> }>(c, `metric:evaluations:${name}:${period}`);
@@ -773,7 +763,7 @@ const METRIC_DETAIL_KEY_PREFIX = 'metric:';
 
 app.get('/api/metrics/:name', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(DEFAULT_PERIOD_DETAIL) })), async (c) => {
   const name = c.req.param('name');
-  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, HttpStatus.BadRequest);
   const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `${METRIC_DETAIL_KEY_PREFIX}${name}:${period}`);
   if (!data) {
@@ -797,7 +787,7 @@ const TREND_KEY_PREFIX = 'trend:';
 
 app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
   const name = c.req.param('name');
-  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, Http.BadRequest);
+  if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, HttpStatus.BadRequest);
   const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `${TREND_KEY_PREFIX}${name}:${period}`);
   // The empty `TrendView` of src/api/aggregates/trend.ts, restated: the page reads `trendData`.
@@ -809,7 +799,7 @@ app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(Per
 
 app.get('/api/evaluations/trace/:traceId', requirePermission('dashboard.traces.read'), async (c) => {
   const traceId = c.req.param('traceId');
-  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
+  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `evaluations:trace:${traceId}`);
   if (!data) return c.json({ evaluations: [] });
   logActivity(c, 'trace_view');
@@ -818,9 +808,9 @@ app.get('/api/evaluations/trace/:traceId', requirePermission('dashboard.traces.r
 
 app.get('/api/traces/:traceId', requirePermission('dashboard.traces.read'), async (c) => {
   const traceId = c.req.param('traceId');
-  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, Http.BadRequest);
+  if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `trace:${traceId}`);
-  if (!data) return c.json({ error: `No trace data for: ${traceId}` }, Http.NotFound);
+  if (!data) return c.json({ error: `No trace data for: ${traceId}` }, HttpStatus.NotFound);
   logActivity(c, 'trace_view');
   return c.json(data);
 });
@@ -858,9 +848,9 @@ app.get('/api/pipeline', requirePermission('dashboard.pipeline.read'), validQuer
 
 app.get('/api/sessions/:sessionId', requirePermission('dashboard.sessions.read'), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `session:${sessionId}`);
-  if (!data) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
+  if (!data) return c.json({ error: `No session data for: ${sessionId}` }, HttpStatus.NotFound);
   logActivity(c, 'session_view');
   return c.json(data);
 });
@@ -890,17 +880,17 @@ app.get('/api/code-quality', requirePermission('dashboard.agents.read'), async (
 
 app.get('/api/agents/detail/:agentId', requirePermission('dashboard.agents.read'), async (c) => {
   const agentId = c.req.param('agentId');
-  if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, Http.BadRequest);
+  if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `agent:${agentId}`);
-  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, Http.NotFound);
+  if (!data) return c.json({ error: `No data for agent: ${agentId}` }, HttpStatus.NotFound);
   return c.json(data);
 });
 
 app.get('/api/agents/:sessionId', requirePermission('dashboard.agents.read'), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
-  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
+  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, HttpStatus.NotFound);
   return c.json({
     sessionId,
     spans: [],
@@ -915,9 +905,9 @@ app.get('/api/agents/:sessionId', requirePermission('dashboard.agents.read'), as
 // The workflow view's payload: the same session key, without its evaluations.
 app.get('/api/agents/:sessionId/graph', requirePermission('dashboard.agents.read'), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, Http.BadRequest);
+  if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
-  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, Http.NotFound);
+  if (!session) return c.json({ error: `No session data for: ${sessionId}` }, HttpStatus.NotFound);
   return c.json({
     sessionId,
     evaluation: session.multiAgentEvaluation ?? null,
@@ -946,13 +936,13 @@ app.get('/api/compliance/verifications', requirePermission('dashboard.compliance
 
 app.get('/api/calibration', requirePermission('dashboard.read'), async (c) => {
   const raw = await getSessionKv<unknown>(c, 'meta:calibration');
-  if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, Http.NotFound);
+  if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, HttpStatus.NotFound);
   // KV can still hold a payload written by an older sync-to-kv; parse rather
   // than pass through, so drift surfaces here instead of in the frontend.
   const result = calibrationResponseSchema.safeParse(raw);
   if (!result.success) {
     console.error('[/api/calibration] schema validation failed:', result.error.issues);
-    return c.json({ error: ERR_CALIBRATION_MALFORMED }, Http.InternalServerError);
+    return c.json({ error: ERR_CALIBRATION_MALFORMED }, HttpStatus.InternalServerError);
   }
   return c.json(result.data);
 });
@@ -963,7 +953,7 @@ app.get('/api/routing-telemetry', requirePermission('dashboard.read'), validQuer
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
   if (!result.success) {
     console.error('[/api/routing-telemetry] schema validation failed:', result.error.issues);
-    return c.json({ error: ERR_ROUTING_TELEMETRY_MALFORMED }, Http.InternalServerError);
+    return c.json({ error: ERR_ROUTING_TELEMETRY_MALFORMED }, HttpStatus.InternalServerError);
   }
   return c.json({ ...result.data, period });
 });
@@ -978,7 +968,7 @@ app.get('/api/routing-telemetry', requirePermission('dashboard.read'), validQuer
 const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   if (!hasPermission(session, 'dashboard.admin') || !session.activeOrgId) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   }
   c.set('orgId', session.activeOrgId);
   return next();
@@ -996,9 +986,9 @@ async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId
     .eq('organization_id', c.get('orgId'))
     .eq('user_id', userId)
     .limit(1);
-  if (current.error) return c.json({ error: ERR_FETCH_MEMBER }, Http.InternalServerError);
+  if (current.error) return c.json({ error: ERR_FETCH_MEMBER }, HttpStatus.InternalServerError);
   const [row] = safeArray<{ role?: string }>(current.data);
-  if (!row) return c.json({ error: ERR_INVALID_USER_ID }, Http.NotFound);
+  if (!row) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound);
   return { role: row.role };
 }
 
@@ -1006,7 +996,7 @@ app.get('/api/admin/members', requireOrgAdmin, async (c) => {
   const { data, error } = await db(c.env).from('organization_memberships')
     .select('user_id,role,users(id,email)')
     .eq('organization_id', c.get('orgId'));
-  if (error) return c.json({ error: ERR_FETCH_MEMBERS }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_FETCH_MEMBERS }, HttpStatus.InternalServerError);
 
   const members = [];
   for (const row of safeArray(data)) {
@@ -1025,10 +1015,10 @@ app.get('/api/admin/members', requireOrgAdmin, async (c) => {
 app.post('/api/admin/members/:userId/role', requireOrgAdmin, async (c) => {
   const orgId = c.get('orgId');
   const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
 
   const body = await readJsonBody(c.req, UpdateMemberRoleRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
   const newRole = body.membershipRole;
 
   // Read the target's current role first — both granting owner and demoting an
@@ -1037,37 +1027,37 @@ app.post('/api/admin/members/:userId/role', requireOrgAdmin, async (c) => {
   const current = await targetMemberRole(c, supabase, userId);
   if (current instanceof Response) return current;
   if ((newRole === 'owner' || current.role === 'owner') && !canTouchOwnerRole(c.get('session'))) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   }
 
   const { error } = await supabase.from('organization_memberships')
     .update({ role: newRole })
     .eq('organization_id', orgId)
     .eq('user_id', userId);
-  if (error) return c.json({ error: ERR_UPDATE_MEMBER_ROLE }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_UPDATE_MEMBER_ROLE }, HttpStatus.InternalServerError);
   logAuditEvent(c, 'member.role_change', userId, { organizationId: orgId });
-  return c.body(null, Http.NoContent);
+  return c.body(null, HttpStatus.NoContent);
 });
 
 app.delete('/api/admin/members/:userId', requireOrgAdmin, async (c) => {
   const orgId = c.get('orgId');
   const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
 
   const supabase = db(c.env);
   const current = await targetMemberRole(c, supabase, userId);
   if (current instanceof Response) return current;
   if (current.role === 'owner' && !canTouchOwnerRole(c.get('session'))) {
-    return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   }
 
   const { error } = await supabase.from('organization_memberships')
     .delete()
     .eq('organization_id', orgId)
     .eq('user_id', userId);
-  if (error) return c.json({ error: ERR_REMOVE_MEMBER }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_REMOVE_MEMBER }, HttpStatus.InternalServerError);
   logAuditEvent(c, 'member.remove', userId, { organizationId: orgId });
-  return c.body(null, Http.NoContent);
+  return c.body(null, HttpStatus.NoContent);
 });
 
 // Legacy GLOBAL admin routes: under org scoping these become staff-only —
@@ -1076,7 +1066,7 @@ app.delete('/api/admin/members/:userId', requireOrgAdmin, async (c) => {
 const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   const allowed = isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, 'dashboard.admin');
-  if (!allowed) return c.json({ error: ERR_FORBIDDEN }, Http.Forbidden);
+  if (!allowed) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   return next();
 });
 
@@ -1096,8 +1086,8 @@ app.get('/api/admin/users', requireGlobalAdmin, async (c) => {
     supabase.from('user_roles').select('user_id,role_id,roles(id,name)'),
   ]);
 
-  if (usersRes.error) return c.json({ error: ERR_FETCH_USERS }, Http.InternalServerError);
-  if (roleRowsRes.error) return c.json({ error: ERR_FETCH_ROLE_ASSIGNMENTS }, Http.InternalServerError);
+  if (usersRes.error) return c.json({ error: ERR_FETCH_USERS }, HttpStatus.InternalServerError);
+  if (roleRowsRes.error) return c.json({ error: ERR_FETCH_ROLE_ASSIGNMENTS }, HttpStatus.InternalServerError);
   const rawUsers = safeArray(usersRes.data);
   const rawRoleRows = safeArray(roleRowsRes.data);
 
@@ -1129,7 +1119,7 @@ app.get('/api/admin/roles', requireGlobalAdmin, async (c) => {
   const { data, error } = await db(c.env).from('roles')
     .select('id,name,permissions')
     .order('name', { ascending: true });
-  if (error) return c.json({ error: ERR_FETCH_ROLES }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_FETCH_ROLES }, HttpStatus.InternalServerError);
 
   const rows = safeArray(data);
   const roles = rows.flatMap((row) => {
@@ -1141,31 +1131,31 @@ app.get('/api/admin/roles', requireGlobalAdmin, async (c) => {
 
 app.post('/api/admin/users/:userId/roles', requireGlobalAdmin, async (c) => {
   const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
 
   const body = await readJsonBody(c.req, AssignRoleRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, Http.BadRequest);
+  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
 
   const { error } = await db(c.env).from('user_roles')
     .insert({ user_id: userId, role_id: body.role_id });
-  if (error) return c.json({ error: ERR_ASSIGN_ROLE }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_ASSIGN_ROLE }, HttpStatus.InternalServerError);
   logAuditEvent(c, 'role.assign', userId, { roleId: body.role_id });
-  return c.body(null, Http.NoContent);
+  return c.body(null, HttpStatus.NoContent);
 });
 
 app.delete('/api/admin/users/:userId/roles/:roleId', requireGlobalAdmin, async (c) => {
   const userId = c.req.param('userId');
   const roleId = c.req.param('roleId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, Http.BadRequest);
-  if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, Http.BadRequest);
+  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
+  if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, HttpStatus.BadRequest);
 
   const { error } = await db(c.env).from('user_roles')
     .delete()
     .eq('user_id', userId)
     .eq('role_id', roleId);
-  if (error) return c.json({ error: ERR_REVOKE_ROLE }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_REVOKE_ROLE }, HttpStatus.InternalServerError);
   logAuditEvent(c, 'role.revoke', userId, { roleId });
-  return c.body(null, Http.NoContent);
+  return c.body(null, HttpStatus.NoContent);
 });
 
 // ---------------------------------------------------------------------------
@@ -1183,7 +1173,6 @@ app.delete('/api/admin/users/:userId/roles/:roleId', requireGlobalAdmin, async (
 // Third-Party Auth (CR62) accepts the SPA's Auth0 ID token for direct reads, nothing more.
 // ---------------------------------------------------------------------------
 
-
 /** The caller's active keys in their active org — the only keys these routes may touch. */
 function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns: string) {
   return db(env).from('api_keys')
@@ -1196,11 +1185,11 @@ function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns:
 app.get('/api/admin/keys', requireOrgAdmin, async (c) => {
   const orgId = c.get('orgId');
   const appUserId = c.get('session').appUserId;
-  if (!appUserId) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  if (!appUserId) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
 
   const { data, error } = await activeOrgKeys(c.env, appUserId, orgId, 'id,prefix,name,tier,status,created_at,last_used_at')
     .order('created_at', { ascending: false });
-  if (error) return c.json({ error: ERR_FETCH_KEYS }, Http.InternalServerError);
+  if (error) return c.json({ error: ERR_FETCH_KEYS }, HttpStatus.InternalServerError);
 
   const keys = safeArray(data).flatMap((row) => {
     const parsed = ApiKeySchema.safeParse(row);
@@ -1212,17 +1201,17 @@ app.get('/api/admin/keys', requireOrgAdmin, async (c) => {
 app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, async (c) => {
   const orgId = c.get('orgId');
   const appUserId = c.get('session').appUserId;
-  if (!appUserId) return c.json({ error: ERR_INTERNAL }, Http.InternalServerError);
+  if (!appUserId) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
 
   const keyId = c.req.param('keyId');
-  if (!UUID_PATTERN.test(keyId)) return c.json({ error: ERR_INVALID_KEY_ID }, Http.BadRequest);
+  if (!UUID_PATTERN.test(keyId)) return c.json({ error: ERR_INVALID_KEY_ID }, HttpStatus.BadRequest);
 
   // Verify the key belongs to the caller and to their active org before forwarding.
   const verify = await activeOrgKeys(c.env, appUserId, orgId, 'id')
     .eq('id', keyId)
     .limit(1);
-  if (verify.error) return c.json({ error: ERR_ROTATION_FAILED }, Http.InternalServerError);
-  if (!safeArray(verify.data).length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, Http.Forbidden);
+  if (verify.error) return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
+  if (!safeArray(verify.data).length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, HttpStatus.Forbidden);
 
   // Call the function as a service, naming the user this worker verified. The
   // function rechecks that the key is this user's and still active.
@@ -1239,14 +1228,14 @@ app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, async (c) => {
   if (!fnRes?.ok) {
     const errText = fnRes ? await fnRes.text().catch(() => '') : '';
     console.error(`[keys/rotate] function returned ${fnRes?.status ?? 'network error'}: ${errText}`);
-    return c.json({ error: ERR_ROTATION_FAILED }, Http.InternalServerError);
+    return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
   }
 
   const result: unknown = await fnRes.json().catch(() => null);
   logAuditEvent(c, 'key.rotate', appUserId, { roleId: keyId, organizationId: orgId });
   // Return the function's response verbatim. Cache-Control: private, no-store
   // is already set by the /api/* middleware; the token must not be logged.
-  return c.json(result, Http.Ok);
+  return c.json(result, HttpStatus.Ok);
 });
 
 // SPA fallback: serve static assets / index.html for non-API routes

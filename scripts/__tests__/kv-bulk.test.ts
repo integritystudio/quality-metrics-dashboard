@@ -20,6 +20,7 @@ import {
 import { ALPN_HTTP1_1 } from '../../../src/test-helpers/alpn-server.js';
 import { kvBulkPut, kvBulkDelete, chunkKvPairs, KV_BATCH_SIZE, KV_BATCH_MAX_BYTES, type KVEntry } from '../sync-to-kv.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 
 const TEST_NAMESPACE_ID = '902fc8a43e7147b486b6376c485c4506';
 const TEST_ACCOUNT_ID = 'test-account-id';
@@ -29,10 +30,6 @@ const NAMESPACE_PATH = `/accounts/${TEST_ACCOUNT_ID}/storage/kv/namespaces/${TES
 const BULK_PUT_PATH = `${NAMESPACE_PATH}/bulk`;
 const BULK_DELETE_PATH = `${NAMESPACE_PATH}/bulk/delete`;
 
-const HTTP_OK = 200;
-const HTTP_NO_CONTENT = 204;
-const HTTP_FORBIDDEN = 403;
-const HTTP_TOO_MANY_REQUESTS = 429;
 const KV_DAILY_WRITE_LIMIT_CODE = 10048;
 const AUTHENTICATION_ERROR_CODE = 10000;
 const AUTHENTICATION_ERROR_MESSAGE = 'Authentication error';
@@ -41,7 +38,7 @@ const SDK_ATTEMPTS_PER_REQUEST = 3;
 /** Covers the SDK's backoff between connection retries (about 0.5 s, then 1 s). */
 const CONNECTION_RETRY_TIMEOUT_MS = 10_000;
 
-const JSON_HEADERS = { 'content-type': 'application/json' };
+const JSON_HEADERS = { [CONTENT_TYPE_HEADER]: ContentType.Json };
 /** Ambient SDK settings that would add credentials or headers to the recorded requests. */
 const AMBIENT_SDK_ENV = [
   'CLOUDFLARE_API_KEY',
@@ -53,7 +50,7 @@ const AMBIENT_SDK_ENV = [
 
 function cloudflareOk(result: unknown): HttpReply {
   return {
-    status: HTTP_OK,
+    status: HttpStatus.Ok,
     headers: JSON_HEADERS,
     body: JSON.stringify({ success: true, errors: [], messages: [], result }),
   };
@@ -73,9 +70,9 @@ function bulkResult(keyCount: number, unsuccessfulKeys: string[] = []) {
 
 /** Cloudflare's daily-limit refusal; `retry-after: 0` keeps any retry of it instant if the no-retry rewrite regresses. */
 const DAILY_LIMIT_REPLY = cloudflareError(
-  HTTP_TOO_MANY_REQUESTS, KV_DAILY_WRITE_LIMIT_CODE, 'KV daily write limit exceeded', { 'retry-after': '0' },
+  HttpStatus.TooManyRequests, KV_DAILY_WRITE_LIMIT_CODE, 'KV daily write limit exceeded', { 'retry-after': '0' },
 );
-const AUTHENTICATION_ERROR_REPLY = cloudflareError(HTTP_FORBIDDEN, AUTHENTICATION_ERROR_CODE, AUTHENTICATION_ERROR_MESSAGE);
+const AUTHENTICATION_ERROR_REPLY = cloudflareError(HttpStatus.Forbidden, AUTHENTICATION_ERROR_CODE, AUTHENTICATION_ERROR_MESSAGE);
 
 function entry(key: string): KVEntry {
   return { key, value: JSON.stringify({ metric: key }) };
@@ -150,7 +147,7 @@ describe('kvBulkPut: successful write', () => {
   });
 
   it('credits all keys when the API answers HTTP 204 with no body', async () => {
-    cloudflare.respondWith(() => ({ status: HTTP_NO_CONTENT }));
+    cloudflare.respondWith(() => ({ status: HttpStatus.NoContent }));
 
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
 
@@ -370,7 +367,7 @@ describe('kvBulkDelete: empty guard', () => {
 
 describe('kvBulkDelete: HTTP 204', () => {
   it('reports no failed keys when the API answers with no body', async () => {
-    cloudflare.respondWith(() => ({ status: HTTP_NO_CONTENT }));
+    cloudflare.respondWith(() => ({ status: HttpStatus.NoContent }));
 
     const failed = await kvBulkDelete(['trace:abc', 'trace:xyz']);
 

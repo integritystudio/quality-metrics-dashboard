@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
-import { HttpStatus } from './support/http.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
 
@@ -212,7 +212,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
       '/api/admin/users/not-a-uuid/roles',
       {
         method: 'POST',
-        headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...adminHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
@@ -225,7 +225,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...adminHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({}),
       },
       makeEnv(),
@@ -246,7 +246,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...adminHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
@@ -262,7 +262,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token}`, [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
       makeEnv(),
