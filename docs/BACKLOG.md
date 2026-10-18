@@ -238,13 +238,20 @@ every one, the executor rule in the source trees only, as configured.
   `promise-function-async` there. All three hits were the same shape: a concise arrow whose body
   *expression* returns a value the executor discards (`setTimeout`'s `Timeout`, `server.listen`'s and
   `server.close`'s `Server`). A block body is the whole fix; `allowVoid` is off here as there.
-- ⚠️ **`TEST_FILES` does not match `scripts/__tests__/**` unless the file ends in `.test.ts`**, despite
-  the block's comment claiming it covers "support modules the src/ test override misses". That is why 2
-  of the 3 executor hits were in `scripts/__tests__/support/recording-server.ts` and had to be fixed
-  rather than exempted. Left as-is: widening the glob also hands that tree five other severity
-  exemptions (`no-non-null-assertion` → warn, `promise-function-async` and
-  `explicit-function-return-type` off, looser `restrict-template-expressions`), which is a parity
-  decision of its own and not what adopting these two rules needed.
+- **`TEST_FILES` now includes `scripts/__tests__/**/*.ts`.** It had matched only `*.test.ts` there,
+  despite the block's comment claiming it covers "support modules the src/ test override misses" — so
+  the identical executor shape was an error under `scripts/__tests__/support/` and silent under
+  `src/__tests__/support/`, where `fixture-server.ts` carries two of them. The split was the defect, not
+  either half of it. Widening it also hands that tree the block's other exemptions
+  (`promise-function-async` and `explicit-function-return-type` off, looser
+  `restrict-template-expressions`, `no-non-null-assertion` at `warn` — still fatal under
+  `--max-warnings 0`); nothing there relies on them today, since the tree was green with those rules on.
+- **The accidental returns were swept anyway, the sleep idiom was not.** Of the 11 sites the rule would
+  flag across the test trees, 10 are `new Promise(r => setTimeout(r, ms))` — the idiom the exemption
+  exists for — and were left alone. The 4 that were a discarded value rather than an idiom now use block
+  bodies: `fixture-server.ts`'s `listen` and `close` (the same plumbing as `recording-server.ts`),
+  `page-harness.tsx`'s never-settling fetch stub, and `judge-evaluations.test.ts`'s deferred-LLM
+  registration, which returned `Array.prototype.push`'s new length.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
   regexp hits were `expect(source).toMatch(/^\s*<Route …/m)` in `coverage-tab.test.tsx`: under `m`,
   `\s` matches the line break that `^` is anchored to, so the quantifier can start at every position
