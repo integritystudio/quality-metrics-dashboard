@@ -31,7 +31,9 @@ export type SupabaseConfig = {
  * consumer stays off, which is what a local or e2e build without Supabase wants.
  */
 export function supabaseConfigFromEnv(env: Record<string, string | undefined>): SupabaseConfig | null {
-  const url = (env.VITE_SUPABASE_URL ?? '').replace(/\/+$/, '');
+  // The lookbehind pins the match to the first slash of the trailing run, so the
+  // quantifier is not retried from every position (regexp/no-super-linear-move).
+  const url = (env.VITE_SUPABASE_URL ?? '').replace(/(?<!\/)\/+$/, '');
   const anonKey = env.VITE_SUPABASE_ANON_KEY ?? '';
   return url && anonKey ? { url, anonKey } : null;
 }

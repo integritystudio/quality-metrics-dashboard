@@ -136,13 +136,13 @@ async function listenPlain(
   handle: (req: IncomingMessage, res: ServerResponse) => void,
 ): Promise<Pick<RecordingServer, 'url' | 'close'>> {
   const server = createServer(handle);
-  await new Promise<void>(resolve => server.listen(EPHEMERAL_PORT, LOOPBACK_HOST, resolve));
+  await new Promise<void>(resolve => { server.listen(EPHEMERAL_PORT, LOOPBACK_HOST, resolve); });
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://${LOOPBACK_HOST}:${port}`,
     async close() {
       server.closeAllConnections();
-      return new Promise<void>((resolve, reject) => server.close(err => (err ? reject(err) : resolve())));
+      return new Promise<void>((resolve, reject) => { server.close(err => (err ? reject(err) : resolve())); });
     },
   };
 }

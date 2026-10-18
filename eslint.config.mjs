@@ -96,6 +96,9 @@ const typeSafetyRules = {
   // A loop condition no iteration can change either spins forever or is dead.
   'no-unmodified-loop-condition': 'error',
   'no-constructor-return': 'error',
+  // A value returned from a Promise executor is discarded, so a `return`
+  // meant as an early exit runs on past it and resolves twice.
+  'no-promise-executor-return': 'error',
   'default-case-last': 'error',
   'no-restricted-globals': ['error',
     { name: 'isNaN', message: 'Global isNaN coerces its argument; use Number.isNaN.' },
@@ -159,7 +162,11 @@ export default tseslint.config(
   {
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
     plugins: regexp.configs['flat/recommended'].plugins,
-    rules: regexp.configs['flat/recommended'].rules,
+    rules: {
+      ...regexp.configs['flat/recommended'].rules,
+      // Quadratic scans: a quantified prefix retried from every start position.
+      'regexp/no-super-linear-move': 'error',
+    },
   },
   // TanStack Query hook hygiene (the preset is a one-element array).
   ...tanstackQuery.configs['flat/recommended'].map(config => ({ ...config, files: ['src/**/*.{ts,tsx}'] })),
@@ -249,6 +256,7 @@ export default tseslint.config(
       // anything, and `new Promise(r => setTimeout(r, ms))` is the sleep idiom.
       // Off in the parent's test block for the same reason.
       '@typescript-eslint/promise-function-async': 'off',
+      'no-promise-executor-return': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       // A stray `.only` silently skips the rest of the suite.
       'vitest/no-focused-tests': 'error',
