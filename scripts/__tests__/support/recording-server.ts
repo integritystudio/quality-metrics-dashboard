@@ -10,16 +10,16 @@
 import { createServer, type IncomingHttpHeaders, type IncomingMessage } from 'node:http';
 import type { Http2ServerRequest } from 'node:http2';
 import type { TLSSocket } from 'node:tls';
-import { startAlpnServer } from '../../../../src/test-helpers/alpn-server.js';
+import { ALPN_NONE, startAlpnServer } from '../../../../src/test-helpers/alpn-server.js';
 import { listenLoopback } from '../../../src/__tests__/support/listen-loopback.js';
+import { CONTENT_TYPE_HEADER, ContentType, Http } from '../../../src/__tests__/support/http-constants.js';
 
-const HTTP_OK = 200;
-const HTTP_INTERNAL_SERVER_ERROR = 500;
-const JSON_CONTENT_TYPE = 'application/json';
-const TEXT_CONTENT_TYPE = 'text/plain';
 const EMPTY_JSON_BODY = '{}';
-/** `alpnProtocol` of a request that arrived without TLS. */
-export const NO_ALPN = 'none';
+/**
+ * `alpnProtocol` of a request that arrived without TLS — the parent ALPN
+ * helper's own sentinel, so the two cannot be spelled differently.
+ */
+export const NO_ALPN = ALPN_NONE;
 
 export type RecordedRequest = {
   method: string;
@@ -55,8 +55,8 @@ export type RecordingServer = {
 }
 
 const answerOk: Responder = () => ({
-  status: HTTP_OK,
-  headers: { 'content-type': JSON_CONTENT_TYPE },
+  status: Http.Ok,
+  headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
   body: EMPTY_JSON_BODY,
 });
 
@@ -66,8 +66,8 @@ const answerOk: Responder = () => ({
  */
 function replyToResponderError(err: unknown): HttpReply {
   return {
-    status: HTTP_INTERNAL_SERVER_ERROR,
-    headers: { 'content-type': TEXT_CONTENT_TYPE, 'x-should-retry': 'false' },
+    status: Http.InternalServerError,
+    headers: { [CONTENT_TYPE_HEADER]: ContentType.Text, 'x-should-retry': 'false' },
     body: `recording-server responder threw: ${err instanceof Error ? err.stack ?? err.message : String(err)}`,
   };
 }

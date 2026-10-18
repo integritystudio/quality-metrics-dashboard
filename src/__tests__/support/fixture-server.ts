@@ -27,6 +27,7 @@ import type { EvaluationRow, LogRow, TraceSpan } from '@obtool-api/types';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { TIME_MS } from '../../lib/constants.js';
 import { listenLoopback } from './listen-loopback.js';
+import { CONTENT_TYPE_HEADER, ContentType, Http } from './http-constants.js';
 
 // ── Wire-format row types ─────────────────────────────────────────────────────
 // Typed off obtool-api's own response rows (type-only import, erased at runtime),
@@ -103,7 +104,6 @@ const NANOS_PER_DAY = BigInt(TIME_MS.DAY) * NANOS_PER_MS;
 const START_DATE_PARAM = 'startDate';
 const END_DATE_PARAM = 'endDate';
 const SESSION_ID_PARAM = 'sessionId';
-const HTTP_BAD_REQUEST = 400;
 
 export type FixtureServerOptions = {
   /**
@@ -194,30 +194,30 @@ export async function createFixtureServer(options: FixtureServerOptions = {}): P
     const failed = [...failPaths].some((fp) => path.startsWith(fp))
       || failQueries.some((fq) => fq.path === path && query.get(fq.param) === fq.value);
     if (failed) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.writeHead(Http.InternalServerError, { [CONTENT_TYPE_HEADER]: ContentType.Json });
       res.end(JSON.stringify({ error: 'fixture failure' }));
       return;
     }
 
-    res.setHeader('Content-Type', 'application/json');
+    res.setHeader(CONTENT_TYPE_HEADER, ContentType.Json);
 
     if (options.dateWindow && hasInvalidDateParam(query)) {
-      res.writeHead(HTTP_BAD_REQUEST);
+      res.writeHead(Http.BadRequest);
       res.end(JSON.stringify({ error: 'invalid date window' }));
     } else if (path === '/health') {
-      res.writeHead(200);
+      res.writeHead(Http.Ok);
       res.end(JSON.stringify({ status: 'ok' }));
     } else if (path === '/v1/evaluations') {
-      res.writeHead(200);
+      res.writeHead(Http.Ok);
       res.end(JSON.stringify(pagedBody(windowed(filterEvals(evalRows, query), query, (row) => row.timestamp_ns), query)));
     } else if (path === '/v1/traces') {
-      res.writeHead(200);
+      res.writeHead(Http.Ok);
       res.end(JSON.stringify(pagedBody(windowed(filterTraces(traceRows, query), query, (row) => row.start_time_ns), query)));
     } else if (path === '/v1/logs') {
-      res.writeHead(200);
+      res.writeHead(Http.Ok);
       res.end(JSON.stringify(pagedBody(windowed(logRows, query, (row) => row.timestamp_ns), query)));
     } else {
-      res.writeHead(404);
+      res.writeHead(Http.NotFound);
       res.end(JSON.stringify({ error: 'not found' }));
     }
   });
