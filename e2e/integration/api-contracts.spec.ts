@@ -72,7 +72,7 @@ test.describe('Dashboard API contracts', () => {
   test('GET /api/dashboard returns valid shape', async ({ request }) => {
     const res = await request.get(url('/api/dashboard?period=7d'), { headers: authHeaders });
     // 200 = data exists, 404 = no data synced yet — both are valid
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
     if (res.status() === HttpStatus.Ok) {
       const body = await res.json();
       expect(body).toHaveProperty('metrics');
@@ -86,7 +86,7 @@ test.describe('Dashboard API contracts', () => {
 
   test('GET /api/metrics/:name returns 200 or 404', async ({ request }) => {
     const res = await request.get(url('/api/metrics/relevance'), { headers: authHeaders });
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/metrics/:name rejects invalid name', async ({ request }) => {
@@ -97,22 +97,22 @@ test.describe('Dashboard API contracts', () => {
 
   test('GET /api/trends/:name returns 200 or 404', async ({ request }) => {
     const res = await request.get(url('/api/trends/relevance?period=7d'), { headers: authHeaders });
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/correlations returns 200 or 404', async ({ request }) => {
     const res = await request.get(url('/api/correlations?period=7d'), { headers: authHeaders });
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/degradation-signals returns valid response', async ({ request }) => {
     const res = await request.get(url('/api/degradation-signals?period=7d'), { headers: authHeaders });
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/coverage returns valid shape', async ({ request }) => {
     const res = await request.get(url('/api/coverage?period=7d'), { headers: authHeaders });
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
     if (res.status() === HttpStatus.Ok) {
       const body = await res.json();
       expect(body).toHaveProperty('metrics');
@@ -122,7 +122,7 @@ test.describe('Dashboard API contracts', () => {
   test('GET /api/calibration returns valid response', async ({ request }) => {
     const res = await request.get(url('/api/calibration'), { headers: authHeaders });
     // 200 = data exists, 404 = no KV entry, 500 = schema validation failure on malformed data
-    expect([200, 404, 500]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound, HttpStatus.InternalServerError]).toContain(res.status());
   });
 
   test('GET /api/calibration serves the full calibration contract when data exists', async ({ request }) => {
@@ -157,7 +157,7 @@ test.describe('Dashboard API contracts', () => {
   test('GET /api/routing-telemetry returns valid response', async ({ request }) => {
     const res = await request.get(url('/api/routing-telemetry?period=7d'), { headers: authHeaders });
     // 200 = data exists, 404 = no KV entry, 500 = schema validation failure on malformed data
-    expect([200, 404, 500]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound, HttpStatus.InternalServerError]).toContain(res.status());
   });
 });
 
@@ -165,17 +165,17 @@ test.describe('Permission-gated routes', () => {
   test('GET /api/pipeline requires dashboard.pipeline.read', async ({ request }) => {
     const res = await request.get(url('/api/pipeline?period=7d'), { headers: authHeaders });
     // 200 if user has permission and data exists, 403 if no permission, 404 if no data
-    expect([200, 403, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.Forbidden, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/agents requires dashboard.agents.read', async ({ request }) => {
     const res = await request.get(url('/api/agents'), { headers: authHeaders });
-    expect([200, 403, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.Forbidden, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/compliance/sla requires proper permissions', async ({ request }) => {
     const res = await request.get(url('/api/compliance/sla?period=7d'), { headers: authHeaders });
-    expect([200, 403, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.Forbidden, HttpStatus.NotFound]).toContain(res.status());
   });
 });
 

@@ -16,7 +16,7 @@ test.describe('API Endpoint Health', () => {
 
   test('GET /api/metrics/:name returns 200 or 404', async ({ request }) => {
     const res = await request.get('/api/metrics/relevance?period=7d');
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('GET /api/correlations returns 200', async ({ request }) => {
@@ -60,7 +60,7 @@ test.describe('API Endpoint Health', () => {
 
   test('GET /api/trends/:name returns 200 or 404', async ({ request }) => {
     const res = await request.get('/api/trends/relevance?period=7d&buckets=5');
-    expect([200, 404]).toContain(res.status());
+    expect([HttpStatus.Ok, HttpStatus.NotFound]).toContain(res.status());
   });
 
   test('rejects invalid period', async ({ request }) => {
