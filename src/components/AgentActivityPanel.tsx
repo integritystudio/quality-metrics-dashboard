@@ -142,7 +142,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                 <tr
                   className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
                   style={{ '--agent-color': color } as CSSProperties}
-                  onClick={() => hasLinks && setExpanded(isExpanded ? null : agent.agentName)}
+                  onClick={() => { if (hasLinks) setExpanded(isExpanded ? null : agent.agentName); }}
                 >
                   <td>
                     <div className="flex-center gap-2">

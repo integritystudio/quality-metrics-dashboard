@@ -75,6 +75,9 @@ const typeSafetyRules = {
   '@typescript-eslint/promise-function-async': 'error',
   '@typescript-eslint/dot-notation': 'error',
   '@typescript-eslint/no-unnecessary-type-arguments': 'error',
+  // A value-returning callback where void is expected usually means a dropped
+  // result: `onClick={() => guard && act()}` returns `false | void`.
+  '@typescript-eslint/strict-void-return': 'error',
   '@typescript-eslint/no-extraneous-class': 'error',
   // Separate signatures that a union parameter would state once hide from the
   // reader that the same body serves both.
@@ -256,6 +259,9 @@ export default tseslint.config(
       // anything, and `new Promise(r => setTimeout(r, ms))` is the sleep idiom.
       // Off in the parent's test block for the same reason.
       '@typescript-eslint/promise-function-async': 'off',
+      // `mockImplementation(() => value)` and `act(() => render(...))` return a
+      // value into a void slot by construction. Off in the parent's test block too.
+      '@typescript-eslint/strict-void-return': 'off',
       'no-promise-executor-return': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       // A stray `.only` silently skips the rest of the suite.
