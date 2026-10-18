@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params` and `max-depth` by hand on 2026-10-17. 610 hits remain, none autofixable. Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth` and `vitest/no-conditional-expect` by hand on 2026-10-17. 601 hits remain, none autofixable. Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -69,7 +69,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`import/no-extraneous-dependencies`~~ (landed) | 25 | 0 | 25 / 0 |
 | `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
 | ~~`max-params` 4~~ (landed) | 11 | 0 | 8 / 3 |
-| `vitest/no-conditional-expect` | 9 | 0 | 0 / 9 |
+| ~~`vitest/no-conditional-expect`~~ (landed) | 9 | 0 | 0 / 9 |
 | `@typescript-eslint/strict-void-return` | 5 | 0 | 2 / 3 |
 | `regexp/no-super-linear-move` | 4 | 0 | 1 / 3 |
 | `no-promise-executor-return` | 3 | 0 | 1 / 2 |
@@ -160,6 +160,33 @@ of the real hit below.
 - So this rule's value here is **future** code, not a defect it found. Expect the same false positive
   from any `while (!flag)` whose flag a callback sets, and prefer extending the existing disable to
   rewriting a correct loop.
+
+**`vitest/no-conditional-expect` landed 2026-10-17** at the parent's bare `error`, in the `TEST_FILES`
+block beside `no-focused-tests` and `no-identical-title`. Proved live with a throwaway `if (x > 0) expect(…)`
+under `src/__tests__/`, `src/lib/*.test.ts`, `worker/__tests__/` and `scripts/__tests__/`: all four fired,
+so the rule reaches every tree `TEST_FILES` names, not just the two files that happened to hit it.
+All 9 hits were in `scripts/__tests__/{judge-evaluations,pipeline-integration}.test.ts` and all were the
+same shape — a `for` over seeded evals with a per-metric `if (ev.evaluationName === …)` inside.
+- 🔴 **The rule found a real vacuous pass, not a style nit.** `non-canary scores are within expected
+  ranges` asserted nothing about a metric `seedEvaluations` stopped emitting: deleting `coherence` from
+  `SEED_METRICS` left that test **green** (other tests caught the mutation; that one did not). The
+  rewrite asserts the set of banded metrics is present *before* checking the bands, and fails.
+- **The fix shape is two string lists, not more branches.** A `bands` table of
+  `[name, low, high]`, then `expect(missing).toEqual([])` and `expect(outOfBand).toEqual([])` where each
+  list is built with `filter`/`flatMap` and formatted `name=score`. A failure names the metric and the
+  offending value, which the old `expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70)` inside a loop did not.
+- 🔴 **`Math.max(...xs)` is banned here** by `no-restricted-syntax` (stack overflow on large arrays; use
+  `d3-array`). d3's `max`/`min` return `undefined` on an empty array rather than `∓Infinity`, so they fail
+  an empty list instead of passing it — but the explicit `expect(scores.length).toBeGreaterThan(0)` lines
+  stay, because `expected undefined to be <= 0.35` does not say which metric vanished.
+- ⚠️ Destructuring the band tuple as `[name, min, max]` shadows d3's imported `min`/`max`
+  (`@typescript-eslint/no-shadow`). Named `low`/`high`.
+- Verified by mutating the producer four ways — relevance's normal band widened, `coherence` dropped from
+  `SEED_METRICS`, relevance's canary band raised, `CANARY_TURN_RATE` set to 0 — each one reds exactly the
+  rewritten test(s) that should catch it.
+- **Untested gap, left alone deliberately.** `SEED_METRICS` bands `faithfulness` (normal `[0.0, 0.09]`,
+  canary `[0.50, 0.80]`, shared with hallucination) and `tool_correctness` (`[0.75, 1.0]` / `[0.10, 0.30]`),
+  and no test pins either. Adding them is coverage work, not part of adopting the rule.
 
 **`max-params` 4 and `max-depth` 4 landed 2026-10-17** at the parent's levels, in a `Complexity controls`
 block over `src/`, `worker/` and `scripts/` — the home the remaining complexity rules (`complexity` 12,
@@ -269,7 +296,8 @@ in a comment on the type itself.
   `minimumDescriptionLength: 10`; `no-unused-vars` here also exempts `_`-prefixed destructured array elements.
   Keep `scripts/`' `prefer-nullish-coalescing` `ignorePrimitives: { boolean: true }`: it guards the
   `isDirectRun` checks.
-- **Tests only.** `vitest/no-disabled-tests`, `expect-expect`, `no-conditional-expect`, `valid-expect` (`maxArgs: 2`);
+- **Tests only.** `vitest/no-disabled-tests`, `expect-expect`, `valid-expect` (`maxArgs: 2`);
+  ~~`no-conditional-expect`~~ (landed 2026-10-17);
   `no-unnecessary-type-assertion` stays off here on purpose (see the comment in `eslint.config.mjs`).
 
 New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x` and
