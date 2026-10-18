@@ -171,18 +171,20 @@ same shape — a `for` over seeded evals with a per-metric `if (ev.evaluationNam
   ranges` asserted nothing about a metric `seedEvaluations` stopped emitting: deleting `coherence` from
   `SEED_METRICS` left that test **green** (other tests caught the mutation; that one did not). The
   rewrite asserts the set of banded metrics is present *before* checking the bands, and fails.
-- **The fix shape is two string lists, not more branches.** A `bands` table of
-  `[name, low, high]`, then `expect(missing).toEqual([])` and `expect(outOfBand).toEqual([])` where each
-  list is built with `filter`/`flatMap` and formatted `name=score`. A failure names the metric and the
-  offending value, which the old `expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70)` inside a loop did not.
+- **The fix shape is a list of violations, not more branches.** The band test builds a `bands` table of
+  `[name, low, high]`, then asserts `expect(missing).toEqual([])` and `expect(outOfBand).toEqual([])`,
+  each list built with `filter`/`flatMap` and formatted `name=score` so a failure names the metric and
+  the offending value — which the old `expect(ev.scoreValue).toBeGreaterThanOrEqual(0.70)` inside a loop
+  did not. The canary test has one assertion per metric and so filters raw score arrays inline; the
+  failing line is what identifies the metric there.
 - 🔴 **Assert the complement, because NaN fails every comparison.** `score < low || score > high` is
   **false** for NaN, so the positive form lets a NaN through both arms; `!(score >= low && score <= high)`
   catches it. The same hole sank the first canary rewrite, which used `d3-array`'s `max`/`min`: those
   **skip** NaN, so a partially-NaN series passes. Measured — a producer emitting NaN for a subset of
   relevance scores passed all 128 tests in `judge-evaluations.test.ts` before this and reds two after.
   The pre-existing `expect(ev.scoreValue).toBeGreaterThanOrEqual(low)` form had the same hole, so the
-  rule did not introduce it; the rewrite is where it got closed. Both tests now assert
-  `expect(violations).toEqual([])` over a `filter` of the negated predicate.
+  rule did not introduce it; the rewrite is where it got closed. Both tests now assert `toEqual([])`
+  over a `filter` of the negated predicate.
 - **`Math.max(...xs)` is banned here** by `no-restricted-syntax` (stack overflow on large arrays; use
   `d3-array`) — which is what pushed the first attempt onto d3 and into the NaN hole above. The current
   shape needs neither, so the import is gone. Keep `expect(scores.length).toBeGreaterThan(0)` regardless:
