@@ -1,6 +1,7 @@
 import { test as base, expect, type Page } from '@playwright/test';
 
 import { API_HOST, API_PORT } from '../src/api/config.js';
+import { ContentType, HttpStatus } from '../src/lib/http-constants.js';
 
 // Must match TEST_TOKEN in src/stubs/auth0-e2e.ts
 export const MOCK_ME_RESPONSE = {
@@ -27,8 +28,8 @@ export const MOCK_STAFF_ME_RESPONSE = {
 export async function mockMe(page: Page, body: unknown): Promise<void> {
   await page.route('**/api/me', route =>
     route.fulfill({
-      status: 200,
-      contentType: 'application/json',
+      status: HttpStatus.Ok,
+      contentType: ContentType.Json,
       body: JSON.stringify(body),
     })
   );

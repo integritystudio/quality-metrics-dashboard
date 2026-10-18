@@ -6,6 +6,7 @@
  * data or on api-gateway being deployed.
  */
 import { test, expect, MOCK_STAFF_ME_RESPONSE, mockMe } from './fixtures.js';
+import { ContentType, HttpStatus } from '../src/lib/http-constants.js';
 
 const GATEWAY_ROUTE = '**/v1/admin/**';
 const ORG_A = { id: 'a0000000-0000-4000-8000-00000000000a', name: 'Acme', slug: 'acme', billing_status: 'active', current_plan: 'growth' };
@@ -33,14 +34,14 @@ async function stubGateway(page: Parameters<typeof mockMe>[0]): Promise<string[]
   const requested: string[] = [];
   await page.route(GATEWAY_ROUTE, async (route) => {
     const request = route.request();
-    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS_HEADERS });
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: HttpStatus.NoContent, headers: CORS_HEADERS });
     const { pathname } = new URL(request.url());
     requested.push(pathname);
     const orgMatch = /^\/v1\/admin\/orgs\/([^/]+)(\/.*)$/.exec(pathname);
     const body = orgMatch
       ? PAYLOADS.find(([suffix]) => suffix === orgMatch[2])?.[1](orgMatch[1]!)
       : { organizations: [ORG_A, ORG_B] };
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: CORS_HEADERS, body: JSON.stringify(body) });
+    return route.fulfill({ status: HttpStatus.Ok, contentType: ContentType.Json, headers: CORS_HEADERS, body: JSON.stringify(body) });
   });
   return requested;
 }

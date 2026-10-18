@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import type { PostgrestClient } from '@supabase/postgrest-js';
 import { serviceClient } from './supabase-service.js';
+import { CONTENT_TYPE_HEADER, ContentType } from '../../src/lib/http-constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -65,7 +66,7 @@ async function getAuth0Jwt(
 ): Promise<string> {
   const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
     body: JSON.stringify({
       grant_type: 'password',
       username: email,

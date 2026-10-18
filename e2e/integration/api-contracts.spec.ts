@@ -11,6 +11,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const STATE_FILE = join(__dirname, '.integration-state.json');
@@ -37,7 +38,7 @@ function url(path: string): string {
 test.describe('Auth flow', () => {
   test('GET /api/me returns authenticated user session', async ({ request }) => {
     const res = await request.get(url('/api/me'), { headers: authHeaders });
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(HttpStatus.Ok);
     const body = await res.json();
     expect(body).toHaveProperty('email', state.email);
     expect(body).toHaveProperty('roles');
@@ -49,21 +50,21 @@ test.describe('Auth flow', () => {
 
   test('GET /api/me returns 401 without token', async ({ request }) => {
     const res = await request.get(url('/api/me'));
-    expect(res.status()).toBe(401);
+    expect(res.status()).toBe(HttpStatus.Unauthorized);
   });
 
   test('GET /api/me returns 401 with invalid token', async ({ request }) => {
     const res = await request.get(url('/api/me'), {
       headers: { 'Authorization': 'Bearer invalid.jwt.token' },
     });
-    expect(res.status()).toBe(401);
+    expect(res.status()).toBe(HttpStatus.Unauthorized);
   });
 });
 
 test.describe('Dashboard API contracts', () => {
   test('GET /api/health returns 200 without auth', async ({ request }) => {
     const res = await request.get(url('/api/health'));
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(HttpStatus.Ok);
     const body = await res.json();
     expect(body).toHaveProperty('status', 'ok');
   });
@@ -72,7 +73,7 @@ test.describe('Dashboard API contracts', () => {
     const res = await request.get(url('/api/dashboard?period=7d'), { headers: authHeaders });
     // 200 = data exists, 404 = no data synced yet — both are valid
     expect([200, 404]).toContain(res.status());
-    if (res.status() === 200) {
+    if (res.status() === HttpStatus.Ok) {
       const body = await res.json();
       expect(body).toHaveProperty('metrics');
     }
@@ -80,7 +81,7 @@ test.describe('Dashboard API contracts', () => {
 
   test('GET /api/dashboard rejects invalid period', async ({ request }) => {
     const res = await request.get(url('/api/dashboard?period=99d'), { headers: authHeaders });
-    expect(res.status()).toBe(400);
+    expect(res.status()).toBe(HttpStatus.BadRequest);
   });
 
   test('GET /api/metrics/:name returns 200 or 404', async ({ request }) => {
@@ -91,7 +92,7 @@ test.describe('Dashboard API contracts', () => {
   test('GET /api/metrics/:name rejects invalid name', async ({ request }) => {
     // Path traversal gets normalized by HTTP clients; use a name with invalid chars instead
     const res = await request.get(url('/api/metrics/foo%00bar'), { headers: authHeaders });
-    expect(res.status()).toBe(400);
+    expect(res.status()).toBe(HttpStatus.BadRequest);
   });
 
   test('GET /api/trends/:name returns 200 or 404', async ({ request }) => {
@@ -112,7 +113,7 @@ test.describe('Dashboard API contracts', () => {
   test('GET /api/coverage returns valid shape', async ({ request }) => {
     const res = await request.get(url('/api/coverage?period=7d'), { headers: authHeaders });
     expect([200, 404]).toContain(res.status());
-    if (res.status() === 200) {
+    if (res.status() === HttpStatus.Ok) {
       const body = await res.json();
       expect(body).toHaveProperty('metrics');
     }
@@ -131,7 +132,7 @@ test.describe('Dashboard API contracts', () => {
     // getMetricCalibration. Skipped on 404/500: whether the dev KV is seeded is
     // not this test's contract, and asserting on it would make the suite flaky.
     const res = await request.get(url('/api/calibration'), { headers: authHeaders });
-    test.skip(res.status() !== 200, 'no calibration data in KV for this environment');
+    test.skip(res.status() !== HttpStatus.Ok, 'no calibration data in KV for this environment');
 
     const body = await res.json() as {
       distributions: Record<string, Record<string, number>>;
@@ -182,12 +183,12 @@ test.describe('Admin routes (should be forbidden for test user)', () => {
   test('GET /api/admin/users returns 403 for non-admin', async ({ request }) => {
     const res = await request.get(url('/api/admin/users'), { headers: authHeaders });
     // Test user has a dashboard.read role, not dashboard.admin
-    expect(res.status()).toBe(403);
+    expect(res.status()).toBe(HttpStatus.Forbidden);
   });
 
   test('GET /api/admin/roles returns 403 for non-admin', async ({ request }) => {
     const res = await request.get(url('/api/admin/roles'), { headers: authHeaders });
-    expect(res.status()).toBe(403);
+    expect(res.status()).toBe(HttpStatus.Forbidden);
   });
 });
 
@@ -195,23 +196,23 @@ test.describe('Activity logging', () => {
   test('POST /api/logout returns 204', async ({ request }) => {
     // Note: this doesn't invalidate the JWT — Supabase JWTs are stateless
     const res = await request.post(url('/api/logout'), { headers: authHeaders });
-    expect(res.status()).toBe(204);
+    expect(res.status()).toBe(HttpStatus.NoContent);
   });
 
   test('POST /api/activity with valid body returns 204', async ({ request }) => {
     const res = await request.post(url('/api/activity'), {
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      headers: { ...authHeaders, [CONTENT_TYPE_HEADER]: ContentType.Json },
       data: { activity_type: 'login' },
     });
-    expect(res.status()).toBe(204);
+    expect(res.status()).toBe(HttpStatus.NoContent);
   });
 
   test('POST /api/activity with invalid body returns 400', async ({ request }) => {
     const res = await request.post(url('/api/activity'), {
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      headers: { ...authHeaders, [CONTENT_TYPE_HEADER]: ContentType.Json },
       data: { invalid: 'field' },
     });
-    expect(res.status()).toBe(400);
+    expect(res.status()).toBe(HttpStatus.BadRequest);
   });
 });
 

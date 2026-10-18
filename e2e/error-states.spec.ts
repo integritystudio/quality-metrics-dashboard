@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures.js';
+import { HttpStatus } from '../src/lib/http-constants.js';
 
 test.describe('Error & Empty States', () => {
   test('shows loading skeleton on initial load', async ({ page }) => {
@@ -13,7 +14,7 @@ test.describe('Error & Empty States', () => {
 
   test('shows error state when API fails', async ({ page }) => {
     await page.route('**/api/dashboard*', (route) =>
-      route.fulfill({ status: 500, body: JSON.stringify({ error: 'Internal error' }) })
+      route.fulfill({ status: HttpStatus.InternalServerError, body: JSON.stringify({ error: 'Internal error' }) })
     );
     await page.goto('/');
     const error = page.locator('text=/error|failed|unavailable|went wrong/i');
