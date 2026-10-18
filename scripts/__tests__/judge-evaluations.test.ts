@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { max, min } from 'd3-array';
 import { writeFileSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -588,9 +587,11 @@ describe('seedEvaluations', () => {
     const scored = new Set(nonCanary.map(ev => ev.evaluationName));
     expect(bands.filter(([name]) => !scored.has(name)).map(([name]) => name)).toEqual([]);
 
+    // Negated rather than `< low || > high`: NaN fails every comparison, so the
+    // positive form would let a NaN score through both arms.
     const outOfBand = bands.flatMap(([name, low, high]) =>
       nonCanary
-        .filter(ev => ev.evaluationName === name && (ev.scoreValue < low || ev.scoreValue > high))
+        .filter(ev => ev.evaluationName === name && !(ev.scoreValue >= low && ev.scoreValue <= high))
         .map(ev => `${name}=${ev.scoreValue}`)
     );
     expect(outOfBand).toEqual([]);
@@ -639,8 +640,8 @@ describe('seedEvaluations', () => {
 
     expect(relevance.length).toBeGreaterThan(0);
     expect(hallucination.length).toBeGreaterThan(0);
-    expect(max(relevance)).toBeLessThanOrEqual(0.35);
-    expect(min(hallucination)).toBeGreaterThanOrEqual(0.50);
+    expect(relevance.filter(score => !(score <= 0.35))).toEqual([]);
+    expect(hallucination.filter(score => !(score >= 0.50))).toEqual([]);
   });
 });
 
