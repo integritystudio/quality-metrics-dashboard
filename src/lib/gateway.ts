@@ -74,7 +74,7 @@ export class GatewayError extends Error {
 }
 
 /** The two statuses `DashboardService` retries before reporting a server error. */
-const HTTP_RETRIED_STATUSES: ReadonlySet<number> = new Set([500, 504]);
+const HTTP_RETRIED_STATUSES: ReadonlySet<number> = new Set([HttpStatus.InternalServerError, HttpStatus.GatewayTimeout]);
 const TIMEOUT_ERROR_NAME = 'TimeoutError';
 
 /** `_sanitizeReadError` plus the retried-status branch: 401, 403, 500/504, and the rest as unexpected. */

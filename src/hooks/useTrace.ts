@@ -4,6 +4,7 @@ import { STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useOrgOptional } from '../contexts/OrgContext.js';
 import { apiFetch } from '../lib/api-client.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 type TraceSpanResponse = {
   traceId: string;
@@ -40,7 +41,7 @@ export function useTrace(traceId: string | undefined): UseQueryResult<TraceRespo
       const res = await apiFetch(`/api/traces/${encodeURIComponent(traceId)}`, token, activeOrgId, { signal });
       if (!res.ok) {
         // Worker returns 404 with JSON body when trace not in KV — return empty data
-        if (res.status === 404) return { traceId, spans: [], evaluations: [] };
+        if (res.status === HttpStatus.NotFound) return { traceId, spans: [], evaluations: [] };
         throw new Error(`API error: ${res.status}`);
       }
       return res.json();

@@ -3,8 +3,10 @@
  * can reach `src/lib/` — frontend, the Hono API server and both test trees — so
  * a server and the code reading it cannot drift apart.
  *
- * Two deliberate twins live outside this file's reach: `worker/index.ts` and its
- * test support module, which cannot safely import this package's constants.
+ * `worker/index.ts` and `worker/__tests__/support/http.ts` keep their own copies.
+ * That is convention, not necessity: this file imports nothing, and the worker
+ * already reaches it through `postgrest-client.ts`. The boundary that stops the
+ * worker importing `src/lib/constants.ts` does not apply here.
  */
 export const HttpStatus = {
   Ok: 200,
