@@ -52,7 +52,7 @@ export function currentPath(location: ReturnType<typeof renderPage>['location'])
 
 /** Hold every request open, as a slow network would, so a page stays loading. */
 export function stubPendingFetch() {
-  const fetchSpy = vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(() => undefined));
+  const fetchSpy = vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(() => { /* never settles */ }));
   vi.stubGlobal('fetch', fetchSpy);
   return fetchSpy;
 }

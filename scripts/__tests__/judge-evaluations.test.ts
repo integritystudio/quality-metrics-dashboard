@@ -1323,7 +1323,7 @@ function createDeferredLLM() {
   const waiting: Array<{ prompt: string; resolve: (r: { text: string }) => void }> = [];
   const llm: LLMProvider = {
     generate(prompt: string) {
-      return new Promise(resolve => waiting.push({ prompt, resolve }));
+      return new Promise(resolve => { waiting.push({ prompt, resolve }); });
     },
   };
   const answerAll = () => {

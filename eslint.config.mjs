@@ -12,7 +12,7 @@ import vitest from '@vitest/eslint-plugin';
 import importX from 'eslint-plugin-import-x';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 
-const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts'];
+const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts', 'scripts/__tests__/**/*.ts'];
 
 // Files that ship nothing: a devDependency import here is correct. Mirrors the
 // parent's list, narrowed to the trees this package actually has.
