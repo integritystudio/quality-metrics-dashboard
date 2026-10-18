@@ -59,7 +59,7 @@ Three constants files with a hard module boundary — do not cross-import:
 - **`src/lib/constants.ts`** — frontend + API server shared. Imported by React components, hooks, and Hono API routes.
 - **`src/lib/http-constants.ts`** — the one home for `HttpStatus`, `CONTENT_TYPE_HEADER` and `ContentType`, reachable by everything that can import `src/lib/` (frontend, API server, both test trees, the local test servers). Never restate a status code or `application/json` inline; `HttpStatus` is a plain object, so a parameter defaulting to one of its members needs an explicit `: number`.
 - **`src/api/api-constants.ts`** — API server only (Node context). Imported by `src/api/routes/` and `scripts/`. Cannot be imported in Vite-rendered code.
-- **`worker/index.ts`** and **`worker/__tests__/support/http.ts`** — deliberate twins with their own `Http`/`HttpStatus` objects; the worker cannot import any file above safely, and its test support module mirrors it. `scripts/` keeps its own status constants too.
+- **`worker/index.ts`** and **`worker/__tests__/support/http.ts`** — their own `Http`/`HttpStatus` objects. The worker cannot safely import `constants.ts` or `api-constants.ts`, but `http-constants.ts` it could: that file imports nothing and the worker already reaches it through `postgrest-client.ts`, so these two copies are convention, not a boundary. `scripts/` keeps its own status constants too.
 
 Score display precision constants (use these, never raw `.toFixed()` literals):
 - `SCORE_CHIP_PRECISION = 2` — compact chips/cells
