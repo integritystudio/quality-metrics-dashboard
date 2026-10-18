@@ -253,7 +253,9 @@ every one, the executor rule in the source trees only, as configured.
   flag across the test trees, 10 are `new Promise(r => setTimeout(r, ms))` — the idiom the exemption
   exists for — and were left alone. The 4 that were a discarded value rather than an idiom now use block
   bodies: `fixture-server.ts`'s `listen` and `close` — plumbing both test servers had spelled out
-  separately, and which now comes from one `listenLoopback` helper beside the fixture server —
+  separately, and which now comes from one `listenLoopback` helper beside the fixture server, as do
+  their statuses, header name and media types (`http-constants.ts`, where one server had named them
+  privately while the other wrote the same values inline) —
   plus `page-harness.tsx`'s never-settling fetch stub and `judge-evaluations.test.ts`'s deferred-LLM
   registration, which returned `Array.prototype.push`'s new length.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
