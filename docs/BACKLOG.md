@@ -242,10 +242,13 @@ every one, the executor rule in the source trees only, as configured.
   despite the block's comment claiming it covers "support modules the src/ test override misses" — so
   the identical executor shape was an error under `scripts/__tests__/support/` and silent under
   `src/__tests__/support/`, where `fixture-server.ts` carries two of them. The split was the defect, not
-  either half of it. Widening it also hands that tree the block's other exemptions
-  (`promise-function-async` and `explicit-function-return-type` off, looser
-  `restrict-template-expressions`, `no-non-null-assertion` at `warn` — still fatal under
-  `--max-warnings 0`); nothing there relies on them today, since the tree was green with those rules on.
+  either half of it. Widening it also hands that tree the block's other exemptions, and the enforcement
+  they give up there is **nothing today**, measured rule by rule: `explicit-function-return-type` was
+  never on for `scripts/` at all (it is scoped to `src/api`, `src/hooks`, `src/lib`), and
+  `promise-function-async`, `no-non-null-assertion` and `restrict-template-expressions` at its strict
+  options each report zero hits over `scripts/__tests__/support/`. The three `vitest/*` rules the block
+  adds are inert there — support modules declare no tests. Re-measure before adding a module to that
+  tree that the exemptions would cover.
 - **The accidental returns were swept anyway, the sleep idiom was not.** Of the 11 sites the rule would
   flag across the test trees, 10 are `new Promise(r => setTimeout(r, ms))` — the idiom the exemption
   exists for — and were left alone. The 4 that were a discarded value rather than an idiom now use block
