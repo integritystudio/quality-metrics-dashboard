@@ -249,8 +249,9 @@ every one, the executor rule in the source trees only, as configured.
 - **The accidental returns were swept anyway, the sleep idiom was not.** Of the 11 sites the rule would
   flag across the test trees, 10 are `new Promise(r => setTimeout(r, ms))` — the idiom the exemption
   exists for — and were left alone. The 4 that were a discarded value rather than an idiom now use block
-  bodies: `fixture-server.ts`'s `listen` and `close` (the same plumbing as `recording-server.ts`),
-  `page-harness.tsx`'s never-settling fetch stub, and `judge-evaluations.test.ts`'s deferred-LLM
+  bodies: `fixture-server.ts`'s `listen` and `close` — plumbing both test servers had spelled out
+  separately, and which now comes from one `listenLoopback` helper beside the fixture server —
+  plus `page-harness.tsx`'s never-settling fetch stub and `judge-evaluations.test.ts`'s deferred-LLM
   registration, which returned `Array.prototype.push`'s new length.
 - 🔴 **`/^\s*…/m` is the super-linear shape to watch for, and it reads as correct.** Three of the four
   regexp hits were `expect(source).toMatch(/^\s*<Route …/m)` in `coverage-tab.test.tsx`: under `m`,
