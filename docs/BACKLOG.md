@@ -605,7 +605,9 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     the parent's step-scale `STEP_SCALE_*`) are deleted; `QualityLiveIndicator` and `ConfidencePanel`
     now band through `scoreColorBand`, the parent's continuous `SCORE_BAND_*` (`[0.4, 0.6, 0.8, 0.9]`),
     as `data-band`. Both gain the `good` and `poor` bands, and evaluator agreement below 0.5 is no
-    longer left unbanded. Live chips are still banded as `maximize`: `LiveMetric` carries no direction.
+    longer left unbanded. Live hallucination chips band as `minimize` (`HALLUCINATION_RISK_EVALUATION_NAMES`);
+    they had been coloured as higher-is-better. Live chips still use the uniform bands, not
+    `adaptiveScoreColorBand`'s per-metric scale strategy that `ScoreBadge` applies.
   - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
     `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
 - **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,

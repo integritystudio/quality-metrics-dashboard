@@ -1,6 +1,10 @@
 import { useQualityLive } from '../hooks/useQualityLive.js';
-import { formatTimestamp, scoreColorBand } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { formatTimestamp, scoreColorBand, type ScoreDirection } from '../lib/quality-utils.js';
+import { HALLUCINATION_RISK_EVALUATION_NAMES, SCORE_CHIP_PRECISION } from '../lib/constants.js';
+
+function liveMetricDirection(metricName: string): ScoreDirection {
+  return HALLUCINATION_RISK_EVALUATION_NAMES.has(metricName.toLowerCase()) ? 'minimize' : 'maximize';
+}
 
 export function QualityLiveIndicator() {
   const { data, isLoading, error } = useQualityLive();
@@ -31,7 +35,7 @@ export function QualityLiveIndicator() {
           key={m.name}
           title={`${m.name}: ${m.score.toFixed(SCORE_CHIP_PRECISION)} (${m.evaluatorType})`}
           className="mono text-xs chip gap-1 font-medium inline-flex-center quality-chip"
-          data-band={scoreColorBand(m.score)}
+          data-band={scoreColorBand(m.score, liveMetricDirection(m.name))}
         >
           <span className="dot-xs" />
           {m.name.replace(/_/g, ' ')}
