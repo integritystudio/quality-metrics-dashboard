@@ -159,7 +159,6 @@ export type SurvivalCohort = typeof SURVIVAL_COHORT[keyof typeof SURVIVAL_COHORT
 export const CONTENT_KIND = { CODE: 'code', DOC: 'doc' } as const;
 export type ContentKind = typeof CONTENT_KIND[keyof typeof CONTENT_KIND];
 
-
 export const HEATMAP_ROW_HEADER_WIDTH = 80;
 export const HEATMAP_COL_HEADER_HEIGHT = 32;
 export const COVERAGE_GRID_HEADER_WIDTH = 120;
