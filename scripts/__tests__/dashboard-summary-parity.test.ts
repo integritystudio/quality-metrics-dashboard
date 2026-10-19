@@ -8,12 +8,11 @@
  * Both now call `computeAllDashboardEntries` / `computeDashboardFull` /
  * `computeDashboardRoleView` from `../src/api/aggregates/dashboard-summary`.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { dashboardRoutes } from '../../src/api/routes/dashboard.js';
 import { evaluation } from './support/evaluations.js';
-import { serveParityFixture } from './support/parity-fixture.js';
+import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -25,25 +24,11 @@ const evaluations: EvaluationResult[] = [
 
 const fixture = serveParityFixture({ evaluations });
 
-function kvValue(result: OrgComputation, key: string): unknown {
-  const entry = result.allEntries.find(e => e.key === key);
-  return entry ? JSON.parse(entry.value) as unknown : undefined;
-}
-
 describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
-  let synced: OrgComputation;
-
-  beforeEach(async () => {
-    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const synced = syncEachTest(fixture, NOW);
 
   it.each(['7d', '30d'] as const)('writes for %s the value the dev route answers (no role)', async (period) => {
-    const fromKv = kvValue(synced, `dashboard:${period}`);
+    const fromKv = kvValue(synced(), `dashboard:${period}`);
 
     const res = await dashboardRoutes.request(`/dashboard?period=${period}`);
     expect(res.status).toBe(200);
@@ -53,7 +38,7 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   });
 
   it('includes cqi and sparklines in the full payload', () => {
-    const fromKv = kvValue(synced, 'dashboard:7d') as Record<string, unknown> | undefined;
+    const fromKv = kvValue<Record<string, unknown>>(synced(), 'dashboard:7d');
     expect(fromKv).toHaveProperty('cqi');
     expect(fromKv).toHaveProperty('sparklines');
   });
@@ -61,7 +46,7 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   it.each(['executive', 'operator', 'auditor'] as const)(
     'writes for 7d/%s the value the dev route answers (role view)',
     async (role) => {
-      const fromKv = kvValue(synced, `dashboard:7d:${role}`);
+      const fromKv = kvValue(synced(), `dashboard:7d:${role}`);
 
       const res = await dashboardRoutes.request(`/dashboard?period=7d&role=${role}`);
       expect(res.status).toBe(200);
@@ -72,7 +57,7 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   );
 
   it('executive role view includes cqi and sparklines', () => {
-    const fromKv = kvValue(synced, 'dashboard:7d:executive') as Record<string, unknown> | undefined;
+    const fromKv = kvValue<Record<string, unknown>>(synced(), 'dashboard:7d:executive');
     expect(fromKv).toHaveProperty('cqi');
     expect(fromKv).toHaveProperty('sparklines');
   });

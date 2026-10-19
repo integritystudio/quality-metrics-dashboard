@@ -9,12 +9,11 @@
  * The route supports pagination. One evaluation per metric through both paths
  * must produce identical row objects (including `evaluatorKind` and `cohort`).
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { metricsRoutes } from '../../src/api/routes/metrics.js';
 import { evaluation } from './support/evaluations.js';
-import { serveParityFixture } from './support/parity-fixture.js';
+import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -38,30 +37,15 @@ const coherenceEval: EvaluationResult = evaluation('e-coherence', '2026-10-07T08
 
 const fixture = serveParityFixture({ evaluations: [relevanceEval, coherenceEval] });
 
-function kvValue(result: OrgComputation, key: string): unknown {
-  const entry = result.allEntries.find(e => e.key === key);
-  return entry ? JSON.parse(entry.value) as unknown : undefined;
-}
-
 describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
-  let synced: OrgComputation;
-
-  beforeEach(async () => {
-    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const synced = syncEachTest(fixture, NOW);
 
   it.each([
     ['relevance', '7d'],
     ['coherence', '7d'],
     ['relevance', '30d'],
   ] as const)('writes for %s/%s the same row the dev route returns', async (metric, period) => {
-    const fromKv = kvValue(synced, `metric:evaluations:${metric}:${period}`) as
-      { rows: unknown[] } | undefined;
+    const fromKv = kvValue<{ rows: unknown[] }>(synced(), `metric:evaluations:${metric}:${period}`);
 
     // Route default sort is timestamp-desc; with one row per metric the order is deterministic.
     const res = await metricsRoutes.request(`/metrics/${metric}/evaluations?period=${period}&limit=200`);
@@ -72,8 +56,7 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   });
 
   it('includes evaluatorKind and cohort in the KV row', () => {
-    const fromKv = kvValue(synced, 'metric:evaluations:relevance:7d') as
-      { rows: Array<Record<string, unknown>> } | undefined;
+    const fromKv = kvValue<{ rows: Array<Record<string, unknown>> }>(synced(), 'metric:evaluations:relevance:7d');
     expect(fromKv?.rows[0]).toMatchObject({ evaluatorKind: 'llm', cohort: 'normal' });
   });
 

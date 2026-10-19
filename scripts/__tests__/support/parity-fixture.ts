@@ -1,4 +1,4 @@
-import { afterAll, beforeAll } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { CloudBackend } from '../../../../src/backends/cloud.js';
 import type { EvaluationResult } from '../../../../src/backends/index.js';
 import {
@@ -8,9 +8,13 @@ import {
   type FixtureServer,
   type TraceWireRow,
 } from '../../../src/__tests__/support/fixture-server.js';
+import { computeOrgEntries, type OrgComputation } from '../../sync-to-kv.js';
 
 /** The `evaluator_type` of a row with no kind: it reads back with neither a kind nor a legacy type. */
 const NO_EVALUATOR_TYPE = '';
+
+/** The sync reads the fixture as a non-home org: no local calibration or degradation state. */
+const IS_HOME_ORG = false;
 
 /**
  * An evaluation as the `/v1/evaluations` row that CloudBackend reads back to it.
@@ -80,4 +84,32 @@ export function serveParityFixture(rows: ParityRows): ParityFixture {
       return backend;
     },
   };
+}
+
+/**
+ * Before each test, pins `Date` to `now` and runs the sync over the fixture;
+ * returns an accessor for that test's result.
+ */
+export function syncEachTest(fixture: ParityFixture, now: Date): () => OrgComputation {
+  let synced: OrgComputation | undefined;
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ now, toFake: ['Date'] });
+    synced = await computeOrgEntries(fixture.syncBackend(), now, IS_HOME_ORG);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  return () => {
+    if (!synced) throw new Error('syncEachTest: result read before beforeEach');
+    return synced;
+  };
+}
+
+/** The parsed value the sync wrote under `key`, or `undefined` when it wrote none. */
+export function kvValue<T = unknown>(result: OrgComputation, key: string): T | undefined {
+  const entry = result.allEntries.find(e => e.key === key);
+  return entry ? JSON.parse(entry.value) as T : undefined;
 }
