@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return` on 2026-10-18. 543 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference` and `no-await-in-loop` on 2026-10-18. 486 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -62,9 +62,9 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/dot-notation`~~ (landed) | 49 | 49 | 22 / 27 |
 | ~~`@typescript-eslint/promise-function-async`~~ (landed) | 46 | 46 | 45 / 1 |
 | `complexity` 12 (warn) | 39 | 0 | 36 / 3 |
-| `no-await-in-loop` (warn) | 32 | 0 | 25 / 7 |
+| ~~`no-await-in-loop`~~ (landed) | 32 | 0 | 25 / 7 |
 | ~~`@typescript-eslint/method-signature-style`~~ (landed) | 31 | 31 | 13 / 18 |
-| `unicorn/no-array-callback-reference` | 25 | 0 | 16 / 9 |
+| ~~`unicorn/no-array-callback-reference`~~ (landed) | 25 | 0 | 16 / 9 |
 | ~~`no-duplicate-imports`~~ (landed) | 26 | 0 | 8 / 18 |
 | ~~`import/no-extraneous-dependencies`~~ (landed) | 25 | 0 | 25 / 0 |
 | `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
@@ -197,14 +197,14 @@ same shape — a `for` over seeded evals with a per-metric `if (ev.evaluationNam
   and no test pins either. Adding them is coverage work, not part of adopting the rule.
 
 **`max-params` 4 and `max-depth` 4 landed 2026-10-17** at the parent's levels, in a `Complexity controls`
-block over `src/`, `worker/` and `scripts/` — the home the remaining complexity rules (`complexity` 12,
-`no-await-in-loop`, `sonarjs/no-duplicate-string`) should join. Proved live with a throwaway 5-parameter
+block over `src/`, `worker/` and `scripts/` — the home `no-await-in-loop` joined on 2026-10-18 and the
+remaining complexity rules (`complexity` 12, `sonarjs/no-duplicate-string`) should join. Proved live with a throwaway 5-parameter
 function and a 5-deep `if` nest under `src/`, `worker/`, `scripts/` and both test trees: all 10 hits fired.
 All 13 real hits were fixed by hand (11 `max-params`, 2 `max-depth`); `--fix` offers nothing for either.
 - **The parent's `warn` is this repo's `error`.** Both rules are `warn` there, and that severity was kept
   for parity, but `npm run lint` runs under `--max-warnings 0` — so there is no "adopt at warn and defer
   the hits" option here. Every hit had to go before the rule could land, which is what makes the
-  remaining `complexity`/`no-await-in-loop`/`no-duplicate-string` rows (86 hits) a sweep, not a flag flip.
+  remaining `complexity`/`no-duplicate-string` rows (54 hits) a sweep, not a flag flip.
 - 🔴 **`exactOptionalPropertyTypes: true` breaks the obvious `max-params` fix.** Grouping optional
   parameters into an object type is the standard remedy, but `spans?: boolean` no longer accepts a
   caller's `boolean | undefined` variable: as a separate argument it was an omitted one, and as a
@@ -348,6 +348,80 @@ parent has it. Verified per tree with `eslint --print-config`: `2` for a `src/`,
   lookbehind in O(1) instead of re-running the quantifier. Behaviour is identical on every input,
   including an all-slash string.
 
+**`unicorn/no-array-callback-reference` landed 2026-10-18** at the parent's bare `error`, in
+`typeSafetyRules` and with **no test exemption**, matching the parent — it is absent from that repo's
+`TEST_FILES` block, so the dashboard enforces it in `src/`, `worker/`, `scripts/` and every test tree
+alike. Proved live with a throwaway `xs.map(Math.abs)` in ten directories — the three source trees, all
+three `__tests__/` roots, all three `__tests__/support/` dirs and a co-located `src/lib/*.test.ts` — and
+all ten fired. All 25 hits were fixed by hand (16 source, 9 test); the rule only ever offers suggestions.
+- **None of the 25 was a live defect**, and that was checked rather than assumed: every callback is
+  single-parameter (`optionName`, `toOTelRecord`, `turnKey`, `envelope`, `isTraceKey`, `snapshotToEvalRow`,
+  `projectEvaluationRow`, `convert`, `isStrategyGroup`, `spanLine`, `withoutOperation`, `answer`,
+  `promptOf`, `entry`, `fingerprint`, `readPosition`) or ignores extra arguments (`Number.isFinite`), so
+  every wrap is behaviour-preserving. The rule's value here is future code — the `xs.map(parseInt)` shape
+  the parent's comment names.
+- **The 9 test hits were all fixture builders passed by name** across
+  `scripts/__tests__/{account-stamps,derive-evaluations,judge-consolidated-batch,kv-bulk,upload-evaluations}.test.ts`
+  and `src/__tests__/WorkflowGraph.test.tsx`. Adopting the rule there costs the 9 wraps and nothing else:
+  both suites are unchanged at 1209 and 844 passing.
+- 🔴 **The rule already exempts a type guard on `every`/`filter`/`find`/`findLast`, so do not "fix" one by
+  wrapping it.** `methodsWithTypePredicateOverloads` in the rule source skips a locally-declared
+  `x is T` callback on exactly those four methods, because wrapping it loses the narrowing. That is why
+  `RoutingTelemetryPage.tsx`'s `data.groups.filter(isStrategyGroup)` is silent while
+  `.some(isStrategyGroup)` six lines above it fires: `.some` has no predicate overload to lose, so the
+  wrap there is free. An *imported* guard is exempted unconditionally — the rule is syntax-based and
+  cannot see the predicate.
+- 🔴 **Wrapping a `ReactNode`-returning callback trips `promise-function-async`.** React 19 types
+  `ReactNode` as a union that includes `Promise<AwaitedReactNode>`, so `TruncatedList.tsx`'s
+  `shown.map((item, index) => renderItem(item, index))` reads as a non-async promise-returning function.
+  The explicit `: ReactNode` annotation the rule's own message suggests is the whole fix; expect it on
+  every future wrap of a render callback.
+- `renderItem` is also the one site whose second argument is load-bearing
+  (`renderItem: (item: T, index: number) => ReactNode`), so that wrap passes `index` through — the others
+  take the element alone.
+
+**`no-await-in-loop` landed 2026-10-18** at the parent's `warn`, in the `Complexity controls` block over
+`src/`, `worker/` and `scripts/`, with **no test exemption** — the parent does not exempt it either, so the
+test trees inherit it from that block. Verified per tree with `eslint --print-config`: `1` for a `src/`,
+`worker/`, `scripts/` and test file alike. All 32 hits matched the table's count exactly, 25 source / 7 test,
+and every one was fixed by hand; the rule only ever offers suggestions.
+- **Zero hits in `src/` production code and zero in `worker/`.** Every one was in `scripts/` or a test tree,
+  which is why a rule the parent runs tree-wide cost this package nothing in the app itself.
+- 🔴 **In four loops the sequencing *is* the safety property, not a style choice.** `kvBulkPut` returns on
+  Cloudflare's daily-write-limit code, so concurrent chunks would already be in flight when the quota
+  answer arrives; `scoreTurnWithReference`'s `canSpend()` gates each paid call on what the calls before it
+  booked against `MAX_MEASURED_SPEND_USD`; `post-evaluations` and `upload-evaluations` both promise
+  abort-on-first-failure (`upload`'s error path says "state saved up to the last accepted batch", which a
+  concurrent send makes false); and `pickWorkingJudgeApiKey` probes keys in precedence order and returns the
+  first accepted one. Parallelising any of them overshoots a cap or breaks a contract — read the loop's exit
+  before calling a hit mechanical.
+- **Three more are memory-bound, which the file alone does not show.** `sync-to-kv`'s per-org loop computes
+  an org whole in memory (~1.65 GB on `prd`, the same figure that blocks the Workflow port),
+  `backtest-degradation` holds one 100k-row result set at a time, and `judge-turns` streams JSONL precisely
+  so a file is not resident. Those three directives carry the number, since nothing nearby does.
+- **The rule reports a nested loop's iterable expression, not only awaits in the body.**
+  `for (const turn of await extractTurns(info))` fires (`judge-agreement.ts`, `judge-quality-eval.ts`) —
+  so does `for await (… of stream)` inside an outer loop. Do not go looking only for `await` statements.
+- 🔴 **`eslint-disable-next-line` covers one line, so a two-await loop needs two directives.** That is what
+  made the `await sleep(pollIntervalMs); batch = await this.poll(batch)` pair — spelled identically in
+  `runBatch` and `cancelAndAwaitEnd` — worth extracting into `pollAfterInterval`: one helper took the batch
+  provider's six flagged lines to two directives and removed the duplication. Reach for an extraction before
+  a second directive on the same loop.
+- **Four test loops were genuinely parallelisable, and became rewrites rather than disables.** Three
+  `it('accepts all valid periods')` loops over a period/bucket list are now `it.each`, which also names the
+  failing case (`api-trends`, `api-correlations`, `api-pipeline`); `WorkflowGraph`'s per-edge
+  `await screen.findByTestId` became one `Promise.all` over `{ edge, element }` pairs.
+- ⚠️ **Check the enclosing `beforeEach` before converting a loop to `it.each`.** `api-correlations`' loop
+  called `fixture.reset()` per iteration, wiping the two evals its `describe`'s `beforeEach` seeds; the
+  reset had to stay inside the `it.each` body or the cases would exercise seeded data instead of none.
+  `api-pipeline`'s loop had no reset and its `beforeEach` reseeds, so there it was free.
+- The two remaining test hits are disabled, both on loops whose rounds release each other:
+  `runClock`'s fake-clock `while (!settled)` (appended to the directive it already carries for
+  `no-unmodified-loop-condition` — the same callback-mutation blind spot recorded above) and
+  `judge-evaluations.test.ts`'s `do…while` over answered judge rounds.
+- `npm run lint` exits 0 under `--max-warnings 0` with the rule on.
+
+
 **`explicit-function-return-type` is on for `src/api`, `src/hooks` and `src/lib` only** (landed
 2026-10-16, at `error`; the parent has it tree-wide at `warn`). 46 sites annotated there. It is
 deliberately **not** applied to `src/components` or `src/pages`, which hold 156 of the 235 `src/` hits:
@@ -405,8 +479,8 @@ in a comment on the type itself.
 - **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` (warn) and, in tests,
   `local/no-magic-numbers-ignore-fixtures`. The rule is defined inline in the parent's CJS config and not
   exported, so it must be extracted into a shared module or copied.
-- **Complexity.** `complexity` 12, `no-await-in-loop`, `sonarjs/no-duplicate-string` (all warn);
-  ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17.
+- **Complexity.** `complexity` 12, `sonarjs/no-duplicate-string` (both warn);
+  ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17, ~~`no-await-in-loop`~~ 2026-10-18.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
   2026-10-17.
 - **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
@@ -414,8 +488,8 @@ in a comment on the type itself.
   `no-unreachable-loop`,
   ~~`no-unmodified-loop-condition`~~ (landed 2026-10-17), `no-unreachable` (off here via tseslint's
   `eslint-recommended`).
-- **unicorn.** `no-array-sort`, `no-array-callback-reference`, `prefer-number-properties` (partly covered here by
-  `no-restricted-globals` and `radix`).
+- **unicorn.** `no-array-sort`, ~~`no-array-callback-reference`~~ (landed 2026-10-18),
+  `prefer-number-properties` (partly covered here by `no-restricted-globals` and `radix`).
 - **regexp.** ~~`regexp/no-super-linear-move`~~ (landed 2026-10-17).
 - **TypeScript.** `dot-notation`, `explicit-function-return-type` (warn), `method-signature-style: property`,
   `consistent-type-definitions: type`, `prefer-readonly`, `no-unnecessary-type-arguments`,
