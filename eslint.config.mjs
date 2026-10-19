@@ -31,7 +31,6 @@ const DEV_DEPENDENCY_FILES = [
 const noUnusedVarsRule = ['error', {
   argsIgnorePattern: '^_',
   varsIgnorePattern: '^_',
-  destructuredArrayIgnorePattern: '^_',
   caughtErrorsIgnorePattern: '^_',
 }];
 

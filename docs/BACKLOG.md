@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, both option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. Still open: the `no-unused-vars` option drift and the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, all three option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. Still open: the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
@@ -624,8 +624,9 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
   ~~`no-useless-default-assignment`~~, ~~`no-useless-constructor`~~ and
   ~~`no-non-null-asserted-nullish-coalescing`~~ 2026-10-19. `explicit-function-return-type` is on for
   `src/api`, `src/hooks` and `src/lib` only (see above).
-- **Option drift.** ~~`no-deprecated` warn → error~~ and ~~`ban-ts-comment` `minimumDescriptionLength: 10`~~
-  landed 2026-10-19. Still open: `no-unused-vars` here also exempts `_`-prefixed destructured array elements.
+- **Option drift.** Done — ~~`no-deprecated` warn → error~~, ~~`ban-ts-comment` `minimumDescriptionLength: 10`~~
+  and ~~`no-unused-vars` `destructuredArrayIgnorePattern: '^_'`~~ (dropped; the parent never set it and the
+  tree had no `_`-prefixed destructured array element relying on it, so lint stayed at 0) landed 2026-10-19.
   Keep `scripts/`' `prefer-nullish-coalescing` `ignorePrimitives: { boolean: true }`: it guards the
   `isDirectRun` checks.
 - **Tests only.** Done — ~~`no-conditional-expect`~~ landed 2026-10-17, ~~`vitest/no-disabled-tests`~~,
