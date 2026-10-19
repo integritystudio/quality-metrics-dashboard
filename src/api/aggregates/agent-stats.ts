@@ -134,24 +134,27 @@ function computeEvalMetricSummary(scores: number[]): EvalMetricSummary {
   };
 }
 
-/**
- * Per-agent activity over `spans` (agent-finalize spans in the period), with
- * evaluation summaries from the `evaluations` whose trace an agent ran in.
- * Evaluations on other traces are ignored, so callers may pass a superset.
- */
-export function computeAgentStats(
-  spans: AgentStatsSpan[],
-  evaluations: AgentStatsEvaluation[],
-  period: Period,
-  now: Date,
-): AgentStatsResponse {
-  const { periodDays, startDate, endDate } = agentStatsWindow(period, now);
-
+/** Date-only key → daily bucket, oldest first, one per day in the period. */
+function dailyBucketIndex(periodDays: number, now: Date): Map<string, number> {
   const bucketIndex = new Map<string, number>();
   for (let d = 0; d < periodDays; d++) {
     bucketIndex.set(toDateOnly(new Date(now.getTime() - (periodDays - 1 - d) * TIME_MS.DAY)), d);
   }
+  return bucketIndex;
+}
 
+/** A span outside the period, or without a start, counts toward no day. */
+function bumpDailyCount(entry: AgentAcc, bucketIndex: Map<string, number>, span: AgentStatsSpan): void {
+  if (!span.startTimeUnixNano) return;
+  const idx = bucketIndex.get(toDateOnly(new Date(timestampToMs(span.startTimeUnixNano))));
+  if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
+}
+
+/** Per-agent totals, plus which agents ran in each trace (how evaluations are attributed). */
+function accumulateSpans(spans: AgentStatsSpan[], bucketIndex: Map<string, number>, periodDays: number): {
+  acc: Record<string, AgentAcc>;
+  traceToAgents: Map<string, Set<string>>;
+} {
   const acc = Object.create(null) as Record<string, AgentAcc>;
   const traceToAgents = new Map<string, Set<string>>();
 
@@ -159,10 +162,7 @@ export function computeAgentStats(
     const name = attrStr(span, GENAI_AGENT_ATTRIBUTES.AGENT_NAME);
     const entry = (acc[name] ??= createAgentAccumulator(periodDays));
     entry.invocations++;
-    if (span.startTimeUnixNano) {
-      const idx = bucketIndex.get(toDateOnly(new Date(timestampToMs(span.startTimeUnixNano))));
-      if (idx !== undefined) entry.dailyCounts[idx] = (entry.dailyCounts[idx] ?? 0) + 1;
-    }
+    bumpDailyCount(entry, bucketIndex, span);
     if (spanAttr(span, AGENT_ATTRIBUTES.HAS_ERROR, 'boolean')) entry.errors++;
     if (spanAttr(span, AGENT_ATTRIBUTES.HAS_RATE_LIMIT, 'boolean')) entry.rateLimitCount++;
     entry.totalOutputSize += attrNum(span, AGENT_ATTRIBUTES.OUTPUT_SIZE);
@@ -178,6 +178,17 @@ export function computeAgentStats(
     increment(entry.sourceTypes, KNOWN_SOURCE_TYPES.has(rawSrc) ? rawSrc : 'other');
   }
 
+  return { acc, traceToAgents };
+}
+
+/**
+ * Scores per agent per metric. An evaluation counts for every agent that ran in
+ * its trace, so one trace-level score reaches each of them.
+ */
+function accumulateAgentEvaluations(
+  evaluations: AgentStatsEvaluation[],
+  traceToAgents: Map<string, Set<string>>,
+): Record<string, Record<string, number[]>> {
   const agentEvalAcc = Object.create(null) as Record<string, Record<string, number[]>>;
   for (const ev of evaluations) {
     if (!ev.traceId || ev.scoreValue == null || !Number.isFinite(ev.scoreValue)) continue;
@@ -188,32 +199,53 @@ export function computeAgentStats(
       (metrics[ev.evaluationName] ??= []).push(ev.scoreValue);
     }
   }
+  return agentEvalAcc;
+}
 
-  const agents = Object.entries(acc).map(([agentName, d]): AgentStat => {
-    const evalSummary: Record<string, EvalMetricSummary> = {};
-    for (const [metric, scores] of Object.entries(agentEvalAcc[agentName] ?? {})) {
-      evalSummary[metric] = computeEvalMetricSummary(scores);
-    }
-    const sessionIdList = [...d.sessions];
-    const traceIdList = [...d.traceIds];
-    return {
-      agentName,
-      invocations: d.invocations,
-      errors: d.errors,
-      errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
-      rateLimitCount: d.rateLimitCount,
-      avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
-      sessionCount: d.sessions.size,
-      sessionIds: sessionIdList.slice(0, MAX_IDS),
-      sessionIdsTruncated: sessionIdList.length > MAX_IDS,
-      traceIdsTotal: traceIdList.length,
-      traceIds: traceIdList.slice(0, MAX_IDS),
-      traceIdsTruncated: traceIdList.length > MAX_IDS,
-      sourceTypes: d.sourceTypes,
-      dailyCounts: d.dailyCounts,
-      evalSummary,
-    };
-  }).toSorted((a, b) => b.invocations - a.invocations);
+function toAgentStat(agentName: string, d: AgentAcc, metricScores: Record<string, number[]> | undefined): AgentStat {
+  const evalSummary: Record<string, EvalMetricSummary> = {};
+  for (const [metric, scores] of Object.entries(metricScores ?? {})) {
+    evalSummary[metric] = computeEvalMetricSummary(scores);
+  }
+  const sessionIdList = [...d.sessions];
+  const traceIdList = [...d.traceIds];
+  return {
+    agentName,
+    invocations: d.invocations,
+    errors: d.errors,
+    errorRate: d.invocations > 0 ? +(d.errors / d.invocations).toFixed(SCORE_DISPLAY_PRECISION) : 0,
+    rateLimitCount: d.rateLimitCount,
+    avgOutputSize: d.invocations > 0 ? Math.round(d.totalOutputSize / d.invocations) : 0,
+    sessionCount: d.sessions.size,
+    sessionIds: sessionIdList.slice(0, MAX_IDS),
+    sessionIdsTruncated: sessionIdList.length > MAX_IDS,
+    traceIdsTotal: traceIdList.length,
+    traceIds: traceIdList.slice(0, MAX_IDS),
+    traceIdsTruncated: traceIdList.length > MAX_IDS,
+    sourceTypes: d.sourceTypes,
+    dailyCounts: d.dailyCounts,
+    evalSummary,
+  };
+}
+
+/**
+ * Per-agent activity over `spans` (agent-finalize spans in the period), with
+ * evaluation summaries from the `evaluations` whose trace an agent ran in.
+ * Evaluations on other traces are ignored, so callers may pass a superset.
+ */
+export function computeAgentStats(
+  spans: AgentStatsSpan[],
+  evaluations: AgentStatsEvaluation[],
+  period: Period,
+  now: Date,
+): AgentStatsResponse {
+  const { periodDays, startDate, endDate } = agentStatsWindow(period, now);
+  const { acc, traceToAgents } = accumulateSpans(spans, dailyBucketIndex(periodDays, now), periodDays);
+  const agentEvalAcc = accumulateAgentEvaluations(evaluations, traceToAgents);
+
+  const agents = Object.entries(acc)
+    .map(([agentName, d]) => toAgentStat(agentName, d, agentEvalAcc[agentName]))
+    .toSorted((a, b) => b.invocations - a.invocations);
 
   return { period, startDate, endDate, agents };
 }

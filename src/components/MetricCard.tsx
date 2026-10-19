@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Link } from 'wouter';
 import type { QualityMetricResult, WorstExplanation } from '../types.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './Indicators.js';
@@ -7,6 +7,45 @@ import { Sparkline } from './Sparkline.js';
 import { inferScoreDirection, truncateText, plural, formatScore } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
+type MetricStatus = QualityMetricResult['status'];
+
+/** Card glow, for the two statuses that get one. */
+const GLOW_CLASS: Partial<Record<MetricStatus, string>> = {
+  critical: 'glow-critical',
+  warning: 'glow-warning',
+};
+
+/** Sparkline stroke, which follows the glow but falls back to the accent. */
+const SPARKLINE_COLOR: Partial<Record<MetricStatus, string>> = {
+  critical: 'var(--status-critical)',
+  warning: 'var(--status-warning)',
+};
+
+const SPARKLINE_MIN_POINTS = 2;
+const SPARKLINE_WIDTH = 120;
+const SPARKLINE_HEIGHT = 24;
+const WORST_EXPLANATION_MAX_CHARS = 60;
+
+/** A single point cannot show a trend, so the strip is dropped below two. */
+function MetricSparkline({ data, status, displayName }: {
+  data: Array<number | null> | undefined;
+  status: MetricStatus;
+  displayName: string;
+}): ReactNode {
+  if (!data || data.length < SPARKLINE_MIN_POINTS) return null;
+  return (
+    <div className="mt-2">
+      <Sparkline
+        data={data}
+        width={SPARKLINE_WIDTH}
+        height={SPARKLINE_HEIGHT}
+        color={SPARKLINE_COLOR[status] ?? 'var(--accent)'}
+        label={`${displayName} score trend`}
+      />
+    </div>
+  );
+}
+
 function MetricCardInner({ metric, sparklineData }: {
   metric: QualityMetricResult;
   sparklineData: Array<number | null> | undefined;
@@ -14,7 +53,7 @@ function MetricCardInner({ metric, sparklineData }: {
   const { name, displayName, sampleCount, status, values, trend, confidence, alerts } = metric;
   const worst = (metric as QualityMetricResult & { worstExplanation?: WorstExplanation }).worstExplanation;
   const primaryValue = values.avg;
-  const glowClass = status === 'critical' ? 'glow-critical' : status === 'warning' ? 'glow-warning' : '';
+  const glowClass = GLOW_CLASS[status] ?? '';
 
   return (
     <Link href={`/metrics/${name}`} className="card-link" aria-label={`View ${displayName} metric details`}>
@@ -38,17 +77,7 @@ function MetricCardInner({ metric, sparklineData }: {
           </div>
         </div>
 
-        {sparklineData && sparklineData.length >= 2 && (
-          <div className="mt-2">
-            <Sparkline
-              data={sparklineData}
-              width={120}
-              height={24}
-              color={status === 'critical' ? 'var(--status-critical)' : status === 'warning' ? 'var(--status-warning)' : 'var(--accent)'}
-              label={`${displayName} score trend`}
-            />
-          </div>
-        )}
+        <MetricSparkline data={sparklineData} status={status} displayName={displayName} />
 
         <div className="metric-footer flex-center">
           <span>n={sampleCount} <ConfidenceBadge confidence={confidence} /></span>
@@ -62,7 +91,7 @@ function MetricCardInner({ metric, sparklineData }: {
         {worst?.explanation && (
           <div className="metric-worst truncate" title={worst.explanation}>
             <span className="worst-score">{worst.score.toFixed(SCORE_CHIP_PRECISION)}</span>{' '}
-            {truncateText(worst.explanation, 60)}
+            {truncateText(worst.explanation, WORST_EXPLANATION_MAX_CHARS)}
           </div>
         )}
       </div>

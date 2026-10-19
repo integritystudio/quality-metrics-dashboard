@@ -137,6 +137,65 @@ export type JudgeRunSummary = {
  * verdict is what the run cost from the usage the API reported, next to the
  * pre-run estimate and the NAME of the key it was billed to.
  */
+/**
+ * Rates, not counts: a run with fewer new turns scores fewer evaluations
+ * without anything having failed, and a count comparison called that a drop.
+ * Both runs need enough attempts for the comparison to mean anything.
+ */
+function isSuccessRateDrop(
+  attempted: number,
+  successRate: number,
+  prev: JudgeRunState | undefined,
+  prevRate: number | undefined,
+): boolean {
+  if (prev === undefined || prevRate === undefined) return false;
+  if (prev.attempted < RATE_COMPARISON_MIN_ATTEMPTS || attempted < RATE_COMPARISON_MIN_ATTEMPTS) return false;
+  return prevRate - successRate > SUCCESS_RATE_DROP_THRESHOLD;
+}
+
+/** The exit code and the verdict clause, in the order the header describes. */
+function judgeVerdict(args: {
+  succeeded: number;
+  failed: number;
+  attempted: number;
+  successRate: number;
+  prev: JudgeRunState | undefined;
+  prevRate: number | undefined;
+  byClass: Record<JudgeFailureClass, number>;
+}): { exitCode: number; verdict: string } {
+  const { succeeded, failed, attempted, successRate, prev, prevRate, byClass } = args;
+  if (byClass.billing > 0) {
+    return {
+      exitCode: JUDGE_EXIT_BILLING,
+      verdict: 'BILLING REFUSED — no judge output from this run can be trusted; top up credit before re-running',
+    };
+  }
+  // Ahead of the verdicts below: abandoned evaluations count as failed, so
+  // an overrun would otherwise be reported as a failure rate.
+  if (byClass['wall-clock'] > 0) {
+    return {
+      exitCode: JUDGE_EXIT_BATCH_WALL_CLOCK,
+      verdict: `BATCH WALL CLOCK EXCEEDED — ${byClass['wall-clock']} evaluations were abandoned with the cancelled batch and wait for the next run; the ${succeeded} scored before it are kept`,
+    };
+  }
+  if (attempted > 0 && succeeded === 0) {
+    return { exitCode: JUDGE_EXIT_NO_SCORES, verdict: 'NO SCORES PRODUCED — every evaluation failed' };
+  }
+  if (attempted > 0 && failed / attempted > HIGH_FAILURE_RATE_THRESHOLD) {
+    return {
+      exitCode: JUDGE_EXIT_HIGH_FAILURE_RATE,
+      verdict: `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}%); check failure classes above`,
+    };
+  }
+  if (prev !== undefined && prevRate !== undefined && isSuccessRateDrop(attempted, successRate, prev, prevRate)) {
+    return {
+      exitCode: JUDGE_EXIT_HIGH_FAILURE_RATE,
+      verdict: `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}% of ${prev.attempted} on the previous run; check for a new failure class`,
+    };
+  }
+  return { exitCode: 0, verdict: 'ok' };
+}
+
 export function summarizeJudgeRun(
   succeeded: number,
   failures: { byMetric: Record<string, number>; byClass: Record<JudgeFailureClass, number> },
@@ -149,34 +208,7 @@ export function summarizeJudgeRun(
   const successRate = attempted > 0 ? succeeded / attempted : 0;
   const prevRate = prev && prev.attempted > 0 ? prev.succeeded / prev.attempted : undefined;
   const classes = JUDGE_FAILURE_CLASSES.filter(c => byClass[c] > 0).map(c => `${c}=${byClass[c]}`).join(' ') || 'none';
-  let exitCode = 0;
-  let verdict = 'ok';
-  if (byClass.billing > 0) {
-    exitCode = JUDGE_EXIT_BILLING;
-    verdict = 'BILLING REFUSED — no judge output from this run can be trusted; top up credit before re-running';
-  } else if (byClass['wall-clock'] > 0) {
-    // Ahead of the verdicts below: abandoned evaluations count as failed, so
-    // an overrun would otherwise be reported as a failure rate.
-    exitCode = JUDGE_EXIT_BATCH_WALL_CLOCK;
-    verdict = `BATCH WALL CLOCK EXCEEDED — ${byClass['wall-clock']} evaluations were abandoned with the cancelled batch and wait for the next run; the ${succeeded} scored before it are kept`;
-  } else if (attempted > 0 && succeeded === 0) {
-    exitCode = JUDGE_EXIT_NO_SCORES;
-    verdict = 'NO SCORES PRODUCED — every evaluation failed';
-  } else if (attempted > 0 && failed / attempted > HIGH_FAILURE_RATE_THRESHOLD) {
-    exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `HIGH FAILURE RATE — ${failed} of ${attempted} evaluations failed (${(failed / attempted * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}%); check failure classes above`;
-  } else if (
-    prev !== undefined &&
-    prevRate !== undefined &&
-    prev.attempted >= RATE_COMPARISON_MIN_ATTEMPTS &&
-    attempted >= RATE_COMPARISON_MIN_ATTEMPTS &&
-    prevRate - successRate > SUCCESS_RATE_DROP_THRESHOLD
-  ) {
-    // Rates, not counts: a run with fewer new turns scores fewer evaluations
-    // without anything having failed, and a count comparison called that a drop.
-    exitCode = JUDGE_EXIT_HIGH_FAILURE_RATE;
-    verdict = `SUCCESS RATE DROP — ${(successRate * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}% of ${attempted} succeeded vs ${(prevRate * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION)}% of ${prev.attempted} on the previous run; check for a new failure class`;
-  }
+  const { exitCode, verdict } = judgeVerdict({ succeeded, failed, attempted, successRate, prev, prevRate, byClass });
   const { usage, estimatedUsd, keySource } = spend;
   const actualUsd = tokenUsageCostUsd(usage, judgePricing());
   const spent = `usage: in=${usage.inputTokens} out=${usage.outputTokens} cache_read=${usage.cacheReadInputTokens} cache_creation=${usage.cacheCreationInputTokens} est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=${keySource}`;

@@ -6,6 +6,7 @@
  * the card is titled "Plan" and renews on "—" for every org, as it does for the customer;
  * the fields are parsed so the page follows the gateway when it adds them.
  */
+import type { ReactNode } from 'react';
 import { useAdminBillingStatus } from '../../hooks/useAdminCustomer.js';
 import { billingStatusBadge, formatRenewalDate } from '../../lib/admin-customer.js';
 import { ADMIN_VIEW, CUSTOMER_VIEW } from '../../lib/admin-customer-strings.js';
@@ -15,13 +16,45 @@ import { CustomerCard, CustomerCardActions, CustomerErrorCard, CustomerRow, Stat
 
 const { billing: text, common } = CUSTOMER_VIEW;
 
+type BillingData = ReturnType<typeof useAdminBillingStatus>['data'];
+
+/** The read-only stand-in for the customer's Stripe CTA; a contract-billed org gets none. */
+function billingCtaLabel(data: BillingData, isContractBilled: boolean): string | null {
+  if (data === undefined || isContractBilled) return null;
+  return data.hasBillingAccount ? text.manageBilling : text.choosePlan;
+}
+
+/** `planDisplayName.isNotEmpty ? planDisplayName : 'Plan'`: the endpoint sends none today. */
+function billingCardTitle(data: BillingData): string {
+  if (data !== undefined && data.planDisplayName.length > 0) return data.planDisplayName;
+  return text.defaultCardTitle;
+}
+
+/** Plan, renewal and the note that stands in for a missing billing account. */
+function BillingDetails({ data, isContractBilled }: {
+  data: NonNullable<BillingData>;
+  isContractBilled: boolean;
+}): ReactNode {
+  return (
+    <>
+      <CustomerRow label={text.planRow} value={data.planKey || common.dash} />
+      <CustomerRow
+        label={data.cancelAtPeriodEnd ? text.cancelsRow : text.renewsRow}
+        value={data.nextRenewalDate ? formatRenewalDate(data.nextRenewalDate) : common.dash}
+      />
+      {!data.hasBillingAccount && (
+        <p className="text-xs text-muted">{isContractBilled ? text.contractNote : text.noAccountNote}</p>
+      )}
+    </>
+  );
+}
+
 export function AdminCustomerBillingPage({ orgId }: { orgId: string }) {
   const billing = useAdminBillingStatus(orgId);
   const data = billing.data;
   const isContractBilled = data?.planKey === text.contractPlan;
-  const ctaLabel = data === undefined || isContractBilled ? null : data.hasBillingAccount ? text.manageBilling : text.choosePlan;
-  // `planDisplayName.isNotEmpty ? planDisplayName : 'Plan'`: the endpoint sends none today.
-  const cardTitle = data !== undefined && data.planDisplayName.length > 0 ? data.planDisplayName : text.defaultCardTitle;
+  const ctaLabel = billingCtaLabel(data, isContractBilled);
+  const cardTitle = billingCardTitle(data);
 
   return (
     <CustomerPageScaffold
@@ -39,18 +72,7 @@ export function AdminCustomerBillingPage({ orgId }: { orgId: string }) {
           isLoading={billing.isFetching}
           trailing={data && <StatusPill {...billingStatusBadge(data.billingStatus)} />}
         >
-          {data && (
-            <>
-              <CustomerRow label={text.planRow} value={data.planKey || common.dash} />
-              <CustomerRow
-                label={data.cancelAtPeriodEnd ? text.cancelsRow : text.renewsRow}
-                value={data.nextRenewalDate ? formatRenewalDate(data.nextRenewalDate) : common.dash}
-              />
-              {!data.hasBillingAccount && (
-                <p className="text-xs text-muted">{isContractBilled ? text.contractNote : text.noAccountNote}</p>
-              )}
-            </>
-          )}
+          {data && <BillingDetails data={data} isContractBilled={isContractBilled} />}
           <CustomerCardActions onRefresh={() => void billing.refetch()} disabled={billing.isFetching}>
             {ctaLabel && <span className="customer-cta" aria-disabled="true">{ctaLabel}</span>}
           </CustomerCardActions>

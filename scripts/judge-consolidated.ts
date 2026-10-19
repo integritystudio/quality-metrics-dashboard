@@ -203,6 +203,40 @@ export function sourceCriterionName(recordName: string, options: ConsolidatedCri
   return recordName === HALLUCINATION_EVAL_NAME ? FAITHFULNESS_EVAL_NAME : recordName;
 }
 
+/**
+ * The criteria a turn with tool results adds: faithfulness and hallucination
+ * (one judged criterion unless `directHallucination`), plus the
+ * tool-correctness family.
+ */
+function toolGroundedCriteria(
+  missing: (name: string) => boolean,
+  options: ConsolidatedCriteriaOptions,
+): ConsolidatedSelection {
+  const criteria: GEvalConfig[] = [];
+  const recordNames: string[] = [];
+  const needsFaith = missing(FAITHFULNESS_EVAL_NAME);
+  const needsHal = missing(HALLUCINATION_EVAL_NAME);
+  if (options.directHallucination) {
+    if (needsFaith) criteria.push(FAITHFULNESS_CRITERIA);
+    if (needsHal) criteria.push(HALLUCINATION_CRITERIA);
+  } else if (needsFaith || needsHal) {
+    criteria.push(FAITHFULNESS_CRITERIA);
+  }
+  if (needsFaith) recordNames.push(FAITHFULNESS_EVAL_NAME);
+  if (needsHal) recordNames.push(HALLUCINATION_EVAL_NAME);
+
+  if (missing(TOOL_CORRECTNESS_CRITERIA.name)) {
+    criteria.push(TOOL_CORRECTNESS_CRITERIA);
+    recordNames.push(TOOL_CORRECTNESS_CRITERIA.name);
+    for (const config of TOOL_SUB_CRITERIA) {
+      if (!missing(config.name)) continue;
+      criteria.push(config);
+      recordNames.push(config.name);
+    }
+  }
+  return { criteria, recordNames };
+}
+
 export function selectCriteria(
   turn: Turn,
   existingKeys: Set<string>,
@@ -224,26 +258,9 @@ export function selectCriteria(
   }
 
   if (turn.toolResults.length > 0) {
-    const needsFaith = missing(FAITHFULNESS_EVAL_NAME);
-    const needsHal = missing(HALLUCINATION_EVAL_NAME);
-    if (options.directHallucination) {
-      if (needsFaith) criteria.push(FAITHFULNESS_CRITERIA);
-      if (needsHal) criteria.push(HALLUCINATION_CRITERIA);
-    } else if (needsFaith || needsHal) {
-      criteria.push(FAITHFULNESS_CRITERIA);
-    }
-    if (needsFaith) recordNames.push(FAITHFULNESS_EVAL_NAME);
-    if (needsHal) recordNames.push(HALLUCINATION_EVAL_NAME);
-
-    if (missing(TOOL_CORRECTNESS_CRITERIA.name)) {
-      criteria.push(TOOL_CORRECTNESS_CRITERIA);
-      recordNames.push(TOOL_CORRECTNESS_CRITERIA.name);
-      for (const config of TOOL_SUB_CRITERIA) {
-        if (!missing(config.name)) continue;
-        criteria.push(config);
-        recordNames.push(config.name);
-      }
-    }
+    const tool = toolGroundedCriteria(missing, options);
+    criteria.push(...tool.criteria);
+    recordNames.push(...tool.recordNames);
   }
 
   return { criteria, recordNames };
@@ -439,6 +456,60 @@ export type ConsolidatedTurnOptions = {
   criteria?: ConsolidatedCriteriaOptions;
 }
 
+/**
+ * Steps are per criterion; a criterion whose steps fail drops out of this turn
+ * alone, as it would on the per-criterion path, and `onStepsFailure` is told.
+ */
+async function prepareCriteria(
+  provider: ConsolidatedProvider,
+  configs: readonly GEvalConfig[],
+  stepsCache: EvaluationStepsCache,
+  onStepsFailure: (config: GEvalConfig, reason: unknown) => void,
+): Promise<PreparedCriterion[]> {
+  const stepOutcomes = await Promise.all(
+    configs.map(async config => cachedEvaluationSteps(provider, config, stepsCache).then(
+      steps => ({ config, steps }),
+      (reason: unknown) => ({ config, reason }),
+    )),
+  );
+  const prepared: PreparedCriterion[] = [];
+  for (const outcome of stepOutcomes) {
+    if ('steps' in outcome) {
+      prepared.push({ config: outcome.config, steps: outcome.steps });
+      continue;
+    }
+    onStepsFailure(outcome.config, outcome.reason);
+  }
+  return prepared;
+}
+
+/** One record per wanted criterion whose verdict parsed; the rest are tracked as failures. */
+function recordsFromVerdicts(
+  turn: Turn,
+  wanted: readonly string[],
+  parsed: ParsedConsolidatedResponse,
+  ctx: { options: ConsolidatedCriteriaOptions; sessionPreview: string },
+): EvalRecord[] {
+  const records: EvalRecord[] = [];
+  for (const name of wanted) {
+    const source = sourceCriterionName(name, ctx.options);
+    const verdict = parsed.verdicts.get(source);
+    if (!verdict) {
+      trackFailure(name, parsed.failures.get(source) ?? new Error(`Could not parse verdict for ${source}`), ctx.sessionPreview);
+      continue;
+    }
+    const normalized = toNormalizedScore(verdict.score);
+    // Hallucination is stored higher-is-worse and both of its sources grade 5 = best:
+    // by default the faithfulness verdict (this path's own convention, see the
+    // header), under directHallucination HALLUCINATION_CRITERIA's 5 = no fabrication.
+    const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
+    const explanation = verdict.reasoning.trim()
+      || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${ctx.sessionPreview}`;
+    records.push(buildRecord(turn, name, score, explanation));
+  }
+  return records;
+}
+
 export async function evaluateTurnConsolidated(
   provider: ConsolidatedProvider,
   turn: Turn,
@@ -453,22 +524,9 @@ export async function evaluateTurnConsolidated(
   const recordNamesFor = (criterionName: string): string[] =>
     selection.recordNames.filter(name => sourceCriterionName(name, options) === criterionName);
 
-  // Steps are per criterion; a criterion whose steps fail drops out of this
-  // turn alone, as it would on the per-criterion path.
-  const prepared: PreparedCriterion[] = [];
-  const stepOutcomes = await Promise.all(
-    selection.criteria.map(async config => cachedEvaluationSteps(provider, config, stepsCache).then(
-      steps => ({ config, steps }),
-      (reason: unknown) => ({ config, reason }),
-    )),
-  );
-  for (const outcome of stepOutcomes) {
-    if ('steps' in outcome) {
-      prepared.push({ config: outcome.config, steps: outcome.steps });
-      continue;
-    }
-    for (const name of recordNamesFor(outcome.config.name)) trackFailure(name, outcome.reason, sessionPreview);
-  }
+  const prepared = await prepareCriteria(provider, selection.criteria, stepsCache, (config, reason) => {
+    for (const name of recordNamesFor(config.name)) trackFailure(name, reason, sessionPreview);
+  });
   if (prepared.length === 0) return [];
 
   const names = prepared.map(p => p.config.name);
@@ -487,24 +545,7 @@ export async function evaluateTurnConsolidated(
     return [];
   }
 
-  const records: EvalRecord[] = [];
-  for (const name of wanted) {
-    const source = sourceCriterionName(name, options);
-    const verdict = parsed.verdicts.get(source);
-    if (!verdict) {
-      trackFailure(name, parsed.failures.get(source) ?? new Error(`Could not parse verdict for ${source}`), sessionPreview);
-      continue;
-    }
-    const normalized = toNormalizedScore(verdict.score);
-    // Hallucination is stored higher-is-worse and both of its sources grade 5 = best:
-    // by default the faithfulness verdict (this path's own convention, see the
-    // header), under directHallucination HALLUCINATION_CRITERIA's 5 = no fabrication.
-    const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
-    const explanation = verdict.reasoning.trim()
-      || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;
-    records.push(buildRecord(turn, name, score, explanation));
-  }
-  return records;
+  return recordsFromVerdicts(turn, wanted, parsed, { options, sessionPreview });
 }
 
 /** One criterion's normalized (0–1) score; throws the parse failure when the verdict is missing. */

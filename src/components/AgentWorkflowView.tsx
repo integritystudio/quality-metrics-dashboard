@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { max } from 'd3-array';
 import { WorkflowGraphView } from './WorkflowGraph.js';
 import { WorkflowTimeline } from './WorkflowTimeline.js';
@@ -23,6 +23,120 @@ const TAB_LABELS: Record<WorkflowTab, string> = {
 };
 
 const TABS: WorkflowTab[] = ['dag', 'timeline'];
+
+/** Divisor that gives the duration slider ~200 steps across its range. */
+const SLIDER_STEPS = 200;
+
+/** One chip per agent, plus the reset that clears the selection. */
+function WorkflowAgentFilter({ agentNames, colorOf, selected, filterActive, onToggle, onSelectAll }: {
+  agentNames: readonly string[];
+  colorOf: (name: string) => string;
+  selected: ReadonlySet<string>;
+  filterActive: boolean;
+  onToggle: (name: string) => void;
+  onSelectAll: () => void;
+}): ReactNode {
+  return (
+    <div className="workflow-filter" role="group" aria-label="Filter agents">
+      {agentNames.map(name => {
+        const color = colorOf(name);
+        const active = selected.has(name);
+        return (
+          <button
+            key={name}
+            type="button"
+            className="btn-reset eval-filter-chip workflow-filter__chip mono-xs"
+            // Agent palette is data-driven; cannot be expressed as static CSS classes
+            style={{ '--chip-color': color } as React.CSSProperties}
+            data-active={active || undefined}
+            aria-pressed={active}
+            onClick={() => onToggle(name)}
+          >
+            {name}
+          </button>
+        );
+      })}
+      {filterActive && (
+        <button
+          type="button"
+          className="btn-reset workflow-filter__reset text-xs text-muted"
+          onClick={onSelectAll}
+        >
+          All
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Duration threshold, the two dimming toggles, and the PNG export. */
+function WorkflowGraphControls({
+  maxDurationMs,
+  minDurationMs,
+  onMinDurationChange,
+  errorsOnly,
+  onErrorsOnlyToggle,
+  showCriticalPath,
+  onCriticalPathToggle,
+  onExport,
+}: {
+  maxDurationMs: number;
+  minDurationMs: number;
+  onMinDurationChange: (ms: number) => void;
+  errorsOnly: boolean;
+  onErrorsOnlyToggle: () => void;
+  showCriticalPath: boolean;
+  onCriticalPathToggle: () => void;
+  onExport: () => void;
+}): ReactNode {
+  const sliderStep = Math.max(1, Math.round(maxDurationMs / SLIDER_STEPS));
+  return (
+    <div className="workflow-filter__controls" role="group" aria-label="Graph controls">
+      <label className="workflow-filter__label">
+        Min duration
+        <input
+          type="range"
+          min={0}
+          max={maxDurationMs}
+          step={sliderStep}
+          value={minDurationMs}
+          onChange={e => onMinDurationChange(Number(e.target.value))}
+          className="workflow-filter__slider"
+          aria-label={`Minimum agent duration: ${fmtDuration(minDurationMs)}`}
+        />
+        <span className="workflow-filter__slider-value mono-xs">
+          {minDurationMs > 0 ? `≥ ${fmtDuration(minDurationMs)}` : 'any'}
+        </span>
+      </label>
+      <button
+        type="button"
+        className="btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--error"
+        data-active={errorsOnly || undefined}
+        aria-pressed={errorsOnly}
+        onClick={onErrorsOnlyToggle}
+      >
+        Errors only
+      </button>
+      <button
+        type="button"
+        className="btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--accent"
+        data-active={showCriticalPath || undefined}
+        aria-pressed={showCriticalPath}
+        onClick={onCriticalPathToggle}
+      >
+        Critical path
+      </button>
+      <button
+        type="button"
+        className="btn-reset workflow-filter__export mono-xs"
+        onClick={onExport}
+        aria-label="Export graph as PNG"
+      >
+        Export PNG
+      </button>
+    </div>
+  );
+}
 
 export function AgentWorkflowView({
   graph,
@@ -101,6 +215,8 @@ export function AgentWorkflowView({
   }, [agentNames]);
 
   const selectAll = useCallback(() => setSelectedAgents(null), []);
+  const toggleErrorsOnly = useCallback(() => setErrorsOnly(v => !v), []);
+  const toggleCriticalPath = useCallback(() => setShowCriticalPath(v => !v), []);
 
   const handleExport = useCallback(async () => {
     const el = graphContainerRef.current;
@@ -113,11 +229,11 @@ export function AgentWorkflowView({
     link.click();
   }, []);
 
+  const exportPng = useCallback(() => void handleExport(), [handleExport]);
+
   const colorOf = useMemo(() => agentColorScale(agentNames), [agentNames]);
   const showFilter = agentNames.length >= WORKFLOW_FILTER_MIN_AGENTS;
   const showControls = graph.nodes.length > 0;
-
-  const sliderStep = Math.max(1, Math.round(maxDurationMs / 200));
 
   return (
     <div>
@@ -143,82 +259,27 @@ export function AgentWorkflowView({
       </div>
 
       {showFilter && (
-        <div className="workflow-filter" role="group" aria-label="Filter agents">
-          {agentNames.map(name => {
-            const color = colorOf(name);
-            const active = effectiveSelected.has(name);
-            return (
-              <button
-                key={name}
-                type="button"
-                className="btn-reset eval-filter-chip workflow-filter__chip mono-xs"
-                // Agent palette is data-driven; cannot be expressed as static CSS classes
-                style={{ '--chip-color': color } as React.CSSProperties}
-                data-active={active || undefined}
-                aria-pressed={active}
-                onClick={() => toggleAgent(name)}
-              >
-                {name}
-              </button>
-            );
-          })}
-          {selectedAgents !== null && (
-            <button
-              type="button"
-              className="btn-reset workflow-filter__reset text-xs text-muted"
-              onClick={selectAll}
-            >
-              All
-            </button>
-          )}
-        </div>
+        <WorkflowAgentFilter
+          agentNames={agentNames}
+          colorOf={colorOf}
+          selected={effectiveSelected}
+          filterActive={selectedAgents !== null}
+          onToggle={toggleAgent}
+          onSelectAll={selectAll}
+        />
       )}
 
       {showControls && (
-        <div className="workflow-filter__controls" role="group" aria-label="Graph controls">
-          <label className="workflow-filter__label">
-            Min duration
-            <input
-              type="range"
-              min={0}
-              max={maxDurationMs}
-              step={sliderStep}
-              value={minDurationMs}
-              onChange={e => setMinDurationMs(Number(e.target.value))}
-              className="workflow-filter__slider"
-              aria-label={`Minimum agent duration: ${fmtDuration(minDurationMs)}`}
-            />
-            <span className="workflow-filter__slider-value mono-xs">
-              {minDurationMs > 0 ? `≥ ${fmtDuration(minDurationMs)}` : 'any'}
-            </span>
-          </label>
-          <button
-            type="button"
-            className="btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--error"
-            data-active={errorsOnly || undefined}
-            aria-pressed={errorsOnly}
-            onClick={() => setErrorsOnly(v => !v)}
-          >
-            Errors only
-          </button>
-          <button
-            type="button"
-            className="btn-reset eval-filter-chip workflow-filter__chip eval-filter-chip--accent"
-            data-active={showCriticalPath || undefined}
-            aria-pressed={showCriticalPath}
-            onClick={() => setShowCriticalPath(v => !v)}
-          >
-            Critical path
-          </button>
-          <button
-            type="button"
-            className="btn-reset workflow-filter__export mono-xs"
-            onClick={() => void handleExport()}
-            aria-label="Export graph as PNG"
-          >
-            Export PNG
-          </button>
-        </div>
+        <WorkflowGraphControls
+          maxDurationMs={maxDurationMs}
+          minDurationMs={minDurationMs}
+          onMinDurationChange={setMinDurationMs}
+          errorsOnly={errorsOnly}
+          onErrorsOnlyToggle={toggleErrorsOnly}
+          showCriticalPath={showCriticalPath}
+          onCriticalPathToggle={toggleCriticalPath}
+          onExport={exportPng}
+        />
       )}
 
       <div

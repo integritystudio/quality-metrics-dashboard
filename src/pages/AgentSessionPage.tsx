@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'wouter';
 import { useAgentSession } from '../hooks/useAgentSession.js';
 import { TurnTimeline } from '../components/TurnTimeline.js';
@@ -10,6 +11,56 @@ import { plural } from '../lib/quality-utils.js';
 import { AGENT_SESSION_AGENT_PARAM, routes } from '../lib/routes.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
+type AgentSessionEvaluation = NonNullable<NonNullable<ReturnType<typeof useAgentSession>['data']>['evaluation']>;
+
+function AgentSessionBody({ sessionId, evaluation, focusedAgent }: {
+  sessionId: string;
+  evaluation: AgentSessionEvaluation;
+  focusedAgent: string | undefined;
+}): ReactNode {
+  const { turns, handoffs } = evaluation;
+  const agentNames = [...new Set(turns.map(t => t.agentName ?? 'unknown'))];
+
+  return (
+    <>
+      <DetailPageHeader title="Agent Session" id={sessionId}>
+        <span className="text-secondary text-xs">
+          {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
+        </span>
+        <Link href={routes.workflow(sessionId)} className="text-xs text-link">View Workflow</Link>
+      </DetailPageHeader>
+
+      <div className="card flex-wrap gap-6 p-4 mb-4 align-start">
+        <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
+        {evaluation.errorPropagationTurns > 0 && (
+          <div className="text-center">
+            <div className="mono-xs-muted mb-1 uppercase">Error Propagation</div>
+            <span className="mono text-md text-critical">
+              {plural(evaluation.errorPropagationTurns, 'turn')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <ViewSection title="Turn Timeline">
+        <div className="card">
+          <TurnTimeline turns={turns} agentNames={agentNames} focusedAgent={focusedAgent} />
+        </div>
+      </ViewSection>
+
+      {handoffs.length > 0 && (
+        <ViewSection title="Handoffs">
+          <div className="flex-col gap-2">
+            {handoffs.map((h) => (
+              <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${h.score}`} handoff={h} />
+            ))}
+          </div>
+        </ViewSection>
+      )}
+    </>
+  );
+}
+
 export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   const { data, isLoading, error } = useAgentSession(sessionId);
   const focusedAgent = useSearchParams()[0].get(AGENT_SESSION_AGENT_PARAM) ?? undefined;
@@ -17,49 +68,11 @@ export function AgentSessionPage({ sessionId }: { sessionId: string }) {
   if (!isLoading && !error && !data) return null;
 
   const evaluation = data?.evaluation;
-  const turns = evaluation?.turns ?? [];
-  const handoffs = evaluation?.handoffs ?? [];
-  const agentNames = [...new Set(turns.map(t => t.agentName ?? 'unknown'))];
 
   return (
     <PageShell isLoading={isLoading} error={error} skeletonHeight={SKELETON_HEIGHT_MD}>
-      {data && evaluation && (
-        <>
-          <DetailPageHeader title="Agent Session" id={sessionId}>
-            <span className="text-secondary text-xs">
-              {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
-            </span>
-            <Link href={routes.workflow(sessionId)} className="text-xs text-link">View Workflow</Link>
-          </DetailPageHeader>
-
-          <div className="card flex-wrap gap-6 p-4 mb-4 align-start">
-            <AgentScoreSummary handoffScore={evaluation.handoffScore ?? 0} avgRelevance={evaluation.avgTurnRelevance ?? 0} completeness={evaluation.conversationCompleteness ?? 0} />
-            {evaluation.errorPropagationTurns > 0 && (
-              <div className="text-center">
-                <div className="mono-xs-muted mb-1 uppercase">Error Propagation</div>
-                <span className="mono text-md text-critical">
-                  {plural(evaluation.errorPropagationTurns, 'turn')}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <ViewSection title="Turn Timeline">
-            <div className="card">
-              <TurnTimeline turns={turns} agentNames={agentNames} focusedAgent={focusedAgent} />
-            </div>
-          </ViewSection>
-
-          {handoffs.length > 0 && (
-            <ViewSection title="Handoffs">
-              <div className="flex-col gap-2">
-                {handoffs.map((h) => (
-                  <HandoffCard key={`${h.sourceAgent}-${h.targetAgent}-${h.score}`} handoff={h} />
-                ))}
-              </div>
-            </ViewSection>
-          )}
-        </>
+      {evaluation && (
+        <AgentSessionBody sessionId={sessionId} evaluation={evaluation} focusedAgent={focusedAgent} />
       )}
     </PageShell>
   );

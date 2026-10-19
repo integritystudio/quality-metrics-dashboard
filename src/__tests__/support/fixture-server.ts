@@ -262,6 +262,45 @@ const EMPTY_ATTRIBUTES = '{}';
 const ABSENT_EVAL_ID = '';
 
 /**
+ * Drops undefined values so a spread leaves the row defaults beneath them in
+ * place. The return type excludes `undefined` from each value, because a key
+ * carrying it is absent from the result rather than set to it.
+ */
+type Supplied<T> = { [K in keyof T]?: Exclude<T[K], undefined> };
+
+function present<T extends object>(fields: T): Supplied<T> {
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as Supplied<T>;
+}
+
+/** The wire row an empty `evalToWire({})` produces. */
+const EVAL_WIRE_DEFAULTS: EvalWireRow = {
+  org_id: FIXTURE_ORG_ID,
+  id: 1,
+  timestamp_ns: String(FIXTURE_TIMESTAMP_NS),
+  evaluation_name: 'relevance',
+  evaluator: ABSENT_EVAL_ID,
+  evaluator_type: 'seed',
+  score_value: 0.85,
+  score_label: null,
+  score_unit: null,
+  explanation: null,
+  error_type: null,
+  judge_model: null,
+  trace_id: ABSENT_EVAL_ID,
+  span_id: ABSENT_EVAL_ID,
+  session_id: ABSENT_EVAL_ID,
+  response_id: null,
+  agent_id: null,
+  agent_name: null,
+  trajectory_length: null,
+  service_name: null,
+  source: FIXTURE_EVAL_SOURCE,
+  attributes: EMPTY_ATTRIBUTES,
+  r2_key: FIXTURE_R2_KEY,
+  batch_index: 0,
+};
+
+/**
  * Convert an `EvaluationResult`-shaped object to the wire row that
  * CloudBackend serves and parses back to `EvaluationResult`.
  */
@@ -283,30 +322,22 @@ export function evalToWire(
   id = 1,
 ): EvalWireRow {
   return {
-    org_id: FIXTURE_ORG_ID,
+    ...EVAL_WIRE_DEFAULTS,
     id,
-    timestamp_ns: String(e.timestamp ?? FIXTURE_TIMESTAMP_NS),
-    evaluation_name: e.evaluationName ?? 'relevance',
-    evaluator: e.evaluator ?? ABSENT_EVAL_ID,
-    evaluator_type: e.evaluatorType ?? 'seed',
-    score_value: e.scoreValue ?? 0.85,
-    score_label: e.scoreLabel ?? null,
-    score_unit: null,
-    explanation: e.explanation ?? null,
-    error_type: null,
-    judge_model: null,
-    trace_id: e.traceId ?? ABSENT_EVAL_ID,
-    span_id: e.spanId ?? ABSENT_EVAL_ID,
-    session_id: e.sessionId ?? ABSENT_EVAL_ID,
-    response_id: null,
-    agent_id: null,
-    agent_name: e.agentName ?? null,
-    trajectory_length: e.trajectoryLength ?? null,
-    service_name: null,
-    source: FIXTURE_EVAL_SOURCE,
-    attributes: EMPTY_ATTRIBUTES,
-    r2_key: FIXTURE_R2_KEY,
-    batch_index: 0,
+    ...present({
+      timestamp_ns: e.timestamp === undefined ? undefined : String(e.timestamp),
+      evaluation_name: e.evaluationName,
+      evaluator: e.evaluator,
+      evaluator_type: e.evaluatorType,
+      score_value: e.scoreValue,
+      score_label: e.scoreLabel,
+      explanation: e.explanation,
+      trace_id: e.traceId,
+      span_id: e.spanId,
+      session_id: e.sessionId,
+      agent_name: e.agentName,
+      trajectory_length: e.trajectoryLength,
+    }),
   };
 }
 
@@ -317,6 +348,23 @@ export function evalToWire(
  * `attributes` is JSON-stringified; timestamps stay as decimal bigint strings.
  * An absent end time is served as the start time (zero duration).
  */
+const SPAN_WIRE_DEFAULTS: TraceWireRow = {
+  org_id: FIXTURE_ORG_ID,
+  trace_id: 'trace-001',
+  span_id: 'span-001',
+  parent_span_id: null,
+  name: 'tool:unknown',
+  kind: 'INTERNAL',
+  start_time_ns: String(FIXTURE_TIMESTAMP_NS),
+  end_time_ns: String(FIXTURE_TIMESTAMP_NS),
+  status_code: 'OK',
+  status_message: null,
+  service_name: FIXTURE_SERVICE_NAME,
+  session_id: null,
+  attributes: EMPTY_ATTRIBUTES,
+  r2_key: FIXTURE_R2_KEY,
+};
+
 export function spanToWire(s: {
   traceId?: string;
   spanId?: string;
@@ -334,20 +382,21 @@ export function spanToWire(s: {
   if (s.sessionId && !attrs[SESSION_ATTRIBUTES.ID]) attrs[SESSION_ATTRIBUTES.ID] = s.sessionId;
   const start = s.startTimeUnixNano ?? FIXTURE_TIMESTAMP_NS;
   return {
-    org_id: FIXTURE_ORG_ID,
-    trace_id: s.traceId ?? 'trace-001',
-    span_id: s.spanId ?? 'span-001',
-    parent_span_id: s.parentSpanId ?? null,
-    name: s.name ?? 'tool:unknown',
-    kind: s.kind ?? 'INTERNAL',
+    ...SPAN_WIRE_DEFAULTS,
+    ...present({
+      trace_id: s.traceId,
+      span_id: s.spanId,
+      parent_span_id: s.parentSpanId,
+      name: s.name,
+      kind: s.kind,
+      status_code: s.status?.code,
+      status_message: s.status?.message,
+      service_name: s.serviceName,
+      session_id: (attrs[SESSION_ATTRIBUTES.ID] as string | undefined) ?? s.sessionId,
+    }),
     start_time_ns: String(start),
     end_time_ns: String(s.endTimeUnixNano ?? start),
-    status_code: s.status?.code ?? 'OK',
-    status_message: s.status?.message ?? null,
-    service_name: s.serviceName ?? FIXTURE_SERVICE_NAME,
-    session_id: (attrs[SESSION_ATTRIBUTES.ID] as string | undefined) ?? s.sessionId ?? null,
     attributes: JSON.stringify(attrs),
-    r2_key: FIXTURE_R2_KEY,
   };
 }
 

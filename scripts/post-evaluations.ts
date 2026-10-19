@@ -59,6 +59,39 @@ export function emptyAccountIndex(): AccountIndex {
 }
 
 /**
+ * Map and route `records` into one batch per destination, counting everything
+ * that ships nowhere as it goes.
+ */
+function batchRecords(
+  records: readonly unknown[],
+  accounts: AccountIndex,
+  nowMs: number,
+  summary: PostSummary,
+): Map<string, EvaluationPayload[]> {
+  const batches = new Map<string, EvaluationPayload[]>();
+  for (const record of records) {
+    const mapped = mapRecord(record, nowMs, Number.POSITIVE_INFINITY);
+    if (mapped.skip) {
+      increment(summary.skipped, mapped.skip);
+      continue;
+    }
+    const { route, basis } = routeRecord(mapped, accounts);
+    summary.routedBy[basis]++;
+    const delivery = deliveryFor(route);
+    if (delivery.kind === 'withheld') {
+      summary.withheld++;
+      continue;
+    }
+    if (delivery.kind === 'held-for-key') {
+      increment(summary.heldForKey, delivery.ref);
+      continue;
+    }
+    pushTo(batches, delivery.destination, mapped.payload);
+  }
+  return batches;
+}
+
+/**
  * Map, route and post `records` (OTel-shaped, as `toOTelRecord` writes them).
  * Stops at the first rejected batch and reports it in `failure`; everything
  * before it was accepted, and a re-run re-sends the rest without duplicating
@@ -77,27 +110,7 @@ export async function postEvaluationRecords(
     routedBy: { stamp: 0, span: 0, join: 0 },
   };
   const nowMs = opts.nowMs ?? Date.now();
-  const batches = new Map<string, EvaluationPayload[]>();
-
-  for (const record of records) {
-    const mapped = mapRecord(record, nowMs, Number.POSITIVE_INFINITY);
-    if (mapped.skip) {
-      increment(summary.skipped, mapped.skip);
-      continue;
-    }
-    const { route, basis } = routeRecord(mapped, opts.accounts);
-    summary.routedBy[basis]++;
-    const delivery = deliveryFor(route);
-    if (delivery.kind === 'withheld') {
-      summary.withheld++;
-      continue;
-    }
-    if (delivery.kind === 'held-for-key') {
-      increment(summary.heldForKey, delivery.ref);
-      continue;
-    }
-    pushTo(batches, delivery.destination, mapped.payload);
-  }
+  const batches = batchRecords(records, opts.accounts, nowMs, summary);
 
   const { baseUrl, secret } = resolveSendConfig();
   if (!opts.dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {

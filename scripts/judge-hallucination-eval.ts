@@ -110,6 +110,7 @@ export const MAX_MEASURED_SPEND_USD = 8;
 export const REFERENCE_FLAG = '--reference';
 export const MARKER_FILENAME = '.judge-hallucination.started';
 export const RESULTS_PREFIX = 'judge-hallucination-';
+const LOG_PREFIX = '[hallucination]';
 /** A turn whose faithfulness and hallucination sum to 1 within this is inferring, not measuring. */
 const COMPLEMENT_EPSILON = 1e-9;
 const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination: true };
@@ -145,7 +146,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   }));
 }
 
-const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[hallucination]', noun: 'eval' });
+const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: LOG_PREFIX, noun: 'eval' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
 const { refuse, begin } = runGuard;
 
@@ -294,7 +295,7 @@ async function main(): Promise<void> {
   const turnErrors: TurnErrors[] = [];
   resetFailureTracking();
 
-  const progress = turnProgress('[hallucination]', prior.length);
+  const progress = turnProgress(LOG_PREFIX, prior.length);
   const scored = await processBatch(prior, REFERENCE_CONCURRENCY, NO_BATCH_DELAY_MS, async (priorTurn): Promise<HallucinationTurn> => {
     const turn = getOrThrow(byKey, turnKey(priorTurn));
     const errors: string[] = [];
@@ -368,4 +369,4 @@ async function main(): Promise<void> {
   console.log(`\n[hallucination] spent ${formatUsd(spentUsd())}; results written: ${outPath}`);
 }
 
-runIfMain(import.meta.url, main, '[hallucination]', { fatalExitCode: EXIT_REFUSED });
+runIfMain(import.meta.url, main, LOG_PREFIX, { fatalExitCode: EXIT_REFUSED });

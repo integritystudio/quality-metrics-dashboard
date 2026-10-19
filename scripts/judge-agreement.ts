@@ -91,6 +91,7 @@ export const MAX_ESTIMATED_SPEND_USD = 8;
 export const LIMIT_FLAG = '--limit';
 export const MARKER_FILENAME = '.judge-agreement.started';
 export const RESULTS_PREFIX = 'judge-agreement-';
+const LOG_PREFIX = '[agreement]';
 /** Estimate only: QAG answers one question per statement, each carrying the context. */
 const QAG_STATEMENTS_ESTIMATE = MAX_STATEMENTS / 2;
 /** Estimate only: same figure the pipeline's --dry-run uses per call. */
@@ -170,7 +171,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 // Marker and results files
 // ---------------------------------------------------------------------------
 
-const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: '[agreement]', noun: 'check' });
+const runGuard = createRunGuard({ markerFilename: MARKER_FILENAME, resultsPrefix: RESULTS_PREFIX, logPrefix: LOG_PREFIX, noun: 'check' });
 export const { listResultsFiles, resultsFilePath, refusalReason } = runGuard;
 const { refuse, begin } = runGuard;
 
@@ -392,7 +393,7 @@ async function main(): Promise<void> {
   const stepsCache: EvaluationStepsCache = new Map();
   resetFailureTracking();
 
-  const progress = turnProgress('[agreement]', sample.turns.length);
+  const progress = turnProgress(LOG_PREFIX, sample.turns.length);
   const outcomes = await processBatch(sample.turns, AGREEMENT_CONCURRENCY, NO_BATCH_DELAY_MS, async (turn): Promise<TurnOutcome> => {
     const outcome: TurnOutcome = {
       sessionId: turn.sessionId,
@@ -452,4 +453,4 @@ async function main(): Promise<void> {
   console.log(`\n[agreement] results written: ${outPath}`);
 }
 
-runIfMain(import.meta.url, main, '[agreement]', { fatalExitCode: EXIT_REFUSED });
+runIfMain(import.meta.url, main, LOG_PREFIX, { fatalExitCode: EXIT_REFUSED });

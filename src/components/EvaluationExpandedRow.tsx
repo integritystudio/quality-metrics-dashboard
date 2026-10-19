@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'wouter';
 import { SCORE_COLORS } from '../lib/quality-utils.js';
 import { routes } from '../lib/routes.js';
@@ -37,6 +38,37 @@ export function ToolVerificationChip({ toolName, toolCorrect, argsCorrect, score
   );
 }
 
+/** True when the row carries anything beyond the trace/session links. */
+function hasExpandedDetail(row: EvalRow, metaCount: number): boolean {
+  if (row.explanation || metaCount > 0) return true;
+  return (row.stepScores?.length ?? 0) > 0 || (row.toolVerifications?.length ?? 0) > 0;
+}
+
+/**
+ * The trace and session links. A session id takes the spans link; a row with
+ * only a trace id sends it to the trace instead.
+ */
+function EvaluationRowLinks({ row }: { row: EvalRow }): ReactNode {
+  const { traceId, sessionId } = row;
+  if (!traceId && !sessionId) return null;
+  const spansHref = sessionId ? routes.session(sessionId) : traceId ? routes.trace(traceId) : null;
+  return (
+    // back-link inline — uses mb-0 to reset default margin
+    <div className="d-flex gap-4 mt-3 border-t pt-3">
+      {traceId && (
+        <Link href={routes.evaluationDetail(traceId)} className="back-link inline-flex-center mb-0">
+          View full evaluation detail &rarr;
+        </Link>
+      )}
+      {spansHref && (
+        <Link href={spansHref} className="back-link inline-flex-center mb-0">
+          View trace spans &rarr;
+        </Link>
+      )}
+    </div>
+  );
+}
+
 export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
   const meta = [
     { label: 'Evaluator Type', value: row.evaluatorType },
@@ -47,9 +79,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
     { label: 'Trajectory Length', value: row.trajectoryLength },
   ].filter(m => m.value != null);
 
-  const hasDetail = !!row.explanation || meta.length > 0 ||
-    (row.stepScores != null && row.stepScores.length > 0) ||
-    (row.toolVerifications != null && row.toolVerifications.length > 0);
+  const hasDetail = hasExpandedDetail(row, meta.length);
 
   return (
     <div className="eval-expanded-content">
@@ -93,25 +123,7 @@ export function EvaluationExpandedRow({ row }: { row: EvalRow }) {
         </SectionBlock>
       )}
 
-      {/* back-link inline — uses mb-0 to reset default margin */}
-      {(!!row.traceId || !!row.sessionId) && (
-        <div className="d-flex gap-4 mt-3 border-t pt-3">
-          {row.traceId && (
-            <Link href={routes.evaluationDetail(row.traceId)} className="back-link inline-flex-center mb-0">
-              View full evaluation detail &rarr;
-            </Link>
-          )}
-          {row.sessionId ? (
-            <Link href={routes.session(row.sessionId)} className="back-link inline-flex-center mb-0">
-              View trace spans &rarr;
-            </Link>
-          ) : row.traceId ? (
-            <Link href={routes.trace(row.traceId)} className="back-link inline-flex-center mb-0">
-              View trace spans &rarr;
-            </Link>
-          ) : null}
-        </div>
-      )}
+      <EvaluationRowLinks row={row} />
 
       {!hasDetail && !row.traceId && !row.sessionId && (
         <div className="text-muted text-xs">

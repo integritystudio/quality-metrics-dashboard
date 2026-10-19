@@ -26,51 +26,54 @@ export const DASHBOARD_ROLE_BY_MEMBERSHIP: Record<OrgMembershipRole, DashboardRo
   viewer: 'e2e-dashboard-reader',
 };
 
-export const PERMISSIONS_BY_DASHBOARD_ROLE: Record<DashboardRole, readonly DashboardPermission[]> = {
-  owner: [
-    'dashboard.read',
-    'dashboard.executive',
-    'dashboard.operator',
-    'dashboard.auditor',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-    'dashboard.admin',
-  ],
-  // Deliberately NO executive/operator/auditor: org admin gets the admin panel
-  // plus all data reads, but no exec/operator/auditor tabs (spec-intentional —
-  // the `dashboard.admin ? all views` shortcut does not apply on the org path).
-  admin: [
-    'dashboard.read',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-    'dashboard.admin',
-  ],
-  read: ['dashboard.read'],
-  'e2e-dashboard-reader': [
-    'dashboard.read',
-    'dashboard.executive',
-    'dashboard.operator',
-    'dashboard.auditor',
-    'dashboard.traces.read',
-    'dashboard.sessions.read',
-    'dashboard.agents.read',
-    'dashboard.pipeline.read',
-    'dashboard.compliance.read',
-  ],
-};
+/**
+ * The permission strings, named once. Every route guard and every role list
+ * below reaches them through this map rather than respelling the literal.
+ */
+export const PERMISSION = {
+  read: 'dashboard.read',
+  executive: 'dashboard.executive',
+  operator: 'dashboard.operator',
+  auditor: 'dashboard.auditor',
+  traces: 'dashboard.traces.read',
+  sessions: 'dashboard.sessions.read',
+  agents: 'dashboard.agents.read',
+  pipeline: 'dashboard.pipeline.read',
+  compliance: 'dashboard.compliance.read',
+  admin: 'dashboard.admin',
+} as const satisfies Record<string, DashboardPermission>;
 
 /** The permission that grants each view. */
 const VIEW_PERMISSIONS: ReadonlyArray<readonly [DashboardPermission, DashboardView]> = [
-  ['dashboard.executive', 'executive'],
-  ['dashboard.operator', 'operator'],
-  ['dashboard.auditor', 'auditor'],
+  [PERMISSION.executive, 'executive'],
+  [PERMISSION.operator, 'operator'],
+  [PERMISSION.auditor, 'auditor'],
 ];
+
+/**
+ * The view-tab permissions, taken from the view map rather than respelled, so a
+ * role granting a tab and `viewsForPermissions` resolving it cannot drift apart.
+ */
+const VIEW_TAB_READS: readonly DashboardPermission[] = VIEW_PERMISSIONS.map(([permission]) => permission);
+
+/** The per-route data reads every role above `read` holds. */
+const DATA_READS: readonly DashboardPermission[] = [
+  PERMISSION.traces,
+  PERMISSION.sessions,
+  PERMISSION.agents,
+  PERMISSION.pipeline,
+  PERMISSION.compliance,
+];
+
+export const PERMISSIONS_BY_DASHBOARD_ROLE: Record<DashboardRole, readonly DashboardPermission[]> = {
+  owner: [PERMISSION.read, ...VIEW_TAB_READS, ...DATA_READS, PERMISSION.admin],
+  // Deliberately NO executive/operator/auditor: org admin gets the admin panel
+  // plus all data reads, but no exec/operator/auditor tabs (spec-intentional —
+  // the `dashboard.admin ? all views` shortcut does not apply on the org path).
+  admin: [PERMISSION.read, ...DATA_READS, PERMISSION.admin],
+  read: [PERMISSION.read],
+  'e2e-dashboard-reader': [PERMISSION.read, ...VIEW_TAB_READS, ...DATA_READS],
+};
 
 /**
  * Derive allowedViews strictly by filtering the view map against the permission

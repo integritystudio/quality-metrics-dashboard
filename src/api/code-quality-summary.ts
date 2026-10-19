@@ -97,11 +97,19 @@ type VersionAcc = {
 
 type CodeQualitySpan = SpanLike & { startTimeUnixNano?: string | number | bigint | null | undefined };
 
-export function summarizeCodeQuality(
-  checkpointSpans: readonly CodeQualitySpan[],
-  invocationSpans: readonly CodeQualitySpan[],
-): CodeQualityResponse {
-  // Aggregate checkpoint spans by (agentName, agentVersion, window, cohort, contentKind)
+/** The later of the accumulated timestamp and this span's, ignoring an unparseable one. */
+function laterMs(current: number, span: CodeQualitySpan): number {
+  const spanMs = timestampToMs(span.startTimeUnixNano);
+  return Number.isFinite(spanMs) && spanMs > current ? spanMs : current;
+}
+
+/** An accumulator that never saw a parseable timestamp reports none. */
+function isoOrEmpty(latestMs: number): string {
+  return latestMs > 0 ? new Date(latestMs).toISOString() : '';
+}
+
+/** Checkpoint rates grouped by (agentName, agentVersion, window, cohort, contentKind). */
+function accumulateWindows(checkpointSpans: readonly CodeQualitySpan[]): Map<string, WindowAcc> {
   const windowAcc = new Map<string, WindowAcc>();
 
   for (const span of checkpointSpans) {
@@ -123,13 +131,13 @@ export function summarizeCodeQuality(
     entry.survivalRates.push(attrRate(span, CODE_ATTRIBUTES.SURVIVAL_RATE));
     entry.churnRates.push(attrRate(span, CODE_ATTRIBUTES.CHURN_RATE));
     entry.deletionRates.push(attrRate(span, CODE_ATTRIBUTES.DELETION_RATE));
-
-    const spanMs = timestampToMs(span.startTimeUnixNano);
-    if (Number.isFinite(spanMs) && spanMs > entry.latestMs) {
-      entry.latestMs = spanMs;
-    }
+    entry.latestMs = laterMs(entry.latestMs, span);
   }
 
+  return windowAcc;
+}
+
+function toAgentWindowStats(windowAcc: Map<string, WindowAcc>): AgentWindowStats[] {
   const survivalByAgentWindow: AgentWindowStats[] = [];
   for (const [key, entry] of windowAcc) {
     const [agentName = 'unknown', agentVersion = 'unknown', window = 'unknown'] = key.split(KEY_SEP);
@@ -143,11 +151,14 @@ export function summarizeCodeQuality(
       avgChurnRate: mean(entry.churnRates) ?? 0,
       avgDeletionRate: mean(entry.deletionRates) ?? 0,
       checkpointCount: entry.survivalRates.length,
-      latestTimestamp: entry.latestMs > 0 ? new Date(entry.latestMs).toISOString() : '',
+      latestTimestamp: isoOrEmpty(entry.latestMs),
     });
   }
+  return survivalByAgentWindow;
+}
 
-  // Aggregate invocation spans by (agentName, agentVersion, cohort)
+/** Invocation counts grouped by (agentName, agentVersion, cohort). */
+function accumulateVersions(invocationSpans: readonly CodeQualitySpan[]): Map<string, VersionAcc> {
   const versionAcc = new Map<string, VersionAcc>();
 
   for (const span of invocationSpans) {
@@ -163,12 +174,13 @@ export function summarizeCodeQuality(
     }
 
     entry.invocationCount++;
-    const spanMs = timestampToMs(span.startTimeUnixNano);
-    if (Number.isFinite(spanMs) && spanMs > entry.latestMs) {
-      entry.latestMs = spanMs;
-    }
+    entry.latestMs = laterMs(entry.latestMs, span);
   }
 
+  return versionAcc;
+}
+
+function toVersionStats(versionAcc: Map<string, VersionAcc>): AgentVersionStats[] {
   const versionRollout: AgentVersionStats[] = [];
   for (const [key, entry] of versionAcc) {
     const [agentName = 'unknown', agentVersion = 'unknown'] = key.split(KEY_SEP);
@@ -177,11 +189,19 @@ export function summarizeCodeQuality(
       agentVersion,
       cohort: entry.cohort,
       invocationCount: entry.invocationCount,
-      latestTimestamp: entry.latestMs > 0 ? new Date(entry.latestMs).toISOString() : '',
+      latestTimestamp: isoOrEmpty(entry.latestMs),
     });
   }
+  return versionRollout;
+}
 
-  versionRollout.sort((a, b) => b.invocationCount - a.invocationCount);
+export function summarizeCodeQuality(
+  checkpointSpans: readonly CodeQualitySpan[],
+  invocationSpans: readonly CodeQualitySpan[],
+): CodeQualityResponse {
+  const survivalByAgentWindow = toAgentWindowStats(accumulateWindows(checkpointSpans));
+  const versionRollout = toVersionStats(accumulateVersions(invocationSpans))
+    .toSorted((a, b) => b.invocationCount - a.invocationCount);
 
   return {
     survivalByAgentWindow,

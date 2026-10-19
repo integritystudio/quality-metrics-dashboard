@@ -1,4 +1,4 @@
-import type { Context, HonoRequest } from 'hono';
+import type { Context, HonoRequest, Next } from 'hono';
 import { cors } from 'hono/cors';
 import { createFactory } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
@@ -8,7 +8,7 @@ import { PostgrestClient } from '@supabase/postgrest-js';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema, ApiKeySchema, DashboardPermissionSchema } from '../src/lib/validation/auth-schemas.js';
-import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
+import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSION, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_API_KEY_HEADER, SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
@@ -70,6 +70,9 @@ function isTokenRejection(err: unknown): boolean {
   ].some((cls) => err instanceof cls);
 }
 const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
+
+/** Stands in for the status in a log line when `fetch` produced no response at all. */
+const NO_RESPONSE_STATUS = 'network error';
 
 /** Joins allowed values as "a, b, or c" for the 400 messages, so they follow the shared lists. */
 const OR_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
@@ -358,50 +361,57 @@ app.get('/api/health', async (c) => {
 
 const AUTH_TIMEOUT_MS = 5000;
 
-app.use('/api/*', async (c, next) => {
+/** The bearer token on the request, or null when there is none to verify. */
+function bearerToken(c: AppContext): string | null {
   const authHeader = c.req.header('Authorization');
-  const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+}
 
-  // Test mode: bypass auth when ALLOW_TEST_BYPASS is explicitly enabled in the environment.
-  // Never set ALLOW_TEST_BYPASS in production — leave the binding absent.
-  if (c.env.ALLOW_TEST_BYPASS === 'true' && jwt === 'test-token') {
-    // Phase-gate assertion (P5, Q7): refuse the bypass outright when a
-    // production env marker is present. HOME_ORG_ID and STAFF_USER_IDS carry
-    // real values only on the two production workers (dev deliberately holds
-    // '' / '[]'), so either being set means this binding leaked into prod.
-    if ((c.env.HOME_ORG_ID ?? '') !== '' || parseStaffIds(c.env.STAFF_USER_IDS).size > 0) {
-      console.error('[auth] ALLOW_TEST_BYPASS refused: production env markers present (HOME_ORG_ID/STAFF_USER_IDS)');
-      return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
-    }
-    const bypassOrgId = 'a0000000-0000-4000-8000-000000000001';
-    c.set('session', {
-      authUserId: 'auth0|test-user',
-      appUserId: 'a0000000-0000-4000-8000-000000000002',
-      email: 'test@example.com',
-      roles: ['test'],
-      permissions: ['dashboard.admin'],
-      allowedViews: [...ROLES],
-      // Org context (P5): the bypass session carries the org-scoped shape so
-      // e2e fixtures and the session contract change in the same phase.
-      activeOrgId: bypassOrgId,
-      memberships: [{
-        orgId: bypassOrgId,
-        slug: 'test-org',
-        name: 'Test Org',
-        membershipRole: 'owner',
-        dashboardRole: 'owner',
-      }],
-      role: 'owner',
-      isStaff: false,
-    });
-    return next();
+/** The org the bypass session acts in; paired with the fixed app user below. */
+const BYPASS_ORG_ID = 'a0000000-0000-4000-8000-000000000001';
+
+/**
+ * Test mode: bypass auth when ALLOW_TEST_BYPASS is explicitly enabled in the environment.
+ * Never set ALLOW_TEST_BYPASS in production — leave the binding absent.
+ *
+ * Returns `true` once the bypass session is installed, `false` when this is not a
+ * bypass request at all, and a Response when the bypass is refused.
+ */
+function applyTestBypass(c: AppContext, jwt: string | null): Response | boolean {
+  if (c.env.ALLOW_TEST_BYPASS !== 'true' || jwt !== 'test-token') return false;
+  // Phase-gate assertion (P5, Q7): refuse the bypass outright when a
+  // production env marker is present. HOME_ORG_ID and STAFF_USER_IDS carry
+  // real values only on the two production workers (dev deliberately holds
+  // '' / '[]'), so either being set means this binding leaked into prod.
+  if ((c.env.HOME_ORG_ID ?? '') !== '' || parseStaffIds(c.env.STAFF_USER_IDS).size > 0) {
+    console.error('[auth] ALLOW_TEST_BYPASS refused: production env markers present (HOME_ORG_ID/STAFF_USER_IDS)');
+    return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
   }
+  c.set('session', {
+    authUserId: 'auth0|test-user',
+    appUserId: 'a0000000-0000-4000-8000-000000000002',
+    email: 'test@example.com',
+    roles: ['test'],
+    permissions: [PERMISSION.admin],
+    allowedViews: [...ROLES],
+    // Org context (P5): the bypass session carries the org-scoped shape so
+    // e2e fixtures and the session contract change in the same phase.
+    activeOrgId: BYPASS_ORG_ID,
+    memberships: [{
+      orgId: BYPASS_ORG_ID,
+      slug: 'test-org',
+      name: 'Test Org',
+      membershipRole: 'owner',
+      dashboardRole: 'owner',
+    }],
+    role: 'owner',
+    isStaff: false,
+  });
+  return true;
+}
 
-  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
-
-  // One deadline shared across all auth fetches
-  const signal = AbortSignal.timeout(AUTH_TIMEOUT_MS);
-
+/** The verified token's `sub`, or the response that refuses the request. */
+async function verifiedAuth0Id(c: AppContext, jwt: string): Promise<Response | string> {
   const JWKS = getJwks(c.env.AUTH0_DOMAIN);
   let jwtPayload: Record<string, unknown>;
   try {
@@ -419,39 +429,52 @@ app.use('/api/*', async (c, next) => {
   }
   const auth0Id = typeof jwtPayload.sub === 'string' ? jwtPayload.sub : null;
   if (!auth0Id) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
+  return auth0Id;
+}
 
-  const orgScopingEnabled = isOrgScopingEnabled(c.env);
-  if (orgScopingEnabled && !c.env.HOME_ORG_ID) {
-    // Fail loudly: an empty HOME_ORG_ID (the dev worker's deliberate value)
-    // must never silently resolve or fall back into a production org.
-    console.error('[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve');
-    return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
-  }
+type AppUser = { appUserId: string; email: string; defaultOrgId: string | null };
 
-  // Fetch public.users row by auth0_id — required; users with no app record are rejected
-  const supabase = db(c.env);
+/**
+ * The `public.users` row for this auth0 id — required; a user with no app record is
+ * rejected. A failed read is upstream (503, retried by the client); only a missing
+ * row means the user has no app record (401).
+ */
+async function loadAppUser(
+  c: AppContext,
+  supabase: PostgrestClient,
+  auth0Id: string,
+  signal: AbortSignal,
+): Promise<Response | AppUser> {
   const userRes = await supabase.from('users')
     .select('id,email,default_organization_id')
     .eq('auth0_id', auth0Id)
     .limit(1)
     .abortSignal(signal);
-  // A failed read is upstream (503, retried by the client); only a missing row means the
-  // user has no app record (401).
   if (userRes.error) {
-    console.error('[auth] user lookup failed, status:', userRes.status || 'network error');
+    console.error('[auth] user lookup failed, status:', userRes.status || NO_RESPONSE_STATUS);
     return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
   }
   const [rawUser] = safeArray(userRes.data);
   if (!rawUser) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
   const userResult = PublicUserSchema.safeParse(rawUser);
   if (!userResult.success) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
-  const appUserId = userResult.data.id;
-  const email = userResult.data.email;
-  const defaultOrgId = userResult.data.default_organization_id ?? null;
-  const authUserId = auth0Id;
+  return {
+    appUserId: userResult.data.id,
+    email: userResult.data.email,
+    defaultOrgId: userResult.data.default_organization_id ?? null,
+  };
+}
 
-  // Roles and (under org scoping) memberships fetch in PARALLEL — Risk 19:
-  // the added membership round-trip must not serialize into the auth budget.
+/**
+ * Roles and (under org scoping) memberships fetch in PARALLEL — Risk 19:
+ * the added membership round-trip must not serialize into the auth budget.
+ */
+async function fetchGrants(
+  supabase: PostgrestClient,
+  appUserId: string,
+  signal: AbortSignal,
+  orgScopingEnabled: boolean,
+) {
   const rolesPromise = supabase.from('user_roles')
     .select('roles(name,permissions)')
     .eq('user_id', appUserId)
@@ -462,70 +485,146 @@ app.use('/api/*', async (c, next) => {
       .eq('user_id', appUserId)
       .abortSignal(signal)
     : null;
-  const [rolesRes, membershipsRes] = await Promise.all([rolesPromise, membershipsPromise]);
+  return Promise.all([rolesPromise, membershipsPromise]);
+}
 
-  if (rolesRes.error) {
-    console.error('[auth] role fetch failed for user', appUserId, 'status:', rolesRes.status || 'network error');
-    return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, HttpStatus.InternalServerError);
-  }
-  const rows = safeArray(rolesRes.data);
+type MembershipsResult = Awaited<ReturnType<typeof fetchGrants>>[1];
+
+type RoleGrants = { roles: string[]; permissionSet: Set<DashboardPermission> };
+
+/** DB permission strings are untrusted: only known DashboardPermission values reach the session. */
+function parseRoleGrants(rows: unknown[]): RoleGrants {
   const roles: string[] = [];
   const permissionSet = new Set<DashboardPermission>();
   for (const row of rows) {
     const rowResult = UserRoleRowSchema.safeParse(row);
     if (!rowResult.success || !rowResult.data.roles) continue;
     roles.push(rowResult.data.roles.name);
-    // DB permission strings are untrusted: only known DashboardPermission values reach the session.
     for (const perm of rowResult.data.roles.permissions) {
       const known = DashboardPermissionSchema.safeParse(perm);
       if (known.success) permissionSet.add(known.data);
     }
   }
+  return { roles, permissionSet };
+}
 
-  if (orgScopingEnabled) {
-    // Fail closed: a failed read must not pass for "no memberships", which answers a
-    // non-retried 403 (or, for staff, the home org).
-    if (membershipsRes?.error) {
-      console.error('[auth] membership fetch failed for user', appUserId, 'status:', membershipsRes.status || 'network error');
-      return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
-    }
-    const memberships = parseMemberships(membershipsRes?.data);
-    const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(appUserId);
+/**
+ * Resolve activeOrgId: X-Org-Id (membership-validated, or staff) →
+ * default_organization_id (re-validated — Risk 15) → first membership, and for
+ * staff alone, the home org. Undefined when none of them resolves.
+ */
+function resolveActiveOrg(
+  c: AppContext,
+  memberships: readonly OrgMembershipSummary[],
+  isStaff: boolean,
+  defaultOrgId: string | null,
+): Response | string | undefined {
+  const requestedOrg = c.req.header(ORG_ID_HEADER);
+  let activeOrgId: string | undefined;
+  if (requestedOrg) {
+    if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+    if (!canEnterOrg(isStaff, memberships, requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+    activeOrgId = requestedOrg;
+  }
+  if (!activeOrgId && defaultOrgId && canEnterOrg(isStaff, memberships, defaultOrgId)) {
+    activeOrgId = defaultOrgId;
+  }
+  activeOrgId ??= memberships[0]?.orgId;
+  if (!activeOrgId && isStaff) activeOrgId = c.env.HOME_ORG_ID;
+  return activeOrgId;
+}
 
-    // Resolve activeOrgId: X-Org-Id (membership-validated, or staff) →
-    // default_organization_id (re-validated — Risk 15) → first membership.
-    const requestedOrg = c.req.header(ORG_ID_HEADER);
-    let activeOrgId: string | undefined;
-    if (requestedOrg) {
-      if (!UUID_PATTERN.test(requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-      if (!canEnterOrg(isStaff, memberships, requestedOrg)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-      activeOrgId = requestedOrg;
-    }
-    if (!activeOrgId && defaultOrgId && canEnterOrg(isStaff, memberships, defaultOrgId)) {
-      activeOrgId = defaultOrgId;
-    }
-    activeOrgId ??= memberships[0]?.orgId;
-    if (!activeOrgId && isStaff) activeOrgId = c.env.HOME_ORG_ID;
+/** The org-scoped session: permissions come from the active org's membership role. */
+async function orgScopedSession(c: AppContext, args: {
+  next: Next;
+  authUserId: string;
+  user: AppUser;
+  roles: string[];
+  membershipsRes: MembershipsResult;
+}) {
+  const { next, authUserId, user, roles, membershipsRes } = args;
+  // Fail closed: a failed read must not pass for "no memberships", which answers a
+  // non-retried 403 (or, for staff, the home org).
+  if (membershipsRes?.error) {
+    console.error('[auth] membership fetch failed for user', user.appUserId, 'status:', membershipsRes.status || NO_RESPONSE_STATUS);
+    return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
+  }
+  const memberships = parseMemberships(membershipsRes?.data);
+  const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(user.appUserId);
 
-    if (activeOrgId) {
-      const grant = orgGrant(isStaff, memberships, activeOrgId);
-      c.set('session', { authUserId, appUserId, email, roles, ...grant, activeOrgId, memberships, isStaff });
-      return next();
-    }
+  const activeOrgId = resolveActiveOrg(c, memberships, isStaff, user.defaultOrgId);
+  if (activeOrgId instanceof Response) return activeOrgId;
 
-    // No active org and not staff: refuse, whatever the user's roles
-    // (AUTH-NO-ORG-LEGACY-SESSION). The on_user_created trigger gives every
-    // new user a role, so the old roles-only fallback (Risk 13) handed every
-    // user without an org a global session reading the home org's bare keys.
-    return c.json({ error: ERR_NO_ORG }, HttpStatus.Forbidden);
+  if (activeOrgId) {
+    const grant = orgGrant(isStaff, memberships, activeOrgId);
+    c.set('session', {
+      authUserId, appUserId: user.appUserId, email: user.email, roles,
+      ...grant, activeOrgId, memberships, isStaff,
+    });
+    return next();
   }
 
-  const permissions = [...permissionSet];
-  const allowedViews: DashboardView[] = permissionSet.has('dashboard.admin') ? [...ROLES] : viewsForPermissions(permissions);
+  // No active org and not staff: refuse, whatever the user's roles
+  // (AUTH-NO-ORG-LEGACY-SESSION). The on_user_created trigger gives every
+  // new user a role, so the old roles-only fallback (Risk 13) handed every
+  // user without an org a global session reading the home org's bare keys.
+  return c.json({ error: ERR_NO_ORG }, HttpStatus.Forbidden);
+}
 
-  c.set('session', { authUserId, appUserId, email, roles, permissions, allowedViews });
+/** The pre-org-scoping session: permissions come from the user's legacy roles. */
+function legacySession(c: AppContext, authUserId: string, user: AppUser, grants: RoleGrants): void {
+  const permissions = [...grants.permissionSet];
+  const allowedViews: DashboardView[] = grants.permissionSet.has(PERMISSION.admin) ? [...ROLES] : viewsForPermissions(permissions);
+  c.set('session', {
+    authUserId, appUserId: user.appUserId, email: user.email,
+    roles: grants.roles, permissions, allowedViews,
+  });
+}
+
+const authenticate = factory.createMiddleware(async (c, next) => {
+  const jwt = bearerToken(c);
+
+  const bypass = applyTestBypass(c, jwt);
+  if (bypass instanceof Response) return bypass;
+  if (bypass) return next();
+
+  if (!jwt) return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
+
+  // One deadline shared across all auth fetches
+  const signal = AbortSignal.timeout(AUTH_TIMEOUT_MS);
+
+  const auth0Id = await verifiedAuth0Id(c, jwt);
+  if (auth0Id instanceof Response) return auth0Id;
+
+  const orgScopingEnabled = isOrgScopingEnabled(c.env);
+  if (orgScopingEnabled && !c.env.HOME_ORG_ID) {
+    // Fail loudly: an empty HOME_ORG_ID (the dev worker's deliberate value)
+    // must never silently resolve or fall back into a production org.
+    console.error('[auth] ORG_SCOPING_ENABLED=true but HOME_ORG_ID is empty — refusing to serve');
+    return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
+  }
+
+  const supabase = db(c.env);
+  const user = await loadAppUser(c, supabase, auth0Id, signal);
+  if (user instanceof Response) return user;
+
+  const [rolesRes, membershipsRes] = await fetchGrants(supabase, user.appUserId, signal, orgScopingEnabled);
+
+  if (rolesRes.error) {
+    console.error('[auth] role fetch failed for user', user.appUserId, 'status:', rolesRes.status || NO_RESPONSE_STATUS);
+    return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, HttpStatus.InternalServerError);
+  }
+  const grants = parseRoleGrants(safeArray(rolesRes.data));
+
+  if (orgScopingEnabled) {
+    return orgScopedSession(c, { next, authUserId: auth0Id, user, roles: grants.roles, membershipsRes });
+  }
+
+  legacySession(c, auth0Id, user, grants);
   return next();
 });
+
+app.use('/api/*', authenticate);
 
 function isOrgScopingEnabled(env: Pick<Bindings, 'ORG_SCOPING_ENABLED'>): boolean {
   return env.ORG_SCOPING_ENABLED === 'true';
@@ -595,7 +694,7 @@ function parseMemberships(raw: unknown): OrgMembershipSummary[] {
 }
 
 function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
-  return session.permissions.includes('dashboard.admin') || session.permissions.includes(permission);
+  return session.permissions.includes(PERMISSION.admin) || session.permissions.includes(permission);
 }
 
 /** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
@@ -720,7 +819,7 @@ app.post('/api/activity', async (c) => {
   return c.body(null, HttpStatus.NoContent);
 });
 
-app.get('/api/dashboard', requirePermission('dashboard.read'), validQuery(DashboardQuery), async (c) => {
+app.get('/api/dashboard', requirePermission(PERMISSION.read), validQuery(DashboardQuery), async (c) => {
   const session = c.get('session');
   const { period, role } = c.req.valid('query');
   if (role && !session.allowedViews.includes(role)) {
@@ -739,7 +838,7 @@ function scoreOf(row: Record<string, unknown>): number {
   return typeof row.score === 'number' ? row.score : 0;
 }
 
-app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), validQuery(MetricEvaluationsQuery), async (c) => {
+app.get('/api/metrics/:name/evaluations', requirePermission(PERMISSION.read), validQuery(MetricEvaluationsQuery), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, HttpStatus.BadRequest);
   const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
@@ -761,7 +860,7 @@ app.get('/api/metrics/:name/evaluations', requirePermission('dashboard.read'), v
 // The Worker cannot import that module, so the prefix is restated here.
 const METRIC_DETAIL_KEY_PREFIX = 'metric:';
 
-app.get('/api/metrics/:name', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(DEFAULT_PERIOD_DETAIL) })), async (c) => {
+app.get('/api/metrics/:name', requirePermission(PERMISSION.read), validQuery(z.object({ period: periodField(DEFAULT_PERIOD_DETAIL) })), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, HttpStatus.BadRequest);
   const { period } = c.req.valid('query');
@@ -785,7 +884,7 @@ app.get('/api/metrics/:name', requirePermission('dashboard.read'), validQuery(z.
 // Written by scripts/sync-to-kv.ts (TREND_KEY_PREFIX in src/api/aggregates/trend.ts), restated as above.
 const TREND_KEY_PREFIX = 'trend:';
 
-app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
+app.get('/api/trends/:name', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
   const name = c.req.param('name');
   if (!isValidId(name)) return c.json({ error: ERR_INVALID_METRIC_NAME }, HttpStatus.BadRequest);
   const { period } = c.req.valid('query');
@@ -797,7 +896,7 @@ app.get('/api/trends/:name', requirePermission('dashboard.read'), validQuery(Per
   return c.json(data);
 });
 
-app.get('/api/evaluations/trace/:traceId', requirePermission('dashboard.traces.read'), async (c) => {
+app.get('/api/evaluations/trace/:traceId', requirePermission(PERMISSION.traces), async (c) => {
   const traceId = c.req.param('traceId');
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `evaluations:trace:${traceId}`);
@@ -806,7 +905,7 @@ app.get('/api/evaluations/trace/:traceId', requirePermission('dashboard.traces.r
   return c.json(data);
 });
 
-app.get('/api/traces/:traceId', requirePermission('dashboard.traces.read'), async (c) => {
+app.get('/api/traces/:traceId', requirePermission(PERMISSION.traces), async (c) => {
   const traceId = c.req.param('traceId');
   if (!isValidId(traceId)) return c.json({ error: ERR_INVALID_TRACE_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `trace:${traceId}`);
@@ -815,14 +914,14 @@ app.get('/api/traces/:traceId', requirePermission('dashboard.traces.read'), asyn
   return c.json(data);
 });
 
-app.get('/api/correlations', requirePermission('dashboard.read'), validQuery(z.object({ period: periodField(CORRELATIONS_DEFAULT_PERIOD) })), async (c) => {
+app.get('/api/correlations', requirePermission(PERMISSION.read), validQuery(z.object({ period: periodField(CORRELATIONS_DEFAULT_PERIOD) })), async (c) => {
   const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `correlations:${period}`);
   if (!data) return c.json({ correlations: [], metrics: [] });
   return c.json(data);
 });
 
-app.get('/api/degradation-signals', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
+app.get('/api/degradation-signals', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   // Key matches DEGRADATION_KV_KEY in src/lib/quality/quality-constants.ts + period suffix
   const data = await getSessionKv<unknown>(c, `meta/dashboard/degradation-signals:${period}`);
@@ -830,7 +929,7 @@ app.get('/api/degradation-signals', requirePermission('dashboard.read'), validQu
   return c.json(data);
 });
 
-app.get('/api/coverage', requirePermission('dashboard.read'), validQuery(CoverageQuery), async (c) => {
+app.get('/api/coverage', requirePermission(PERMISSION.read), validQuery(CoverageQuery), async (c) => {
   const { period, inputKey } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `coverage:${period}:${inputKey}`);
   // Shape-compatible empty matrix: the grid derives status and gaps from
@@ -839,14 +938,14 @@ app.get('/api/coverage', requirePermission('dashboard.read'), validQuery(Coverag
   return c.json(data);
 });
 
-app.get('/api/pipeline', requirePermission('dashboard.pipeline.read'), validQuery(PeriodQuery), async (c) => {
+app.get('/api/pipeline', requirePermission(PERMISSION.pipeline), validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `pipeline:${period}`);
   if (!data) return c.json({ period, stages: [], totalEvaluations: 0 });
   return c.json(data);
 });
 
-app.get('/api/sessions/:sessionId', requirePermission('dashboard.sessions.read'), async (c) => {
+app.get('/api/sessions/:sessionId', requirePermission(PERMISSION.sessions), async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `session:${sessionId}`);
@@ -860,7 +959,7 @@ app.get('/api/sessions/:sessionId', requirePermission('dashboard.sessions.read')
 const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
 const AGENTS_DEFAULT_PERIOD: Period = '30d';
 
-app.get('/api/agents', requirePermission('dashboard.agents.read'), validQuery(z.object({ period: periodField(AGENTS_DEFAULT_PERIOD) })), async (c) => {
+app.get('/api/agents', requirePermission(PERMISSION.agents), validQuery(z.object({ period: periodField(AGENTS_DEFAULT_PERIOD) })), async (c) => {
   const { period } = c.req.valid('query');
   const data = await getSessionKv<unknown>(c, `${AGENT_STATS_KEY_PREFIX}${period}`);
   // The page requires `period` and `agents`; the dates are absent until a sync writes the key.
@@ -872,13 +971,13 @@ app.get('/api/agents', requirePermission('dashboard.agents.read'), validQuery(z.
 // The Worker cannot import that module, so the key is restated here.
 const CODE_QUALITY_KV_KEY = 'code-quality';
 
-app.get('/api/code-quality', requirePermission('dashboard.agents.read'), async (c) => {
+app.get('/api/code-quality', requirePermission(PERMISSION.agents), async (c) => {
   const data = await getSessionKv<unknown>(c, CODE_QUALITY_KV_KEY);
   if (!data) return c.json({ survivalByAgentWindow: [], versionRollout: [], hasData: false });
   return c.json(data);
 });
 
-app.get('/api/agents/detail/:agentId', requirePermission('dashboard.agents.read'), async (c) => {
+app.get('/api/agents/detail/:agentId', requirePermission(PERMISSION.agents), async (c) => {
   const agentId = c.req.param('agentId');
   if (!isValidId(agentId)) return c.json({ error: ERR_INVALID_AGENT_ID }, HttpStatus.BadRequest);
   const data = await getSessionKv<unknown>(c, `agent:${agentId}`);
@@ -886,7 +985,7 @@ app.get('/api/agents/detail/:agentId', requirePermission('dashboard.agents.read'
   return c.json(data);
 });
 
-app.get('/api/agents/:sessionId', requirePermission('dashboard.agents.read'), async (c) => {
+app.get('/api/agents/:sessionId', requirePermission(PERMISSION.agents), async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
@@ -903,7 +1002,7 @@ app.get('/api/agents/:sessionId', requirePermission('dashboard.agents.read'), as
 });
 
 // The workflow view's payload: the same session key, without its evaluations.
-app.get('/api/agents/:sessionId/graph', requirePermission('dashboard.agents.read'), async (c) => {
+app.get('/api/agents/:sessionId/graph', requirePermission(PERMISSION.agents), async (c) => {
   const sessionId = c.req.param('sessionId');
   if (!isValidId(sessionId)) return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   const session = await getSessionKv<Record<string, unknown>>(c, `session:${sessionId}`);
@@ -915,7 +1014,7 @@ app.get('/api/agents/:sessionId/graph', requirePermission('dashboard.agents.read
   });
 });
 
-app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), validQuery(PeriodQuery), async (c) => {
+app.get('/api/compliance/sla', requirePermission(PERMISSION.compliance), validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   const dashboard = await getSessionKv<Record<string, unknown>>(c, `dashboard:${period}`);
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
@@ -928,13 +1027,13 @@ app.get('/api/compliance/sla', requirePermission('dashboard.compliance.read'), v
   });
 });
 
-app.get('/api/compliance/verifications', requirePermission('dashboard.compliance.read'), validQuery(PeriodQuery), (c) => {
+app.get('/api/compliance/verifications', requirePermission(PERMISSION.compliance), validQuery(PeriodQuery), (c) => {
   const { period } = c.req.valid('query');
   logActivity(c, 'compliance_view');
   return c.json({ period, count: 0, verifications: [] });
 });
 
-app.get('/api/calibration', requirePermission('dashboard.read'), async (c) => {
+app.get('/api/calibration', requirePermission(PERMISSION.read), async (c) => {
   const raw = await getSessionKv<unknown>(c, 'meta:calibration');
   if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, HttpStatus.NotFound);
   // KV can still hold a payload written by an older sync-to-kv; parse rather
@@ -947,7 +1046,7 @@ app.get('/api/calibration', requirePermission('dashboard.read'), async (c) => {
   return c.json(result.data);
 });
 
-app.get('/api/routing-telemetry', requirePermission('dashboard.read'), validQuery(PeriodQuery), async (c) => {
+app.get('/api/routing-telemetry', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   const raw = await getSessionKv<unknown>(c, `routing-telemetry:${period}`);
   const result = routingTelemetryKvSchema.safeParse(raw ?? {});
@@ -967,7 +1066,7 @@ app.get('/api/routing-telemetry', requirePermission('dashboard.read'), validQuer
 /** Org-admin gate: dashboard.admin + an org-scoped session; binds the route to that org. */
 const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
-  if (!hasPermission(session, 'dashboard.admin') || !session.activeOrgId) {
+  if (!hasPermission(session, PERMISSION.admin) || !session.activeOrgId) {
     return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   }
   c.set('orgId', session.activeOrgId);
@@ -1065,7 +1164,7 @@ app.delete('/api/admin/members/:userId', requireOrgAdmin, async (c) => {
 // user_roles mutation. Flag OFF keeps today's dashboard.admin gate.
 const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
-  const allowed = isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, 'dashboard.admin');
+  const allowed = isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, PERMISSION.admin);
   if (!allowed) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
   return next();
 });
@@ -1227,7 +1326,7 @@ app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, async (c) => {
 
   if (!fnRes?.ok) {
     const errText = fnRes ? await fnRes.text().catch(() => '') : '';
-    console.error(`[keys/rotate] function returned ${fnRes?.status ?? 'network error'}: ${errText}`);
+    console.error(`[keys/rotate] function returned ${fnRes?.status ?? NO_RESPONSE_STATUS}: ${errText}`);
     return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
   }
 

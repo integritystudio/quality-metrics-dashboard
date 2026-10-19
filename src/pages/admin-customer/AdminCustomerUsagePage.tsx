@@ -6,6 +6,7 @@
  * the bucket totals. Both reads poll every 30 s; a failed poll keeps what is on screen, and
  * only a first-load failure shows the error card.
  */
+import type { ReactNode } from 'react';
 import { useAdminUsageQuota, useAdminUsageSummary } from '../../hooks/useAdminCustomer.js';
 import {
   aggregateUsageByMetric,
@@ -33,6 +34,46 @@ const LEVEL_TONE: Record<QuotaLevel, QuotaTone> = { normal: 'normal', warning: '
 /** The alert and status line borrow the dashboard's status tokens. */
 const LEVEL_STATUS: Record<Exclude<QuotaLevel, 'normal'>, 'warning' | 'critical'> = { warning: 'warning', danger: 'warning', reached: 'critical' };
 
+/** The limit the gateway enforces, or null when there is no bar to draw. */
+function enforcedLimit(quota: QuotaStatusData | null): number | null {
+  if (quota?.monthlyLimit == null || quota.monthlyLimit <= 0) return null;
+  return quota.monthlyLimit;
+}
+
+/** The words beside the bar: unlimited, nothing, limit reached, or a percentage. */
+function usageStatusLine(isUnlimited: boolean, limit: number | null, level: QuotaLevel, percent: number): string | null {
+  if (isUnlimited) return text.unlimitedPlan;
+  if (limit === null) return null;
+  return level === 'reached' ? text.limitReached : text.percentUsed(percent);
+}
+
+/** The reached and approaching alerts, which need an enforced limit to mean anything. */
+function UsageAlert({ level, limit, percent, resetLabel }: {
+  level: QuotaLevel;
+  limit: number | null;
+  percent: number;
+  resetLabel: string;
+}): ReactNode {
+  if (limit === null) return null;
+  if (level === 'reached') {
+    return (
+      <div className="customer-alert" data-status="critical" role="alert">
+        <p className="customer-alert__title">{text.reachedAlertTitle}</p>
+        <p>{text.reachedAlertMessage(resetLabel)}</p>
+      </div>
+    );
+  }
+  if (level === 'danger' || level === 'warning') {
+    return (
+      <div className="customer-alert" data-status="warning" role="alert">
+        <p className="customer-alert__title">{text.approachingAlertTitle}</p>
+        <p>{text.approachingAlertMessage(percent, limit, resetLabel)}</p>
+      </div>
+    );
+  }
+  return null;
+}
+
 /**
  * `_UsageBar`: usage against the monthly limit, in words as well as colour. Without a
  * quota it shows the bucket total alone.
@@ -44,20 +85,13 @@ function UsageBar({ quota, bucketTotal, periodLabel, resetLabel }: {
   resetLabel: string;
 }) {
   const used = quota?.monthlyUsed ?? bucketTotal;
-  const limit = quota?.monthlyLimit != null && quota.monthlyLimit > 0 ? quota.monthlyLimit : null;
+  const limit = enforcedLimit(quota);
   const isUnlimited = quota !== null && quota.monthlyLimit === null;
   const ratio = quotaRatio(used, limit);
   const percent = quotaPercent(used, limit);
   const level = quotaLevel(used, limit);
   const isRaised = level !== 'normal';
-
-  const status = isUnlimited
-    ? text.unlimitedPlan
-    : limit === null
-      ? null
-      : level === 'reached'
-        ? text.limitReached
-        : text.percentUsed(percent);
+  const status = usageStatusLine(isUnlimited, limit, level, percent);
 
   return (
     <div className="usage-bar">
@@ -74,18 +108,7 @@ function UsageBar({ quota, bucketTotal, periodLabel, resetLabel }: {
           <span className="text-xs text-muted">{resetLabel}</span>
         </div>
       )}
-      {level === 'reached' && limit !== null && (
-        <div className="customer-alert" data-status="critical" role="alert">
-          <p className="customer-alert__title">{text.reachedAlertTitle}</p>
-          <p>{text.reachedAlertMessage(resetLabel)}</p>
-        </div>
-      )}
-      {(level === 'danger' || level === 'warning') && limit !== null && (
-        <div className="customer-alert" data-status="warning" role="alert">
-          <p className="customer-alert__title">{text.approachingAlertTitle}</p>
-          <p>{text.approachingAlertMessage(percent, limit, resetLabel)}</p>
-        </div>
-      )}
+      <UsageAlert level={level} limit={limit} percent={percent} resetLabel={resetLabel} />
     </div>
   );
 }

@@ -61,6 +61,27 @@ function getScoreBand(score: number | null) {
 const elk = new ELK();
 
 /**
+ * ELK's computed position. A node without one means the layout failed for it,
+ * so it is warned about and rendered at the origin rather than dropped.
+ */
+function nodePosition(elkNode: { id: string; x?: number | undefined; y?: number | undefined }): { x: number; y: number } {
+  if (elkNode.x === undefined || elkNode.y === undefined) {
+    console.warn(`WorkflowGraph: ELK returned no position for node "${elkNode.id}"; rendering at origin`);
+  }
+  return { x: elkNode.x ?? 0, y: elkNode.y ?? 0 };
+}
+
+/** `workflow-node` plus its score band and the dimmed/critical modifiers. */
+function agentNodeClass(d: WorkflowNodeWithMeta, band: ReturnType<typeof getScoreBand>): string {
+  return [
+    'workflow-node',
+    band?.className,
+    d.dimmed && 'workflow-node--dimmed',
+    d.critical && 'workflow-node--critical',
+  ].filter(Boolean).join(' ');
+}
+
+/**
  * Type guard for WorkflowNode.
  * Replaces `data as unknown as WorkflowNode` double-cast in AgentNodeComponent.
  * Validates the minimum fields needed for rendering; avoids silent mismatches if ReactFlow
@@ -255,31 +276,22 @@ async function computeLayout(
       const critical = criticalPath?.has(elkNode.id) ?? false;
       const isCluster = isClusterNodeId(elkNode.id);
       const onActivate = onNodeActivate ? () => onNodeActivate(elkNode.id) : undefined;
-
-      if (elkNode.x === undefined || elkNode.y === undefined) {
-        console.warn(`WorkflowGraph: ELK returned no position for node "${elkNode.id}"; rendering at origin`);
-      }
+      const position = nodePosition(elkNode);
 
       if (isCluster) {
-        const avgScore = workflowNode.evaluationScore;
         const data: ClusterNodeData = {
           clusterId: workflowNode.clusterId ?? elkNode.id,
           memberCount: workflowNode.clusterMemberCount ?? 0,
           hasError: workflowNode.hasError,
-          avgScore,
+          avgScore: workflowNode.evaluationScore,
           onActivate,
         };
-        return {
-          id: elkNode.id,
-          position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
-          data,
-          type: 'clusterNode',
-        };
+        return { id: elkNode.id, position, data, type: 'clusterNode' };
       }
 
       return {
         id: elkNode.id,
-        position: { x: elkNode.x ?? 0, y: elkNode.y ?? 0 },
+        position,
         data: { ...workflowNode, dimmed, critical, onActivate },
         type: 'agentNode',
       };
@@ -302,12 +314,7 @@ const AgentNodeComponent = memo(function AgentNode({ data }: NodeProps) {
   // Dimmed nodes are click-inert (pointer-events: none), so keep them out of the tab order too.
   const onActivate = d.dimmed ? undefined : d.onActivate;
 
-  const nodeClass = [
-    'workflow-node',
-    band?.className,
-    d.dimmed && 'workflow-node--dimmed',
-    d.critical && 'workflow-node--critical',
-  ].filter(Boolean).join(' ');
+  const nodeClass = agentNodeClass(d, band);
 
   return (
     <div

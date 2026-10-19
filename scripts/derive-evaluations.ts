@@ -465,6 +465,54 @@ function heuristicRecords(
  * not on this machine is skipped rather than scored on placeholders. Spans that start
  * before `sinceMs` are not read, so a run opens only the transcripts it can post.
  */
+type TranscriptLimit = ReturnType<typeof pLimit>;
+
+/**
+ * The run-level job this span opens — null unless it is a subagent stop whose
+ * transcript resolves on this machine.
+ */
+function subagentJob(
+  span: LocalTraceSpan,
+  sessionId: string,
+  attrs: ReturnType<typeof attrsOf>,
+  limit: TranscriptLimit,
+): Promise<EvalRecord[]> | null {
+  if (span.name !== SUBAGENT_STOP_SPAN) return null;
+  const recordedPath = attrs[AGENT_ATTRIBUTES.TRANSCRIPT_PATH];
+  const path = typeof recordedPath === 'string' ? resolveTranscriptPath(recordedPath) : null;
+  if (!path) return null;
+  const agentType = attrString(attrs[AGENT_ATTRIBUTES.TYPE], 'unknown');
+  return limit(async () => {
+    const input = await readSingleTurnInput(path);
+    return input
+      ? heuristicRecords(span, sessionId, input, `${agentType} agent: ${input.toolCalls.length} tool calls`)
+      : [];
+  });
+}
+
+/**
+ * The session-level job this span closes. Sessions that may still be in progress
+ * are skipped: their last-span changes on the next derive run, producing a
+ * different evaluationId and a duplicate D1 row.
+ */
+function sessionJob(
+  span: LocalTraceSpan,
+  sessionId: string,
+  sessionTranscripts: ReadonlyMap<string, string>,
+  ctx: { limit: TranscriptLimit; nowMs: number },
+): Promise<EvalRecord[]> | null {
+  if (hrtToSeconds(span.startTime) * TIME_MS.SECOND > ctx.nowMs - MIN_SESSION_COMPLETION_AGE_MS) return null;
+  const path = sessionTranscripts.get(sessionId);
+  if (!path) return null;
+  return ctx.limit(async () => {
+    const input = await readMultiTurnInput(path);
+    return input
+      ? heuristicRecords(span, sessionId, input, `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`)
+        .map(r => ({ ...r, stableEvaluationKey: `session:${r.sessionId}:${r.evaluationName}` }))
+      : [];
+  });
+}
+
 export async function deriveAgentHeuristics(
   spans: readonly LocalTraceSpan[],
   sinceMs: number,
@@ -483,32 +531,13 @@ export async function deriveAgentHeuristics(
     const last = lastSpanBySession.get(sessionId);
     if (!last || byStartThenSpanId(last, span) < 0) lastSpanBySession.set(sessionId, span);
 
-    if (span.name !== SUBAGENT_STOP_SPAN) continue;
-    const recordedPath = attrs[AGENT_ATTRIBUTES.TRANSCRIPT_PATH];
-    const path = typeof recordedPath === 'string' ? resolveTranscriptPath(recordedPath) : null;
-    if (!path) continue;
-    const agentType = attrString(attrs[AGENT_ATTRIBUTES.TYPE], 'unknown');
-    jobs.push(limit(async () => {
-      const input = await readSingleTurnInput(path);
-      return input
-        ? heuristicRecords(span, sessionId, input, `${agentType} agent: ${input.toolCalls.length} tool calls`)
-        : [];
-    }));
+    const job = subagentJob(span, sessionId, attrs, limit);
+    if (job) jobs.push(job);
   }
 
   for (const [sessionId, span] of lastSpanBySession) {
-    // Skip sessions that may still be in progress: their last-span changes on the
-    // next derive run, producing a different evaluationId and a duplicate D1 row.
-    if (hrtToSeconds(span.startTime) * TIME_MS.SECOND > nowMs - MIN_SESSION_COMPLETION_AGE_MS) continue;
-    const path = sessionTranscripts.get(sessionId);
-    if (!path) continue;
-    jobs.push(limit(async () => {
-      const input = await readMultiTurnInput(path);
-      return input
-        ? heuristicRecords(span, sessionId, input, `Session ${sessionId.slice(0, SESSION_ID_PREVIEW_LEN)}: ${input.turns.length} turns`)
-          .map(r => ({ ...r, stableEvaluationKey: `session:${r.sessionId}:${r.evaluationName}` }))
-        : [];
-    }));
+    const job = sessionJob(span, sessionId, sessionTranscripts, { limit, nowMs });
+    if (job) jobs.push(job);
   }
 
   return (await Promise.all(jobs)).flat();
@@ -646,7 +675,8 @@ type DayInput = {
  * - spans record an agent invocation, but none has a name derive matches;
  * - most tool spans carry no success flag under the key derive reads.
  */
-export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): string[] {
+/** What each day's spans record of the inputs the derivations read. */
+function tallyDayInputs(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): Map<string, DayInput> {
   const days = new Map<string, DayInput>();
   for (const span of spans) {
     const date = toDateOnly(hrtToISO(span.startTime));
@@ -661,6 +691,11 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
       if (typeof toolSuccessOf(span, attrs) !== 'boolean') day.toolMissingSuccess++;
     }
   }
+  return days;
+}
+
+export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): string[] {
+  const days = tallyDayInputs(spans, dateScope);
 
   const warnings: string[] = [];
   for (const [date, day] of [...days].toSorted(([a], [b]) => ascending(a, b))) {

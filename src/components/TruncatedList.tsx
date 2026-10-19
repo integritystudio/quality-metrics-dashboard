@@ -16,7 +16,8 @@ export function TruncatedList<T>({ items, max, renderItem, total }: {
   const remainder = (total ?? items.length) - shown.length;
   return (
     <>
-      {shown.map(renderItem)}
+      {/* ReactNode includes Promise<AwaitedReactNode>, so the annotation is what keeps promise-function-async off this arrow. */}
+      {shown.map((item, index): ReactNode => renderItem(item, index))}
       {remainder > 0 && (
         <div className="text-muted text-xs mt-1">+{remainder} more</div>
       )}

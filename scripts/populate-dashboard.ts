@@ -62,6 +62,7 @@ import {
   judgeScopeArgs,
   nextStepAfter,
   runWithRetry,
+  type PipelineStage,
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
@@ -192,74 +193,87 @@ function abort(name: string, outcome: Extract<StepOutcome, { ok: false }>): neve
 
 let pipelineExitCode = 0;
 
+/**
+ * Carry a stage's soft-failure exit code to the pipeline's and go on to the next
+ * stage; anything else stops the run here.
+ */
+function continueOrAbort(
+  stage: PipelineStage,
+  name: string,
+  outcome: Extract<StepOutcome, { ok: false }>,
+  message: (status: number) => string,
+): void {
+  if (outcome.status !== null && nextStepAfter(stage, outcome.status)) {
+    console.error(message(outcome.status));
+    pipelineExitCode = outcome.status;
+    return;
+  }
+  abort(name, outcome);
+}
+
+/**
+ * Derive reads /v1/traces and posts to ingest, so it is the first stage that
+ * needs the network. A failed read or post loses nothing — the next run covers
+ * the same window — so once the retries are spent the run carries on
+ * (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
+ */
+async function runDerive(): Promise<void> {
+  const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
+  if (derive.ok) return;
+  continueOrAbort('derive', 'derive-evaluations', derive,
+    status => `[populate] derive-evaluations exited ${status}; continuing to judge, upload + sync, then exiting ${status}`);
+}
+
+/**
+ * The judge says on its own stderr why it produced nothing. The rule-based
+ * evaluations from derive still deserve to reach the cloud, so a soft failure
+ * keeps going — and carries the code to the exit, so the launchd wrapper logs FAILED.
+ */
+function runJudge(): void {
+  const judgeArgs: string[] = [...judgeScope];
+  if (dryRun) judgeArgs.push(DRY_RUN_FLAG);
+  if (seed) judgeArgs.push(JUDGE_SEED_FLAG);
+  if (limit) judgeArgs.push(JUDGE_LIMIT_FLAG, limit);
+  if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
+  if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);
+  const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
+  if (judge.ok) return;
+  continueOrAbort('judge', 'judge-evaluations', judge,
+    status => `[populate] judge-evaluations exited ${status}; continuing to upload + sync, then exiting ${status}`);
+}
+
+/**
+ * Wait out a transient failure like derive and sync do, and carry on to sync if
+ * a send still fails (UPLOAD-FAILURE-ABORTS-PIPELINE).
+ */
+async function runUpload(): Promise<void> {
+  if (!process.env.INJECT_HMAC_SECRET && !dryRun) {
+    // Fail loudly. A silent skip here is what the dead-dashboard failure mode
+    // looked like: every step green, nothing reaching the cloud.
+    console.error('[populate] Error: INJECT_HMAC_SECRET is not set, so derived evaluations cannot reach the cloud and sync-to-kv would compute an empty dashboard. Run under `doppler run --project integrity-studio --config prd`, or pass --skip-upload to accept that.');
+    process.exit(1);
+  }
+  const uploadArgs: string[] = [];
+  if (dryRun) uploadArgs.push(DRY_RUN_FLAG);
+  const upload = await runWithNetworkRetry('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
+  if (upload.ok) return;
+  continueOrAbort('upload', 'upload-evaluations', upload,
+    status => `[populate] upload-evaluations exited ${status}; continuing to sync, then exiting ${status}`);
+}
+
+async function runSync(): Promise<void> {
+  const syncArgs: string[] = [];
+  if (dryRun) syncArgs.push(DRY_RUN_FLAG);
+  if (syncBudget !== undefined) syncArgs.push(`${SYNC_BUDGET_FLAG}=${syncBudget}`);
+  const sync = await runWithNetworkRetry('sync-to-kv', 'sync-to-kv.ts', syncArgs);
+  if (!sync.ok) abort('sync-to-kv', sync);
+}
+
 async function main(): Promise<void> {
-  if (!dryRun && !skipDerive) {
-    // Derive reads /v1/traces and posts to ingest, so it is the first stage
-    // that needs the network. A failed read or post loses
-    // nothing — the next run covers the same window — so once the retries are
-    // spent the run carries on (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
-    const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
-    if (!derive.ok) {
-      if (derive.status !== null && nextStepAfter('derive', derive.status)) {
-        console.error(`[populate] derive-evaluations exited ${derive.status}; continuing to judge, upload + sync, then exiting ${derive.status}`);
-        pipelineExitCode = derive.status;
-      } else {
-        abort('derive-evaluations', derive);
-      }
-    }
-  }
-
-  if (!skipJudge) {
-    const judgeArgs: string[] = [...judgeScope];
-    if (dryRun) judgeArgs.push(DRY_RUN_FLAG);
-    if (seed) judgeArgs.push(JUDGE_SEED_FLAG);
-    if (limit) judgeArgs.push(JUDGE_LIMIT_FLAG, limit);
-    if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
-    if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);
-    const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
-    if (!judge.ok) {
-      if (judge.status !== null && nextStepAfter('judge', judge.status)) {
-        // The judge has already said on its own stderr why it produced nothing.
-        // The rule-based evaluations from derive still deserve to reach the
-        // cloud, so keep going — and carry the code to the exit, so the launchd
-        // wrapper logs FAILED.
-        console.error(`[populate] judge-evaluations exited ${judge.status}; continuing to upload + sync, then exiting ${judge.status}`);
-        pipelineExitCode = judge.status;
-      } else {
-        abort('judge-evaluations', judge);
-      }
-    }
-  }
-
-  if (!skipUpload) {
-    if (!process.env.INJECT_HMAC_SECRET && !dryRun) {
-      // Fail loudly. A silent skip here is what the dead-dashboard failure mode
-      // looked like: every step green, nothing reaching the cloud.
-      console.error('[populate] Error: INJECT_HMAC_SECRET is not set, so derived evaluations cannot reach the cloud and sync-to-kv would compute an empty dashboard. Run under `doppler run --project integrity-studio --config prd`, or pass --skip-upload to accept that.');
-      process.exit(1);
-    }
-    const uploadArgs: string[] = [];
-    if (dryRun) uploadArgs.push(DRY_RUN_FLAG);
-    // Wait out a transient failure like derive and sync do, and carry on to
-    // sync if a send still fails (UPLOAD-FAILURE-ABORTS-PIPELINE).
-    const upload = await runWithNetworkRetry('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
-    if (!upload.ok) {
-      if (upload.status !== null && nextStepAfter('upload', upload.status)) {
-        console.error(`[populate] upload-evaluations exited ${upload.status}; continuing to sync, then exiting ${upload.status}`);
-        pipelineExitCode = upload.status;
-      } else {
-        abort('upload-evaluations', upload);
-      }
-    }
-  }
-
-  if (!skipSync) {
-    const syncArgs: string[] = [];
-    if (dryRun) syncArgs.push(DRY_RUN_FLAG);
-    if (syncBudget !== undefined) syncArgs.push(`${SYNC_BUDGET_FLAG}=${syncBudget}`);
-    const sync = await runWithNetworkRetry('sync-to-kv', 'sync-to-kv.ts', syncArgs);
-    if (!sync.ok) abort('sync-to-kv', sync);
-  }
+  if (!dryRun && !skipDerive) await runDerive();
+  if (!skipJudge) runJudge();
+  if (!skipUpload) await runUpload();
+  if (!skipSync) await runSync();
 
   const total = sum(results, r => r.ms);
   console.log(`[populate] steps: ${results.map(r => `${r.name}=${r.ms}ms`).join(' ')} total=${total}ms exit=${pipelineExitCode}`);

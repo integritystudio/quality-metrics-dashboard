@@ -40,9 +40,29 @@ function json(body: unknown, status: number = HttpStatus.Ok): Response {
   return new Response(JSON.stringify(body), { status, headers: { [CONTENT_TYPE_HEADER]: ContentType.Json } });
 }
 
+type GatewayControl = { refuse: GatewayRefusal | null; refuseRoute: GatewayRoute | null };
+
+/** The first route pattern that matches, with the org id it captured. */
+function matchRoute(path: string): { route: GatewayRoute; orgId: string } | null {
+  for (const [route, pattern] of ROUTE_PATTERNS) {
+    const m = pattern.exec(path);
+    if (m) return { route, orgId: m[1] ?? '' };
+  }
+  return null;
+}
+
+/** The answer a refusal in force for this route produces, or null to serve the fixture. */
+function refusalResponse(control: GatewayControl, route: GatewayRoute): Promise<Response> | null {
+  const { refuse, refuseRoute } = control;
+  if (refuse === null) return null;
+  if (refuseRoute !== null && refuseRoute !== route) return null;
+  if (refuse === 'network-error') return Promise.reject(new TypeError('Failed to fetch'));
+  return Promise.resolve(json(refuse.body ?? { error: { message: 'refused' } }, refuse.status));
+}
+
 export function startFakeGateway(responders: Responders) {
   const requests: GatewayRequest[] = [];
-  const control: { refuse: GatewayRefusal | null; refuseRoute: GatewayRoute | null } = { refuse: null, refuseRoute: null };
+  const control: GatewayControl = { refuse: null, refuseRoute: null };
 
   vi.stubGlobal('fetch', vi.fn((input: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
@@ -53,17 +73,15 @@ export function startFakeGateway(responders: Responders) {
     if (path === SWITCH_PATH && method === 'POST') return Promise.resolve(json({}));
     if (!isGateway) throw new Error(`fake gateway has no route for ${method} ${input}`);
 
-    const matched = ROUTE_PATTERNS.map(([route, pattern]) => [route, pattern.exec(path)] as const).find(([, m]) => m !== null);
+    const matched = matchRoute(path);
     if (!matched) throw new Error(`fake gateway has no route for ${method} ${path}`);
-    const [route, match] = matched;
 
-    const refusal = control.refuse !== null && (control.refuseRoute === null || control.refuseRoute === route) ? control.refuse : null;
-    if (refusal === 'network-error') return Promise.reject(new TypeError('Failed to fetch'));
-    if (refusal) return Promise.resolve(json(refusal.body ?? { error: { message: 'refused' } }, refusal.status));
+    const refusal = refusalResponse(control, matched.route);
+    if (refusal) return refusal;
 
-    const responder = responders[route];
-    if (!responder) throw new Error(`fake gateway has no fixture for ${route}`);
-    return Promise.resolve(json(responder(defined(match)[1] ?? '')));
+    const responder = responders[matched.route];
+    if (!responder) throw new Error(`fake gateway has no fixture for ${matched.route}`);
+    return Promise.resolve(json(responder(matched.orgId)));
   }));
 
   return {
