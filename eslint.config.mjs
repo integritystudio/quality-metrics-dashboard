@@ -61,7 +61,8 @@ const typeSafetyRules = {
   '@typescript-eslint/no-invalid-void-type': 'error',
   '@typescript-eslint/no-shadow': 'error',
   '@typescript-eslint/no-dynamic-delete': 'error',
-  '@typescript-eslint/no-deprecated': 'warn',
+  // Includes the repo's own @deprecated tags, which otherwise enforce nothing.
+  '@typescript-eslint/no-deprecated': 'error',
   '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
   '@typescript-eslint/no-non-null-assertion': 'error',
   '@typescript-eslint/switch-exhaustiveness-check': ['error', { considerDefaultExhaustiveForUnions: true }],
@@ -84,6 +85,12 @@ const typeSafetyRules = {
   // Separate signatures that a union parameter would state once hide from the
   // reader that the same body serves both.
   '@typescript-eslint/unified-signatures': 'error',
+  // From the parent's `strict` preset, which this config does not extend.
+  '@typescript-eslint/ban-ts-comment': ['error', { minimumDescriptionLength: 10 }],
+  '@typescript-eslint/no-useless-constructor': 'error',
+  '@typescript-eslint/no-non-null-asserted-nullish-coalescing': 'error',
+  '@typescript-eslint/prefer-readonly': 'error',
+  '@typescript-eslint/no-useless-default-assignment': 'error',
   '@typescript-eslint/prefer-literal-enum-member': 'error',
   'eqeqeq': ['error', 'always', { null: 'ignore' }],
   // Two statements for one module hide half the dependency; a type-only import
@@ -99,7 +106,13 @@ const typeSafetyRules = {
   // array; a bare `xs.sort()` statement stays allowed (allowExpressionStatement).
   'unicorn/no-array-sort': 'error',
   'unicorn/prefer-node-protocol': 'error',
+  'unicorn/prefer-number-properties': 'error',
   'radix': 'error',
+  'no-eval': 'error',
+  'no-new-func': 'error',
+  // tseslint's eslint-recommended switches this off; the parent turns it back on.
+  'no-unreachable': 'error',
+  'no-unreachable-loop': 'error',
   'no-param-reassign': ['error', { props: false }],
   'array-callback-return': ['error', { checkForEach: true }],
   'guard-for-in': 'error',
@@ -277,6 +290,12 @@ export default tseslint.config(
       'vitest/no-identical-title': 'error',
       // An expect inside a branch may never execute; the test still passes.
       'vitest/no-conditional-expect': 'error',
+      // A `.skip` or `.todo` is a test that passes by not running.
+      'vitest/no-disabled-tests': 'error',
+      // A test with no assertion passes on any behaviour.
+      'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'expect*', 'assert', 'assert.*', 'assert*'] }],
+      // Vitest's expect takes an optional failure message as its second argument.
+      'vitest/valid-expect': ['error', { maxArgs: 2 }],
       // Fixture lookups are `| undefined` only because of noUncheckedIndexedAccess.
       '@typescript-eslint/restrict-template-expressions': ['error', {
         allowNumber: true,

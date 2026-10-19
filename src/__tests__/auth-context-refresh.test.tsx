@@ -76,7 +76,7 @@ function Wrapper({ children }: { children: ReactNode }) {
 }
 
 /** Authenticate, answer `/api/me` with a 401, and wait for the consumer to show no session. */
-async function renderWithRejectedMe() {
+async function expectRejectedMeClearsSession() {
   mockIsAuthenticated = true;
   const fetchSpy = vi.fn().mockImplementation((url: string) => {
     if (url === ME_URL) {
@@ -162,7 +162,7 @@ describe('AuthContext: authenticated state', () => {
   });
 
   it('clears session when /api/me returns an error', async () => {
-    await renderWithRejectedMe();
+    await expectRejectedMeClearsSession();
   });
 });
 
@@ -238,7 +238,7 @@ describe('AuthContext: login activity', () => {
   });
 
   it('does not post login activity when /api/me fails (no valid session)', async () => {
-    const fetchSpy = await renderWithRejectedMe();
+    const fetchSpy = await expectRejectedMeClearsSession();
 
     expect(callsTo(fetchSpy, ACTIVITY_URL)).toHaveLength(0);
     expect(sessionStorage.getItem(SESSION_LOGIN_KEY)).toBeNull();
