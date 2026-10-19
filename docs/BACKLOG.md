@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop` and `unicorn/no-array-sort` on 2026-10-18. 421 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop` and `unicorn/no-array-sort` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 25. 286 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed; the earlier "421" counted the 160 magic-number hits measured on 2026-10-16). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -192,9 +192,9 @@ same shape — a `for` over seeded evals with a per-metric `if (ev.evaluationNam
 - Verified by mutating the producer four ways — relevance's normal band widened, `coherence` dropped from
   `SEED_METRICS`, relevance's canary band raised, `CANARY_TURN_RATE` set to 0 — each one reds exactly the
   rewritten test(s) that should catch it.
-- **Untested gap, left alone deliberately.** `SEED_METRICS` bands `faithfulness` (normal `[0.0, 0.09]`,
-  canary `[0.50, 0.80]`, shared with hallucination) and `tool_correctness` (`[0.75, 1.0]` / `[0.10, 0.30]`),
-  and no test pins either. Adding them is coverage work, not part of adopting the rule.
+- **Untested gap, left alone deliberately.** `SEED_METRICS` bands `faithfulness` (normal
+  `{ min: 0.0, max: 0.09 }`, canary `{ min: 0.50, max: 0.80 }`, shared with hallucination) and
+  `tool_correctness` (`{ min: 0.75, max: 1.0 }` / `{ min: 0.10, max: 0.30 }`), and no test pins either. Adding them is coverage work, not part of adopting the rule.
 
 **`max-params` 4 and `max-depth` 4 landed 2026-10-17** at the parent's levels, in a `Complexity controls`
 block over `src/`, `worker/` and `scripts/` — the home `no-await-in-loop` joined on 2026-10-18 and the
@@ -508,9 +508,25 @@ in a comment on the type itself.
 `no-useless-default-assignment`, `no-non-null-asserted-nullish-coalescing`, `vitest/no-disabled-tests`,
 `vitest/expect-expect`, `vitest/valid-expect`, and both option-drift changes
 (`no-deprecated` warn → error, `ban-ts-comment` `minimumDescriptionLength: 10`).
-- **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` (warn) and, in tests,
-  `local/no-magic-numbers-ignore-fixtures`. The rule is defined inline in the parent's CJS config and not
-  exported, so it must be extracted into a shared module or copied.
+- **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files
+  2026-10-18: copied from the parent's inline definition into `eslint-rules/no-magic-numbers-ignore-bitwise.mjs`,
+  with the parent's options. Swept from 155 hits to 25. `percent` and `TIME_MS` now have one definition each
+  in `src/lib/constants.ts`, values an existing constant already named were swapped for it, shared values
+  got one name, and coincidentally equal ones got distinct names. Still open:
+  - **The gate is red.** `npm run lint` runs `--max-warnings 0`, so the 25 must be cleared or the rule
+    tuned before this lands on `main`.
+  - **7 hits already sit in named constants** (`BATCH_WALL_CLOCK_MS = 3 * TIME_MS.HOUR`,
+    `KV_VALUE_LIMIT_BYTES = 25 * BYTES.MB`, …): the rule counts the multiplier, and `enforceConst` does not
+    exempt a binary-expression operand.
+  - **18 single-use values**: the WCAG relative-luminance coefficients in `CorrelationHeatmap.tsx` (10),
+    `SCORE_BAND_LOWER_BOUNDS` (4), backtest's baseline split `0.7`, the API port `3001`, `AlertList`'s
+    `1.2` headroom and `TrendChart`'s `0.001` exponent cutoff.
+  - **Tests are not covered.** The parent's `local/no-magic-numbers-ignore-fixtures` variant was not copied.
+  - **Score bands disagree with the thresholds.** `SCORE_BAND_LOWER_BOUNDS` (`[0.4, 0.6, 0.8, 0.9]`,
+    `quality-utils.ts`) and `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5) band scores two ways and differ
+    below 0.8; which one is right is a product decision.
+  - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
+    `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
 - **Complexity.** `complexity` 12, `sonarjs/no-duplicate-string` (both warn);
   ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17, ~~`no-await-in-loop`~~ 2026-10-18.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
