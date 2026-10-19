@@ -71,6 +71,22 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v4
       - run: npm ci
+      # The SPA bundles the parent's score bands (src/lib/score-bands.ts re-exports
+      # @parent/lib/quality/score-bands.js), so vite build needs ../dist here too;
+      # without it the build fails with UNLOADABLE_DEPENDENCY and nothing deploys.
+      # The same step as the check job above; keep the two in step.
+      - name: Build parent observability-toolkit into ../dist
+        run: |
+          GH_TOKEN=$(doppler secrets get GITHUB_TOKEN --project integrity-studio --config prd --plain)
+          echo "::add-mask::$GH_TOKEN"
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/integritystudio/observability-toolkit.git" \
+            "${RUNNER_TEMP}/parent"
+          npm ci --prefix "${RUNNER_TEMP}/parent"
+          npm run build --prefix "${RUNNER_TEMP}/parent"
+          ln -s "${RUNNER_TEMP}/parent/dist" "${GITHUB_WORKSPACE}/../dist"
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
       - name: Build with env vars from Doppler (same-origin API)
         run: |
           export VITE_AUTH0_DOMAIN=$(doppler secrets get VITE_AUTH0_DOMAIN --project integrity-studio --config prd --plain)
