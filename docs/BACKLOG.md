@@ -574,8 +574,8 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     (12, 3, 16, 8) match only unrelated constants (`MONTHS_PER_YEAR`, `BITS.BYTE`, …), so none was swapped.
     - `MIN_SESSION_COMPLETION_AGE_MS` and `BATCH_WALL_CLOCK_MS` use new `DURATION_MS.TWELVE_HOURS` /
       `THREE_HOURS`, added to the parent's `src/lib/core/units.ts` on parent branch
-      `feat/duration-ms-twelve-three-hours`, merged into the parent's local main as `ab2ecd00` (not yet
-      pushed). 🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
+      `feat/duration-ms-twelve-three-hours`, merged into the parent's `origin/main` as `ab2ecd00`.
+      🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
       redirects that to the parent's `dist/`, so a checkout or build without the members fails
       `typecheck:scripts` (2 × TS2339) and lint (8 `no-unsafe-*`), and leaves both values `undefined` at
       run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the batch wall clock
@@ -601,9 +601,13 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
       `KV_BATCH_MAX_BYTES`, `KV_VALUE_LIMIT_BYTES`) carry a one-line disable.
   - **Tests are not covered.** The parent's `local/no-magic-numbers-ignore-fixtures` variant was not copied.
-  - **Score bands disagree with the thresholds.** `SCORE_BAND_LOWER_BOUNDS` (`[0.4, 0.6, 0.8, 0.9]`,
-    `quality-utils.ts`) and `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5) band scores two ways and differ
-    below 0.8; which one is right is a product decision.
+  - ~~**Two band scales.**~~ Resolved 2026-10-19: `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5, a copy of
+    the parent's step-scale `STEP_SCALE_*`) are deleted; `QualityLiveIndicator` and `ConfidencePanel`
+    now band through `scoreColorBand`, the parent's continuous `SCORE_BAND_*` (`[0.4, 0.6, 0.8, 0.9]`),
+    as `data-band`. Both gain the `good` and `poor` bands, and evaluator agreement below 0.5 is no
+    longer left unbanded. Live hallucination chips band as `minimize` (`HALLUCINATION_RISK_EVALUATION_NAMES`);
+    they had been coloured as higher-is-better. Live chips still use the uniform bands, not
+    `adaptiveScoreColorBand`'s per-metric scale strategy that `ScoreBadge` applies.
   - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
     `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
 - **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,
