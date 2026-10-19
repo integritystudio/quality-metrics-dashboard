@@ -29,9 +29,7 @@ No open items.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, both option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. Still open: the `no-unused-vars` option drift and the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
-| DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | Done 2026-10-19 | Both fields required in `src/api/session-detail.ts`. Awaiting changelog migration. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
-| DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
 here against `../src/server.ts` and a parent test under the parent's `eslint.config.cjs`. The cheap subset
@@ -641,43 +639,6 @@ versions); the dashboard installs standalone in CI.
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
 
-**DASH-VENDOR-ATTR-LITERALS.** `src/lib/hook-attributes.ts` (2026-10-17) gave the agent and hook
-span-attribute keys one home, because the fixtures and the readers had each spelled them inline — a
-canonical-key rename (one row in `hooks/lib/attribute-aliases.ts`) would have left the tests green while
-production read `undefined`. 11 keys, ~45 call sites across 3 readers and 6 test files; semconv keys stay
-in `otel-attributes.ts`, which is re-export-only by contract, so these vendor keys could not go there.
-**Done 2026-10-17** — the rest followed the same day. `hook-attributes.ts` now holds 12 groups / 48 keys
-(`agent`, `hook`, `tool`, `mcp`, `tokens`, `context`, `git`, `project`, `task`, `alerts`, `transcript`,
-`code` + `code.structure`), and every reader and fixture imports them: ~110 literals across 6 production
-modules and 13 test files. The `integritystudio.evaluation.*` keys stay in `scripts/eval-record.ts` —
-that module documents the on-disk record contract and its deliberate divergences from the hooks' own
-`EVALUATION_ATTRS`, so it keeps the definitions and the four fixture files now import them from it.
-What is deliberately still a literal:
-- `scripts/__tests__/derive-evaluations.test.ts` `'integritystudio.tool.succeeded'` — a key derive does
-  **not** read, which is the point: the test proves `detectInputDrift` fires on a renamed success flag.
-  A constant there would defeat it.
-- the legacy half of every `renamedAttr(span, canonical, legacy, type)` pair (`'tokens.input'`,
-  `'mcp.success'`, …). Those spellings are frozen history and have no canonical constant by design.
-- `integritystudio.us.auth0.com` in `auth0-env-validation.test.ts` is an Auth0 domain, not an attribute.
-- 🔴 **Both groups declare a `TYPE`** (`integritystudio.agent.type`, `integritystudio.hook.type`), so
-  `{ ...AGENT_ATTRIBUTES, ...HOOK_ATTRIBUTES }` silently drops the agent one. Concatenate entries, never
-  merge the objects; `scripts/__tests__/hook-attributes.test.ts` caught this on its first run.
-- **What the test can and cannot prove.** `canonicalAttrKey(key) === key` fails a key that is a *legacy*
-  spelling, which is the error that would make a reader see `undefined`. It passes a key the alias table
-  has never heard of, so it is not a spell-check — the namespace assertion is what catches a typo'd
-  prefix. Parity with the emitter stays held by citation: `~/.claude/hooks/lib/agent-sources.ts` writes
-  these keys, and the parent and the hooks "intentionally share no code"
-  (`../src/lib/observability/instrumentation.ts`), so there is nothing importable to assert against.
-- `HOOK_NAME_ATTRIBUTE` was retired from `src/api/aggregates/agent-stats.ts`: a shared key constant
-  living in an aggregate module is how the duplication started. `CODE_EVENT_ATTR` went the same way out
-  of `src/api/code-quality-summary.ts`, which had been spelling `integritystudio.code.event` **twice in
-  one file** — once as that export and once inside its private `ATTR` table. That table is now the two
-  semconv agent keys alone; the seven code keys come from `CODE_ATTRIBUTES`.
-- **The test covers the module by namespace import**, `Object.values(hookAttributes).flatMap(...)`, so a
-  group added later is checked without editing it: 48 keys × canonical + namespace, plus one
-  cross-group uniqueness check. Collisions are the reason it concatenates instead of spreading —
-  `TYPE` is in both agent and hook, `SUCCESS`/`ERROR_TYPE` in both tool and mcp.
-
 **DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
 entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version
 its own range excludes — a major downgrade npm reports as satisfied. Dev- and test-only (jsdom is the
@@ -690,15 +651,6 @@ record rather than a defect. Two things follow from it:
   the reference, and bumping it moves every transitive copy with it. That is the point — it is what
   keeps one version in the tree — but it means the devDependency is load-bearing despite being
   imported nowhere. Do not "clean it up" as unused.
-
-**DASH-ERRORDETAIL-OPTIONAL.** `src/api/session-detail.ts` `ErrorDetail` declares
-`tool?: string; errorType?: string`, but `computeErrorSummary` sets both on every pushed entry, each with
-a `?? 'unknown'` fallback, so neither is ever absent. Every consumer handles an `undefined` that cannot
-happen. The optionality predates the return-type work (it was already in the local
-`Array<{ … }>` annotation at `dcc09af:session-detail.ts:270`); extracting the named type copied it
-faithfully rather than introducing it. Fixed 2026-10-19 by making both required. No second edit was
-needed: `src/hooks/useSessionDetail.ts` imports `SessionDetail` rather than mirroring `errors.details`.
-Type-only — the KV value and the wire payload do not change.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.12](changelog/3.0.12/CHANGELOG.md) (2026-10-12).

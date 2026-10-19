@@ -150,3 +150,54 @@ gains `currentPath`, and the three PR #21 files mount through `renderPage`. The 
   to `AuthContext`. `AuthContext` exports `SESSION_LOGIN_KEY` and the test imports it.
 - `scripts/__tests__/judge-anthropic-client.test.ts` keeps its own loopback server beside the new
   `scripts/__tests__/support/recording-server.ts` (PR #24). it uses `startRecordingServer`.
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | Done 2026-10-19 | Both fields required in `src/api/session-detail.ts`. Awaiting changelog migration. Source: session 2026-10-16 |
+| DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
+
+**DASH-ERRORDETAIL-OPTIONAL.** `src/api/session-detail.ts` `ErrorDetail` declares
+`tool?: string; errorType?: string`, but `computeErrorSummary` sets both on every pushed entry, each with
+a `?? 'unknown'` fallback, so neither is ever absent. Every consumer handles an `undefined` that cannot
+happen. The optionality predates the return-type work (it was already in the local
+`Array<{ … }>` annotation at `dcc09af:session-detail.ts:270`); extracting the named type copied it
+faithfully rather than introducing it. Fixed 2026-10-19 by making both required. No second edit was
+needed: `src/hooks/useSessionDetail.ts` imports `SessionDetail` rather than mirroring `errors.details`.
+Type-only — the KV value and the wire payload do not change.
+
+**DASH-VENDOR-ATTR-LITERALS.** `src/lib/hook-attributes.ts` (2026-10-17) gave the agent and hook
+span-attribute keys one home, because the fixtures and the readers had each spelled them inline — a
+canonical-key rename (one row in `hooks/lib/attribute-aliases.ts`) would have left the tests green while
+production read `undefined`. 11 keys, ~45 call sites across 3 readers and 6 test files; semconv keys stay
+in `otel-attributes.ts`, which is re-export-only by contract, so these vendor keys could not go there.
+**Done 2026-10-17** — the rest followed the same day. `hook-attributes.ts` now holds 12 groups / 48 keys
+(`agent`, `hook`, `tool`, `mcp`, `tokens`, `context`, `git`, `project`, `task`, `alerts`, `transcript`,
+`code` + `code.structure`), and every reader and fixture imports them: ~110 literals across 6 production
+modules and 13 test files. The `integritystudio.evaluation.*` keys stay in `scripts/eval-record.ts` —
+that module documents the on-disk record contract and its deliberate divergences from the hooks' own
+`EVALUATION_ATTRS`, so it keeps the definitions and the four fixture files now import them from it.
+What is deliberately still a literal:
+- `scripts/__tests__/derive-evaluations.test.ts` `'integritystudio.tool.succeeded'` — a key derive does
+  **not** read, which is the point: the test proves `detectInputDrift` fires on a renamed success flag.
+  A constant there would defeat it.
+- the legacy half of every `renamedAttr(span, canonical, legacy, type)` pair (`'tokens.input'`,
+  `'mcp.success'`, …). Those spellings are frozen history and have no canonical constant by design.
+- `integritystudio.us.auth0.com` in `auth0-env-validation.test.ts` is an Auth0 domain, not an attribute.
+- 🔴 **Both groups declare a `TYPE`** (`integritystudio.agent.type`, `integritystudio.hook.type`), so
+  `{ ...AGENT_ATTRIBUTES, ...HOOK_ATTRIBUTES }` silently drops the agent one. Concatenate entries, never
+  merge the objects; `scripts/__tests__/hook-attributes.test.ts` caught this on its first run.
+- **What the test can and cannot prove.** `canonicalAttrKey(key) === key` fails a key that is a *legacy*
+  spelling, which is the error that would make a reader see `undefined`. It passes a key the alias table
+  has never heard of, so it is not a spell-check — the namespace assertion is what catches a typo'd
+  prefix. Parity with the emitter stays held by citation: `~/.claude/hooks/lib/agent-sources.ts` writes
+  these keys, and the parent and the hooks "intentionally share no code"
+  (`../src/lib/observability/instrumentation.ts`), so there is nothing importable to assert against.
+- `HOOK_NAME_ATTRIBUTE` was retired from `src/api/aggregates/agent-stats.ts`: a shared key constant
+  living in an aggregate module is how the duplication started. `CODE_EVENT_ATTR` went the same way out
+  of `src/api/code-quality-summary.ts`, which had been spelling `integritystudio.code.event` **twice in
+  one file** — once as that export and once inside its private `ATTR` table. That table is now the two
+  semconv agent keys alone; the seven code keys come from `CODE_ATTRIBUTES`.
+- **The test covers the module by namespace import**, `Object.values(hookAttributes).flatMap(...)`, so a
+  group added later is checked without editing it: 48 keys × canonical + namespace, plus one
+  cross-group uniqueness check. Collisions are the reason it concatenates instead of spreading —
+  `TYPE` is in both agent and hook, `SUCCESS`/`ERROR_TYPE` in both tool and mcp.
