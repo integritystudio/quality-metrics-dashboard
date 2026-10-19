@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop` and `unicorn/no-array-sort` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 25. 286 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed; the earlier "421" counted the 160 magic-number hits measured on 2026-10-16). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop` and `unicorn/no-array-sort` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 18. 279 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed; the earlier "421" counted the 160 magic-number hits measured on 2026-10-16). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -57,7 +57,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/consistent-type-definitions`~~ (landed) | 261 | 261 | 218 / 43 |
 | ~~`@typescript-eslint/explicit-function-return-type`~~ (46 of 253 landed) | 253 | 0 | 247 / 6 |
 | ~~`@stylistic/indent`~~ (landed) | 215 | 215 | 215 / 0 |
-| `local/no-magic-numbers-ignore-bitwise` (warn; enabled for non-test files, 155 measured 2026-10-18, 120 after the percent/`TIME_MS` consolidation, 89 after the direct swaps to existing constants, 57 after naming shared values, 25 after naming coincidental values apart) | 25 | 0 | 25 / excluded |
+| `local/no-magic-numbers-ignore-bitwise` (warn; enabled for non-test files, 155 measured 2026-10-18, 120 after the percent/`TIME_MS` consolidation, 89 after the direct swaps to existing constants, 57 after naming shared values, 25 after naming coincidental values apart, 18 after the 7 multiplier hits) | 18 | 0 | 18 / excluded |
 | ~~`unicorn/no-array-sort`~~ (landed) | 65 | 0 | 38 / 27 |
 | ~~`@typescript-eslint/dot-notation`~~ (landed) | 49 | 49 | 22 / 27 |
 | ~~`@typescript-eslint/promise-function-async`~~ (landed) | 46 | 46 | 45 / 1 |
@@ -510,14 +510,34 @@ in a comment on the type itself.
 (`no-deprecated` warn → error, `ban-ts-comment` `minimumDescriptionLength: 10`).
 - **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files
   2026-10-18: copied from the parent's inline definition into `eslint-rules/no-magic-numbers-ignore-bitwise.mjs`,
-  with the parent's options. Swept from 155 hits to 25. `percent` and `TIME_MS` now have one definition each
+  with the parent's options. Swept from 155 hits to 18. `percent` and `TIME_MS` now have one definition each
   in `src/lib/constants.ts`, values an existing constant already named were swapped for it, shared values
   got one name, and coincidentally equal ones got distinct names. Still open:
-  - **The gate is red.** `npm run lint` runs `--max-warnings 0`, so the 25 must be cleared or the rule
+  - **The gate is red.** `npm run lint` runs `--max-warnings 0`, so the 18 must be cleared or the rule
     tuned before this lands on `main`.
-  - **7 hits already sit in named constants** (`BATCH_WALL_CLOCK_MS = 3 * TIME_MS.HOUR`,
-    `KV_VALUE_LIMIT_BYTES = 25 * BYTES.MB`, …): the rule counts the multiplier, and `enforceConst` does not
-    exempt a binary-expression operand.
+  - **The 7 multiplier hits are resolved, but two wait on the parent.** The rule counts the multiplier in
+    `3 * TIME_MS.HOUR`, and `enforceConst` does not exempt a binary-expression operand, so a named constant
+    alone did not clear them. No existing constant held any of the 7 values, and the bare multipliers
+    (12, 3, 16, 8) match only unrelated constants (`MONTHS_PER_YEAR`, `BITS.BYTE`, …), so none was swapped.
+    - `MIN_SESSION_COMPLETION_AGE_MS` and `BATCH_WALL_CLOCK_MS` use new `DURATION_MS.TWELVE_HOURS` /
+      `THREE_HOURS`, added to the parent's `src/lib/core/units.ts` on parent branch
+      `feat/duration-ms-twelve-three-hours`. 🔴 **Land that branch on the parent's main first.** `scripts/`
+      imports `units.ts` from the parent checkout by source path, so until it has the members
+      `typecheck:scripts` fails (2 × TS2339), lint reports 8 `no-unsafe-*` errors, and both values are
+      `undefined` at run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the
+      batch wall clock would be silently disabled.
+    - `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is now a full period (`PERIOD_KEYS`,
+      `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`, which now
+      iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **sync-to-kv still defaults to
+      `--days=30`**, and `computeOrgKvEntries` skips any period longer than that, so no `:90d` KV entry is
+      written and the 90d button serves `ERR_NO_DATA` until a run passes `--days=90`. The default was left
+      alone deliberately: an org already holds ~1.65 GB in memory at 30 days, and the evaluation read spans
+      `METRIC_DETAIL_WINDOWS` × the window. The parity tests' `it.each` period lists do not cover `90d`.
+    - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
+      `KV_BATCH_MAX_BYTES`, `KV_VALUE_LIMIT_BYTES`) carry a one-line disable.
+  - **13 `unicorn/no-array-callback-reference` errors are on this branch** (`TruncatedList.tsx`, `App.tsx`,
+    `cli-args.ts`, `api-constants.ts`, five test files), measured before the multiplier work — despite the
+    rule being recorded as swept above. Unexplained; check the installed `eslint-plugin-unicorn` version.
   - **18 single-use values**: the WCAG relative-luminance coefficients in `CorrelationHeatmap.tsx` (10),
     `SCORE_BAND_LOWER_BOUNDS` (4), backtest's baseline split `0.7`, the API port `3001`, `AlertList`'s
     `1.2` headroom and `TrendChart`'s `0.001` exponent cutoff.
