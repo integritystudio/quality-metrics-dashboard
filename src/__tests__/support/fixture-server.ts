@@ -341,13 +341,7 @@ export function evalToWire(
   };
 }
 
-/**
- * Convert a span-shaped object to the trace wire row that CloudBackend
- * serves and parses back to a `TraceSpan`.
- *
- * `attributes` is JSON-stringified; timestamps stay as decimal bigint strings.
- * An absent end time is served as the start time (zero duration).
- */
+/** The wire row an empty `spanToWire({})` produces. */
 const SPAN_WIRE_DEFAULTS: TraceWireRow = {
   org_id: FIXTURE_ORG_ID,
   trace_id: 'trace-001',
@@ -365,6 +359,13 @@ const SPAN_WIRE_DEFAULTS: TraceWireRow = {
   r2_key: FIXTURE_R2_KEY,
 };
 
+/**
+ * Convert a span-shaped object to the trace wire row that CloudBackend
+ * serves and parses back to a `TraceSpan`.
+ *
+ * `attributes` is JSON-stringified; timestamps stay as decimal bigint strings.
+ * An absent end time is served as the start time (zero duration).
+ */
 export function spanToWire(s: {
   traceId?: string;
   spanId?: string;
