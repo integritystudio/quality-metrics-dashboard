@@ -178,7 +178,7 @@ export type SpanLatency = {
   hookLatency: Record<string, HookLatencyEntry>;
 };
 
-export type ErrorDetail = { spanName: string; tool?: string; errorType?: string; filePath?: string | undefined };
+export type ErrorDetail = { spanName: string; tool: string; errorType: string; filePath?: string | undefined };
 
 export type ErrorSummary = { byCategory: Record<string, number>; details: ErrorDetail[] };
 

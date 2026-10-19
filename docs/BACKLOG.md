@@ -29,7 +29,7 @@ No open items.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules and both option-drift changes landed 2026-10-19. Still open: `reportUnusedInlineConfigs`, the `no-unused-vars` option drift and the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
-| DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
+| DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | Done 2026-10-19 | Both fields required in `src/api/session-detail.ts`. Awaiting changelog migration. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
 
@@ -695,9 +695,9 @@ record rather than a defect. Two things follow from it:
 a `?? 'unknown'` fallback, so neither is ever absent. Every consumer handles an `undefined` that cannot
 happen. The optionality predates the return-type work (it was already in the local
 `Array<{ … }>` annotation at `dcc09af:session-detail.ts:270`); extracting the named type copied it
-faithfully rather than introducing it. Tightening it to required also means tightening the mirrored
-`errors.details` in `src/hooks/useSessionDetail.ts`, which is why it was left alone. Type-only — the KV
-value and the wire payload do not change.
+faithfully rather than introducing it. Fixed 2026-10-19 by making both required. No second edit was
+needed: `src/hooks/useSessionDetail.ts` imports `SessionDetail` rather than mirroring `errors.details`.
+Type-only — the KV value and the wire payload do not change.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.12](changelog/3.0.12/CHANGELOG.md) (2026-10-12).
