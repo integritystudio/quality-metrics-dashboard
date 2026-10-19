@@ -226,9 +226,13 @@ class MessageBatchProvider implements BatchLLMProvider {
   private async drain(): Promise<FlushResult> {
     try {
       let requests = await this.awaitQueued();
+      // The rounds are sequential by construction: the next batch's requests are
+      // the continuations this one's results enqueue, so they do not exist yet.
       while (requests.length > 0) {
+        // eslint-disable-next-line no-await-in-loop -- sequential rounds, see above
         const result = await this.runBatch(requests);
         if (result) return result;
+        // eslint-disable-next-line no-await-in-loop -- sequential rounds, see above
         requests = await this.awaitQueued();
       }
       return { settled: 0, abandoned: 0 };
@@ -267,8 +271,8 @@ class MessageBatchProvider implements BatchLLMProvider {
       if (Date.now() - this.startedAt >= this.wallClockMs) {
         return this.closeAtWallClock(batch.id);
       }
-      await sleep(this.pollIntervalMs);
-      batch = await this.poll(batch);
+      // eslint-disable-next-line no-await-in-loop -- a poll reports the state the interval before it waited for
+      batch = await this.pollAfterInterval(batch);
     }
     try {
       for await (const line of await this.client.results(batch.id)) {
@@ -302,6 +306,12 @@ class MessageBatchProvider implements BatchLLMProvider {
     } catch (err) {
       pending.reject(err instanceof Error ? err : new Error(String(err)));
     }
+  }
+
+  /** One polling interval, then the batch as the API now reports it. */
+  private async pollAfterInterval(batch: MessageBatch): Promise<MessageBatch> {
+    await sleep(this.pollIntervalMs);
+    return this.poll(batch);
   }
 
   /** The batch as the API now reports it. A poll lost to the network returns the last state seen. */
@@ -349,8 +359,8 @@ class MessageBatchProvider implements BatchLLMProvider {
     }
     const deadline = Date.now() + this.cancelGraceMs;
     while (batch.processing_status !== 'ended' && Date.now() < deadline) {
-      await sleep(this.pollIntervalMs);
-      batch = await this.poll(batch);
+      // eslint-disable-next-line no-await-in-loop -- a poll reports the state the interval before it waited for
+      batch = await this.pollAfterInterval(batch);
     }
     if (batch.processing_status === 'ended') return true;
     console.warn(`${LOG_PREFIX} ${batchId} had not ended ${this.cancelGraceMs}ms after the cancel; its results go unread`);

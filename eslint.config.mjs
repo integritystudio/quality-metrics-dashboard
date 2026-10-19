@@ -90,6 +90,9 @@ const typeSafetyRules = {
   'prefer-template': 'error',
   'object-shorthand': ['error', 'always'],
   'unicorn/throw-new-error': 'error',
+  // A bare callback reference silently receives every argument the iterator
+  // passes: `xs.map(parseInt)` reads the index as the radix.
+  'unicorn/no-array-callback-reference': 'error',
   'unicorn/prefer-node-protocol': 'error',
   'radix': 'error',
   'no-param-reassign': ['error', { props: false }],
@@ -345,6 +348,7 @@ export default tseslint.config(
     rules: {
       'max-depth': ['warn', 4],
       'max-params': ['warn', 4],
+      'no-await-in-loop': 'warn',
     },
   },
   // Import graph rules. eslint-plugin-import does not support ESLint 10, so this
