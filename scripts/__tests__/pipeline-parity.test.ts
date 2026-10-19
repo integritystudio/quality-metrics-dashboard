@@ -4,12 +4,11 @@
  * `computePipelineView` inline in `computePeriodEntries`; the route did the same.
  * One fixture through both paths must now give the same value.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { pipelineRoutes } from '../../src/api/routes/pipeline.js';
 import { evaluation } from './support/evaluations.js';
-import { serveParityFixture } from './support/parity-fixture.js';
+import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -24,25 +23,11 @@ const evaluations: EvaluationResult[] = [
 
 const fixture = serveParityFixture({ evaluations });
 
-function kvValue(result: OrgComputation, key: string): unknown {
-  const entry = result.allEntries.find(e => e.key === key);
-  return entry ? JSON.parse(entry.value) as unknown : undefined;
-}
-
 describe('pipeline parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
-  let synced: OrgComputation;
-
-  beforeEach(async () => {
-    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const synced = syncEachTest(fixture, NOW);
 
   it.each(['24h', '7d', '30d'] as const)('writes for %s the value the dev route answers', async (period) => {
-    const fromKv = kvValue(synced, `pipeline:${period}`);
+    const fromKv = kvValue(synced(), `pipeline:${period}`);
 
     const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
     expect(res.status).toBe(200);

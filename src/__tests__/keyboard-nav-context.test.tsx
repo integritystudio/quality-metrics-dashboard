@@ -21,6 +21,19 @@ function OverlayReader() {
   return <div data-testid="overlay">{overlayOpen ? 'open' : 'closed'}</div>;
 }
 
+const renderOverlayReader = () => render(<KeyboardNavProvider><OverlayReader /></KeyboardNavProvider>);
+
+/** Register the "g h" combo and return its action. */
+function renderHomeCombo() {
+  const action = vi.fn();
+  render(
+    <KeyboardNavProvider>
+      <ShortcutConsumer shortcutKey="g h" desc="Go home" scope="nav" action={action} />
+    </KeyboardNavProvider>,
+  );
+  return action;
+}
+
 
 describe('shortcut conflict guard', () => {
   it('throws when registering single key "g" when combo "g h" already exists', () => {
@@ -85,16 +98,7 @@ describe('shortcut conflict guard', () => {
 
 describe('two-key combo dispatch', () => {
   it('fires combo action when both keys pressed in sequence', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
     expect(action).not.toHaveBeenCalled();
     act(() => { fireEvent.keyDown(document, { key: 'h' }); });
@@ -121,31 +125,13 @@ describe('two-key combo dispatch', () => {
   });
 
   it('does NOT fire combo when only the first key is pressed', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
     expect(action).not.toHaveBeenCalled();
   });
 
   it('does NOT fire combo when second key does not match', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => {
       fireEvent.keyDown(document, { key: 'g' });
       fireEvent.keyDown(document, { key: 'x' });
@@ -155,16 +141,7 @@ describe('two-key combo dispatch', () => {
 
   it('re-arms combo pending after a failed second key', () => {
     // After "g" + "x" fails, a fresh "g" + "h" should fire the combo
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => {
       fireEvent.keyDown(document, { key: 'g' });
       fireEvent.keyDown(document, { key: 'x' }); // fails, clears pending
@@ -203,16 +180,7 @@ describe('combo timeout', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   it('clears pending after 500ms so a late second key does not fire the combo', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
     act(() => { vi.advanceTimersByTime(501); });
     act(() => { fireEvent.keyDown(document, { key: 'h' }); });
@@ -220,16 +188,7 @@ describe('combo timeout', () => {
   });
 
   it('fires combo when second key arrives before the 500ms timeout', () => {
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
     act(() => { vi.advanceTimersByTime(400); });
     act(() => { fireEvent.keyDown(document, { key: 'h' }); });
@@ -239,16 +198,7 @@ describe('combo timeout', () => {
   it('does NOT fire combo at exactly the 500ms boundary — second key at 500ms is too late', () => {
     // The timeout clears pending at 500ms; a key arriving at that exact moment
     // should NOT fire the combo because the timer has already fired
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(
-      <KeyboardNavProvider>
-        <ComboConsumer />
-      </KeyboardNavProvider>,
-    );
+    const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
     // Advance exactly to the timeout boundary
     act(() => { vi.advanceTimersByTime(500); });
@@ -261,63 +211,39 @@ describe('combo timeout', () => {
 
 describe('overlay toggle', () => {
   it('starts closed', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     expect(screen.getByTestId('overlay').textContent).toBe('closed');
   });
 
   it('pressing ? opens the overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     act(() => { fireEvent.keyDown(document, { key: '?' }); });
     expect(screen.getByTestId('overlay').textContent).toBe('open');
   });
 
   it('pressing ? a second time closes the overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     act(() => { fireEvent.keyDown(document, { key: '?' }); });
     act(() => { fireEvent.keyDown(document, { key: '?' }); });
     expect(screen.getByTestId('overlay').textContent).toBe('closed');
   });
 
   it('pressing Escape closes an open overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     act(() => { fireEvent.keyDown(document, { key: '?' }); });
     act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
     expect(screen.getByTestId('overlay').textContent).toBe('closed');
   });
 
   it('pressing Escape when overlay is closed has no effect', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     act(() => { fireEvent.keyDown(document, { key: 'Escape' }); });
     expect(screen.getByTestId('overlay').textContent).toBe('closed');
   });
 
   it('Escape with Ctrl held does NOT close the overlay', () => {
     // Modifier keys bypass all shortcut handling including overlay escape
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     act(() => { fireEvent.keyDown(document, { key: '?' }); });
     expect(screen.getByTestId('overlay').textContent).toBe('open');
     act(() => { fireEvent.keyDown(document, { key: 'Escape', ctrlKey: true }); });
@@ -326,11 +252,7 @@ describe('overlay toggle', () => {
   });
 
   it('? with Ctrl held does NOT toggle overlay', () => {
-    render(
-      <KeyboardNavProvider>
-        <OverlayReader />
-      </KeyboardNavProvider>,
-    );
+    renderOverlayReader();
     act(() => { fireEvent.keyDown(document, { key: '?', ctrlKey: true }); });
     // Modifier bypass prevents overlay from opening
     expect(screen.getByTestId('overlay').textContent).toBe('closed');
@@ -422,12 +344,7 @@ describe('modifier key bypass', () => {
 
   it('does NOT prime combo pending when first key pressed with Ctrl held', () => {
     // Modifier bypass should also prevent combo priming
-    const action = vi.fn();
-    function ComboConsumer() {
-      useShortcut('g h', 'Go home', 'nav', action);
-      return null;
-    }
-    render(<KeyboardNavProvider><ComboConsumer /></KeyboardNavProvider>);
+    const action = renderHomeCombo();
     // "g" with Ctrl should NOT set pendingRef
     act(() => { fireEvent.keyDown(document, { key: 'g', ctrlKey: true }); });
     // "h" without modifier — if pending was wrongly set, this would fire the combo

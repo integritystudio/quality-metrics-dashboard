@@ -8,6 +8,39 @@ function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
   return 'strategy' in g && 'fallbackRate' in g;
 }
 
+function DistributionTable({ label, distribution, routedSpans }: {
+  label: string;
+  distribution: Record<string, number>;
+  routedSpans: number;
+}) {
+  if (Object.keys(distribution).length === 0) return null;
+  return (
+    <div className="card mb-3">
+      <h3 className="text-sm font-semibold mb-3">{label} Distribution</h3>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>{label}</th>
+            <th>Count</th>
+            <th>Share</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(distribution)
+            .toSorted(byValueDesc)
+            .map(([key, count]) => (
+              <tr key={key}>
+                <td className="mono">{key}</td>
+                <td className="mono">{count}</td>
+                <td className="mono">{formatPercent(percentOf(count, routedSpans))}</td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function RoutingTelemetryPage({ period }: { period: Period }) {
   const { data, isLoading, error } = useRoutingTelemetry(period);
 
@@ -45,61 +78,8 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
             </div>
           </div>
 
-          {Object.keys(data.providerDistribution).length > 0 && (
-            <div className="card mb-3">
-              <h3 className="text-sm font-semibold mb-3">Provider Distribution</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Provider</th>
-                    <th>Count</th>
-                    <th>Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(data.providerDistribution)
-                    .toSorted(byValueDesc)
-                    .map(([provider, count]) => (
-                      <tr key={provider}>
-                        <td className="mono">{provider}</td>
-                        <td className="mono">{count}</td>
-                        <td className="mono">
-                          {formatPercent(percentOf(count, data.summary.routedSpans))}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {Object.keys(data.modelDistribution).length > 0 && (
-            <div className="card mb-3">
-              <h3 className="text-sm font-semibold mb-3">Model Distribution</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Model</th>
-                    <th>Count</th>
-                    <th>Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(data.modelDistribution)
-                    .toSorted(byValueDesc)
-                    .map(([model, count]) => (
-                      <tr key={model}>
-                        <td className="mono">{model}</td>
-                        <td className="mono">{count}</td>
-                        <td className="mono">
-                          {formatPercent(percentOf(count, data.summary.routedSpans))}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DistributionTable label="Provider" distribution={data.providerDistribution} routedSpans={data.summary.routedSpans} />
+          <DistributionTable label="Model" distribution={data.modelDistribution} routedSpans={data.summary.routedSpans} />
 
           {data.groups.length > 0 && data.groups.some(g => isStrategyGroup(g)) && (
             <div className="card mb-3">

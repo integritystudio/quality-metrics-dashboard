@@ -12,8 +12,8 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import { SignJWT } from 'jose';
 import app from '../index.js';
 import { jsonResponse } from './support/http.js';
-import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, jwksUrlFor, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { TEST_AUTH0_DOMAIN, createTestIssuer, jwksUrlFor, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { NO_STAFF_USER_IDS, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const SECONDS_PER_MINUTE = 60;
@@ -25,24 +25,6 @@ const TENANT_DOMAIN = TEST_AUTH0_DOMAIN;
 const UNREACHABLE_DOMAIN = 'unreachable.us.auth0.com';
 const AUTH0_ID = 'auth0|u';
 
-const mockAssets = { fetch: vi.fn() };
-
-function makeEnv(overrides?: Partial<Record<string, unknown>>) {
-  return {
-    DASHBOARD: new MemoryKv(),
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TENANT_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-    ...overrides,
-  };
-}
-
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
-}
-
 function noUpstream(): Promise<Response> {
   return Promise.reject(new TypeError('unexpected request'));
 }
@@ -50,7 +32,7 @@ function noUpstream(): Promise<Response> {
 let tenant: TestIssuer;
 let unreachable: TestIssuer;
 
-async function meStatus(token: string, env = makeEnv()): Promise<number> {
+async function meStatus(token: string, env = makeWorkerEnv()): Promise<number> {
   const res = await app.request('/api/me', { headers: { Authorization: `Bearer ${token}` } }, env, makeCtx());
   return res.status;
 }
@@ -104,13 +86,13 @@ describe('upstream failures are 503', () => {
     vi.stubGlobal('fetch', (url: string) => (url === jwksUrl ? answerJwks() : noUpstream()));
     const token = await unreachable.sign({ sub: AUTH0_ID });
 
-    expect(await meStatus(token, makeEnv({ AUTH0_DOMAIN: UNREACHABLE_DOMAIN }))).toBe(HttpStatus.ServiceUnavailable);
+    expect(await meStatus(token, makeWorkerEnv({ AUTH0_DOMAIN: UNREACHABLE_DOMAIN }))).toBe(HttpStatus.ServiceUnavailable);
   });
 });
 
 describe('Supabase reads during auth', () => {
   const APP_USER_ID = 'a0000000-0000-4000-8000-000000000051';
-  const orgEnv = () => makeEnv({ ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: 'a0000000-0000-4000-8000-0000000000aa', STAFF_USER_IDS: '[]' });
+  const orgEnv = () => makeWorkerEnv({ ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: 'a0000000-0000-4000-8000-0000000000aa', STAFF_USER_IDS: NO_STAFF_USER_IDS });
 
   async function status(fetchImpl: FetchLike): Promise<number> {
     vi.stubGlobal('fetch', tenant.serveJwks(fetchImpl));

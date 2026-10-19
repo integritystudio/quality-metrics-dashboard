@@ -11,7 +11,8 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import app from '../index.js';
 import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { TEST_AUTH0_DOMAIN, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { makeWorkerEnv } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 import { CONTENT_TYPE_HEADER, HttpStatus } from '../../src/lib/http-constants.js';
 
@@ -24,14 +25,7 @@ const mockAssets = {
 };
 
 function makeEnv(kv = new MemoryKv()) {
-  return {
-    DASHBOARD: kv,
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-  };
+  return makeWorkerEnv({ DASHBOARD: kv, ASSETS: mockAssets });
 }
 
 let tenant: TestIssuer;

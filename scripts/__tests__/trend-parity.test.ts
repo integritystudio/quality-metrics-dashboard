@@ -5,14 +5,13 @@
  * the sync bucketed the whole period. One fixture through both paths must now
  * give the same value per period.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { trendKey } from '../../src/api/aggregates/trend.js';
 import { trendRoutes } from '../../src/api/routes/trends.js';
 import { DEFAULT_TREND_BUCKETS } from '../../src/lib/constants.js';
 import { evaluation, FIXTURE_METRIC } from './support/evaluations.js';
-import { serveParityFixture } from './support/parity-fixture.js';
+import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -28,25 +27,11 @@ const fixture = serveParityFixture({ evaluations });
 
 type TrendValue = { bucketCount: number; totalEvaluations: number; narrowed: boolean; trendData: Array<{ count: number }> };
 
-function kvValue<T = unknown>(result: OrgComputation, key: string): T | undefined {
-  const entry = result.allEntries.find(e => e.key === key);
-  return entry ? JSON.parse(entry.value) as T : undefined;
-}
-
 describe('trend parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
-  let synced: OrgComputation;
-
-  beforeEach(async () => {
-    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const synced = syncEachTest(fixture, NOW);
 
   it.each(['24h', '7d', '30d'] as const)('writes for %s the value the dev route answers', async (period) => {
-    const fromKv = kvValue(synced, trendKey(FIXTURE_METRIC, period));
+    const fromKv = kvValue(synced(), trendKey(FIXTURE_METRIC, period));
 
     const res = await trendRoutes.request(`/trends/${FIXTURE_METRIC}?period=${period}&buckets=${DEFAULT_TREND_BUCKETS}`);
     expect(res.status).toBe(200);
@@ -56,8 +41,8 @@ describe('trend parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   });
 
   it('narrows the synced month to the data range as the route does, and not the week', () => {
-    const month = kvValue<TrendValue>(synced, trendKey(FIXTURE_METRIC, '30d'));
-    const week = kvValue<TrendValue>(synced, trendKey(FIXTURE_METRIC, '7d'));
+    const month = kvValue<TrendValue>(synced(), trendKey(FIXTURE_METRIC, '30d'));
+    const week = kvValue<TrendValue>(synced(), trendKey(FIXTURE_METRIC, '7d'));
 
     expect(month?.narrowed).toBe(true);
     expect(week?.narrowed).toBe(false);

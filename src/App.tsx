@@ -32,7 +32,7 @@ import { AgentSessionPage } from './pages/AgentSessionPage.js';
 import { AgentsPage } from './pages/AgentsPage.js';
 import { SessionDetailPage } from './pages/SessionDetailPage.js';
 import { AdminPage } from './pages/AdminPage.js';
-import { StaffGuard, StaffCustomersLink } from './components/StaffGuard.js';
+import { AccessDenied, StaffGuard, StaffCustomersLink } from './components/StaffGuard.js';
 import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
 import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
 import { AgentCodeQualityPage } from './pages/AgentCodeQualityPage.js';
@@ -323,15 +323,7 @@ function AdminLink() {
 function AdminGuard({ children }: { children: ReactNode }) {
   const { session, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!session?.permissions.includes('dashboard.admin')) {
-    return (
-      <div className="empty-state">
-        <h2>Access Denied</h2>
-        <p>You do not have permission to access this page.</p>
-        <p><Link href="/">Go to dashboard</Link></p>
-      </div>
-    );
-  }
+  if (!session?.permissions.includes('dashboard.admin')) return <AccessDenied />;
   return <>{children}</>;
 }
 

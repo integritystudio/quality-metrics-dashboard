@@ -7,13 +7,11 @@
  * Non-admin tests use mockAuditorAuthSequence (auditor permissions, no dashboard.admin).
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
-import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
-
-type FetchMock = Mock<FetchLike>;
+import { serveSignedSession, type FetchMock } from './support/signed-session.js';
+import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
@@ -25,26 +23,6 @@ const ADMIN_PERMISSIONS = ['dashboard.read', 'dashboard.executive', 'dashboard.o
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
 const VALID_KEY_UUID = 'd3333333-3333-4333-8333-333333333333';
-
-const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
-};
-
-function makeEnv(overrides?: Partial<Record<string, unknown>>) {
-  return {
-    DASHBOARD: new MemoryKv(),
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-    ...overrides,
-  };
-}
-
-function adminHeaders() {
-  return { Authorization: `Bearer ${token}` };
-}
 
 /**
  * Wraps a route-level fetch handler with auth middleware responses.
@@ -87,30 +65,12 @@ function mockAuditorAuthSequence(fetchMock: FetchMock) {
   });
 }
 
-let fetchMock: FetchMock;
 
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn((p: Promise<unknown>) => { void p; }), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
-}
-
-let tenant: TestIssuer;
-let token: string;
-
-beforeAll(async () => {
-  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
-  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
-});
+const { fetchMock, authHeaders } = serveSignedSession(MOCK_AUTH0_ID);
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
   // Default: admin auth succeeds; route handler returns 200 for unmatched calls.
   fetchMock.mockImplementation(withAdminAuth(() => Promise.resolve(new Response(null, { status: HttpStatus.Ok }))));
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
 });
 
 // ─── Authentication (every /api/admin/* route) ─────────────────────────────────
@@ -134,7 +94,7 @@ const ADMIN_ROUTES: ReadonlyArray<readonly [method: string, path: string]> = [
 
 describe.each(ADMIN_ROUTES)('%s %s', (method, path) => {
   it('returns 401 without a bearer token', async () => {
-    const res = await app.request(path, { method }, makeEnv());
+    const res = await app.request(path, { method }, makeWorkerEnv());
     expect(res.status).toBe(HttpStatus.Unauthorized);
     // No Supabase call may precede the refusal.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -149,8 +109,8 @@ describe('GET /api/admin/users', () => {
 
     const res = await app.request(
       '/api/admin/users',
-      { headers: { Authorization: `Bearer ${token}` } },
-      makeEnv(),
+      { headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
@@ -176,8 +136,8 @@ describe('GET /api/admin/users', () => {
 
     const res = await app.request(
       '/api/admin/users',
-      { headers: adminHeaders() },
-      makeEnv(),
+      { headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
@@ -195,8 +155,8 @@ describe('GET /api/admin/roles', () => {
 
     const res = await app.request(
       '/api/admin/roles',
-      { headers: { Authorization: `Bearer ${token}` } },
-      makeEnv(),
+      { headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
@@ -215,8 +175,8 @@ describe('GET /api/admin/roles', () => {
 
     const res = await app.request(
       '/api/admin/roles',
-      { headers: adminHeaders() },
-      makeEnv(),
+      { headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
@@ -227,7 +187,7 @@ describe('GET /api/admin/roles', () => {
   it('returns its own 500 when Supabase is unreachable', async () => {
     fetchMock.mockImplementation(withAdminAuth(() => Promise.reject(new TypeError('Network connection lost.'))));
 
-    const res = await app.request('/api/admin/roles', { headers: adminHeaders() }, makeEnv());
+    const res = await app.request('/api/admin/roles', { headers: authHeaders() }, makeWorkerEnv());
     expect(res.status).toBe(HttpStatus.InternalServerError);
     expect(await res.json()).toEqual({ error: 'Failed to fetch roles' });
   });
@@ -241,10 +201,10 @@ describe('POST /api/admin/users/:userId/roles', () => {
       '/api/admin/users/not-a-uuid/roles',
       {
         method: 'POST',
-        headers: { ...adminHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
+        headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
-      makeEnv(),
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -254,10 +214,10 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { ...adminHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
+        headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({}),
       },
-      makeEnv(),
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -275,10 +235,10 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { ...adminHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
+        headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
-      makeEnv(),
+      makeWorkerEnv(),
       makeCtx(),
     );
     expect(res.status).toBe(HttpStatus.NoContent);
@@ -291,10 +251,10 @@ describe('POST /api/admin/users/:userId/roles', () => {
       `/api/admin/users/${VALID_USER_UUID}/roles`,
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, [CONTENT_TYPE_HEADER]: ContentType.Json },
+        headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
-      makeEnv(),
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
@@ -306,8 +266,8 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
   it('returns 400 for invalid userId', async () => {
     const res = await app.request(
       `/api/admin/users/bad-id/roles/${VALID_ROLE_UUID}`,
-      { method: 'DELETE', headers: adminHeaders() },
-      makeEnv(),
+      { method: 'DELETE', headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -315,8 +275,8 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
   it('returns 400 for invalid roleId', async () => {
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/bad-role-id`,
-      { method: 'DELETE', headers: adminHeaders() },
-      makeEnv(),
+      { method: 'DELETE', headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -332,8 +292,8 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
 
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
-      { method: 'DELETE', headers: adminHeaders() },
-      makeEnv(),
+      { method: 'DELETE', headers: authHeaders() },
+      makeWorkerEnv(),
       makeCtx(),
     );
     expect(res.status).toBe(HttpStatus.NoContent);
@@ -344,8 +304,8 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
 
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
-      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
-      makeEnv(),
+      { method: 'DELETE', headers: authHeaders() },
+      makeWorkerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });

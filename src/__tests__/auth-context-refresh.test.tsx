@@ -75,6 +75,26 @@ function Wrapper({ children }: { children: ReactNode }) {
   );
 }
 
+/** Authenticate, answer `/api/me` with a 401, and wait for the consumer to show no session. */
+async function renderWithRejectedMe() {
+  mockIsAuthenticated = true;
+  const fetchSpy = vi.fn().mockImplementation((url: string) => {
+    if (url === ME_URL) {
+      return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HttpStatus.Unauthorized }));
+    }
+    return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
+  });
+  vi.stubGlobal('fetch', fetchSpy);
+
+  const { container } = render(<TestConsumer />, { wrapper: Wrapper });
+  const scope = within(container);
+
+  await waitFor(() => {
+    expect(scope.getByTestId('no-session')).toBeDefined();
+  });
+  return fetchSpy;
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -142,22 +162,7 @@ describe('AuthContext: authenticated state', () => {
   });
 
   it('clears session when /api/me returns an error', async () => {
-    mockIsAuthenticated = true;
-
-    const fetchSpy = vi.fn().mockImplementation((url: string) => {
-      if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HttpStatus.Unauthorized }));
-      }
-      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
-    });
-    vi.stubGlobal('fetch', fetchSpy);
-
-    const { container } = render(<TestConsumer />, { wrapper: Wrapper });
-    const scope = within(container);
-
-    await waitFor(() => {
-      expect(scope.getByTestId('no-session')).toBeDefined();
-    });
+    await renderWithRejectedMe();
   });
 });
 
@@ -233,21 +238,7 @@ describe('AuthContext: login activity', () => {
   });
 
   it('does not post login activity when /api/me fails (no valid session)', async () => {
-    mockIsAuthenticated = true;
-    const fetchSpy = vi.fn().mockImplementation((url: string) => {
-      if (url === ME_URL) {
-        return Promise.resolve(new Response(JSON.stringify({ error: 'Unauthorized' }), { status: HttpStatus.Unauthorized }));
-      }
-      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
-    });
-    vi.stubGlobal('fetch', fetchSpy);
-
-    const { container } = render(<TestConsumer />, { wrapper: Wrapper });
-    const scope = within(container);
-
-    await waitFor(() => {
-      expect(scope.getByTestId('no-session')).toBeDefined();
-    });
+    const fetchSpy = await renderWithRejectedMe();
 
     expect(callsTo(fetchSpy, ACTIVITY_URL)).toHaveLength(0);
     expect(sessionStorage.getItem(SESSION_LOGIN_KEY)).toBeNull();

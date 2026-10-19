@@ -302,18 +302,27 @@ async function runClock<T>(work: Promise<T>): Promise<T> {
   return work;
 }
 
-describe('createBatchProvider at the wall clock', () => {
-  let warn: MockInstance<typeof console.warn>;
-
+/** Fake timers and a silenced `console.warn` around each test of the enclosing describe; returns the spy. */
+function silenceWarnUnderFakeTimers(): () => MockInstance<typeof console.warn> {
+  let warn: MockInstance<typeof console.warn> | undefined;
   beforeEach(() => {
     vi.useFakeTimers();
     warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
-
   afterEach(() => {
     vi.useRealTimers();
-    warn.mockRestore();
+    warn?.mockRestore();
   });
+  return () => defined(warn);
+}
+
+function resetFailureTrackingAroundEach(): void {
+  beforeEach(() => resetFailureTracking());
+  afterEach(() => resetFailureTracking());
+}
+
+describe('createBatchProvider at the wall clock', () => {
+  const warn = silenceWarnUnderFakeTimers();
 
   it('settles what the cancelled batch had already answered, once each, and abandons the rest', async () => {
     const onUsage = vi.fn();
@@ -417,7 +426,7 @@ describe('createBatchProvider at the wall clock', () => {
     expect(overrun).toBeInstanceOf(BatchWallClockExceededError);
     // The one request the batch held was answered, so nothing was abandoned.
     expect(overrun).toMatchObject({ abandoned: 0 });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('settled 1 results it had already produced, abandoned 0 requests'));
+    expect(warn()).toHaveBeenCalledWith(expect.stringContaining('settled 1 results it had already produced, abandoned 0 requests'));
     expect(client.create).toHaveBeenCalledTimes(1);
   });
 
@@ -458,7 +467,7 @@ describe('createBatchProvider at the wall clock', () => {
     expect(overrun).toBeInstanceOf(BatchWallClockExceededError);
     expect(await second).toBe(overrun);
     expect(overrun).toMatchObject({ abandoned: 2 });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not be read'));
+    expect(warn()).toHaveBeenCalledWith(expect.stringContaining('could not be read'));
     expect(provider.failure).toBeUndefined();
   });
 
@@ -474,7 +483,7 @@ describe('createBatchProvider at the wall clock', () => {
     await runClock(provider.flush());
 
     expect(await kept).toEqual({ text: 'kept' });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining(POLL_LOST.message));
+    expect(warn()).toHaveBeenCalledWith(expect.stringContaining(POLL_LOST.message));
     expect(client.results).toHaveBeenCalledTimes(1);
     expect(provider.failure).toBeUndefined();
   });
@@ -512,7 +521,7 @@ describe('createBatchProvider at the wall clock', () => {
     expect(await one).toEqual({ text: 're:one' });
     expect(client.retrieve).toHaveBeenCalledTimes(POLLS_TO_WALL_CLOCK);
     expect(client.cancel).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn()).not.toHaveBeenCalled();
     expect(provider.failure).toBeUndefined();
   });
 });
@@ -538,19 +547,8 @@ function requiredCriteria(request: BatchRequests[number]): string[] {
 const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ timestamp: '2026-09-29T12:00:00.000Z', userText: 'What does this function do?', assistantText: 'It parses the config file.', ...overrides });
 
 describe('a consolidated --batch run cut short by the wall clock', () => {
-  let warn: MockInstance<typeof console.warn>;
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    resetFailureTracking();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    warn.mockRestore();
-    resetFailureTracking();
-  });
+  silenceWarnUnderFakeTimers();
+  resetFailureTrackingAroundEach();
 
   it('keeps the turn the cancelled batch had scored, counts the other as wall-clock, and exits soft so upload and sync still run', async () => {
     // The evaluation-steps batch ends on its first poll; the verdict batch is
@@ -593,19 +591,8 @@ describe('a consolidated --batch run cut short by the wall clock', () => {
 const VERDICT_TEXT = JSON.stringify({ reasoning: 'ok', score: VERDICT_SCORE });
 
 describe('a per-criterion --batch run cut short by the wall clock', () => {
-  let warn: MockInstance<typeof console.warn>;
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    resetFailureTracking();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    warn.mockRestore();
-    resetFailureTracking();
-  });
+  silenceWarnUnderFakeTimers();
+  resetFailureTrackingAroundEach();
 
   it('keeps each turn\'s scored criteria, counts the rest as wall-clock, and resolves rather than throwing', async () => {
     // Each criterion is two calls: evaluation steps, then a schema-bound score.

@@ -8,14 +8,13 @@
  * The fixture server reads as obtool-api does, both bounds rounded to whole UTC
  * days, which is what the sync's in-memory `between` reproduces.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
-import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { metricDetailKey } from '../../src/api/aggregates/metric-detail.js';
 import { metricsRoutes } from '../../src/api/routes/metrics.js';
 import { DEFAULT_BUCKET_COUNT, DEFAULT_TOP_N } from '../../src/lib/constants.js';
 import { evaluation, FIXTURE_METRIC } from './support/evaluations.js';
-import { serveParityFixture } from './support/parity-fixture.js';
+import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
 
@@ -32,25 +31,11 @@ const fixture = serveParityFixture({ evaluations });
 
 type DetailValue = { sampleCount: number; trend?: { previousValue: number }; dynamics?: { velocity: number } };
 
-function kvValue<T = unknown>(result: OrgComputation, key: string): T | undefined {
-  const entry = result.allEntries.find(e => e.key === key);
-  return entry ? JSON.parse(entry.value) as T : undefined;
-}
-
 describe('metric detail parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
-  let synced: OrgComputation;
-
-  beforeEach(async () => {
-    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const synced = syncEachTest(fixture, NOW);
 
   it.each(['24h', '7d', '30d'] as const)('writes for %s the value the dev route answers', async (period) => {
-    const fromKv = kvValue(synced, metricDetailKey(FIXTURE_METRIC, period));
+    const fromKv = kvValue(synced(), metricDetailKey(FIXTURE_METRIC, period));
 
     const res = await metricsRoutes.request(
       `/metrics/${FIXTURE_METRIC}?period=${period}&topN=${DEFAULT_TOP_N}&bucketCount=${DEFAULT_BUCKET_COUNT}`,
@@ -62,8 +47,8 @@ describe('metric detail parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   });
 
   it('baselines each period against the one before it, with dynamics', () => {
-    const week = kvValue<DetailValue>(synced, metricDetailKey(FIXTURE_METRIC, '7d'));
-    const month = kvValue<DetailValue>(synced, metricDetailKey(FIXTURE_METRIC, '30d'));
+    const week = kvValue<DetailValue>(synced(), metricDetailKey(FIXTURE_METRIC, '7d'));
+    const month = kvValue<DetailValue>(synced(), metricDetailKey(FIXTURE_METRIC, '30d'));
 
     expect(week?.sampleCount).toBe(2);
     expect(week?.trend?.previousValue).toBe(0.5);
@@ -73,6 +58,6 @@ describe('metric detail parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   });
 
   it('no longer writes the bare metric:<name> key the Worker served for every period', () => {
-    expect(synced.allEntries.map(e => e.key)).not.toContain(`metric:${FIXTURE_METRIC}`);
+    expect(synced().allEntries.map(e => e.key)).not.toContain(`metric:${FIXTURE_METRIC}`);
   });
 });

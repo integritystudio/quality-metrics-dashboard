@@ -4,18 +4,17 @@
  * summary list of its own there, which the page rejected. One fixture through
  * both paths must now give the same value.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
-import { computeOrgEntries, type OrgComputation } from '../sync-to-kv.js';
 import { agentStatsKey, type AgentStatsResponse } from '../../src/api/aggregates/agent-stats.js';
 import { HOOK_NAME } from '../../src/api/api-constants.js';
 import { agentRoutes } from '../../src/api/routes/agents.js';
 import { spanToWire, type TraceWireRow } from '../../src/__tests__/support/fixture-server.js';
 import { evaluation, isoToNs } from './support/evaluations.js';
-import { serveParityFixture } from './support/parity-fixture.js';
+import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-08T01:08:00.000Z');
 
@@ -63,11 +62,6 @@ const evaluations: EvaluationResult[] = [
 
 const fixture = serveParityFixture({ evaluations, spans });
 
-function kvValue(result: OrgComputation, key: string): AgentStatsResponse | undefined {
-  const entry = result.allEntries.find(e => e.key === key);
-  return entry ? JSON.parse(entry.value) as AgentStatsResponse : undefined;
-}
-
 async function routeValue(period: string): Promise<AgentStatsResponse> {
   const res = await agentRoutes.request(`/agents?period=${period}`);
   expect(res.status).toBe(200);
@@ -75,19 +69,10 @@ async function routeValue(period: string): Promise<AgentStatsResponse> {
 }
 
 describe('agents page parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
-  let synced: OrgComputation;
-
-  beforeEach(async () => {
-    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), NOW, false);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  const synced = syncEachTest(fixture, NOW);
 
   it.each(['24h', '7d', '30d'] as const)('writes for %s the value the dev route answers', async (period) => {
-    const fromKv = kvValue(synced, agentStatsKey(period));
+    const fromKv = kvValue<AgentStatsResponse>(synced(), agentStatsKey(period));
 
     expect(fromKv).toEqual(await routeValue(period));
   });
@@ -104,6 +89,6 @@ describe('agents page parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   });
 
   it('no longer writes the bare meta:agents list the page could not read', () => {
-    expect(synced.allEntries.map(e => e.key)).not.toContain('meta:agents');
+    expect(synced().allEntries.map(e => e.key)).not.toContain('meta:agents');
   });
 });

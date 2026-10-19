@@ -11,6 +11,9 @@ import type { EvaluationResult } from '../../../src/backends/index.js';
 import { evaluation } from './support/evaluations.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import {
+  ALERT_EVALUATION, KEY_ERAS, MCP_POST_TOOL, SESSION_START, TOKEN_METRICS, withBothSpellings, type Attributes,
+} from '../../src/__tests__/support/integritystudio-key-rename.js';
 
 function detailOf(spans: SessionSpan[], evaluations: EvaluationResult[], evaluationsTruncated?: boolean) {
   return computeSessionDetail(
@@ -116,21 +119,6 @@ describe('computeSessionDetail after the agent hook rename', () => {
 // key and falls back to the old one. Every case writes one session under one
 // spelling and expects the same detail. Hook names are copied from real spans.
 describe('computeSessionDetail across the integritystudio.* key rename', () => {
-  const VENDOR_PREFIX = 'integritystudio.';
-  const DECOY_OFFSET = 1000;
-  const SESSION_START = { 'project.name': 'env-settings', 'context.message_count': 4, 'context.estimated_tokens': 9000, 'tasks.active': 2 };
-  const TOKEN_METRICS = { 'tokens.messages': 12, 'tokens.input': 100, 'tokens.output': 50, 'tokens.cache_read': 7, 'tokens.cache_creation': 3, 'tokens.model': 'claude-opus-5' };
-  const MCP_POST_TOOL = { 'mcp.tool': 'get_me' };
-  const ALERT_EVALUATION = { 'alerts.triggered_count': 3 };
-
-  type Attributes = Record<string, unknown>;
-  const withPrefix = (attrs: Attributes): Attributes =>
-    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [`${VENDOR_PREFIX}${key}`, value]));
-  const unprefixed = (attrs: Attributes): Attributes => attrs;
-  /** The unprefixed keys holding values no reader should surface when the prefixed key is present. */
-  const staleUnprefixed = (attrs: Attributes): Attributes =>
-    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [key, typeof value === 'number' ? value + DECOY_OFFSET : `stale-${String(value)}`]));
-
   function hookSpan(hookName: string, attributes: Attributes) {
     return { name: `hook:${hookName}`, traceId: 't1', attributes: { [HOOK_ATTRIBUTES.NAME]: hookName, ...attributes } };
   }
@@ -159,17 +147,12 @@ describe('computeSessionDetail across the integritystudio.* key rename', () => {
     expect(detail.alertSummary.totalFired).toBe(3);
   }
 
-  it.each([
-    ['post-rename integritystudio.*', withPrefix],
-    ['pre-rename unprefixed', unprefixed],
-  ])('reads %s keys', (_era, write) => {
+  it.each(KEY_ERAS)('reads %s keys', (_era, write) => {
     expectSessionRead(detailOf(sessionSpans(write), []));
   });
 
   it('prefers the integritystudio.* key when a span carries both', () => {
-    const both = (attrs: Attributes): Attributes => ({ ...staleUnprefixed(attrs), ...withPrefix(attrs) });
-
-    expectSessionRead(detailOf(sessionSpans(both), []));
+    expectSessionRead(detailOf(sessionSpans(withBothSpellings), []));
   });
 });
 

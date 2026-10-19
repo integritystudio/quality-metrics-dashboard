@@ -53,6 +53,36 @@ function computeSparklines(
   return sparklines;
 }
 
+type DashboardParts = {
+  dashboard: ReturnType<typeof computeDashboardSummary>;
+  cqi: CompositeQualityIndex | undefined;
+  sparklines: DashboardSparklines;
+};
+
+type DashboardRoleView = ReturnType<typeof computeRoleView> & {
+  sparklines: DashboardSparklines;
+  cqi?: CompositeQualityIndex | undefined;
+};
+
+function computeDashboardParts(
+  evaluationsByMetric: Map<string, EvaluationResult[]>,
+  dates: { start: string; end: string },
+): DashboardParts {
+  const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
+  const startMs = new Date(dates.start).getTime();
+  const endMs = new Date(dates.end).getTime();
+  return {
+    dashboard,
+    cqi: computeCQI(dashboard.metrics),
+    sparklines: computeSparklines(evaluationsByMetric, startMs, endMs, SPARKLINE_BUCKET_COUNT),
+  };
+}
+
+function projectRoleView({ dashboard, cqi, sparklines }: DashboardParts, role: Role): DashboardRoleView {
+  const view = computeRoleView(dashboard, role);
+  return role === 'executive' ? { ...view, cqi, sparklines } : { ...view, sparklines };
+}
+
 /**
  * Full `dashboard:period` payload: summary + CQI + sparklines.
  * One fixture through both the route (no `role` param) and the sync yields
@@ -62,11 +92,7 @@ export function computeDashboardFull(
   evaluationsByMetric: Map<string, EvaluationResult[]>,
   dates: { start: string; end: string },
 ): DashboardFullResult {
-  const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
-  const cqi = computeCQI(dashboard.metrics);
-  const startMs = new Date(dates.start).getTime();
-  const endMs = new Date(dates.end).getTime();
-  const sparklines = computeSparklines(evaluationsByMetric, startMs, endMs, SPARKLINE_BUCKET_COUNT);
+  const { dashboard, cqi, sparklines } = computeDashboardParts(evaluationsByMetric, dates);
   return { ...dashboard, cqi, sparklines };
 }
 
@@ -78,14 +104,8 @@ export function computeDashboardRoleView(
   evaluationsByMetric: Map<string, EvaluationResult[]>,
   dates: { start: string; end: string },
   role: Role,
-): ReturnType<typeof computeRoleView> & { sparklines: DashboardSparklines; cqi?: CompositeQualityIndex | undefined } {
-  const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
-  const cqi = computeCQI(dashboard.metrics);
-  const startMs = new Date(dates.start).getTime();
-  const endMs = new Date(dates.end).getTime();
-  const sparklines = computeSparklines(evaluationsByMetric, startMs, endMs, SPARKLINE_BUCKET_COUNT);
-  const view = computeRoleView(dashboard, role);
-  return role === 'executive' ? { ...view, cqi, sparklines } : { ...view, sparklines };
+): DashboardRoleView {
+  return projectRoleView(computeDashboardParts(evaluationsByMetric, dates), role);
 }
 
 /**
@@ -97,18 +117,14 @@ export function computeAllDashboardEntries(
   dates: { start: string; end: string },
 ): {
   full: DashboardFullResult;
-  roleViews: Record<string, ReturnType<typeof computeDashboardRoleView>>;
+  roleViews: Record<string, DashboardRoleView>;
 } {
-  const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
-  const cqi = computeCQI(dashboard.metrics);
-  const startMs = new Date(dates.start).getTime();
-  const endMs = new Date(dates.end).getTime();
-  const sparklines = computeSparklines(evaluationsByMetric, startMs, endMs, SPARKLINE_BUCKET_COUNT);
+  const parts = computeDashboardParts(evaluationsByMetric, dates);
+  const { dashboard, cqi, sparklines } = parts;
   const full: DashboardFullResult = { ...dashboard, cqi, sparklines };
-  const roleViews: Record<string, ReturnType<typeof computeDashboardRoleView>> = {};
+  const roleViews: Record<string, DashboardRoleView> = {};
   for (const role of ROLES) {
-    const view = computeRoleView(dashboard, role);
-    roleViews[role] = role === 'executive' ? { ...view, cqi, sparklines } : { ...view, sparklines };
+    roleViews[role] = projectRoleView(parts, role);
   }
   return { full, roleViews };
 }

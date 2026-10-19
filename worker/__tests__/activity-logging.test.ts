@@ -5,14 +5,13 @@
  * and that activity logging failures do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { serveSignedSession, type FetchMock } from './support/signed-session.js';
+import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-
-type FetchMock = Mock<FetchLike>;
 
 const DASHBOARD_KEY = 'dashboard:7d';
 
@@ -21,31 +20,6 @@ const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
 const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
 
-const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
-};
-
-function makeEnv(kv = new MemoryKv()) {
-  return {
-    DASHBOARD: kv,
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-  };
-}
-
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
-}
-
-let tenant: TestIssuer;
-let token: string;
-
-function authHeaders() {
-  return { Authorization: `Bearer ${token}` };
-}
 
 function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boolean }) {
   const callCount = new Map<string, number>();
@@ -75,22 +49,7 @@ function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boo
   });
 }
 
-let fetchMock: FetchMock;
-
-beforeAll(async () => {
-  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
-  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const { fetchMock, authHeaders } = serveSignedSession(MOCK_AUTH0_ID);
 
 function findActivityCall(calls: unknown[][]) {
   return calls.find(([url]) => typeof url === 'string' && url.includes('/rest/v1/user_activity'));
@@ -107,7 +66,7 @@ describe('logActivity: view routes', () => {
   it.each(VIEW_ROUTES)('POSTs activity_type=$activityType on $path', async ({ activityType, path, kvKey, kvValue }) => {
     mockAuthSequence(fetchMock);
 
-    const res = await app.request(path, { headers: authHeaders() }, makeEnv(new MemoryKv({ [kvKey]: kvValue })), makeCtx());
+    const res = await app.request(path, { headers: authHeaders() }, makeWorkerEnv({ DASHBOARD: new MemoryKv({ [kvKey]: kvValue }) }), makeCtx());
     expect(res.status).toBe(HttpStatus.Ok);
 
     // Wait for microtasks to allow async activity logging to be queued
@@ -125,7 +84,7 @@ describe('logActivity: view routes', () => {
   it('does not POST to user_activity when KV returns no data (404)', async () => {
     mockAuthSequence(fetchMock);
 
-    const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv(), makeCtx());
+    const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeWorkerEnv(), makeCtx());
     expect(res.status).toBe(HttpStatus.NotFound);
 
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -142,7 +101,7 @@ describe('logActivity: failure resilience', () => {
     const res = await app.request(
       '/api/dashboard',
       { headers: authHeaders() },
-      makeEnv(new MemoryKv({ [DASHBOARD_KEY]: { metrics: [] } })),
+      makeWorkerEnv({ DASHBOARD: new MemoryKv({ [DASHBOARD_KEY]: { metrics: [] } }) }),
       makeCtx(),
     );
     expect(res.status).toBe(HttpStatus.Ok);
@@ -159,7 +118,7 @@ describe('POST /api/activity: request body', () => {
     const res = await app.request(
       '/api/activity',
       { method: 'POST', headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json }, body },
-      makeEnv(),
+      makeWorkerEnv(),
       makeCtx(),
     );
 

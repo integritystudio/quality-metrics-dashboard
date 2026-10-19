@@ -6,14 +6,12 @@
  * do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
-import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { serveSignedSession } from './support/signed-session.js';
+import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-
-type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
@@ -24,21 +22,6 @@ const ADMIN_PERMISSIONS = [
 ];
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
-
-const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
-};
-
-function makeEnv() {
-  return {
-    DASHBOARD: new MemoryKv(),
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-  };
-}
 
 function withAdminAuth(
   routeHandler: (url: string, init?: RequestInit) => Promise<Response>,
@@ -58,29 +41,7 @@ function withAdminAuth(
   };
 }
 
-let fetchMock: FetchMock;
-let tenant: TestIssuer;
-let token: string;
-let mockExecutionCtx: { waitUntil: Mock<ExecutionContext['waitUntil']>; passThroughOnException: Mock<ExecutionContext['passThroughOnException']> };
-
-beforeAll(async () => {
-  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
-  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
-  mockExecutionCtx = {
-    waitUntil: vi.fn((p: Promise<unknown>) => { void p; }),
-    passThroughOnException: vi.fn(),
-  };
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const { fetchMock, authHeaders } = serveSignedSession(MOCK_AUTH0_ID);
 
 function findAuditLogCall(calls: unknown[][]) {
   return calls.find(([url]) =>
@@ -116,8 +77,8 @@ const ROLE_MUTATIONS: RoleMutation[] = [
 ];
 
 function requestMutation({ path, init }: RoleMutation) {
-  const headers = { ...init.headers as Record<string, string>, Authorization: `Bearer ${token}` };
-  return app.request(path, { ...init, headers }, makeEnv(), mockExecutionCtx as unknown as ExecutionContext);
+  const headers = { ...init.headers as Record<string, string>, ...authHeaders() };
+  return app.request(path, { ...init, headers }, makeWorkerEnv(), makeCtx());
 }
 
 describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {

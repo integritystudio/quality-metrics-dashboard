@@ -14,7 +14,8 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import app from '../index.js';
 import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { TEST_AUTH0_DOMAIN, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { NO_STAFF_USER_IDS, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const MOCK_AUTH0_ID = 'auth0|no-org-user';
@@ -86,25 +87,9 @@ function syncedKv(): MemoryKv {
     [`org:${MEMBER_ORG_ID}:${BARE_DASHBOARD_KEY}`]: MEMBER_PAYLOAD,
   });
 }
-const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })) };
 
 function makeEnv(overrides?: Partial<Record<string, unknown>>) {
-  return {
-    DASHBOARD: syncedKv(),
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-    ORG_SCOPING_ENABLED: 'true',
-    HOME_ORG_ID,
-    STAFF_USER_IDS: '[]',
-    ...overrides,
-  };
-}
-
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+  return makeWorkerEnv({ DASHBOARD: syncedKv(), ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS, ...overrides });
 }
 
 function json(body: unknown): Promise<Response> {
