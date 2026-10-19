@@ -535,11 +535,14 @@ in a comment on the type itself.
       holds ~1.65 GB in memory at 30 days, and the evaluation read spans `METRIC_DETAIL_WINDOWS` × the
       window. The parity tests' `it.each` period lists do not cover `90d`.
     - **So the header hides 90d until it has data.** `DATA_GATED_PERIOD` (`constants.ts`) names it;
-      `Layout` asks `usePeriodHasData` — `useDashboard` for that period, which maps the worker's
-      `ERR_NO_DATA` 404 to a `no_data` summary — and shows the button, and registers shortcut `4`, only
-      once a real summary comes back, or while 90d is the selected period. `Layout.test.tsx` covers all
-      three states against the real query stack. The cost is one `/api/dashboard?period=90d` poll per
-      `POLL_INTERVAL_MS` on every page, a KV read that 404s until the data exists. Lifting the gate means
+      `Layout` asks `useOfferPeriod` — `useDashboard` for that period, which maps the worker's
+      `ERR_NO_DATA` 404 to a `no_data` summary — and shows the button, and registers shortcut `4`, once a
+      real summary comes back, when the check **fails** (so an outage never hides a period that has data),
+      or while 90d is the selected period; it stays hidden only while the first check loads and on a
+      no-data answer. `Layout.test.tsx` covers those five states against the real query stack. The gate
+      re-checks every `DATA_GATE_POLL_INTERVAL_MS` (an hour, the KV refresh cadence) rather than the
+      page's 30 s; react-query polls at the shortest interval among a key's observers, so it drops to
+      30 s only while the 90d page itself is open. Lifting the gate means
       deleting `DATA_GATED_PERIOD` once a scheduled sync writes 90d; e2e asserts only the three
       always-offered periods, since the fourth depends on the environment's data.
     - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
