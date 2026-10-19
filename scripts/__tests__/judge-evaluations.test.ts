@@ -66,7 +66,7 @@ import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
-import { SECONDS } from '../../../src/lib/core/units.js';
+import { MINUTES_PER_HOUR } from '../../src/lib/constants.js';
 import { makeTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -559,8 +559,8 @@ describe('seedEvaluations', () => {
 
     const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
     const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
-    const COMPLEMENT_DIGITS = 3;
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, COMPLEMENT_DIGITS);
+    const CLOSE_TO_DIGITS = 3;
+    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, CLOSE_TO_DIGITS);
   });
 
   // OBP16: this used to assert the inverse of the correct behaviour — that a
@@ -640,7 +640,7 @@ describe('seedEvaluations', () => {
     const turns = Array.from({ length: 200 }, (_, i) =>
       makeTurn({
         sessionId: `canary-test-${i}`,
-        timestamp: `2026-02-09T01:${String(i % SECONDS.MINUTE).padStart(2, '0')}:${String(Math.floor(i / SECONDS.MINUTE)).padStart(2, '0')}.000Z`,
+        timestamp: `2026-02-09T01:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:${String(Math.floor(i / MINUTES_PER_HOUR)).padStart(2, '0')}.000Z`,
         toolResults: ['ctx'],
       })
     );
@@ -989,7 +989,8 @@ describe('fitContextForJudge', () => {
   });
 
   it('keeps at most the tool-context item limit', () => {
-    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS * 2 }, (_, i) => `result ${i}`);
+    const OVERFLOW_ITEMS = 5;
+    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + OVERFLOW_ITEMS }, (_, i) => `result ${i}`);
 
     expect(fitContextForJudge(many)).toHaveLength(MAX_TOOL_CONTEXT_ITEMS);
   });
@@ -1000,7 +1001,8 @@ describe('evaluateTurn with an oversized tool result', () => {
     resetFailureTracking();
     const llm = createMockLLM();
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH * 2)] });
+    const OVERFLOW_CHARS = 500;
+    const turn = makeTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH + OVERFLOW_CHARS)] });
 
     const evals = await evaluateTurn(judge, turn, new Set());
 

@@ -175,6 +175,7 @@ describe('budget allocation', () => {
   }
 
   it('reserves MIN_TRACE_BUDGET even when high-priority entries exceed budget', () => {
+    const EXPECTED_MIN_TRACE_BUDGET = 100;
     const fixture = { highPriorityCount: 400, tracePoolSize: 200, highWritten: 349, deferred: 351 };
     const highPriority = makeHighPriorityEntries(fixture.highPriorityCount);
     const { entries: traceEntries, evalsByTrace } = makeTracePool(fixture.tracePoolSize);
@@ -186,6 +187,7 @@ describe('budget allocation', () => {
 
     // budget=449, highPriorityBudget = min(400, 449-100) = 349, traceBudget = 100
     expect(highCount).toBe(fixture.highWritten);
+    expect(MIN_TRACE_BUDGET).toBe(EXPECTED_MIN_TRACE_BUDGET);
     expect(traceCount).toBe(MIN_TRACE_BUDGET);
     // changed=400+400=800, toWrite=449, deferred=351
     expect(deferred).toBe(fixture.deferred);

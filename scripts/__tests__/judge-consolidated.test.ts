@@ -44,7 +44,7 @@ const ASSISTANT_TEXT = 'I found the null check missing in auth.ts and fixed it.'
 const TOOL_RESULT = 'export function login() { /* … */ }';
 const TURN_KEY = '2026-02-09T01:11:15';
 const FAKE_STEPS = '1. Read the input\n2. Compare with the output\n3. Check every claim';
-const DEFAULT_SCORE = 4;
+const DEFAULT_RAW_SCORE = 4;
 const DEFAULT_SCORE_NORMALIZED = 0.75;
 const LOW_SCORE = 2;
 const LOW_SCORE_NORMALIZED = 0.25;
@@ -91,7 +91,7 @@ function createFakeProvider(
       const required = (options.schema as { required: string[] }).required;
       const body = Object.fromEntries(required.map(name => [
         name,
-        { [REASONING_KEY]: `${name} reasoning`, [SCORE_KEY]: scores[name] ?? DEFAULT_SCORE },
+        { [REASONING_KEY]: `${name} reasoning`, [SCORE_KEY]: scores[name] ?? DEFAULT_RAW_SCORE },
       ]));
       return Promise.resolve({ text: JSON.stringify(body) });
     },
@@ -274,7 +274,7 @@ describe('parseConsolidatedResponse', () => {
 describe('toNormalizedScore', () => {
   it('maps the 1-5 scale onto 0-1 exactly as G-Eval does', () => {
     expect(toNormalizedScore(G_EVAL_MIN_SCORE)).toBe(0);
-    expect(toNormalizedScore(DEFAULT_SCORE)).toBe(DEFAULT_SCORE_NORMALIZED);
+    expect(toNormalizedScore(DEFAULT_RAW_SCORE)).toBe(DEFAULT_SCORE_NORMALIZED);
     expect(toNormalizedScore(G_EVAL_MAX_SCORE)).toBe(1);
   });
 
@@ -320,7 +320,7 @@ describe('evaluateTurnConsolidated', () => {
   });
 
   it('normalizes scores like G-Eval and derives hallucination as 1 - faithfulness', async () => {
-    const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: DEFAULT_SCORE, [FAITHFULNESS_EVAL_NAME]: LOW_SCORE });
+    const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: DEFAULT_RAW_SCORE, [FAITHFULNESS_EVAL_NAME]: LOW_SCORE });
     const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set());
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 

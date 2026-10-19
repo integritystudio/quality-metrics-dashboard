@@ -65,7 +65,8 @@ describe('scoreTask', () => {
   });
 
   it('returns 0.5 for in_progress tasks', () => {
-    expect(scoreTask(new Set(['pending', 'in_progress']))).toBe(STATUS_SCORES.in_progress);
+    const IN_PROGRESS_SCORE = 0.5;
+    expect(scoreTask(new Set(['pending', 'in_progress']))).toBe(IN_PROGRESS_SCORE);
   });
 
   it('returns 0.0 for pending-only tasks', () => {

@@ -102,8 +102,8 @@ describe('estimateRunSpend', () => {
     expect(noTools.referenceCalls).toBe(0);
     expect(noTools.referenceUsd).toBe(0);
 
-    const TOOL_RESULT_CHARS = 400;
-    const withTools = estimateRunSpend([makeSizedTurn(), makeSizedTurn({ toolResults: ['r'.repeat(TOOL_RESULT_CHARS)] })], TEST_PRICING, TEST_PRICING);
+    const SHORT_TOOL_RESULT_CHARS = 400;
+    const withTools = estimateRunSpend([makeSizedTurn(), makeSizedTurn({ toolResults: ['r'.repeat(SHORT_TOOL_RESULT_CHARS)] })], TEST_PRICING, TEST_PRICING);
     expect(withTools.referenceCalls).toBe(1);
     expect(withTools.referenceUsd).toBeGreaterThan(0);
     expect(withTools.totalUsd).toBeCloseTo(withTools.haikuUsd + withTools.referenceUsd);

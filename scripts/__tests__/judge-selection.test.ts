@@ -29,6 +29,12 @@ function judgedKeys(...turns: Turn[]): Set<string> {
 
 const opts = { limit: Number.POSITIVE_INFINITY, deliverableOnly: true, env: ENV };
 
+describe('turnKeyOf', () => {
+  it('keys a turn by its ISO timestamp truncated to the second', () => {
+    expect(turnKeyOf('2026-02-09T01:11:15.525Z')).toBe('2026-02-09T01:11:15');
+  });
+});
+
 describe('selectTurns', () => {
   it('applies the limit after skipping judged turns, so a run never re-takes them', () => {
     const [a, b, c, d] = ['1', '2', '3', '4'].map((id) => turn(id)) as [Turn, Turn, Turn, Turn];

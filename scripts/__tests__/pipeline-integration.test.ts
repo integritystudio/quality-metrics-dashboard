@@ -37,7 +37,7 @@ import { defined } from '../../src/__tests__/support/defined.js';
 const FIXTURE_DAY = '2026-02-25';
 const FIXTURE_YEAR = new Date(FIXTURE_DAY).getUTCFullYear();
 const SPAN_START_S = Date.parse(`${FIXTURE_DAY}T00:00:00Z`) / TIME_MS.SECOND;
-const COMPLEMENT_PRECISION_DIGITS = 3;
+const CLOSE_TO_DIGITS = 3;
 
 // Helpers
 
@@ -183,7 +183,7 @@ describe('pipeline contract: judge seed output', () => {
     const { evals } = seedEvaluations([makeTurn()], new Set());
     const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
     const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, COMPLEMENT_PRECISION_DIGITS);
+    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, CLOSE_TO_DIGITS);
   });
 
   it('canary evaluations carry cohort "canary", others "seed"', () => {
