@@ -4,6 +4,9 @@ import { formatScore, percentOf } from '../lib/quality-utils.js';
 import type { TriggeredAlert } from '../types.js';
 import { PERCENT_MAX } from '../lib/constants.js';
 
+/** Bar scale headroom above the larger of actual and threshold. */
+const THRESHOLD_BAR_HEADROOM = 1.2;
+
 type AlertWithMeta = TriggeredAlert & { metricName?: string };
 
 function SimpleAlertItem({ alert }: { alert: AlertWithMeta }) {
@@ -27,7 +30,7 @@ function ThresholdBar({ actual, threshold, direction }: {
   threshold: number;
   direction: 'above' | 'below';
 }) {
-  const max = Math.max(actual, threshold) * 1.2 || 1;
+  const max = Math.max(actual, threshold) * THRESHOLD_BAR_HEADROOM || 1;
   const actualPct = Math.max(0, Math.min(percentOf(actual, max), PERCENT_MAX));
   const thresholdPct = Math.max(0, Math.min(percentOf(threshold, max), PERCENT_MAX));
   const isViolating = direction === 'below' ? actual < threshold : actual > threshold;

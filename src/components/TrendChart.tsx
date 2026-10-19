@@ -28,8 +28,10 @@ type TrendChartProps = {
   metricName: string;
 }
 
+const EXPONENTIAL_FORMAT_BELOW = 0.001;
+
 function formatValue(v: number): string {
-  return Math.abs(v) < 0.001 ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
+  return Math.abs(v) < EXPONENTIAL_FORMAT_BELOW ? v.toExponential(2) : v.toFixed(SCORE_FORMAT_PRECISION);
 }
 
 function formatBreachTime(iso: string): string {

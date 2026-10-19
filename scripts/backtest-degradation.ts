@@ -55,6 +55,8 @@ const RESULTS_TOP_CONFIGS = 10;
 const DEFAULT_OUTPUT_FILE = 'backtest-results.json';
 const DAYS_FLAG = '--days';
 const METRIC_FLAG = '--metric';
+/** Leading share of each expanding window taken as its baseline. */
+const BASELINE_FRACTION = 0.7;
 const OUTPUT_FLAG = '--output';
 
 const { days, metricFilter, outputFile } = exitOnCliArgError('[backtest]', () => {
@@ -162,8 +164,8 @@ export function buildTimeSeries(buckets: DailyBucket[]): TimeSeriesPoint[] {
     for (const score of bucket.scores) cumulativeScores.push(score);
     if (bucket.scores.length === 0) coverageGapCount++;
 
-    // Extend baseline incrementally: baseline covers first 70% of [0..i]
-    const newBaselineEnd = Math.max(1, Math.floor((i + 1) * 0.7));
+    // Extend baseline incrementally over the leading BASELINE_FRACTION of [0..i]
+    const newBaselineEnd = Math.max(1, Math.floor((i + 1) * BASELINE_FRACTION));
     while (baselineEnd < newBaselineEnd) {
       const bb = buckets[baselineEnd];
       if (bb) for (const score of bb.scores) baselineScores.push(score);
