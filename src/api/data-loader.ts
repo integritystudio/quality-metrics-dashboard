@@ -8,6 +8,7 @@ import { queryLogs } from './parent/query-logs.js';
 import { PERIOD_MS, lookbackRange } from '../lib/constants.js';
 import { isoToNs, toIsoWindowBound } from './api-constants.js';
 import { SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
+import { cloudReadKey, sharedCloudRead } from './cloud-reads.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
@@ -53,12 +54,27 @@ function getBackend(): CloudBackend {
   return backend;
 }
 
+type EvaluationRead = {
+  start: string;
+  end: string;
+  limit: number;
+  evaluationName?: string;
+  traceId?: string;
+  sessionId?: string;
+};
+
+/** Every evaluations read goes through the shared layer, keyed on the request it sends. */
+async function readEvaluations({ start, end, ...filters }: EvaluationRead): Promise<EvaluationResult[]> {
+  return sharedCloudRead(cloudReadKey('evaluations', { start, end, ...filters }), async () =>
+    getBackend().queryEvaluations({ startDate: isoToNs(start), endDate: isoToNs(end), ...filters }),
+  );
+}
+
 export async function loadEvaluationsByMetric(
   start: string,
   end: string
 ): Promise<Map<string, EvaluationResult[]>> {
-  const be = getBackend();
-  const evals = await be.queryEvaluations({ startDate: isoToNs(start), endDate: isoToNs(end), limit: LIMIT_EVALS_BULK });
+  const evals = await readEvaluations({ start, end, limit: LIMIT_EVALS_BULK });
   return group(evals, ev => ev.evaluationName);
 }
 
@@ -67,13 +83,7 @@ export async function loadEvaluationsForMetric(
   start: string,
   end: string
 ): Promise<EvaluationResult[]> {
-  const be = getBackend();
-  return be.queryEvaluations({
-    startDate: isoToNs(start),
-    endDate: isoToNs(end),
-    evaluationName: metricName,
-    limit: LIMIT_EVALS_METRIC,
-  });
+  return readEvaluations({ start, end, evaluationName: metricName, limit: LIMIT_EVALS_METRIC });
 }
 
 export async function loadEvaluationsByTraceId(
@@ -81,14 +91,8 @@ export async function loadEvaluationsByTraceId(
   startDate?: string,
   endDate?: string,
 ): Promise<EvaluationResult[]> {
-  const be = getBackend();
   const { start, end } = lookbackRange(DEFAULT_LOOKBACK_90D);
-  return be.queryEvaluations({
-    traceId,
-    startDate: isoToNs(startDate ?? start),
-    endDate: isoToNs(endDate ?? end),
-    limit: LIMIT_EVALS_PER_TRACE,
-  });
+  return readEvaluations({ traceId, start: startDate ?? start, end: endDate ?? end, limit: LIMIT_EVALS_PER_TRACE });
 }
 
 const TRACE_QUERY_CONCURRENCY = 10;
@@ -105,14 +109,13 @@ export async function loadEvaluationsByTraceIds(
 ): Promise<EvaluationResult[]> {
   const uniqueIds = [...new Set(traceIds)];
   if (uniqueIds.length === 0) return [];
-  const be = getBackend();
   const { start: defStart, end: defEnd } = lookbackRange(DEFAULT_LOOKBACK_90D);
   const start = startDate ?? defStart;
   const end = endDate ?? defEnd;
   const limiter = pLimit(TRACE_QUERY_CONCURRENCY);
   const settled = await Promise.allSettled(
     uniqueIds.map(async traceId =>
-      limiter(async () => be.queryEvaluations({ traceId, startDate: isoToNs(start), endDate: isoToNs(end), limit: LIMIT_EVALS_PER_TRACE }))
+      limiter(async () => readEvaluations({ traceId, start, end, limit: LIMIT_EVALS_PER_TRACE }))
     )
   );
   const all: EvaluationResult[] = [];
@@ -139,14 +142,27 @@ function traceQueryDates(startDate?: string, endDate?: string): { start: string;
   };
 }
 
+type TraceRead = Parameters<typeof queryTracesTool>[0];
+
+async function readTraces(query: TraceRead): Promise<LoadedSpan[]> {
+  const { attributeFilter, startDate, endDate, ...rest } = query;
+  const key = cloudReadKey('traces', {
+    start: startDate === undefined ? undefined : String(startDate),
+    end: endDate === undefined ? undefined : String(endDate),
+    ...rest,
+    attributeFilter: JSON.stringify(attributeFilter),
+  });
+  return sharedCloudRead(key, async () => (await queryTracesTool(query, { backend: getBackend() })).traces);
+}
+
 export async function loadTracesByTraceId(traceId: string, startDate?: string, endDate?: string): Promise<LoadedSpan[]> {
   const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
+  return readTraces({ traceId, startDate: start, endDate: end, limit: LIMIT_TRACES });
 }
 
 export async function loadTracesBySessionId(sessionId: string, startDate?: string, endDate?: string): Promise<LoadedSpan[]> {
   const { start, end } = traceQueryDates(startDate, endDate);
-  return (await queryTracesTool({ attributeFilter: { [SESSION_ATTRIBUTES.ID]: sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES }, { backend: getBackend() })).traces;
+  return readTraces({ attributeFilter: { [SESSION_ATTRIBUTES.ID]: sessionId }, startDate: start, endDate: end, limit: LIMIT_TRACES });
 }
 
 /**
@@ -160,7 +176,7 @@ export async function loadTracesByFilter(
   endDate: string,
   limit: number,
 ): Promise<LoadedSpan[]> {
-  return (await queryTracesTool({ attributeFilter, startDate, endDate, limit }, { backend: getBackend() })).traces;
+  return readTraces({ attributeFilter, startDate, endDate, limit });
 }
 
 async function queryLogsWithDefaultRange(
@@ -173,8 +189,8 @@ async function queryLogsWithDefaultRange(
   // toIsoWindowBound expands 'YYYY-MM-DD' → 'YYYY-MM-DDT00:00:00.000Z'; ISO strings pass through.
   const start = toIsoWindowBound(startDate ?? defStart, 'start');
   const end = toIsoWindowBound(endDate ?? defEnd, 'end');
-  const result = await queryLogs({ ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS }, { backend: getBackend() });
-  return result.logs;
+  const query = { ...filter, startDate: start, endDate: end, limit: LIMIT_LOGS };
+  return sharedCloudRead(cloudReadKey('logs', query), async () => (await queryLogs(query, { backend: getBackend() })).logs);
 }
 
 export async function loadLogsByTraceId(
@@ -220,12 +236,11 @@ export async function loadEvaluationsBySessionId(
   startDate?: string,
   endDate?: string,
 ): Promise<SessionEvaluations> {
-  const be = getBackend();
   const { start, end } = lookbackRange(DEFAULT_LOOKBACK_30D);
-  const rows = await be.queryEvaluations({
+  const rows = await readEvaluations({
     sessionId,
-    startDate: isoToNs(startDate ?? start),
-    endDate: isoToNs(endDate ?? end),
+    start: startDate ?? start,
+    end: endDate ?? end,
     limit: LIMIT_EVALS_SESSION + TRUNCATION_PROBE_ROWS,
   });
   return {
@@ -235,13 +250,8 @@ export async function loadEvaluationsBySessionId(
 }
 
 export async function checkHealth(): Promise<{ status: string; hasData: boolean }> {
-  const be = getBackend();
-  const health = await be.healthCheck();
+  const health = await getBackend().healthCheck();
   const { start, end } = lookbackRange(DEFAULT_LOOKBACK_7D);
-  const evals = await be.queryEvaluations({
-    startDate: isoToNs(start),
-    endDate: isoToNs(end),
-    limit: LIMIT_HEALTH_PROBE,
-  });
+  const evals = await readEvaluations({ start, end, limit: LIMIT_HEALTH_PROBE });
   return { status: health.status, hasData: evals.length > 0 };
 }
