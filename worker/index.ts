@@ -1,21 +1,42 @@
-import type { Context, HonoRequest, Next } from 'hono';
+import type { Next } from 'hono';
 import { cors } from 'hono/cors';
-import { createFactory } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import { z } from 'zod';
-import { PostgrestClient } from '@supabase/postgrest-js';
+import type { PostgrestClient } from '@supabase/postgrest-js';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
-import type { UserActivityEvent } from '../src/types/activity.js';
-import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema, ApiKeySchema, DashboardPermissionSchema } from '../src/lib/validation/auth-schemas.js';
+import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, DashboardPermissionSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSION, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
 import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
-import { SUPABASE_API_KEY_HEADER, SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
-import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
+import { CONTENT_TYPE_HEADER, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
-import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PERIOD_KEYS, PeriodEnum, type Period } from '../src/lib/periods.js';
+import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PeriodEnum, type Period } from '../src/lib/periods.js';
 import { ROLES, RoleSchema } from '../src/lib/roles.js';
+import { factory, isOrgScopingEnabled, readJsonBody, requirePermission, safeArray, type AppContext, type Bindings } from './app-context.js';
+import { db, logActivity } from './supabase.js';
+import { registerAdminRoutes } from './admin-routes.js';
+import {
+  ERR_AUTH_UNAVAILABLE,
+  ERR_CALIBRATION_MALFORMED,
+  ERR_FAILED_LOAD_USER_ROLES,
+  ERR_FORBIDDEN,
+  ERR_INTERNAL,
+  ERR_INVALID_AGENT_ID,
+  ERR_INVALID_METRIC_NAME,
+  ERR_INVALID_PAGINATION,
+  ERR_INVALID_PERIOD,
+  ERR_INVALID_QUERY,
+  ERR_INVALID_REQUEST_BODY,
+  ERR_INVALID_ROLE,
+  ERR_INVALID_SESSION_ID,
+  ERR_INVALID_TRACE_ID,
+  ERR_NO_ORG,
+  ERR_ROUTING_TELEMETRY_MALFORMED,
+  ERR_UNAUTHORIZED,
+  NO_RESPONSE_STATUS,
+  orList,
+} from './error-messages.js';
 
 /**
  * Module-level JWKS cache keyed by AUTH0_DOMAIN.
@@ -69,36 +90,15 @@ function isTokenRejection(err: unknown): boolean {
     joseErrors.JOSENotSupported,
   ].some((cls) => err instanceof cls);
 }
-const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
-
-/** Stands in for the status in a log line when `fetch` produced no response at all. */
-const NO_RESPONSE_STATUS = 'network error';
-
-/** Joins allowed values as "a, b, or c" for the 400 messages, so they follow the shared lists. */
-const OR_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
-const ERR_INVALID_PERIOD = `Invalid period. Must be ${OR_LIST.format(PERIOD_KEYS)}.`;
-
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
-const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${OR_LIST.format(VALID_SORT_BY)}.`;
+const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${orList(VALID_SORT_BY)}.`;
 
 const PaginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
-const ERR_INVALID_PAGINATION = 'Invalid pagination params. limit must be 1–200, offset must be >= 0.';
-
-const ERR_UNAUTHORIZED = 'Unauthorized';
-const ERR_FORBIDDEN = 'Forbidden';
-const ERR_INVALID_REQUEST_BODY = 'Invalid request body';
-const ERR_INVALID_METRIC_NAME = 'Invalid metric name';
-const ERR_INVALID_TRACE_ID = 'Invalid traceId';
-const ERR_INVALID_SESSION_ID = 'Invalid sessionId';
-const ERR_INVALID_AGENT_ID = 'Invalid agentId';
-
-const ERR_INVALID_ROLE = `Invalid role. Must be ${OR_LIST.format(ROLES)}.`;
-
 const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
-const ERR_INVALID_INPUT_KEY = `Invalid inputKey. Must be ${OR_LIST.format(VALID_INPUT_KEYS)}.`;
+const ERR_INVALID_INPUT_KEY = `Invalid inputKey. Must be ${orList(VALID_INPUT_KEYS)}.`;
 
 const CORRELATIONS_DEFAULT_PERIOD: Period = '30d';
 const periodField = (fallback: Period) => PeriodEnum.default(fallback);
@@ -128,35 +128,11 @@ const QUERY_FIELD_ERRORS: Record<string, string> = {
   sortBy: ERR_INVALID_SORT_BY,
   inputKey: ERR_INVALID_INPUT_KEY,
 };
-const ERR_INVALID_USER_ID = 'Invalid userId';
-const ERR_INVALID_ROLE_ID = 'Invalid roleId';
-const ERR_INVALID_QUERY = 'Invalid query parameters';
-const ERR_INTERNAL = 'Internal server error';
-const ERR_NO_ORG = 'No organization membership';
-const ERR_ROUTING_TELEMETRY_MALFORMED = 'Routing telemetry data is malformed';
-const ERR_CALIBRATION_MALFORMED = 'Calibration data is malformed';
-const ERR_FAILED_LOAD_USER_ROLES = 'Failed to load user roles';
-const ERR_INVALID_KEY_ID = 'Invalid keyId';
-const ERR_KEY_NOT_FOUND_IN_ORG = 'Key not found in active org';
-const ERR_ROTATION_FAILED = 'Key rotation failed';
-const ERR_FETCH_MEMBERS = 'Failed to fetch members';
-const ERR_FETCH_MEMBER = 'Failed to fetch member';
-const ERR_UPDATE_MEMBER_ROLE = 'Failed to update member role';
-const ERR_REMOVE_MEMBER = 'Failed to remove member';
-const ERR_FETCH_USERS = 'Failed to fetch users';
-const ERR_FETCH_ROLE_ASSIGNMENTS = 'Failed to fetch role assignments';
-const ERR_FETCH_ROLES = 'Failed to fetch roles';
-const ERR_ASSIGN_ROLE = 'Failed to assign role';
-const ERR_REVOKE_ROLE = 'Failed to revoke role';
-const ERR_FETCH_KEYS = 'Failed to fetch keys';
 
 const KV_SCHEMA_VERSION = 1;
 
 const PARAM_RE = /^[\w:.-]+$/;
 const MAX_PARAM_LEN = 200;
-function safeArray<T>(val: unknown): T[] {
-  return Array.isArray(val) ? val as T[] : [];
-}
 function isValidId(id: string | undefined): id is string {
   return !!id && id.length <= MAX_PARAM_LEN && PARAM_RE.test(id);
 }
@@ -227,93 +203,6 @@ async function getGlobalKv<T>(kv: KVNamespace, key: string): Promise<T | null> {
   return readKvEnvelope<T>(kv, key);
 }
 
-type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'member.remove' | 'key.rotate';
-type SupabaseEnv = { SUPABASE_URL: string; SUPABASE_SERVICE_ROLE_KEY: string };
-
-const FIRE_AND_FORGET_TIMEOUT_MS = 3000;
-
-// Inserts one row for a non-critical write. Every failure, the timeout included, is
-// swallowed: postgrest-js answers { error } rather than rejecting, and the catch takes
-// the rest — including a malformed SUPABASE_URL, which `.from()` throws synchronously.
-async function insertAndForget(env: SupabaseEnv, table: string, row: Record<string, unknown>): Promise<void> {
-  try {
-    await db(env).from(table).insert(row).abortSignal(AbortSignal.timeout(FIRE_AND_FORGET_TIMEOUT_MS));
-  } catch {
-    // Fire-and-forget: a failed audit or activity write must not fail the request.
-  }
-}
-
-type AuditDetails = { roleId?: string; organizationId?: string };
-
-// Fire-and-forget: logs a sensitive admin mutation by the session user to audit_log without
-// blocking the response. No-ops without an app user; callers fire it only on success.
-// organizationId (P6): org-admin mutations always record session.activeOrgId, so an
-// audit row can never claim a scope the mutation did not have. organization_id exists
-// since 20260320020000_create_phase2_ledger_tables.sql.
-function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: string, { roleId, organizationId }: AuditDetails = {}): void {
-  const actorUserId = c.get('session').appUserId;
-  if (!actorUserId) return;
-  c.executionCtx.waitUntil(insertAndForget(c.env, 'audit_log', {
-    actor_user_id: actorUserId,
-    action,
-    // target_type and target_id are NOT NULL columns; role_id is not a column —
-    // carry it in metadata for role.assign / role.revoke actions.
-    target_type: 'user',
-    target_id: targetUserId,
-    ...(roleId !== undefined && { metadata: { role_id: roleId } }),
-    ...(organizationId !== undefined && { organization_id: organizationId }),
-  }));
-}
-
-// Fire-and-forget: logs the session user's activity to user_activity without blocking the response.
-// Auth: uses service role key (Auth0 JWTs are not valid Supabase session tokens for RLS).
-// waitUntil keeps the Worker runtime from cancelling the in-flight write after the response is sent.
-function logActivity(c: AppContext, activityType: UserActivityEvent): void {
-  const appUserId = c.get('session').appUserId;
-  if (!appUserId) return;
-  c.executionCtx.waitUntil(insertAndForget(c.env, 'user_activity', { user_id: appUserId, activity_type: activityType }));
-}
-
-type Bindings = {
-  DASHBOARD: KVNamespace;
-  ASSETS: Fetcher;
-  SUPABASE_URL: string;
-  // Service role key for all Supabase DB calls (Auth0 JWTs cannot satisfy Supabase RLS).
-  // Set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-  SUPABASE_SERVICE_ROLE_KEY: string;
-  AUTH0_DOMAIN: string;    // e.g. "integritystudio.us.auth0.com"
-  // Custom domain the same tenant also serves logins on, e.g. "auth.integritystudio.ai"
-  // (landing CR70). A token obtained through it carries that host as `iss`, signed by the
-  // same key set, so it is accepted as a second issuer against AUTH0_DOMAIN's JWKS.
-  // Unset on the dev worker: the dev tenant has no custom domain.
-  AUTH0_CUSTOM_DOMAIN?: string;
-  AUTH0_AUDIENCE: string;  // e.g. "https://api.integritystudio.dev"
-  // Must be explicitly set to 'true' to enable the test-token bypass.
-  // Never set this in production wrangler.toml — leave absent.
-  ALLOW_TEST_BYPASS?: string;
-  // --- Org-scoped multi-tenancy (P5) ---
-  // Gates org resolution + getKv prefixing. Deployed 'false' until the P7 cutover.
-  ORG_SCOPING_ENABLED?: string;
-  // Org owning all pre-tenancy data. Non-empty on both production workers,
-  // deliberately '' on quality-metrics-api-dev (must fail loudly, never resolve
-  // a production org).
-  HOME_ORG_ID?: string;
-  // JSON array of app user UUIDs — the explicit staff allowlist (decision Q2).
-  STAFF_USER_IDS?: string;
-  // Set 'true' at P8 to switch off the home-org bare-key dual-read fallback.
-  ORG_KV_FALLBACK_DISABLED?: string;
-};
-
-type Variables = {
-  session: AppSession;
-  // Set by requireOrgAdmin: the active org every org-admin route is bound to.
-  orgId: string;
-};
-
-type AppEnv = { Bindings: Bindings; Variables: Variables };
-type AppContext = Context<AppEnv>;
-
-const factory = createFactory<AppEnv>();
 const app = factory.createApp();
 
 // A handler that throws (an upstream fetch rejecting, say) gets the same JSON
@@ -626,10 +515,6 @@ const authenticate = factory.createMiddleware(async (c, next) => {
 
 app.use('/api/*', authenticate);
 
-function isOrgScopingEnabled(env: Pick<Bindings, 'ORG_SCOPING_ENABLED'>): boolean {
-  return env.ORG_SCOPING_ENABLED === 'true';
-}
-
 /** Parsed STAFF_USER_IDS by raw value: env is fixed for an isolate, so each value parses once. */
 const staffIdSets = new Map<string, ReadonlySet<string>>();
 const NO_STAFF: ReadonlySet<string> = new Set();
@@ -693,30 +578,8 @@ function parseMemberships(raw: unknown): OrgMembershipSummary[] {
   return memberships;
 }
 
-function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
-  return session.permissions.includes(PERMISSION.admin) || session.permissions.includes(permission);
-}
-
-/** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
-function requirePermission(permission: DashboardPermission) {
-  return factory.createMiddleware(async (c, next) => {
-    if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-    return next();
-  });
-}
-
 function validQuery<T extends z.ZodType>(schema: T) {
   return queryValidator(schema, QUERY_FIELD_ERRORS, ERR_INVALID_QUERY);
-}
-
-/**
- * The request's JSON body parsed by `schema`, or null when it is absent, malformed or
- * invalid. Called inside the handler, after its permission and path checks, so a caller
- * without access is refused before its body is read.
- */
-async function readJsonBody<T extends z.ZodType>(req: HonoRequest, schema: T): Promise<z.output<T> | null> {
-  const result = schema.safeParse(await req.json().catch(() => null));
-  return result.success ? result.data : null;
 }
 
 /**
@@ -729,30 +592,6 @@ async function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
     ? c.get('session').activeOrgId ?? null
     : null;
   return getKv<T>(c.env.DASHBOARD, orgId, key, c.env);
-}
-
-const SUPABASE_REST_TIMEOUT_MS = 10_000;
-
-/**
- * Service-role PostgREST client. Callers map every failure to their own response, so the
- * library's GET retry (1s/2s/4s backoff) would only delay it and is off. Built per call:
- * construction is cheap and captures `fetch`, which the tests stub per case.
- */
-function db(env: SupabaseEnv): PostgrestClient {
-  return new PostgrestClient(`${env.SUPABASE_URL}${SUPABASE_REST_PATH}`, {
-    headers: serviceRoleHeaders(env),
-    retry: false,
-    timeout: SUPABASE_REST_TIMEOUT_MS,
-  });
-}
-
-// Both apikey and Authorization use the service role key — the anon key is for browser clients only.
-function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
-  return {
-    [SUPABASE_API_KEY_HEADER]: env.SUPABASE_SERVICE_ROLE_KEY,
-    'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    [CONTENT_TYPE_HEADER]: ContentType.Json,
-  };
 }
 
 // Explicitly construct the me payload to avoid exposing internal IDs
@@ -1057,285 +896,7 @@ app.get('/api/routing-telemetry', requirePermission(PERMISSION.read), validQuery
   return c.json({ ...result.data, period });
 });
 
-// ---------------------------------------------------------------------------
-// Org-scoped admin (P6) — every route is bound to session.activeOrgId, never a
-// client parameter, so an org admin can only ever mutate their own org.
-// Unavailable on legacy (non-org) sessions: those keep the global routes below.
-// ---------------------------------------------------------------------------
-
-/** Org-admin gate: dashboard.admin + an org-scoped session; binds the route to that org. */
-const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
-  const session = c.get('session');
-  if (!hasPermission(session, PERMISSION.admin) || !session.activeOrgId) {
-    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-  }
-  c.set('orgId', session.activeOrgId);
-  return next();
-});
-
-/** Only owners (or staff) may grant, downgrade, or remove an `owner` membership. */
-function canTouchOwnerRole(session: AppSession): boolean {
-  return session.isStaff === true || session.role === 'owner';
-}
-
-/** The target's membership role in the active org, or the response that ends the request. */
-async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId: string): Promise<{ role: string | undefined } | Response> {
-  const current = await supabase.from('organization_memberships')
-    .select('role')
-    .eq('organization_id', c.get('orgId'))
-    .eq('user_id', userId)
-    .limit(1);
-  if (current.error) return c.json({ error: ERR_FETCH_MEMBER }, HttpStatus.InternalServerError);
-  const [row] = safeArray<{ role?: string }>(current.data);
-  if (!row) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound);
-  return { role: row.role };
-}
-
-app.get('/api/admin/members', requireOrgAdmin, async (c) => {
-  const { data, error } = await db(c.env).from('organization_memberships')
-    .select('user_id,role,users(id,email)')
-    .eq('organization_id', c.get('orgId'));
-  if (error) return c.json({ error: ERR_FETCH_MEMBERS }, HttpStatus.InternalServerError);
-
-  const members = [];
-  for (const row of safeArray(data)) {
-    const parsed = AdminMemberRowSchema.safeParse(row);
-    if (!parsed.success) continue;
-    members.push({
-      userId: parsed.data.user_id,
-      ...(parsed.data.users?.email ? { email: parsed.data.users.email } : {}),
-      membershipRole: parsed.data.role,
-      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
-    });
-  }
-  return c.json(members);
-});
-
-app.post('/api/admin/members/:userId/role', requireOrgAdmin, async (c) => {
-  const orgId = c.get('orgId');
-  const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
-
-  const body = await readJsonBody(c.req, UpdateMemberRoleRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
-  const newRole = body.membershipRole;
-
-  // Read the target's current role first — both granting owner and demoting an
-  // existing owner are owner-only operations.
-  const supabase = db(c.env);
-  const current = await targetMemberRole(c, supabase, userId);
-  if (current instanceof Response) return current;
-  if ((newRole === 'owner' || current.role === 'owner') && !canTouchOwnerRole(c.get('session'))) {
-    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-  }
-
-  const { error } = await supabase.from('organization_memberships')
-    .update({ role: newRole })
-    .eq('organization_id', orgId)
-    .eq('user_id', userId);
-  if (error) return c.json({ error: ERR_UPDATE_MEMBER_ROLE }, HttpStatus.InternalServerError);
-  logAuditEvent(c, 'member.role_change', userId, { organizationId: orgId });
-  return c.body(null, HttpStatus.NoContent);
-});
-
-app.delete('/api/admin/members/:userId', requireOrgAdmin, async (c) => {
-  const orgId = c.get('orgId');
-  const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
-
-  const supabase = db(c.env);
-  const current = await targetMemberRole(c, supabase, userId);
-  if (current instanceof Response) return current;
-  if (current.role === 'owner' && !canTouchOwnerRole(c.get('session'))) {
-    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-  }
-
-  const { error } = await supabase.from('organization_memberships')
-    .delete()
-    .eq('organization_id', orgId)
-    .eq('user_id', userId);
-  if (error) return c.json({ error: ERR_REMOVE_MEMBER }, HttpStatus.InternalServerError);
-  logAuditEvent(c, 'member.remove', userId, { organizationId: orgId });
-  return c.body(null, HttpStatus.NoContent);
-});
-
-// Legacy GLOBAL admin routes: under org scoping these become staff-only —
-// dashboard.admin is now an org-scoped grant and must not reach cross-org
-// user_roles mutation. Flag OFF keeps today's dashboard.admin gate.
-const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
-  const session = c.get('session');
-  const allowed = isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, PERMISSION.admin);
-  if (!allowed) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
-  return next();
-});
-
-// Admin error handling policy:
-// All admin routes (/api/admin/*) return generic error messages on Supabase REST failures,
-// e.g. "Failed to fetch users" instead of the raw Supabase error body. This is intentional:
-// - The service role key is used, so Supabase error bodies may contain table/column metadata.
-// - Generic messages prevent internal schema details from leaking to admin clients.
-// - HTTP status is always 500 on upstream failure; 400 for input validation.
-// - Supabase errors are swallowed; failures are surfaced only via status code + generic message.
-// This policy aligns with sanitizeErrorForResponse used in API routes.
-
-app.get('/api/admin/users', requireGlobalAdmin, async (c) => {
-  const supabase = db(c.env);
-  const [usersRes, roleRowsRes] = await Promise.all([
-    supabase.from('users').select('id,email,created_at').order('created_at', { ascending: false }),
-    supabase.from('user_roles').select('user_id,role_id,roles(id,name)'),
-  ]);
-
-  if (usersRes.error) return c.json({ error: ERR_FETCH_USERS }, HttpStatus.InternalServerError);
-  if (roleRowsRes.error) return c.json({ error: ERR_FETCH_ROLE_ASSIGNMENTS }, HttpStatus.InternalServerError);
-  const rawUsers = safeArray(usersRes.data);
-  const rawRoleRows = safeArray(roleRowsRes.data);
-
-  const rolesByUser = new Map<string, Array<{ id: string; name: string }>>();
-  for (const row of rawRoleRows) {
-    const parsed = AdminUserRoleRowSchema.safeParse(row);
-    if (!parsed.success || !parsed.data.roles) continue;
-    const existing = rolesByUser.get(parsed.data.user_id) ?? [];
-    existing.push({ id: parsed.data.roles.id, name: parsed.data.roles.name });
-    rolesByUser.set(parsed.data.user_id, existing);
-  }
-
-  const users = [];
-  for (const raw of rawUsers) {
-    const r = raw as Record<string, unknown>;
-    const parsed = AdminUserSchema.safeParse({
-      id: r.id,
-      email: r.email,
-      created_at: r.created_at,
-      roles: rolesByUser.get(r.id as string) ?? [],
-    });
-    if (parsed.success) users.push(parsed.data);
-  }
-
-  return c.json(users);
-});
-
-app.get('/api/admin/roles', requireGlobalAdmin, async (c) => {
-  const { data, error } = await db(c.env).from('roles')
-    .select('id,name,permissions')
-    .order('name', { ascending: true });
-  if (error) return c.json({ error: ERR_FETCH_ROLES }, HttpStatus.InternalServerError);
-
-  const rows = safeArray(data);
-  const roles = rows.flatMap((row) => {
-    const parsed = AdminRoleSchema.safeParse(row);
-    return parsed.success ? [parsed.data] : [];
-  });
-  return c.json(roles);
-});
-
-app.post('/api/admin/users/:userId/roles', requireGlobalAdmin, async (c) => {
-  const userId = c.req.param('userId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
-
-  const body = await readJsonBody(c.req, AssignRoleRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
-
-  const { error } = await db(c.env).from('user_roles')
-    .insert({ user_id: userId, role_id: body.role_id });
-  if (error) return c.json({ error: ERR_ASSIGN_ROLE }, HttpStatus.InternalServerError);
-  logAuditEvent(c, 'role.assign', userId, { roleId: body.role_id });
-  return c.body(null, HttpStatus.NoContent);
-});
-
-app.delete('/api/admin/users/:userId/roles/:roleId', requireGlobalAdmin, async (c) => {
-  const userId = c.req.param('userId');
-  const roleId = c.req.param('roleId');
-  if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
-  if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, HttpStatus.BadRequest);
-
-  const { error } = await db(c.env).from('user_roles')
-    .delete()
-    .eq('user_id', userId)
-    .eq('role_id', roleId);
-  if (error) return c.json({ error: ERR_REVOKE_ROLE }, HttpStatus.InternalServerError);
-  logAuditEvent(c, 'role.revoke', userId, { roleId });
-  return c.body(null, HttpStatus.NoContent);
-});
-
-// ---------------------------------------------------------------------------
-// API key management (org-scoped admin, P6)
-// ---------------------------------------------------------------------------
-// These routes require dashboard.admin + an active org. The key list and rotation
-// are scoped to session.activeOrgId — an admin can only see and rotate keys that
-// belong to their active org, never another org's keys.
-//
-// Rotation proxies to the Supabase Edge Function api-keys-rotate, server to server.
-// This worker has already verified the user's Auth0 token, so it calls the function
-// with its own service key and names the user in the body. The user's token is never
-// forwarded: the function accepts only a service-level key (verify_jwt = false), and
-// the access token this worker verifies is not a Supabase credential anyway — Supabase
-// Third-Party Auth (CR62) accepts the SPA's Auth0 ID token for direct reads, nothing more.
-// ---------------------------------------------------------------------------
-
-/** The caller's active keys in their active org — the only keys these routes may touch. */
-function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns: string) {
-  return db(env).from('api_keys')
-    .select(columns)
-    .eq('user_id', userId)
-    .eq('organization_id', orgId)
-    .eq('status', 'active');
-}
-
-app.get('/api/admin/keys', requireOrgAdmin, async (c) => {
-  const orgId = c.get('orgId');
-  const appUserId = c.get('session').appUserId;
-  if (!appUserId) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
-
-  const { data, error } = await activeOrgKeys(c.env, appUserId, orgId, 'id,prefix,name,tier,status,created_at,last_used_at')
-    .order('created_at', { ascending: false });
-  if (error) return c.json({ error: ERR_FETCH_KEYS }, HttpStatus.InternalServerError);
-
-  const keys = safeArray(data).flatMap((row) => {
-    const parsed = ApiKeySchema.safeParse(row);
-    return parsed.success ? [parsed.data] : [];
-  });
-  return c.json(keys);
-});
-
-app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, async (c) => {
-  const orgId = c.get('orgId');
-  const appUserId = c.get('session').appUserId;
-  if (!appUserId) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
-
-  const keyId = c.req.param('keyId');
-  if (!UUID_PATTERN.test(keyId)) return c.json({ error: ERR_INVALID_KEY_ID }, HttpStatus.BadRequest);
-
-  // Verify the key belongs to the caller and to their active org before forwarding.
-  const verify = await activeOrgKeys(c.env, appUserId, orgId, 'id')
-    .eq('id', keyId)
-    .limit(1);
-  if (verify.error) return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
-  if (!safeArray(verify.data).length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, HttpStatus.Forbidden);
-
-  // Call the function as a service, naming the user this worker verified. The
-  // function rechecks that the key is this user's and still active.
-  const fnRes = await fetch(
-    `${c.env.SUPABASE_URL}/functions/v1/api-keys-rotate`,
-    {
-      method: 'POST',
-      headers: serviceRoleHeaders(c.env),
-      body: JSON.stringify({ keyId, userId: appUserId }),
-      signal: AbortSignal.timeout(SUPABASE_REST_TIMEOUT_MS),
-    },
-  ).catch(() => null);
-
-  if (!fnRes?.ok) {
-    const errText = fnRes ? await fnRes.text().catch(() => '') : '';
-    console.error(`[keys/rotate] function returned ${fnRes?.status ?? NO_RESPONSE_STATUS}: ${errText}`);
-    return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
-  }
-
-  const result: unknown = await fnRes.json().catch(() => null);
-  logAuditEvent(c, 'key.rotate', appUserId, { roleId: keyId, organizationId: orgId });
-  // Return the function's response verbatim. Cache-Control: private, no-store
-  // is already set by the /api/* middleware; the token must not be logged.
-  return c.json(result, HttpStatus.Ok);
-});
+registerAdminRoutes(app);
 
 // SPA fallback: serve static assets / index.html for non-API routes
 app.get('*', async (c) => {

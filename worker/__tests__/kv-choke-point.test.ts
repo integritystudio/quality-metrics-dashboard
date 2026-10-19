@@ -9,19 +9,30 @@
  *
  * Mutation-proven: adding `await c.env.DASHBOARD.get('dashboard:7d', 'json')`
  * to any route fails the first assertion.
+ *
+ * The scan covers every worker module, not just index.ts, so a route moved into its own
+ * file (admin-routes.ts) cannot carry a raw KV read out from under the guard.
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const workerSource = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'index.ts'),
-  'utf8',
-);
+const workerDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+const workerModules = readdirSync(workerDir)
+  .filter((name) => name.endsWith('.ts'))
+  .toSorted();
+const workerSource = workerModules
+  .map((name) => readFileSync(join(workerDir, name), 'utf8'))
+  .join('\n');
 
-describe('KV choke point (worker/index.ts source scan)', () => {
+describe('KV choke point (worker module source scan)', () => {
+  it('scans every worker module', () => {
+    expect(workerModules).toContain('index.ts');
+    expect(workerModules).toContain('admin-routes.ts');
+  });
+
   it('exactly one raw kv.get exists — inside readKvEnvelope', () => {
     const rawGets = workerSource.match(/\bkv\.get\(/g) ?? [];
     expect(rawGets).toHaveLength(1);
