@@ -600,7 +600,12 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
       always-offered periods, since the fourth depends on the environment's data.
     - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
       `KV_BATCH_MAX_BYTES`, `KV_VALUE_LIMIT_BYTES`) carry a one-line disable.
-  - **Tests are not covered.** The parent's `local/no-magic-numbers-ignore-fixtures` variant was not copied.
+  - ~~**Tests are not covered.**~~ The parent's `local/no-magic-numbers-ignore-fixtures` variant was copied
+    2026-10-19 (`eslint-rules/no-magic-numbers-ignore-bitwise.mjs` now builds both variants from one
+    factory and exports the single `localPlugin` object both config blocks share, since flat config refuses
+    to redefine a plugin) and enabled at warn over `TEST_FILES` with the same options. It found 666 hits in
+    74 files, swept to 0: HTTP statuses to `HttpStatus`, counts derived from the fixture they count, the
+    rest named `const`s or hoisted into `const` fixture objects the variant exempts.
   - **Score bands disagree with the thresholds.** `SCORE_BAND_LOWER_BOUNDS` (`[0.4, 0.6, 0.8, 0.9]`,
     `quality-utils.ts`) and `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5) band scores two ways and differ
     below 0.8; which one is right is a product decision.
