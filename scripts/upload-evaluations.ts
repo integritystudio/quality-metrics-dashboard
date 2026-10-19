@@ -800,10 +800,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         }
         const { destination } = delivery;
         const batch = pushTo(batches, destination, { payload: mapped.payload, fp });
+        // eslint-disable-next-line no-await-in-loop -- a full batch ships before the next record is routed
         if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
       }
       for (const destination of [...batches.keys()]) {
         if (!ok) break;
+        // eslint-disable-next-line no-await-in-loop -- shipped state is saved up to the last accepted batch, so flushes abort in order
         ok = await flush(destination);
       }
 

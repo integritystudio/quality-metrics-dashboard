@@ -109,11 +109,13 @@ export async function postEvaluationRecords(
     for (let i = 0; i < payloads.length; i += MAX_BATCH_SIZE) {
       const chunk = payloads.slice(i, i + MAX_BATCH_SIZE);
       if (!opts.dryRun) {
+        // eslint-disable-next-line no-await-in-loop -- batches are paced below and abort on the first failure
         const res = await sendBatch(destination, chunk, baseUrl, secret);
         if (!res.ok) {
           summary.failure = `POST to ${destination} failed: ${res.detail}`;
           return summary;
         }
+        // eslint-disable-next-line no-await-in-loop -- the pacing delay between batches is the point
         await sleep(INTER_BATCH_DELAY_MS);
       }
       summary.sent += chunk.length;

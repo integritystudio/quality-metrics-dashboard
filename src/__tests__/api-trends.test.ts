@@ -120,13 +120,11 @@ describe('GET /trends/:name', () => {
     }
   });
 
-  it('accepts valid bucket counts', async () => {
-    for (const buckets of [3, 7, 15, 30]) {
-      const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=${buckets}`);
-      expect(res.status).toBe(200);
-      const body = await res.json() as TrendDetailResponse;
-      expect(body.trendData).toHaveLength(buckets);
-    }
+  it.each([3, 7, 15, 30])('accepts %i buckets', async (buckets) => {
+    const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=${buckets}`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as TrendDetailResponse;
+    expect(body.trendData).toHaveLength(buckets);
   });
 
   it('returns empty buckets and no percentiles when there is no data', async () => {

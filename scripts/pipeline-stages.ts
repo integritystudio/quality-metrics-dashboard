@@ -275,7 +275,10 @@ export async function runWithRetry<T>(options: RetryOptions<T>): Promise<T> {
   for (const [retry, waitMs] of delays.entries()) {
     if (!options.shouldRetry(outcome)) break;
     options.onRetry?.(waitMs, retry + 1, totalAttempts, outcome);
+    // A retry waits on the attempt before it by definition.
+    // eslint-disable-next-line no-await-in-loop -- see above
     await wait(waitMs);
+    // eslint-disable-next-line no-await-in-loop -- see above
     outcome = await options.attempt(retry + 2);
   }
   return outcome;
