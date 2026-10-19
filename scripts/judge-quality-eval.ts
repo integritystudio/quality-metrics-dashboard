@@ -203,11 +203,12 @@ export function readAgreementTurns(path: string): AgreementTurn[] {
 
 /** Re-locate the scored turns through the pipeline's own discovery. Unmatched turns are simply absent. */
 async function locateTurns(wanted: readonly AgreementTurn[]): Promise<Turn[]> {
-  const keys = new Set(wanted.map(turnKey));
+  const keys = new Set(wanted.map(t => turnKey(t)));
   const sessions = new Set(wanted.map(t => t.sessionId));
   const found: Turn[] = [];
   for (const info of await _discoverTranscripts()) {
     if (!sessions.has(info.sessionId)) continue;
+    // eslint-disable-next-line no-await-in-loop -- transcripts are parsed one at a time; a session's turns can be large
     for (const turn of await extractTurns(info)) {
       if (keys.has(turnKey(turn))) found.push(turn);
     }
@@ -308,11 +309,11 @@ export function closestConfiguration<K extends string>(
 ): Record<string, K | 'tie'> {
   const names = new Set(configurations.flatMap(c => Object.keys(summaries[c].byCriterion)));
   const verdict: Record<string, K | 'tie'> = {};
-  for (const name of [...names].sort()) {
+  for (const name of [...names].toSorted()) {
     const scored = configurations
       .map(c => ({ c, mae: summaries[c].byCriterion[name]?.meanAbsDiff ?? null }))
       .filter((e): e is { c: K; mae: number } => e.mae !== null)
-      .sort((a, b) => a.mae - b.mae);
+      .toSorted((a, b) => a.mae - b.mae);
     const [best, next] = scored;
     verdict[name] = !best || !next || best.mae === next.mae ? 'tie' : best.c;
   }
@@ -393,6 +394,7 @@ async function scoreTurnWithReference(
       continue;
     }
     try {
+      // eslint-disable-next-line no-await-in-loop -- canSpend() above gates each call on what the calls before it booked
       const normalized = await scoreCriterion(provider, turn, config, stepsCache);
       scores[config.name] = normalized;
       if (config.name === FAITHFULNESS_EVAL_NAME) scores[HALLUCINATION_EVAL_NAME] = 1 - normalized;

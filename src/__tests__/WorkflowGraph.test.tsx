@@ -270,7 +270,7 @@ describe('WorkflowGraphView stress', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId(/^rf-node-/).length).toBe(ST_G5_DISCONNECTED_SIZE);
     });
-    const positions = screen.getAllByTestId(/^rf-node-/).map(readPosition);
+    const positions = screen.getAllByTestId(/^rf-node-/).map(element => readPosition(element));
     const distinct = new Set(positions.map(({ x, y }) => `${x},${y}`));
     expect(distinct.size).toBe(ST_G5_DISCONNECTED_SIZE);
   });
@@ -375,10 +375,13 @@ describe('WorkflowGraphView layout', () => {
     const graph = makeChainGraph(LAYOUT_CHAIN_SIZE, 'step', 'linear');
     render(<WorkflowGraphView graph={graph} />);
 
-    for (const edge of graph.edges) {
-      const rendered = await screen.findByTestId(`rf-edge-${edge.id}`);
-      expect(rendered).toHaveAttribute('data-source', edge.source);
-      expect(rendered).toHaveAttribute('data-target', edge.target);
+    const rendered = await Promise.all(graph.edges.map(async edge => ({
+      edge,
+      element: await screen.findByTestId(`rf-edge-${edge.id}`),
+    })));
+    for (const { edge, element } of rendered) {
+      expect(element).toHaveAttribute('data-source', edge.source);
+      expect(element).toHaveAttribute('data-target', edge.target);
     }
   });
 });

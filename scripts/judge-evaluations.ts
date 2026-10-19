@@ -409,6 +409,7 @@ export async function evaluateTurn(
       await scoreCriterion(TOOL_CORRECTNESS_CRITERIA.name, 'Tool correctness',
         async () => judge.gEval(TOOL_CORRECTNESS_CRITERIA, tcTestCase));
       for (const config of [TOOL_SELECTION_CRITERIA, TOOL_ARGUMENTS_CRITERIA, TOOL_INTEGRATION_CRITERIA]) {
+        // eslint-disable-next-line no-await-in-loop -- score() collects when concurrent; a sequential run is one call at a time
         await scoreCriterion(config.name, config.name, async () => judge.gEval(config, tcTestCase));
       }
     }
@@ -600,7 +601,7 @@ function printDryRun(allTurns: Turn[], batch: boolean, consolidated: boolean): v
     const sid = t.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
     incrementIn(bySession, sid);
   }
-  const sorted = [...bySession.entries()].sort((a, b) => b[1] - a[1]).slice(0, DRY_RUN_TOP_SESSIONS);
+  const sorted = [...bySession.entries()].toSorted((a, b) => b[1] - a[1]).slice(0, DRY_RUN_TOP_SESSIONS);
   console.log('[dry-run] top sessions by turn count:');
   for (const [sid, count] of sorted) {
     console.log(`  ${sid}: ${count} turns`);
@@ -754,7 +755,7 @@ async function main() {
     const outFile = writeEvaluations(flatEvals);
 
     if (judgeKey) {
-      const posted = await postEvaluationRecords(flatEvals.map(toOTelRecord), { dryRun: false, accounts });
+      const posted = await postEvaluationRecords(flatEvals.map(ev => toOTelRecord(ev)), { dryRun: false, accounts });
       console.log(`[judge] posted ${formatPostSummary(posted)}`);
       if (posted.failure) {
         // Ingest drops any id it already holds, so re-sending the whole file is safe.

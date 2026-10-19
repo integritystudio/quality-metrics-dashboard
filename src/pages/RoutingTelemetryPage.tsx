@@ -60,7 +60,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 </thead>
                 <tbody>
                   {Object.entries(data.providerDistribution)
-                    .sort(byValueDesc)
+                    .toSorted(byValueDesc)
                     .map(([provider, count]) => (
                       <tr key={provider}>
                         <td className="mono">{provider}</td>
@@ -88,7 +88,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 </thead>
                 <tbody>
                   {Object.entries(data.modelDistribution)
-                    .sort(byValueDesc)
+                    .toSorted(byValueDesc)
                     .map(([model, count]) => (
                       <tr key={model}>
                         <td className="mono">{model}</td>
@@ -103,7 +103,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
             </div>
           )}
 
-          {data.groups.length > 0 && data.groups.some(isStrategyGroup) && (
+          {data.groups.length > 0 && data.groups.some(g => isStrategyGroup(g)) && (
             <div className="card mb-3">
               <h3 className="text-sm font-semibold mb-3">Strategy Breakdown</h3>
               <table className="data-table">
@@ -118,7 +118,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 <tbody>
                   {data.groups
                     .filter(isStrategyGroup)
-                    .sort((a, b) => b.count - a.count)
+                    .toSorted((a, b) => b.count - a.count)
                     .map((g) => (
                       <tr key={g.strategy}>
                         <td className="mono">{g.strategy}</td>

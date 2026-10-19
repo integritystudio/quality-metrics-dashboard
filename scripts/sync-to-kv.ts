@@ -407,7 +407,7 @@ export function chunkKvPairs<T extends { key: string; value: string }>(
 export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
   const writtenKeys = new Set<string>();
   if (entries.length === 0) return writtenKeys;
-  const chunks = chunkKvPairs(entries.map(envelope));
+  const chunks = chunkKvPairs(entries.map(entry => envelope(entry)));
   let connectionFailures = 0;
   let lastConnectionError: unknown;
   for (const [index, batch] of chunks.entries()) {
@@ -418,6 +418,7 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
     }
     const { namespaceId, accountId } = getCloudflareConfig();
     try {
+      // eslint-disable-next-line no-await-in-loop -- the write-limit arm below returns, so later chunks must not already be in flight
       const { data: result, response } = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
         account_id: accountId,
         body: batch,
@@ -484,6 +485,7 @@ export async function kvBulkDelete(keys: string[], opts?: { dryRun?: boolean }):
     }
     const { namespaceId, accountId } = getCloudflareConfig();
     try {
+      // eslint-disable-next-line no-await-in-loop -- KV write limits cover deletes; a best-effort prune gains nothing from bursting
       const result = await getCloudflareClient().kv.namespaces.bulkDelete(namespaceId, {
         account_id: accountId,
         body: batch,
@@ -516,7 +518,7 @@ function extractTraceId(key: string): string | null {
 /** Weighted sum of how bad, how recent, and whether a metric card links to the trace. */
 function tracePriority(evals: EvaluationResult[], isReferencedByWorst: boolean, now: number): number {
   const worstScore = min(extractFiniteScores(evals)) ?? UNEVALUATED_TRACE_SCORE;
-  const latestTimestamp = max(evals.map(e => timestampToMs(e.timestamp)).filter(Number.isFinite)) ?? 0;
+  const latestTimestamp = max(evals.map(e => timestampToMs(e.timestamp)).filter(ms => Number.isFinite(ms))) ?? 0;
   const recency = latestTimestamp > 0 ? Math.max(0, 1 - (now - latestTimestamp) / PERIOD_MS['30d']) : 0;
   return (1 - worstScore) * TRACE_PRIORITY_WEIGHTS.worstScore
     + recency * TRACE_PRIORITY_WEIGHTS.recency
@@ -629,6 +631,7 @@ async function main(): Promise<void> {
   for (const orgId of orgIds) {
     const backend = new CloudBackend({ ...(orgId ? { orgId } : {}), fetch: http1Fetch });
     const isHome = orgId === null || orgId === HOME_ORG_ID;
+    // eslint-disable-next-line no-await-in-loop -- an org is computed whole in memory (~1.65 GB on prd), so orgs must not overlap
     const res = await computeOrgEntries(backend, now, isHome);
     if (isHome) homeComputation = res;
     hitCap ||= res.hitCap;
@@ -687,7 +690,7 @@ async function main(): Promise<void> {
 
   const isTraceKey = (e: KVEntry) => extractTraceId(e.key) !== null;
   const highPriority = changed.filter(e => !isTraceKey(e));
-  const traceChanged = changed.filter(isTraceKey);
+  const traceChanged = changed.filter(e => isTraceKey(e));
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);
 
   const prioritizedTraces = prioritizeTraces(traceChanged, evalsByTrace, referencedTraceIds);

@@ -71,7 +71,7 @@ metricsRoutes.get('/metrics/:name/evaluations', validQuery(MetricEvaluationsQuer
 
   const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
   const evaluations = (scoreLabel ? allEvaluations.filter(e => resolveScoreLabel(e) === scoreLabel) : allEvaluations)
-    .slice().sort((a, b) => {
+    .toSorted((a, b) => {
       if (sortBy === 'score_asc' || sortBy === 'score_desc') {
         const aVal = a.scoreValue ?? null;
         const bVal = b.scoreValue ?? null;
@@ -86,7 +86,7 @@ metricsRoutes.get('/metrics/:name/evaluations', validQuery(MetricEvaluationsQuer
   const total = evaluations.length;
   const page = evaluations.slice(offset, offset + limit);
 
-  const rows = page.map(projectEvaluationRow);
+  const rows = page.map(e => projectEvaluationRow(e));
 
   return c.json(jsonSafe({ rows, total, limit, offset, hasMore: offset + limit < total }));
 });

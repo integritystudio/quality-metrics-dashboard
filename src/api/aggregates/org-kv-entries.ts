@@ -437,8 +437,8 @@ function computeEvaluationRowEntries(
     for (const name of metricNames) {
       const evals = grouped.get(name);
       if (!evals || evals.length === 0) continue;
-      const sorted = [...evals].sort((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0));
-      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(projectEvaluationRow);
+      const sorted = evals.toSorted((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0));
+      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => projectEvaluationRow(e));
       entries.push({
         key: `metric:evaluations:${name}:${period}`,
         value: toKVValue({ rows }),
@@ -574,7 +574,7 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
     // ISO 8601 sorts lexicographically — take most recent sessions first
     const sessions = acc.sessions
       .slice()
-      .sort((a, b) => descending(a.date ?? '', b.date ?? ''))
+      .toSorted((a, b) => descending(a.date ?? '', b.date ?? ''))
       .slice(0, MAX_RECENT_SESSIONS);
     const lastSeen = acc.lastSeenDate;
     const totalSessions = acc.totalSessionCount;

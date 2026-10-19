@@ -581,7 +581,7 @@ export function deriveAll(loaded: LoadedSpans): EvalRecord[] {
   setSpanAccounts(loaded.accounts);
   const allEvals: EvalRecord[] = [];
 
-  for (const span of [...loaded.spans].sort(byStartThenSpanId)) {
+  for (const span of loaded.spans.toSorted(byStartThenSpanId)) {
     const toolCorr = deriveToolCorrectness(span);
     if (toolCorr) allEvals.push(toolCorr);
 
@@ -663,7 +663,7 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
   }
 
   const warnings: string[] = [];
-  for (const [date, day] of [...days].sort(([a], [b]) => ascending(a, b))) {
+  for (const [date, day] of [...days].toSorted(([a], [b]) => ascending(a, b))) {
     if (day.agentEvidence > 0 && day.agentMatched === 0) {
       warnings.push(`${date}: ${day.agentEvidence} spans record agent invocations, but none is named ${AGENT_PREPARE_SPAN} or ${AGENT_FINALIZE_SPAN}, so the agent metrics are empty. Were the hook spans renamed?`);
     }
@@ -712,7 +712,7 @@ export function carryForwardDistributions(
 function updateCalibration(allEvals: readonly EvalRecord[], dryRun: boolean): void {
   const scoresByMetric: Record<string, number[]> = Object.fromEntries(rollup(
     allEvals,
-    evs => evs.map(ev => ev.scoreValue).filter(Number.isFinite),
+    evs => evs.map(ev => ev.scoreValue).filter(score => Number.isFinite(score)),
     ev => ev.evaluationName,
   ));
 
@@ -783,7 +783,7 @@ async function main(): Promise<void> {
   if (heldBack.length > 0) {
     console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies without an evaluationId, so a re-post would duplicate them`);
   }
-  const posted = await postEvaluationRecords(toPost.map(toOTelRecord), { dryRun, accounts });
+  const posted = await postEvaluationRecords(toPost.map(ev => toOTelRecord(ev)), { dryRun, accounts });
   console.log(`[derive]${dryRun ? ' dry-run:' : ''} posted ${formatPostSummary(posted)}`);
   if (posted.failure) {
     // stderr, so populate can tell a network failure (retried) from a rejection.
@@ -794,7 +794,7 @@ async function main(): Promise<void> {
   updateCalibration(allEvals, dryRun);
 
   const byName = rollup(inScope, evs => evs.length, ev => ev.evaluationName);
-  const counts = [...byName].sort(([a], [b]) => ascending(a, b)).map(([name, n]) => `${name}=${n}`);
+  const counts = [...byName].toSorted(([a], [b]) => ascending(a, b)).map(([name, n]) => `${name}=${n}`);
   console.log(`[derive] records: ${counts.join(' ') || 'none'}`);
 
   const drift = detectInputDrift(loaded.spans, scope);

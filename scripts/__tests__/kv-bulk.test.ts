@@ -143,7 +143,7 @@ describe('kvBulkPut: successful write', () => {
   it('returns all keys when API reports no failures', async () => {
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
 
-    expect([...written].sort()).toEqual(['metric:a', 'metric:b']);
+    expect([...written].toSorted()).toEqual(['metric:a', 'metric:b']);
   });
 
   it('credits all keys when the API answers HTTP 204 with no body', async () => {
@@ -151,7 +151,7 @@ describe('kvBulkPut: successful write', () => {
 
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b')]);
 
-    expect([...written].sort()).toEqual(['metric:a', 'metric:b']);
+    expect([...written].toSorted()).toEqual(['metric:a', 'metric:b']);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('HTTP 204'));
   });
 
@@ -172,7 +172,7 @@ describe('kvBulkPut: partial failure via unsuccessful_keys', () => {
 
     const written = await kvBulkPut([entry('metric:a'), entry('metric:b'), entry('metric:c')]);
 
-    expect([...written].sort()).toEqual(['metric:a', 'metric:c']);
+    expect([...written].toSorted()).toEqual(['metric:a', 'metric:c']);
   });
 
   it('emits a warning that names the failed key', async () => {
@@ -188,7 +188,7 @@ describe('failed-key warnings', () => {
   const failedKeys = ['k:1', 'k:2', 'k:3', 'k:4', 'k:5', 'k:6'];
 
   it.each([
-    ['kvBulkPut', () => kvBulkPut(failedKeys.map(entry))],
+    ['kvBulkPut', () => kvBulkPut(failedKeys.map(key => entry(key)))],
     ['kvBulkDelete', () => kvBulkDelete(failedKeys)],
   ])('%s names the first five failed keys and elides the rest', async (_name, run) => {
     cloudflare.respondWith(() => bulkResult(failedKeys.length, failedKeys));
@@ -337,7 +337,7 @@ describe('kvBulkPut: connection failures', () => {
 
     const written = await kvBulkPut(entries);
 
-    expect([...written].sort()).toEqual(['trace:a', 'trace:c']);
+    expect([...written].toSorted()).toEqual(['trace:a', 'trace:c']);
     expect(vi.mocked(console.warn)).toHaveBeenCalledWith(expect.stringContaining('could not connect'));
   }, CONNECTION_RETRY_TIMEOUT_MS);
 
@@ -466,6 +466,6 @@ describe('kvBulkDelete: batching', () => {
 
     const failed = await kvBulkDelete(keys);
 
-    expect([...failed].sort()).toEqual([failedInFirst, failedInSecond].sort());
+    expect([...failed].toSorted()).toEqual([failedInFirst, failedInSecond].toSorted());
   });
 });
