@@ -574,8 +574,8 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     (12, 3, 16, 8) match only unrelated constants (`MONTHS_PER_YEAR`, `BITS.BYTE`, …), so none was swapped.
     - `MIN_SESSION_COMPLETION_AGE_MS` and `BATCH_WALL_CLOCK_MS` use new `DURATION_MS.TWELVE_HOURS` /
       `THREE_HOURS`, added to the parent's `src/lib/core/units.ts` on parent branch
-      `feat/duration-ms-twelve-three-hours`, merged into the parent's local main as `ab2ecd00` (not yet
-      pushed). 🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
+      `feat/duration-ms-twelve-three-hours`, merged into the parent's `origin/main` as `ab2ecd00`.
+      🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
       redirects that to the parent's `dist/`, so a checkout or build without the members fails
       `typecheck:scripts` (2 × TS2339) and lint (8 `no-unsafe-*`), and leaves both values `undefined` at
       run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the batch wall clock
