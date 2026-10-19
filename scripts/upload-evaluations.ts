@@ -91,7 +91,7 @@ import { TIME_MS } from '../../src/lib/core/units.js';
 import { sleep } from './sleep.js';
 import { getOrThrow, increment, pushTo } from './collections.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
-import { CONTENT_TYPE_HEADER, ContentType } from '../src/lib/http-constants.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
 
 /** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
 const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
@@ -125,7 +125,7 @@ export const INTER_BATCH_DELAY_MS = 250;
 const RESPONSE_SNIPPET_CHARS = 300;
 
 /** Transient-failure backoff per batch (429, 5xx, and transport errors): the wait before each retry. */
-const SEND_RETRY_DELAYS_MS: readonly number[] = [500, 1_000, 2_000];
+const SEND_RETRY_DELAYS_MS: readonly number[] = [TIME_MS.SECOND / 2, TIME_MS.SECOND, 2 * TIME_MS.SECOND];
 const MAX_SEND_ATTEMPTS = SEND_RETRY_DELAYS_MS.length + 1;
 /** Per-request ceiling; a hung connection would otherwise stall the whole run. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -599,7 +599,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
       detail: `${response.status} ${text.slice(0, RESPONSE_SNIPPET_CHARS)}`,
       // 4xx other than 429 is a payload problem — retrying re-sends the same
       // bytes to the same verdict, so only throttling and server faults retry.
-      retryable: response.status === 429 || response.status >= 500,
+      retryable: response.status === HttpStatus.TooManyRequests || response.status >= HttpStatus.InternalServerError,
     };
   } catch (err) {
     return {

@@ -9,7 +9,7 @@ import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../sr
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { knownLabelSchema, type KnownLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { IDENTITY_KEY_REF_FIELD, type AccountRef } from './account-stamps.js';
-import { RULE_EVALUATOR_TYPE as _RULE_EVALUATOR_TYPE } from '../src/api/api-constants.js';
+import { RULE_EVALUATOR_TYPE as _RULE_EVALUATOR_TYPE, SCORE_ROUND_FACTOR } from '../src/api/api-constants.js';
 
 export const SESSION_ID_PREVIEW_LEN = 8;
 
@@ -106,7 +106,7 @@ export const EVALUATION_RESULT_EVENT = 'gen_ai.evaluation.result';
 export const EVALUATION_SCHEMA_URL = 'https://integritystudio.ai/schemas/evaluation/1.0.0';
 
 export function normalizeScore(score: number): number {
-  return Math.round(score * 10000) / 10000;
+  return Math.round(score * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR;
 }
 
 /** Canonical evaluation record. Also used by derive-evaluations.ts. */

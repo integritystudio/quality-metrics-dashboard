@@ -63,7 +63,7 @@ import {
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS } from '../src/lib/constants.js';
-import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
+import { BYTES, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { KV_SCHEMA_VERSION, timestampToMs, extractFiniteScores } from '../src/api/api-constants.js';
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { max, min } from 'd3-array';
@@ -249,7 +249,7 @@ export const KV_BATCH_SIZE = 5_000;
  * Byte cap per bulk PUT. Requests up to 30 MB succeeded, but one dropped connection
  * defers its whole request, so smaller requests lose less (KV-SYNC-LAG-AND-APRIL-RECOUNT).
  */
-export const KV_BATCH_MAX_BYTES = 8 * 1024 * 1024;
+export const KV_BATCH_MAX_BYTES = 8 * BYTES.MB;
 /** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
 const SCRIPT_DIR = importMetaDirname(import.meta);
 const STATE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-state.json');

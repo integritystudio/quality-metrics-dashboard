@@ -40,6 +40,7 @@ export type { Role } from './roles.js';
 export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 export const TIME_MS = {
+  SECOND: 1_000,
   HOUR: 3_600_000,
   DAY: 86_400_000,
 } as const;
@@ -55,9 +56,9 @@ export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
  * `noUncheckedIndexedAccess` does not widen access to `number | undefined`.
  */
 export const PERIOD_MS = {
-  '24h': 1 * TIME_MS.DAY,
-  '7d': 7 * TIME_MS.DAY,
-  '30d': 30 * TIME_MS.DAY,
+  '24h': VALID_PERIODS['24h'] * TIME_MS.DAY,
+  '7d': VALID_PERIODS['7d'] * TIME_MS.DAY,
+  '30d': VALID_PERIODS['30d'] * TIME_MS.DAY,
 } satisfies Record<Period, number>;
 /** Compute { start, end } ISO strings for a period key (e.g. '7d'). */
 export function computePeriodDates(period: Period): { start: string; end: string } {
@@ -108,7 +109,7 @@ export const SCORE_CHIP_PRECISION = 2;
 export const SCORE_FORMAT_PRECISION = 4;
 /** Decimal places for a score drawn inside a tight SVG label. */
 export const SCORE_LABEL_PRECISION = 1;
-/** A 0–1 ratio (or a percentile over 100) times this is a percentage. */
+/** Converts between a 0–1 ratio and a percentage: multiply for the percentage, divide for the ratio. */
 export const PERCENT_MULTIPLIER = 100;
 /** The top of a percentage scale: a clamped percentage never reads above this. */
 export const PERCENT_MAX = 100;
@@ -158,7 +159,6 @@ export type SurvivalCohort = typeof SURVIVAL_COHORT[keyof typeof SURVIVAL_COHORT
 export const CONTENT_KIND = { CODE: 'code', DOC: 'doc' } as const;
 export type ContentKind = typeof CONTENT_KIND[keyof typeof CONTENT_KIND];
 
-export const DEFAULT_PAGE_LIMIT = 50;
 
 export const HEATMAP_ROW_HEADER_WIDTH = 80;
 export const HEATMAP_COL_HEADER_HEIGHT = 32;

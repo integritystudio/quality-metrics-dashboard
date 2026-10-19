@@ -1,5 +1,6 @@
 import { type ReactNode, type CSSProperties } from 'react';
 import { Link } from 'wouter';
+import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
 
 /** Where the back link goes when a page does not say: home. Existing pages pass nothing and are unchanged. */
 export const DEFAULT_BACK_HREF = '/';
@@ -18,7 +19,7 @@ type PageShellProps = {
 export function PageShell({
   isLoading,
   error,
-  skeletonHeight = 300,
+  skeletonHeight = SKELETON_HEIGHT_MD,
   backHref = DEFAULT_BACK_HREF,
   backLabel = DEFAULT_BACK_LABEL,
   children,

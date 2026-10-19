@@ -469,7 +469,7 @@ describe('network failure handling', () => {
   it('retries throttling and server faults but not payload rejections', () => {
     // A 400 means the same bytes will be rejected again — retrying wastes the
     // budget and delays the real error reaching the operator.
-    expect(SCRIPT).toMatch(/response\.status === 429 \|\| response\.status >= 500/);
+    expect(SCRIPT).toMatch(/response\.status === HttpStatus\.TooManyRequests \|\| response\.status >= HttpStatus\.InternalServerError/);
   });
 
   it('bounds every request with a timeout', () => {

@@ -12,6 +12,7 @@ import {
 } from '../parent/bucket-utils.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { LIVE_WINDOW_MS, EVAL_LIMIT, computePeriodDates } from '../../lib/constants.js';
+import { timestampToMs } from '../../lib/timestamps.js';
 import type { LiveMetric, QualityLiveData } from '../../types.js';
 import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
 
@@ -99,7 +100,7 @@ qualityRoutes.get('/degradation-signals', validQuery(PeriodQuery), async (c) => 
     const buckets = bucketLabels.map(b => ({ ...b, scores: [] as number[] }));
     for (const ev of evals) {
       if (ev.scoreValue == null) continue;
-      const ts = Number(ev.timestamp / 1_000_000n);
+      const ts = timestampToMs(ev.timestamp);
       const idx = getEvenBucketIndex(ts, startMs, bucketMs, DEFAULT_BIN_COUNT);
       if (idx !== null) buckets[idx]?.scores.push(ev.scoreValue);
     }

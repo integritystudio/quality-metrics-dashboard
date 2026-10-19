@@ -35,6 +35,7 @@ import {
   HALLUCINATION_RISK_THRESHOLD,
   SCORE_FORMAT_PRECISION,
   COMPACT_UNIT_PRECISION,
+  TIME_MS,
 } from './constants.js';
 export type FeatureRoleType = Role;
 
@@ -322,7 +323,7 @@ export function shortPath(fullPath: string): string {
 }
 
 export function fmtDuration(ms: number, secDecimals = 1): string {
-  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(secDecimals)}s`;
+  return ms < TIME_MS.SECOND ? `${Math.round(ms)}ms` : `${(ms / TIME_MS.SECOND).toFixed(secDecimals)}s`;
 }
 
 const COMPACT_COUNT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: COMPACT_UNIT_PRECISION });

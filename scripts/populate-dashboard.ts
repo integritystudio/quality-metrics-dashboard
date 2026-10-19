@@ -65,11 +65,12 @@ import {
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { BYTES } from '../../src/lib/core/units.js';
 
 const SCRIPTS_DIR = import.meta.dirname;
 const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
 /** Captured stderr ceiling per stage; a stack trace plus warnings is kilobytes, not megabytes. */
-const STDERR_CAPTURE_MAX_BYTES = 16 * 1024 * 1024;
+const STDERR_CAPTURE_MAX_BYTES = 16 * BYTES.MB;
 const MS_PER_SECOND = 1000;
 
 const SKIP_DERIVE_FLAG = '--skip-derive';

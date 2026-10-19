@@ -10,6 +10,7 @@
 
 import { CliArgError, parseCli, positiveIntArg } from './cli-args.js';
 import { sleep } from './sleep.js';
+import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
 
 /** judge-evaluations exit: calls were refused for billing (credit balance). Nothing to retry; the fix is external. */
 export const JUDGE_EXIT_BILLING = 4;
@@ -220,9 +221,13 @@ export const DRY_RUN_FLAG = '--dry-run';
  * Waits between sync-to-kv attempts, in order — five retries, ~30 minutes in
  * total, sized to the 15–35 minute laptop network outages seen in practice
  * (docs/data-pipeline.md § Historical incidents). Bounded so a real code
- * failure cannot hold a run open.
+ * failure cannot hold a run open. Doubling from a minute, capped at fifteen.
  */
-export const SYNC_RETRY_DELAYS_MS: readonly number[] = [60_000, 120_000, 240_000, 480_000, 900_000];
+const SYNC_RETRY_COUNT = 5;
+export const SYNC_RETRY_DELAYS_MS: readonly number[] = Array.from(
+  { length: SYNC_RETRY_COUNT },
+  (_, retry) => Math.min(TIME_MS.MINUTE * 2 ** retry, DURATION_MS.FIFTEEN_MINUTES),
+);
 
 /**
  * Transport-level failure signatures worth waiting out. Deliberately only the

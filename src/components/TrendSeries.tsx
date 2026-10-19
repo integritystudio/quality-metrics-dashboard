@@ -11,7 +11,7 @@ import {
 import { extent } from 'd3-array';
 import { format, differenceInMilliseconds } from 'date-fns';
 import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER } from '../lib/constants.js';
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER, TIME_MS } from '../lib/constants.js';
 import { formatScore } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -44,7 +44,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
     new Date(last.endTime),
     new Date(first.startTime)
   );
-  const spanDays = spanMs / (1000 * 60 * 60 * 24);
+  const spanDays = spanMs / TIME_MS.DAY;
 
   const chartData = data.map((bucket) => ({
     time: formatTime(bucket.startTime, spanDays),

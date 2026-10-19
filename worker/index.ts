@@ -9,7 +9,7 @@ import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSumma
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema, ApiKeySchema, DashboardPermissionSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
-import { ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
+import { DEFAULT_PAGE_LIMIT, ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_API_KEY_HEADER, SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
@@ -78,8 +78,10 @@ const ERR_INVALID_PERIOD = `Invalid period. Must be ${OR_LIST.format(PERIOD_KEYS
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${OR_LIST.format(VALID_SORT_BY)}.`;
 
+const BEARER_PREFIX = 'Bearer ';
+
 const PaginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  limit: z.coerce.number().int().min(1).max(200).default(DEFAULT_PAGE_LIMIT),
   offset: z.coerce.number().int().min(0).default(0),
 });
 const ERR_INVALID_PAGINATION = 'Invalid pagination params. limit must be 1–200, offset must be >= 0.';
@@ -360,7 +362,7 @@ const AUTH_TIMEOUT_MS = 5000;
 
 app.use('/api/*', async (c, next) => {
   const authHeader = c.req.header('Authorization');
-  const jwt = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const jwt = authHeader?.startsWith(BEARER_PREFIX) ? authHeader.slice(BEARER_PREFIX.length) : null;
 
   // Test mode: bypass auth when ALLOW_TEST_BYPASS is explicitly enabled in the environment.
   // Never set ALLOW_TEST_BYPASS in production — leave the binding absent.
@@ -651,7 +653,7 @@ function db(env: SupabaseEnv): PostgrestClient {
 function serviceRoleHeaders(env: { SUPABASE_SERVICE_ROLE_KEY: string }): HeadersInit {
   return {
     [SUPABASE_API_KEY_HEADER]: env.SUPABASE_SERVICE_ROLE_KEY,
-    'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    'Authorization': `${BEARER_PREFIX}${env.SUPABASE_SERVICE_ROLE_KEY}`,
     [CONTENT_TYPE_HEADER]: ContentType.Json,
   };
 }
