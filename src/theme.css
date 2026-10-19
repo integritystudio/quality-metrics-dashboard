@@ -952,8 +952,12 @@ details[open] > .cot-summary::before {
   min-height: 36px;
   border: none;
   background-color: var(--heatmap-cell-bg);
-  color: var(--heatmap-cell-fg);
+  color: var(--bg-primary);
 }
+@supports (color: contrast-color(red)) {
+  .heatmap-cell { color: contrast-color(var(--heatmap-cell-bg)); }
+}
+.heatmap-cell[data-diagonal] { color: var(--text-secondary); }
 .heatmap-cell[data-toxic] {
   border: var(--border-width-thick) solid var(--score-failing);
   animation: toxicPulse 2s ease-in-out infinite;
