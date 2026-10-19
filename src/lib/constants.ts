@@ -176,7 +176,7 @@ export const SPAN_TREE_INDENT = 20;
 export const SPAN_TREE_BASE_PADDING = 8;
 export const SPARKLINE_WIDTH = 160;
 export const SPARKLINE_HEIGHT = 28;
-/** The sparkline size inside a metric card, where there is less room. */
+/** Sparkline's size when a caller passes none. */
 export const SPARKLINE_COMPACT_WIDTH = 80;
 export const SPARKLINE_COMPACT_HEIGHT = 24;
 /** Explanation characters shown inline in a table cell or metric card. */

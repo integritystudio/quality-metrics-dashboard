@@ -16,7 +16,7 @@ const HANDOFF_MARKER_RADIUS = 7;
 const HEADER_HEIGHT = 28;
 /** Gap between a label and the edge it is anchored to. */
 const LABEL_INSET = 8;
-/** Drops a text baseline so the glyphs sit centred on the y they are given. */
+/** Drops a text baseline so the 8–11px labels here sit centred on the y they are given. */
 const TEXT_BASELINE_OFFSET = 4;
 /**
  * Maximum turns rendered in the SVG viewport.
