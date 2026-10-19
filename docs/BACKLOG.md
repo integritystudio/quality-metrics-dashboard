@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. 207 hits remain, all `explicit-function-return-type` over `src/components`/`src/pages` (excluded on purpose — see below). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules and both option-drift changes landed 2026-10-19. Still open: `reportUnusedInlineConfigs`, the `no-unused-vars` option drift and the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -57,7 +57,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/consistent-type-definitions`~~ (landed) | 261 | 261 | 218 / 43 |
 | ~~`@typescript-eslint/explicit-function-return-type`~~ (46 of 253 landed) | 253 | 0 | 247 / 6 |
 | ~~`@stylistic/indent`~~ (landed) | 215 | 215 | 215 / 0 |
-| `local/no-magic-numbers-ignore-bitwise` (warn; enabled for non-test files, 155 measured 2026-10-18, 120 after the percent/`TIME_MS` consolidation, 89 after the direct swaps to existing constants, 57 after naming shared values, 25 after naming coincidental values apart, 18 after the 7 multiplier hits) | 18 | 0 | 18 / excluded |
+| ~~`local/no-magic-numbers-ignore-bitwise`~~ (landed at warn for non-test files 2026-10-18; measured that day, swept to 0) | 155 | 0 | 155 / excluded |
 | ~~`unicorn/no-array-sort`~~ (landed) | 65 | 0 | 38 / 27 |
 | ~~`@typescript-eslint/dot-notation`~~ (landed) | 49 | 49 | 22 / 27 |
 | ~~`@typescript-eslint/promise-function-async`~~ (landed) | 46 | 46 | 45 / 1 |
@@ -70,7 +70,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`sonarjs/no-duplicate-string`~~ (landed) | 15 | 0 | 15 / 0 |
 | ~~`max-params` 4~~ (landed) | 11 | 0 | 8 / 3 |
 | ~~`vitest/no-conditional-expect`~~ (landed) | 9 | 0 | 0 / 9 |
-| ~~`@typescript-eslint/strict-void-return`~~ (landed) | 5 | 0 | 2 / 3 |
+| ~~`@typescript-eslint/strict-void-return`~~ (landed; 40 under typescript-eslint 8.71.2, see below) | 5 | 0 | 2 / 3 |
 | ~~`regexp/no-super-linear-move`~~ (landed) | 4 | 0 | 1 / 3 |
 | ~~`no-promise-executor-return`~~ (landed) | 3 | 0 | 1 / 2 |
 | ~~`@typescript-eslint/no-unnecessary-type-arguments`~~ (landed) | 3 | 3 | 3 / 0 |
@@ -505,8 +505,6 @@ hand: the rule offers suggestions, never an autofix.
   `build.target`, and Vite does not polyfill a prototype method in any case, so the floor is accepted
   rather than configured.
 
-
-
 **`explicit-function-return-type` is on for `src/api`, `src/hooks` and `src/lib` only** (landed
 2026-10-16, at `error`; the parent has it tree-wide at `warn`). 46 sites annotated there. It is
 deliberately **not** applied to `src/components` or `src/pages`, which hold 156 of the 235 `src/` hits:
@@ -556,11 +554,16 @@ describes what a reader may receive, which includes `truncated: false` from a pr
 flag either way. Sharing it breaks the `is false` case in `SessionDetailPage.test.tsx`. The rationale is
 in a comment on the type itself.
 
-**Free today — zero hits, adoptable with no sweep:** `no-eval`, `no-new-func`, `no-unreachable`, `no-unreachable-loop`,
-`unicorn/prefer-number-properties`, `@typescript-eslint/prefer-readonly`, `no-useless-constructor`,
-`no-useless-default-assignment`, `no-non-null-asserted-nullish-coalescing`, `vitest/no-disabled-tests`,
-`vitest/expect-expect`, `vitest/valid-expect`, and both option-drift changes
-(`no-deprecated` warn → error, `ban-ts-comment` `minimumDescriptionLength: 10`).
+**The zero-hit rules landed 2026-10-19** at the parent's settings, with no sweep: `no-eval`, `no-new-func`,
+`no-unreachable`, `no-unreachable-loop`, `unicorn/prefer-number-properties`, `@typescript-eslint/prefer-readonly`
+and `no-useless-default-assignment`, and the `strict`-preset `no-useless-constructor`,
+`no-non-null-asserted-nullish-coalescing` and `ban-ts-comment` (`minimumDescriptionLength: 10`), all in
+`typeSafetyRules`; `vitest/no-disabled-tests`, `expect-expect` (the parent's `assertFunctionNames`) and
+`valid-expect` (`maxArgs: 2`) in the `TEST_FILES` block; and `no-deprecated` warn → error. Verified per tree
+with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0`.
+- `no-deprecated` stays on in the test trees, where the parent switches it off; it has no hits there.
+
+**By category:**
 - **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files
   2026-10-18: copied from the parent's inline definition into `eslint-rules/no-magic-numbers-ignore-bitwise.mjs`,
   with the parent's options. Swept from 155 hits to 0. `percent` and `TIME_MS` now have one definition each
@@ -608,26 +611,26 @@ in a comment on the type itself.
   ~~`no-await-in-loop`~~, ~~`complexity` 12~~ and ~~`sonarjs/no-duplicate-string`~~ 2026-10-18.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
   2026-10-17.
-- **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
-- **Core.** `no-eval`, `no-new-func`, ~~`no-promise-executor-return`~~ (source only, landed 2026-10-17),
-  `no-unreachable-loop`,
-  ~~`no-unmodified-loop-condition`~~ (landed 2026-10-17), `no-unreachable` (off here via tseslint's
-  `eslint-recommended`).
-- **unicorn.** ~~`no-array-sort`~~ and ~~`no-array-callback-reference`~~ (both landed 2026-10-18),
-  `prefer-number-properties` (partly covered here by `no-restricted-globals` and `radix`).
-- **regexp.** ~~`regexp/no-super-linear-move`~~ (landed 2026-10-17).
-- **TypeScript.** `dot-notation`, `explicit-function-return-type` (warn), `method-signature-style: property`,
-  `consistent-type-definitions: type`, `prefer-readonly`, `no-unnecessary-type-arguments`,
-  `no-useless-default-assignment`, `promise-function-async` and ~~`strict-void-return`~~ (source only,
-  landed 2026-10-18); from the
-  `strict` preset ~~`unified-signatures`~~ (landed 2026-10-17), `no-useless-constructor`,
-  `no-non-null-asserted-nullish-coalescing`.
-- **Option drift.** `no-deprecated` is `error` there, `warn` here; `ban-ts-comment` wants
-  `minimumDescriptionLength: 10`; `no-unused-vars` here also exempts `_`-prefixed destructured array elements.
+- **Formatting.** Done — ~~`@stylistic/indent` 2, `SwitchCase: 1`~~ (landed 2026-10-16).
+- **Core.** Done — ~~`no-promise-executor-return`~~ (source only) and ~~`no-unmodified-loop-condition`~~
+  landed 2026-10-17; ~~`no-eval`~~, ~~`no-new-func`~~, ~~`no-unreachable-loop`~~ and ~~`no-unreachable`~~
+  (re-enabled over tseslint's `eslint-recommended`) 2026-10-19.
+- **unicorn.** Done — ~~`no-array-sort`~~ and ~~`no-array-callback-reference`~~ landed 2026-10-18,
+  ~~`prefer-number-properties`~~ 2026-10-19.
+- **regexp.** Done — ~~`regexp/no-super-linear-move`~~ (landed 2026-10-17).
+- **TypeScript.** ~~`dot-notation`~~, ~~`method-signature-style: property`~~,
+  ~~`consistent-type-definitions: type`~~, ~~`no-unnecessary-type-arguments`~~ and
+  ~~`promise-function-async`~~ landed 2026-10-16, ~~`unified-signatures`~~ 2026-10-17,
+  ~~`strict-void-return`~~ (source only) 2026-10-18, and ~~`prefer-readonly`~~,
+  ~~`no-useless-default-assignment`~~, ~~`no-useless-constructor`~~ and
+  ~~`no-non-null-asserted-nullish-coalescing`~~ 2026-10-19. `explicit-function-return-type` is on for
+  `src/api`, `src/hooks` and `src/lib` only (see above).
+- **Option drift.** ~~`no-deprecated` warn → error~~ and ~~`ban-ts-comment` `minimumDescriptionLength: 10`~~
+  landed 2026-10-19. Still open: `no-unused-vars` here also exempts `_`-prefixed destructured array elements.
   Keep `scripts/`' `prefer-nullish-coalescing` `ignorePrimitives: { boolean: true }`: it guards the
   `isDirectRun` checks.
-- **Tests only.** `vitest/no-disabled-tests`, `expect-expect`, `valid-expect` (`maxArgs: 2`);
-  ~~`no-conditional-expect`~~ (landed 2026-10-17);
+- **Tests only.** Done — ~~`no-conditional-expect`~~ landed 2026-10-17, ~~`vitest/no-disabled-tests`~~,
+  ~~`expect-expect`~~ and ~~`valid-expect` (`maxArgs: 2`)~~ 2026-10-19;
   `no-unnecessary-type-assertion` stays off here on purpose (see the comment in `eslint.config.mjs`).
 
 New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x`,
