@@ -20,17 +20,20 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const workerDir = join(dirname(fileURLToPath(import.meta.url)), '..');
-const workerModules = readdirSync(workerDir)
-  .filter((name) => name.endsWith('.ts'))
+// Recursive: a route placed in a future worker/routes/ must not escape the scan. Test files are
+// excluded — their KV doubles would inflate every count the assertions below rest on.
+const workerModules = readdirSync(workerDir, { recursive: true, encoding: 'utf8' })
+  .filter((name) => name.endsWith('.ts') && !name.includes('__tests__'))
   .toSorted();
 const workerSource = workerModules
   .map((name) => readFileSync(join(workerDir, name), 'utf8'))
   .join('\n');
 
 describe('KV choke point (worker module source scan)', () => {
-  it('scans every worker module', () => {
+  it('scans every worker module and no test file', () => {
     expect(workerModules).toContain('index.ts');
     expect(workerModules).toContain('admin-routes.ts');
+    expect(workerModules.filter((name) => name.includes('.test.'))).toEqual([]);
   });
 
   it('exactly one raw kv.get exists — inside readKvEnvelope', () => {
