@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop` and `unicorn/no-array-sort` on 2026-10-18. 421 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18. 367 hits remain across two rules, neither autofixable: `local/no-magic-numbers-ignore-bitwise` (160, and the rule is not exported from the parent's config) and `explicit-function-return-type` over `src/components`/`src/pages` (207, excluded on purpose — see below). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -61,13 +61,13 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`unicorn/no-array-sort`~~ (landed) | 65 | 0 | 38 / 27 |
 | ~~`@typescript-eslint/dot-notation`~~ (landed) | 49 | 49 | 22 / 27 |
 | ~~`@typescript-eslint/promise-function-async`~~ (landed) | 46 | 46 | 45 / 1 |
-| `complexity` 12 (warn) | 39 | 0 | 36 / 3 |
+| ~~`complexity` 12~~ (landed) | 39 | 0 | 36 / 3 |
 | ~~`no-await-in-loop`~~ (landed) | 32 | 0 | 25 / 7 |
 | ~~`@typescript-eslint/method-signature-style`~~ (landed) | 31 | 31 | 13 / 18 |
 | ~~`unicorn/no-array-callback-reference`~~ (landed) | 25 | 0 | 16 / 9 |
 | ~~`no-duplicate-imports`~~ (landed) | 26 | 0 | 8 / 18 |
 | ~~`import/no-extraneous-dependencies`~~ (landed) | 25 | 0 | 25 / 0 |
-| `sonarjs/no-duplicate-string` (warn) | 15 | 0 | 15 / 0 |
+| ~~`sonarjs/no-duplicate-string`~~ (landed) | 15 | 0 | 15 / 0 |
 | ~~`max-params` 4~~ (landed) | 11 | 0 | 8 / 3 |
 | ~~`vitest/no-conditional-expect`~~ (landed) | 9 | 0 | 0 / 9 |
 | ~~`@typescript-eslint/strict-void-return`~~ (landed) | 5 | 0 | 2 / 3 |
@@ -197,14 +197,14 @@ same shape — a `for` over seeded evals with a per-metric `if (ev.evaluationNam
   and no test pins either. Adding them is coverage work, not part of adopting the rule.
 
 **`max-params` 4 and `max-depth` 4 landed 2026-10-17** at the parent's levels, in a `Complexity controls`
-block over `src/`, `worker/` and `scripts/` — the home `no-await-in-loop` joined on 2026-10-18 and the
-remaining complexity rules (`complexity` 12, `sonarjs/no-duplicate-string`) should join. Proved live with a throwaway 5-parameter
+block over `src/`, `worker/` and `scripts/` — `no-await-in-loop` joined on 2026-10-18, and `complexity` 12
+and `sonarjs/no-duplicate-string` closed the group the same day. Proved live with a throwaway 5-parameter
 function and a 5-deep `if` nest under `src/`, `worker/`, `scripts/` and both test trees: all 10 hits fired.
 All 13 real hits were fixed by hand (11 `max-params`, 2 `max-depth`); `--fix` offers nothing for either.
 - **The parent's `warn` is this repo's `error`.** Both rules are `warn` there, and that severity was kept
   for parity, but `npm run lint` runs under `--max-warnings 0` — so there is no "adopt at warn and defer
   the hits" option here. Every hit had to go before the rule could land, which is what makes the
-  remaining `complexity`/`no-duplicate-string` rows (54 hits) a sweep, not a flag flip.
+  `complexity`/`no-duplicate-string` rows (54 hits) a sweep, not a flag flip.
 - 🔴 **`exactOptionalPropertyTypes: true` breaks the obvious `max-params` fix.** Grouping optional
   parameters into an object type is the standard remedy, but `spans?: boolean` no longer accepts a
   caller's `boolean | undefined` variable: as a separate argument it was an omitted one, and as a
@@ -222,6 +222,59 @@ All 13 real hits were fixed by hand (11 `max-params`, 2 `max-depth`); `--fix` of
   `queryEachAccount(env, spec, query)` (`AccountQueryLabel` grew into `AccountQuerySpec` with the limit
   and log prefix it was always passed beside), `summarizeJudgeRun(succeeded, { byMetric, byClass }, …)`
   (20 test call sites), and `evaluateTurnConsolidated(…, { stepsCache, criteria })`.
+
+**`complexity` 12 and `sonarjs/no-duplicate-string` landed 2026-10-18** at the parent's levels (both
+`warn`, so both fatal here), closing the Complexity group. 39 + 15 hits, none autofixable;
+`eslint-plugin-sonarjs@^4.2.2` matches the parent. Every complexity fix was extraction — no signature
+changed except by parameter grouping, and no behaviour with it.
+- 🔴 **`sonarjs/no-duplicate-string` must be switched off by `ignores`, not by a later block.** The
+  parent turns it off in its test block, which is the **last** block in its config; here the
+  `TEST_FILES` block comes *before* the complexity block, so putting the rule there re-enabled it in
+  every test tree and the count went from 15 to **132** (11 in `sync-org-entries.test.ts` alone —
+  fixture ids, exactly what the parent exempts). It now lives in its own block with
+  `ignores: TEST_FILES`, so the result cannot depend on block order. A future re-measure that reports
+  132 is this ordering fault, not drift.
+- **Where the 15 duplicate strings were.** Nine were permission strings in `src/lib/org-rbac.ts`,
+  which now exports a named `PERMISSION` map plus `VIEW_TAB_READS`/`DATA_READS`; `worker/index.ts`'s
+  **25** permission literals read through it, so a permission rename is one edit instead of 26. The
+  rest: each judge script's log prefix (now `LOG_PREFIX`, as `judge-batch-provider` already had) and
+  `'network error'` as the status fallback in four worker log lines (`NO_RESPONSE_STATUS`).
+- ⚠️ **A defaults mapper's complexity is its column count.** `fixture-server.ts`'s `evalToWire` (14)
+  and `spanToWire` (18) branched only through one `?? default` per wire column. Both are now a
+  `*_WIRE_DEFAULTS` constant plus a spread of the fields the input actually supplies. The helper's
+  return type is load-bearing: `Partial<T>` leaves `undefined` in the spread result (`timestamp_ns:
+  string | undefined` then fails to assign), so it returns `{ [K in keyof T]?: Exclude<T[K], undefined> }`.
+- 🔴 **The worker's auth middleware (46) could not be split until it became `factory.createMiddleware`.**
+  `app.use('/api/*', async (c, next) => …)` types `c` as `Context<AppEnv, '/api/*', any>`, so passing it
+  to a helper taking `AppContext` is `no-unsafe-argument` at every call site. `factory.createMiddleware`
+  (already used by `requireOrgAdmin`) gives a context without the `any`; the registration stays
+  `app.use('/api/*', authenticate)` in the same position. A middleware helper must also leave its return
+  type inferred — an explicit `Promise<Response | void>` trips `no-invalid-void-type`.
+- **An extracted guard that returns `Response | T` keeps every error body byte-identical.** No
+  `HTTPException`, no `onError` path: the caller narrows with `instanceof Response`. Where the caller
+  then needs a narrowed union member (`delivery.destination`), the helper has to be a type predicate
+  (`isSendable`) — a plain boolean leaves the union unnarrowed and `tsc` rejects the property read.
+- ⚠️ **Hoisting the shared `AbortSignal` would have moved a deadline.** The auth middleware's one
+  `AbortSignal.timeout(AUTH_TIMEOUT_MS)` is documented as covering "all auth fetches" but is never
+  passed to `jwtVerify`, so the JWKS round trip already eats into the Supabase budget. It stays at its
+  original position rather than moving down beside `db(c.env)`, which would have silently widened the
+  DB budget by the JWKS time.
+- **A `Record` over a union is the exhaustiveness check a `switch` needed a `default` for.**
+  `adaptiveScoreColorBand` (17) is now one bander per `ScaleStrategy` in `BAND_BY_STRATEGY`, so a new
+  strategy fails to compile until it is listed — which the old `default:` arm hid. Safe because
+  `METRIC_SCALE_STRATEGY` is `Record<string, ScaleStrategy>` and the lookup already falls back to
+  `'uniform'`; `noUncheckedIndexedAccess` adds no `| undefined` to a literal-keyed `Record`.
+- **The two largest were structural, not clever.** `SessionDetailPage` (67) became one `sessionView`
+  derivation plus twelve section components, each taking the view model and destructuring what it
+  needs, so every JSX body moved unchanged. `sync-to-kv`'s `main` (46) became seven phase functions
+  (`computeAllOrgs`, `buildMetaEntries`, `refreshHeartbeatOnly`, `pruneStaleKeys`, `writeCoverage`,
+  `writeScopeCounter`, `logRunStart`), and `upload-evaluations`' `main` (39) and `mapRecord` (40) a
+  `RunState` record plus `classifyLine`/`processFile` and `readCore`/`buildPayload`.
+- **Several extractions sat at exactly 12 before a second split.** `complexity` errors *above* 12, so
+  12 passes — but a function left at the limit fails on the next conditional added to it. Where that
+  happened (`accumulateSpans`, `classifyLine`, `main` in `upload-evaluations`, `judgeVerdict`) one more
+  helper came out: `bumpDailyCount`, `manifestMatch`, `readOptions`/`effectiveMaxAgeMs`,
+  `isSuccessRateDrop`.
 
 `@stylistic/eslint-plugin` was added as a devDependency for `@stylistic/indent`.
 `promise-function-async` is off in test files, matching the parent's block and its reasoning (async stubs
@@ -511,8 +564,8 @@ in a comment on the type itself.
 - **Magic numbers.** `local/no-magic-numbers-ignore-bitwise` (warn) and, in tests,
   `local/no-magic-numbers-ignore-fixtures`. The rule is defined inline in the parent's CJS config and not
   exported, so it must be extracted into a shared module or copied.
-- **Complexity.** `complexity` 12, `sonarjs/no-duplicate-string` (both warn);
-  ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17, ~~`no-await-in-loop`~~ 2026-10-18.
+- **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,
+  ~~`no-await-in-loop`~~, ~~`complexity` 12~~ and ~~`sonarjs/no-duplicate-string`~~ 2026-10-18.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
   2026-10-17.
 - **Formatting.** `@stylistic/indent` 2, `SwitchCase: 1`.
@@ -537,9 +590,9 @@ in a comment on the type itself.
   ~~`no-conditional-expect`~~ (landed 2026-10-17);
   `no-unnecessary-type-assertion` stays off here on purpose (see the comment in `eslint.config.mjs`).
 
-New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x` and
-`eslint-import-resolver-typescript` (all three installed), plus `eslint-plugin-sonarjs` still to come,
-at the parent's versions; the dashboard installs standalone in CI.
+New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x`,
+`eslint-import-resolver-typescript` and `eslint-plugin-sonarjs` (all four installed, at the parent's
+versions); the dashboard installs standalone in CI.
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
