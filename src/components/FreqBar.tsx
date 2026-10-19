@@ -1,7 +1,8 @@
 import { BarIndicator } from './BarIndicator.js';
+import { PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 export function FreqBar({ label, count, max, color }: { label: string; count: number; max: number; color: string | undefined }) {
-  const pct = max > 0 ? (count / max) * 100 : 0;
+  const pct = max > 0 ? (count / max) * PERCENT_MULTIPLIER : 0;
   return (
     <div className="freq-bar-row">
       <div className="mono-xs text-secondary text-right truncate">{label}</div>

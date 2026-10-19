@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { fmtDuration, plural } from '../lib/quality-utils.js';
-import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING } from '../lib/constants.js';
+import { OTEL_STATUS_ERROR_CODE, SPAN_TREE_INDENT, SPAN_TREE_BASE_PADDING, PERCENT_MAX, PERCENT_MULTIPLIER } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
 type SpanNode = {
@@ -66,7 +66,7 @@ const STATUS_ICONS: Record<number, string> = {
 };
 
 function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; maxDuration: number }) {
-  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * 100, 100) : 0;
+  const barPct = maxDuration > 0 && node.durationMs ? Math.min((node.durationMs / maxDuration) * PERCENT_MULTIPLIER, PERCENT_MAX) : 0;
   const statusCode = node.status?.code ?? 0;
   const isError = statusCode === OTEL_STATUS_ERROR_CODE;
 

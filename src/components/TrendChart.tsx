@@ -15,6 +15,7 @@ import {
   CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
   CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
   CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION, COMPACT_UNIT_PRECISION,
+  PERCENT_MULTIPLIER,
 } from '../lib/constants.js';
 import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
@@ -167,7 +168,7 @@ export function TrendChart({
           <div>
             <span className="font-semibold">Confidence:</span>{' '}
             <span className="mono">
-              {formatPercent(dynamics.confidence * 100, 0)}
+              {formatPercent(dynamics.confidence * PERCENT_MULTIPLIER, 0)}
             </span>
           </div>
         </div>

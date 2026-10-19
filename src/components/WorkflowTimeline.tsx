@@ -2,7 +2,7 @@ import React from 'react';
 import { scoreColor, agentColorScale } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult, HandoffEvaluation } from '../types.js';
-import { SCORE_CHIP_PRECISION, SCORE_LABEL_PRECISION } from '../lib/constants.js';
+import { SCORE_CHIP_PRECISION, SCORE_LABEL_PRECISION, PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 const LANE_HEIGHT = 64;
 const LANE_PADDING_TOP = 12;
@@ -63,7 +63,7 @@ type TurnBlockProps = {
 
 function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
   const barColor = scoreColor(turn.relevance);
-  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${Math.round(turn.taskProgress * 100)}%${turn.hasError ? ', error' : ''}`;
+  const label = `Turn ${turn.turnIndex}: relevance ${turn.relevance.toFixed(SCORE_CHIP_PRECISION)}, progress ${Math.round(turn.taskProgress * PERCENT_MULTIPLIER)}%${turn.hasError ? ', error' : ''}`;
   return (
     <g transform={`translate(${x},${y})`} role="img" aria-label={label}>
       <rect

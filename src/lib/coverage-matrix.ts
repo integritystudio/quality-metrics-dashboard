@@ -1,4 +1,5 @@
 import type { CoverageMatrix, CoverageGapSummary, CoverageStatus } from '../types.js';
+import { PERCENT_MULTIPLIER } from './constants.js';
 
 /**
  * Browser-side reading of the columnar coverage matrix (CVG-1).
@@ -53,7 +54,5 @@ export function summarizeCoverageGaps(matrix: CoverageMatrix): CoverageGapSummar
   return summaries;
 }
 
-/** Percent conversion, matching the parent's PERCENT_MULTIPLIER. */
-const PERCENT_MULTIPLIER = 100;
 /** Two decimal places, matching the parent's PERCENT_PRECISION. */
 const PERCENT_ROUNDING = 100;

@@ -1,10 +1,8 @@
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
 import { PageShell } from '../components/PageShell.js';
-import { SKELETON_HEIGHT_MD, USD_DISPLAY_PRECISION } from '../lib/constants.js';
+import { PERCENT_MULTIPLIER, SKELETON_HEIGHT_MD, USD_DISPLAY_PRECISION } from '../lib/constants.js';
 import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
-
-const PERCENT_MULTIPLIER = 100;
 
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
   return 'strategy' in g && 'fallbackRate' in g;

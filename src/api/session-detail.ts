@@ -18,7 +18,6 @@ import {
   LATENCY_P95,
   LOG_SUMMARY_MAX_ENTRIES,
   OTEL_STATUS_ERROR_CODE,
-  PERCENT_BASE,
   gitRepositoryLabel,
   logSummaryFieldSchema,
   renamedAttr,
@@ -27,7 +26,7 @@ import {
   type SafeLogEntry,
 } from './api-constants.js';
 import { increment } from '../lib/collections.js';
-import { SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
+import { PERCENT_MULTIPLIER, SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
 import type { StepScore } from '../types.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { AGENT_ATTRIBUTES, ALERT_ATTRIBUTES, CODE_STRUCTURE_ATTRIBUTES, CONTEXT_ATTRIBUTES, GIT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, PROJECT_ATTRIBUTES, TASK_ATTRIBUTES, TOKEN_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
@@ -379,8 +378,8 @@ function computeSpanLatency(spans: SessionSpan[]): SpanLatency {
     hookLatency[name] = {
       count: sorted.length,
       avg: +(mean(sorted) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p50: +(quantileSorted(sorted, LATENCY_P50 / PERCENT_BASE) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
-      p95: +(quantileSorted(sorted, LATENCY_P95 / PERCENT_BASE) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p50: +(quantileSorted(sorted, LATENCY_P50 / PERCENT_MULTIPLIER) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
+      p95: +(quantileSorted(sorted, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
       max: +(sorted.at(-1) ?? 0).toFixed(LATENCY_DISPLAY_PRECISION),
     };
   }

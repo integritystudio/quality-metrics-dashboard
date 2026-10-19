@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { max } from 'd3-array';
+import { PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket: string; count: number }> }) {
   if (distribution.length === 0) return null;
@@ -13,7 +14,7 @@ export function ScoreHistogram({ distribution }: { distribution: Array<{ bucket:
           <div
             key={d.bucket}
             className="histogram-bar"
-            style={{ '--histogram-bar-height': `${(d.count / maxCount) * 100}%` } as CSSProperties}
+            style={{ '--histogram-bar-height': `${(d.count / maxCount) * PERCENT_MULTIPLIER}%` } as CSSProperties}
             aria-label={`${d.bucket}: ${d.count} evaluations`}
           >
             <div className="tooltip surface-elevated">

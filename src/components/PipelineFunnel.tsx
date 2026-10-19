@@ -3,7 +3,7 @@ import { max } from 'd3-array';
 import type { PipelineStage, PipelineDropoff } from '../types.js';
 import { EmptyState } from './EmptyState.js';
 import { formatPercent } from '../lib/quality-utils.js';
-import { FUNNEL_DROPOFF_WARN_PCT } from '../lib/constants.js';
+import { FUNNEL_DROPOFF_WARN_PCT, PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 type PipelineFunnelProps = {
   stages: PipelineStage[];
@@ -27,7 +27,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
 
       <div className="flex-col gap-1">
         {stages.map((stage, idx) => {
-          const widthPct = Math.max(2, (stage.entryCount / maxCount) * 100);
+          const widthPct = Math.max(2, (stage.entryCount / maxCount) * PERCENT_MULTIPLIER);
           const dropoff = dropoffs[idx];
           const showDropoff = dropoff && dropoff.dropped > 0;
 

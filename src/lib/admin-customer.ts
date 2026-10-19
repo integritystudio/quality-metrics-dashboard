@@ -7,12 +7,12 @@ import { ascending, rollups, sum } from 'd3-array';
 import { format } from 'date-fns';
 import {
   DAYS_PER_MONTH_FOR_DAILY_QUOTA,
-  PERCENT_MAX,
   QUOTA_DANGER_RATIO,
   QUOTA_WARNING_RATIO,
   USAGE_DAY_LABEL_INTERVAL,
 } from './admin-customer-constants.js';
 import { CUSTOMER_VIEW } from './admin-customer-strings.js';
+import { PERCENT_MAX, PERCENT_MULTIPLIER } from './constants.js';
 import type { UsageBucket } from './validation/admin-customer-schemas.js';
 
 /** `pickActiveOrg` (dashboard_page.dart): the preferred org while it is listed, else the first, else null. */
@@ -111,7 +111,7 @@ export function quotaRatio(used: number, limit: number | null): number {
 /** `_UsageBar._percent`: rounded down, capped at 100. */
 export function quotaPercent(used: number, limit: number | null): number {
   if (limit == null || limit <= 0) return 0;
-  return Math.min(Math.floor((used * PERCENT_MAX) / limit), PERCENT_MAX);
+  return Math.min(Math.floor((used * PERCENT_MULTIPLIER) / limit), PERCENT_MAX);
 }
 
 /** `_UsageBar._level`. */

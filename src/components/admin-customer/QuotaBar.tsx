@@ -3,7 +3,8 @@
  * 0.75 / 0.90 thresholds. The tone is a data attribute and the colour lives in theme.css.
  */
 import { BarIndicator } from '../BarIndicator.js';
-import { PERCENT_MAX, QUOTA_BAR_HEIGHT } from '../../lib/admin-customer-constants.js';
+import { QUOTA_BAR_HEIGHT } from '../../lib/admin-customer-constants.js';
+import { PERCENT_MAX, PERCENT_MULTIPLIER } from '../../lib/constants.js';
 import type { QuotaTone } from '../../lib/admin-customer.js';
 
 type QuotaBarProps = {
@@ -26,7 +27,7 @@ export function QuotaBar({ ratio, tone, label, percent }: QuotaBarProps) {
       aria-valuemax={PERCENT_MAX}
       aria-valuenow={percent}
     >
-      <BarIndicator value={ratio * PERCENT_MAX} height={QUOTA_BAR_HEIGHT} />
+      <BarIndicator value={ratio * PERCENT_MULTIPLIER} height={QUOTA_BAR_HEIGHT} />
     </div>
   );
 }

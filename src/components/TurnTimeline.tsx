@@ -3,6 +3,7 @@ import { scoreColor, agentColorScale } from '../lib/quality-utils.js';
 import { BarIndicator } from './BarIndicator.js';
 import { EmptyState } from './EmptyState.js';
 import type { TurnLevelResult } from '../types.js';
+import { PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 const UNKNOWN_AGENT = 'unknown';
 // The timeline scrolls sideways: bring the first focused turn to the row's start without jumping the page.
@@ -54,12 +55,12 @@ export function TurnTimeline({ turns, agentNames, focusedAgent }: TurnTimelinePr
 
             <div className="mb-1-5">
               <div className="text-secondary text-2xs mb-1">Relevance</div>
-              <BarIndicator value={turn.relevance * 100} height={6} color={bandColor} />
+              <BarIndicator value={turn.relevance * PERCENT_MULTIPLIER} height={6} color={bandColor} />
             </div>
 
             <div className="mb-1-5">
               <div className="text-secondary text-2xs mb-1">Progress</div>
-              <BarIndicator value={turn.taskProgress * 100} height={6} color="var(--status-healthy)" />
+              <BarIndicator value={turn.taskProgress * PERCENT_MULTIPLIER} height={6} color="var(--status-healthy)" />
             </div>
 
             {turn.hasError && (

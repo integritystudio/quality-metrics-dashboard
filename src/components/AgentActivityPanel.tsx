@@ -16,6 +16,7 @@ import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   ERROR_RATE_WARNING_THRESHOLD,
   SPARKLINE_WIDTH, SPARKLINE_HEIGHT, SCORE_CHIP_PRECISION,
+  PERCENT_MAX, PERCENT_MULTIPLIER,
 } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { BarIndicator } from './BarIndicator.js';
@@ -132,7 +133,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
           {table.getRowModel().rows.map(({ original: agent }) => {
             const color = colorOf(agent.agentName);
             const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
-            const invPct = (agent.invocations / maxInvocations) * 100;
+            const invPct = (agent.invocations / maxInvocations) * PERCENT_MULTIPLIER;
             const topSource = greatest(Object.entries(agent.sourceTypes), ([, count]) => count)?.[0];
             const isExpanded = expanded === agent.agentName;
             const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
@@ -168,7 +169,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
                   <td>
                     <div className="flex-center gap-1-5">
                       <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
-                        {agent.errors > 0 ? formatPercent(agent.errorRate * 100) : '\u2014'}
+                        {agent.errors > 0 ? formatPercent(agent.errorRate * PERCENT_MULTIPLIER) : '\u2014'}
                       </span>
                       {agent.errors > 0 && (
                         <span className="text-muted text-xs">
@@ -287,7 +288,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                 {name}
               </div>
               <div className="flex-center mb-1 gap-2">
-                <BarIndicator value={Math.min(m.avg * 100, 100)} color={barColor} className="flex-1" />
+                <BarIndicator value={Math.min(m.avg * PERCENT_MULTIPLIER, PERCENT_MAX)} color={barColor} className="flex-1" />
                 <span className="mono-xs font-semibold text-right score-label-width score-band" data-band={band}>
                   {m.avg.toFixed(SCORE_CHIP_PRECISION)}
                 </span>
@@ -309,7 +310,7 @@ export function AgentActivitySummary({ agents }: AgentActivityPanelProps) {
   const totalErrors = sum(agents, a => a.errors);
   const totalRateLimits = sum(agents, a => a.rateLimitCount);
   const rawErrorRate = totalInvocations > 0 ? totalErrors / totalInvocations : 0;
-  const overallErrorRate = rawErrorRate * 100;
+  const overallErrorRate = rawErrorRate * PERCENT_MULTIPLIER;
 
   const stats: Array<{ label: string; value: ReactNode; tone?: StatTone | undefined }> = [
     { label: 'Agents', value: agents.length },

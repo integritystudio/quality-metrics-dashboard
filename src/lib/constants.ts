@@ -40,8 +40,8 @@ export type { Role } from './roles.js';
 export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 export const TIME_MS = {
-  HOUR: 60 * 60 * 1000,
-  DAY: 24 * 60 * 60 * 1000,
+  HOUR: 3_600_000,
+  DAY: 86_400_000,
 } as const;
 // Periods live in the worker-safe `periods.ts` module, re-exported here like the roles.
 export { PERIOD_KEYS, PeriodEnum, DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from './periods.js';
@@ -108,6 +108,10 @@ export const SCORE_CHIP_PRECISION = 2;
 export const SCORE_FORMAT_PRECISION = 4;
 /** Decimal places for a score drawn inside a tight SVG label. */
 export const SCORE_LABEL_PRECISION = 1;
+/** A 0–1 ratio (or a percentile over 100) times this is a percentage. */
+export const PERCENT_MULTIPLIER = 100;
+/** The top of a percentage scale: a clamped percentage never reads above this. */
+export const PERCENT_MAX = 100;
 /** Decimal places for percentages shown to the user. */
 export const PERCENT_DISPLAY_PRECISION = 1;
 /** Decimal places before a unit suffix (k, M, K tok, h, d). */

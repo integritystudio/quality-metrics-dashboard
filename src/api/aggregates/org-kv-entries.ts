@@ -14,10 +14,10 @@ import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js'
 import { computeRollingDegradationSignals, type DegradationState } from '../parent/qfe-backtest.js';
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { BYTES, PERCENT_MULTIPLIER, SECONDS, TIME_MS } from '../parent/units.js';
+import { BYTES, SECONDS } from '../parent/units.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, type Period } from '../../lib/constants.js';
+import { PERCENT_MULTIPLIER, PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, TIME_MS, type Period } from '../../lib/constants.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { pushTo } from '../../lib/collections.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';

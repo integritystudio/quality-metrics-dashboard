@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
+import { PERCENT_MAX, PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 type SplitPaneProps = {
   left: ReactNode;
@@ -19,7 +20,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
     function onMouseMove(e: MouseEvent) {
       if (!draggingRef.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      const pct = ((e.clientX - rect.left) / rect.width) * PERCENT_MULTIPLIER;
       setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
     }
     function onMouseUp() { draggingRef.current = false; }
@@ -48,7 +49,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
           if (e.key === 'ArrowRight') { e.preventDefault(); setSplitPct(p => Math.min(maxPct, p + 2)); }
         }}
       />
-      <div className="split-pane-panel" style={{ '--split-width': `${100 - splitPct}%` } as CSSProperties}>{right}</div>
+      <div className="split-pane-panel" style={{ '--split-width': `${PERCENT_MAX - splitPct}%` } as CSSProperties}>{right}</div>
     </div>
   );
 }

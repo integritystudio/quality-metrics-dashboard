@@ -1,7 +1,7 @@
 import { sum } from 'd3-array';
 import { useCodeQuality } from '../hooks/useCodeQuality.js';
 import { PageShell } from '../components/PageShell.js';
-import { CODE_QUALITY_WARN_THRESHOLD, CONTENT_KIND, SKELETON_HEIGHT_MD, SURVIVAL_COHORT, type SurvivalCohort } from '../lib/constants.js';
+import { CODE_QUALITY_WARN_THRESHOLD, CONTENT_KIND, SKELETON_HEIGHT_MD, SURVIVAL_COHORT, type SurvivalCohort, PERCENT_MULTIPLIER } from '../lib/constants.js';
 import type { AgentWindowStats, AgentVersionStats } from '../api/routes/code-quality.js';
 
 const RATE_PRECISION = 1;
@@ -9,7 +9,7 @@ const RATE_PRECISION = 1;
 const SCORED_WINDOW = '21d';
 
 function fmtPct(rate: number): string {
-  return `${(rate * 100).toFixed(RATE_PRECISION)}%`;
+  return `${(rate * PERCENT_MULTIPLIER).toFixed(RATE_PRECISION)}%`;
 }
 
 function CohortBadge({ cohort }: { cohort: SurvivalCohort }) {

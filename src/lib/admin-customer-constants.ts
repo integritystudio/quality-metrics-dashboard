@@ -29,5 +29,3 @@ export const GATEWAY_MAX_RETRIES = 2;
 export const GATEWAY_TIMEOUT_MS = 20_000;
 /** `LinearProgressIndicator(minHeight: 6)` on the quota and usage bars. */
 export const QUOTA_BAR_HEIGHT = 6;
-/** A usage percentage never reads above this, however far a downgrade put usage over the limit. */
-export const PERCENT_MAX = 100;

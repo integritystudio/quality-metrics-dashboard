@@ -1,7 +1,7 @@
 import { useDegradationSignals, type DegradationReport, type DegradationSignal } from '../hooks/useDegradationSignals.js';
 import { PageShell } from '../components/PageShell.js';
 import { StatusBadge } from '../components/Indicators.js';
-import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION } from '../lib/constants.js';
+import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION, PERCENT_MULTIPLIER } from '../lib/constants.js';
 import type { Period } from '../types.js';
 
 const COVERAGE_DROPOUT_PRECISION = 1;
@@ -42,7 +42,7 @@ function ReportRow({ report }: { report: DegradationReport }) {
       <td className="mono">{signal.varianceRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
       <td className="mono">{signal.consecutiveBreaches}</td>
       <td className="mono">{signal.confirmed ? 'Yes' : 'No'}</td>
-      <td className="mono">{(signal.coverageDropoutRate * 100).toFixed(COVERAGE_DROPOUT_PRECISION)}%</td>
+      <td className="mono">{(signal.coverageDropoutRate * PERCENT_MULTIPLIER).toFixed(COVERAGE_DROPOUT_PRECISION)}%</td>
       <td className="mono">{signal.latencySkewRatio.toFixed(SCORE_DISPLAY_PRECISION)}</td>
     </tr>
   );

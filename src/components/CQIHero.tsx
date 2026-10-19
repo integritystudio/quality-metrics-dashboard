@@ -1,14 +1,14 @@
 import type { CSSProperties } from 'react';
 import { scoreColor, formatPercent, formatScore } from '../lib/quality-utils.js';
 import type { CompositeQualityIndex, CQIContribution } from '../types.js';
-import { SCORE_DISPLAY_PRECISION, PERCENT_DISPLAY_PRECISION } from '../lib/constants.js';
+import { SCORE_DISPLAY_PRECISION, PERCENT_DISPLAY_PRECISION, PERCENT_MULTIPLIER } from '../lib/constants.js';
 
 function segmentColor(contribution: CQIContribution): string {
   return scoreColor(contribution.rawScore, 'maximize');
 }
 
 export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
-  const displayValue = (cqi.value * 100).toFixed(PERCENT_DISPLAY_PRECISION);
+  const displayValue = (cqi.value * PERCENT_MULTIPLIER).toFixed(PERCENT_DISPLAY_PRECISION);
   const overallColor = scoreColor(cqi.value, 'maximize');
 
   return (
@@ -31,7 +31,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
             <div
               key={c.metric}
               className="cqi-segment"
-              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * 100, 0)})`}
+              title={`${c.metric}: ${formatScore(c.rawScore)} (weight ${formatPercent(c.weight * PERCENT_MULTIPLIER, 0)})`}
               style={{ '--cqi-segment-flex': c.weight, '--cqi-segment-bg': segmentColor(c) } as CSSProperties}
             />
           ))}
@@ -53,7 +53,7 @@ export function CQIHero({ cqi }: { cqi: CompositeQualityIndex }) {
             <tr key={c.metric}>
               <td>{c.metric}</td>
               <td>{formatScore(c.rawScore)}</td>
-              <td>{formatPercent(c.weight * 100, 0)}</td>
+              <td>{formatPercent(c.weight * PERCENT_MULTIPLIER, 0)}</td>
               <td>{c.contribution.toFixed(SCORE_DISPLAY_PRECISION)}</td>
             </tr>
           ))}
