@@ -24,6 +24,8 @@ local/
 .claude/worktrees/
 coverage/
 .serena/cache/
+.serena/project.yml
+.serena/project.local.yml
 
 # Local Claude Code state (should never be committed)
 .claude/tsc-cache/

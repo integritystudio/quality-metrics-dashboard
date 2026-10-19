@@ -2,6 +2,9 @@
 # Reads docs/repomix/token-count-tree.txt and updates the
 # "## Project Structure" section in README.md with a condensed view.
 set -euo pipefail
+# Byte semantics in every shell: the awk below matches the 3-byte box-drawing
+# characters as byte sequences, which multibyte locales handle per awk differently.
+export LC_ALL=C
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TREE_PATH="$ROOT/docs/repomix/token-count-tree.txt"
@@ -15,6 +18,9 @@ fi
 
 # Total = sum of the top-level entries; the tree has one root per packed directory.
 total_tokens=$(awk '
+/^(├|└)── / && !/\([0-9,]+ tokens\)/ {
+  print "warning: top-level entry without a token count, left out of the total: " $0 > "/dev/stderr"
+}
 /^(├|└)── .*\([0-9,]+ tokens\)/ {
   match($0, /\([0-9,]+ tokens\)/)
   count = substr($0, RSTART + 1, RLENGTH - 2)
@@ -57,12 +63,14 @@ function get_tokens(line,   s, p) {
   gsub(/,/, "", s)
   return int(s)
 }
+# Skip the repomix banner and its rule; only tree lines belong in the README.
+/^🔢 / || /^(─)+$/ { next }
 {
-  lines[NR] = $0
+  lines[++count] = $0
 }
 END {
   i = 1
-  while (i <= NR) {
+  while (i <= count) {
     if (!is_file(lines[i])) {
       print lines[i]
       i++
@@ -71,7 +79,7 @@ END {
     cp = connector_pos(lines[i])
     # Collect consecutive file siblings at same connector position
     n = 0
-    while (i <= NR && is_file(lines[i]) && connector_pos(lines[i]) == cp) {
+    while (i <= count && is_file(lines[i]) && connector_pos(lines[i]) == cp) {
       n++
       sib_line[n] = lines[i]
       sib_tok[n] = get_tokens(lines[i])
@@ -101,9 +109,9 @@ END {
       remaining = n - max
       # Build prefix from first sibling up to connector
       prefix = substr(sib_line[1], 1, cp - 1)
-      gsub(/[├└]/, "│", prefix)
+      gsub(/├|└/, "│", prefix)
       # Check if more entries follow at this level
-      has_more = (i <= NR && connector_pos(lines[i]) == cp) ? 1 : 0
+      has_more = (i <= count && connector_pos(lines[i]) == cp) ? 1 : 0
       conn = has_more ? "├" : "└"
       print prefix conn "── ... (" remaining " more)"
       # Cleanup
