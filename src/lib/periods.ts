@@ -6,6 +6,8 @@ import { z } from 'zod';
  */
 export const PERIOD_KEYS = ['24h', '7d', '30d', '90d'] as const;
 export const PeriodEnum = z.enum(PERIOD_KEYS);
+/** The 400 message for a bad `period`, listing {@link PERIOD_KEYS} so it follows the list. */
+export const INVALID_PERIOD_MESSAGE = `Invalid period. Must be ${new Intl.ListFormat('en', { type: 'disjunction' }).format(PERIOD_KEYS)}.`;
 export type Period = z.infer<typeof PeriodEnum>;
 /** Default period for list/evaluation queries. */
 export const DEFAULT_PERIOD = '7d' satisfies Period;

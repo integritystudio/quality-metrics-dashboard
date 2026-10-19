@@ -14,7 +14,7 @@ import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/
 import { SUPABASE_API_KEY_HEADER, SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
-import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, PERIOD_KEYS, PeriodEnum, type Period } from '../src/lib/periods.js';
+import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, INVALID_PERIOD_MESSAGE, PeriodEnum, type Period } from '../src/lib/periods.js';
 import { ROLES, RoleSchema } from '../src/lib/roles.js';
 
 /**
@@ -73,7 +73,6 @@ const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
 
 /** Joins allowed values as "a, b, or c" for the 400 messages, so they follow the shared lists. */
 const OR_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
-const ERR_INVALID_PERIOD = `Invalid period. Must be ${OR_LIST.format(PERIOD_KEYS)}.`;
 
 const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
 const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${OR_LIST.format(VALID_SORT_BY)}.`;
@@ -120,7 +119,7 @@ const CoverageQuery = z.object({
 
 /** The error each query field answers with; a schema reports issues in shape order. */
 const QUERY_FIELD_ERRORS: Record<string, string> = {
-  period: ERR_INVALID_PERIOD,
+  period: INVALID_PERIOD_MESSAGE,
   role: ERR_INVALID_ROLE,
   limit: ERR_INVALID_PAGINATION,
   offset: ERR_INVALID_PAGINATION,

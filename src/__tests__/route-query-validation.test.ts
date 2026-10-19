@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { blankAsAbsent, validQuery } from '../api/route-errors.js';
-import { ErrorMessage, PeriodSchema, RoleSchema } from '../lib/constants.js';
+import { ErrorMessage, INVALID_PERIOD_MESSAGE, PeriodSchema, RoleSchema } from '../lib/constants.js';
 import { HttpStatus } from '../lib/http-constants.js';
 
 const ProbeQuery = z.object({ period: PeriodSchema, role: blankAsAbsent(RoleSchema.optional()) });
@@ -25,7 +25,7 @@ describe('route validQuery', () => {
   it("answers 400 with the failing field's message", async () => {
     expect(await get('/probe?period=1y')).toEqual({
       status: HttpStatus.BadRequest,
-      body: { error: ErrorMessage.InvalidPeriod },
+      body: { error: INVALID_PERIOD_MESSAGE },
     });
   });
 
