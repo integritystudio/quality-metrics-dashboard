@@ -1,16 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds } from 'date-fns';
-import { getQualityMetric } from '../parent/quality-metrics.js';
 import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
-import { PARAM_METRIC_NAME_RE, isValidParam, jsonSafe } from '../api-constants.js';
-import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, DEFAULT_TOP_N, MAX_TOP_N, DEFAULT_BUCKET_COUNT, MAX_BUCKET_COUNT } from '../../lib/constants.js';
+import { jsonSafe } from '../api-constants.js';
+import { PeriodSchema, PERIOD_MS, SortBySchema, DEFAULT_TOP_N, MAX_TOP_N, DEFAULT_BUCKET_COUNT, MAX_BUCKET_COUNT, computePeriodDates } from '../../lib/constants.js';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../../lib/worker-contract.js';
-import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
+import { blankAsAbsent, validQuery, handleRouteError, resolveMetric } from '../route-errors.js';
 import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
 import { computeMetricDetailView, previousWindow } from '../aggregates/metric-detail.js';
-import { HttpStatus } from '../../lib/http-constants.js';
 
 const SCORE_LABEL_MAX_CHARS = 100;
 
@@ -33,14 +31,9 @@ export const metricsRoutes = new Hono();
 metricsRoutes.onError(handleRouteError);
 
 metricsRoutes.get('/metrics/:name', validQuery(MetricDetailQuery), async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
+  const metric = resolveMetric(c, c.req.param('name'));
+  if (metric instanceof Response) return metric;
+  const { name, config } = metric;
 
   const { period, topN, bucketCount } = c.req.valid('query');
 
@@ -57,22 +50,14 @@ metricsRoutes.get('/metrics/:name', validQuery(MetricDetailQuery), async (c) => 
 });
 
 metricsRoutes.get('/metrics/:name/evaluations', validQuery(MetricEvaluationsQuery), async (c) => {
-  const name = c.req.param('name');
-  if (!isValidParam(name, PARAM_METRIC_NAME_RE)) {
-    return c.json({ error: ErrorMessage.InvalidMetricNameFormat }, HttpStatus.BadRequest);
-  }
-  const config = getQualityMetric(name);
-  if (!config) {
-    return c.json({ error: `Unknown metric: ${name}` }, HttpStatus.NotFound);
-  }
+  const metric = resolveMetric(c, c.req.param('name'));
+  if (metric instanceof Response) return metric;
+  const { name } = metric;
 
   const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
 
-  const now = new Date();
-  const periodMs = PERIOD_MS[period];
-  const start = subMilliseconds(now, periodMs);
-
-  const allEvaluations = await loadEvaluationsForMetric(name, start.toISOString(), now.toISOString());
+  const { start, end } = computePeriodDates(period);
+  const allEvaluations = await loadEvaluationsForMetric(name, start, end);
   const evaluations = (scoreLabel ? allEvaluations.filter(e => resolveScoreLabel(e) === scoreLabel) : allEvaluations)
     .toSorted((a, b) => {
       if (sortBy === 'score_asc' || sortBy === 'score_desc') {

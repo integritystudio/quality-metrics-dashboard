@@ -2,19 +2,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { MultiAgentEvaluation, EvaluationResult } from '../types.js';
 // The shapes the API computes, imported rather than restated so the two cannot drift
 // (type-only, so none of src/api's Node-only code reaches the bundle).
-import type {
-  AgentActivityEntry,
-  AlertSummary,
-  CodeStructureEntry,
-  EvalBreakdownEntry,
-  FileAccessEntry,
-  GitCommit,
-  HookLatencyEntry,
-  SessionInfo,
-  Timespan,
-  TokenProgressionEntry,
-  TokenTotals,
-} from '../api/session-detail.js';
+import type { SessionDetail } from '../api/session-detail.js';
 import { STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
@@ -47,38 +35,8 @@ export type DataSources = {
   total: number;
 }
 
-export type SessionDetailResponse = {
-  sessionId: string;
+export type SessionDetailResponse = Omit<SessionDetail<MultiAgentEvaluation, EvaluationResult>, 'dataSources'> & {
   dataSources: DataSources;
-  timespan: Timespan | null;
-  sessionInfo: SessionInfo | null;
-  tokenTotals: TokenTotals;
-  tokenProgression: TokenProgressionEntry[];
-  toolUsage: Record<string, number>;
-  mcpUsage: Record<string, number>;
-  spanBreakdown: Record<string, number>;
-  hookLatency: Record<string, HookLatencyEntry>;
-  errors: {
-    byCategory: Record<string, number>;
-    details: Array<{
-      spanName: string;
-      tool?: string;
-      errorType?: string;
-      filePath?: string;
-    }>;
-  };
-  agentActivity: AgentActivityEntry[];
-  fileAccess: FileAccessEntry[];
-  gitCommits: GitCommit[];
-  alertSummary: AlertSummary;
-  codeStructure: CodeStructureEntry[];
-  evaluationBreakdown: EvalBreakdownEntry[];
-  logSummary: {
-    bySeverity: Record<string, number>;
-    logs: unknown[];
-  };
-  multiAgentEvaluation: MultiAgentEvaluation;
-  evaluations: EvaluationResult[];
 }
 
 export function useSessionDetail(sessionId: string | undefined): UseQueryResult<SessionDetailResponse> {
