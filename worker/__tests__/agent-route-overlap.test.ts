@@ -11,11 +11,12 @@
  * and asserts on which payload the route serves.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { TEST_AUTH0_DOMAIN, createTestIssuer, type TestIssuer } from './support/jwt.js';
+import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-agents-user';
@@ -27,21 +28,6 @@ let rolePermissions = AGENTS_PERMISSIONS;
 const AGENT_ID = 'code-reviewer';
 const SESSION_ID = 'session-abc123';
 const AGENT_PAYLOAD = { agentName: AGENT_ID, invocations: 4 };
-
-const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
-};
-
-function makeEnv(kv: MemoryKv) {
-  return {
-    DASHBOARD: kv,
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-  };
-}
 
 function withAgentsAuth(url: string): Promise<Response> {
   if (url.includes('/rest/v1/users') && url.includes('auth0_id=') && url.includes('limit=1')) {
@@ -55,7 +41,6 @@ function withAgentsAuth(url: string): Promise<Response> {
 
 let tenant: TestIssuer;
 let token: string;
-let mockExecutionCtx: { waitUntil: Mock<ExecutionContext['waitUntil']>; passThroughOnException: Mock<ExecutionContext['passThroughOnException']> };
 
 beforeAll(async () => {
   tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
@@ -65,10 +50,6 @@ beforeAll(async () => {
 beforeEach(() => {
   rolePermissions = AGENTS_PERMISSIONS;
   vi.stubGlobal('fetch', tenant.serveJwks(withAgentsAuth));
-  mockExecutionCtx = {
-    waitUntil: vi.fn((p: Promise<unknown>) => { void p; }),
-    passThroughOnException: vi.fn(),
-  };
 });
 
 afterEach(() => {
@@ -79,8 +60,8 @@ function get(path: string, kv: MemoryKv) {
   return app.request(
     path,
     { headers: { Authorization: `Bearer ${token}` } },
-    makeEnv(kv),
-    mockExecutionCtx as unknown as ExecutionContext,
+    makeWorkerEnv({ DASHBOARD: kv }),
+    makeCtx(),
   );
 }
 

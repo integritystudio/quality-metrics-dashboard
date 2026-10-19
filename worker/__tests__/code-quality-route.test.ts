@@ -5,39 +5,14 @@
  * missed every Worker route in production.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
+import { BYPASS_BINDINGS, BYPASS_HEADERS, BYPASS_ORG_ID, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 
-const BYPASS_ORG = 'a0000000-0000-4000-8000-000000000001';
-
-const mockAssets = { fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })) };
-
-// ALLOW_TEST_BYPASS requires the production markers to be ABSENT (empty
-// HOME_ORG_ID + empty staff list) — which also matches the dev worker's config.
-function makeEnv(kv: MemoryKv, overrides?: Partial<Record<string, unknown>>) {
-  return {
-    DASHBOARD: kv,
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-    ALLOW_TEST_BYPASS: 'true',
-    HOME_ORG_ID: '',
-    STAFF_USER_IDS: '[]',
-    ...overrides,
-  };
-}
-
-function bypassHeaders() {
-  return { Authorization: 'Bearer test-token' };
-}
-
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+function makeEnv(kv: MemoryKv) {
+  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS, ORG_SCOPING_ENABLED: 'true' });
 }
 
 const CODE_QUALITY_PAYLOAD = {
@@ -50,16 +25,16 @@ const BARE_PAYLOAD = { ...CODE_QUALITY_PAYLOAD, versionRollout: [{ agentName: 'p
 
 describe('GET /api/code-quality', () => {
   it('serves the org-scoped code-quality key the sync writes', async () => {
-    const kv = new MemoryKv({ [`org:${BYPASS_ORG}:code-quality`]: CODE_QUALITY_PAYLOAD, 'code-quality': BARE_PAYLOAD });
+    const kv = new MemoryKv({ [`org:${BYPASS_ORG_ID}:code-quality`]: CODE_QUALITY_PAYLOAD, 'code-quality': BARE_PAYLOAD });
 
-    const res = await app.request('/api/code-quality', { headers: bypassHeaders() }, makeEnv(kv, { ORG_SCOPING_ENABLED: 'true' }), makeCtx());
+    const res = await app.request('/api/code-quality', { headers: BYPASS_HEADERS }, makeEnv(kv), makeCtx());
 
     expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual(CODE_QUALITY_PAYLOAD);
   });
 
   it('answers the empty shape the page renders when the key is absent', async () => {
-    const res = await app.request('/api/code-quality', { headers: bypassHeaders() }, makeEnv(new MemoryKv(), { ORG_SCOPING_ENABLED: 'true' }), makeCtx());
+    const res = await app.request('/api/code-quality', { headers: BYPASS_HEADERS }, makeEnv(new MemoryKv()), makeCtx());
 
     expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toEqual({ survivalByAgentWindow: [], versionRollout: [], hasData: false });

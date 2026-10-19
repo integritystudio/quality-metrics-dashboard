@@ -10,8 +10,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import app from '../index.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
-import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { TEST_AUTH0_DOMAIN, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { NO_STAFF_USER_IDS, TEST_SERVICE_ROLE_KEY, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 
 type FetchMock = Mock<FetchLike>;
 
@@ -41,27 +41,8 @@ const AUDITOR_PERMISSIONS = [
   'dashboard.sessions.read',
 ];
 
-const mockAssets = {
-  fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
-};
-
-function makeEnv(overrides?: Partial<Record<string, unknown>>) {
-  return {
-    DASHBOARD: new MemoryKv(),
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-    ORG_SCOPING_ENABLED: 'true',
-    HOME_ORG_ID: MOCK_ORG_ID,
-    STAFF_USER_IDS: '[]',
-    ...overrides,
-  };
-}
-
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn((p: Promise<unknown>) => { void p; }), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+function makeEnv() {
+  return makeWorkerEnv({ ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: MOCK_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS });
 }
 
 /**
@@ -294,8 +275,8 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
     await rotateRequest(VALID_KEY_UUID);
 
     const headers = capturedFnInit?.headers as Record<string, string> | undefined;
-    expect(headers?.Authorization).toBe('Bearer test-service-role-key');
-    expect(headers?.apikey).toBe('test-service-role-key');
+    expect(headers?.Authorization).toBe(`Bearer ${TEST_SERVICE_ROLE_KEY}`);
+    expect(headers?.apikey).toBe(TEST_SERVICE_ROLE_KEY);
     expect(JSON.stringify(headers)).not.toContain(token);
     expect(JSON.parse(capturedFnInit?.body as string)).toEqual({ keyId: VALID_KEY_UUID, userId: MOCK_APP_USER_ID });
   });

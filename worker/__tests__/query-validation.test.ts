@@ -10,9 +10,7 @@ import { HTTPException } from 'hono/http-exception';
 import app from '../index.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, TEST_AUDIENCE } from './support/jwt.js';
-
-const mockAssets = { fetch: vi.fn() };
+import { BYPASS_BINDINGS, BYPASS_HEADERS, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 
 function pipelinePayload(period: string) {
   return { period, stages: [{ name: `stage-${period}` }], totalEvaluations: 1 };
@@ -47,27 +45,12 @@ function failingKv(err: Error) {
   return { get: () => Promise.reject(err) };
 }
 
-// ALLOW_TEST_BYPASS requires the production markers to be absent.
 function makeEnv(kv: unknown = syncedKv()) {
-  return {
-    DASHBOARD: kv,
-    ASSETS: mockAssets,
-    SUPABASE_URL: 'https://test.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-    AUTH0_DOMAIN: TEST_AUTH0_DOMAIN,
-    AUTH0_AUDIENCE: TEST_AUDIENCE,
-    ALLOW_TEST_BYPASS: 'true',
-    HOME_ORG_ID: '',
-    STAFF_USER_IDS: '[]',
-  };
-}
-
-function makeCtx(): ExecutionContext {
-  return { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS });
 }
 
 function get(path: string, env = makeEnv()): Promise<Response> {
-  return Promise.resolve(app.request(path, { headers: { Authorization: 'Bearer test-token' } }, env, makeCtx()));
+  return Promise.resolve(app.request(path, { headers: BYPASS_HEADERS }, env, makeCtx()));
 }
 
 async function bodyOf(path: string): Promise<unknown> {
