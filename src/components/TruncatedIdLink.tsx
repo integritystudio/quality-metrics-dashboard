@@ -1,8 +1,9 @@
 import type { MouseEvent } from 'react';
 import { Link } from 'wouter';
 import { truncateId } from '../lib/quality-utils.js';
+import { ID_DISPLAY_COMPACT_CHARS } from '../lib/constants.js';
 
-export function TruncatedIdLink({ id, href, maxLen = 8, className = 'mono-xs link-accent', onClick }: {
+export function TruncatedIdLink({ id, href, maxLen = ID_DISPLAY_COMPACT_CHARS, className = 'mono-xs link-accent', onClick }: {
   id: string;
   href: string;
   maxLen?: number;

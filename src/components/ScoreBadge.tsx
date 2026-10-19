@@ -1,6 +1,6 @@
 import { Link } from 'wouter';
 import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { EXPLANATION_TOOLTIP_CHARS, SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
 import { useMetricCalibration } from '../contexts/CalibrationContext.js';
@@ -46,7 +46,7 @@ function Tooltip({ id, score, label, evaluator, evaluatorType, explanation, trac
       {explanation && (
         <div className="tooltip-row tooltip-row--col gap-half">
           <span className="text-secondary">Explanation</span>
-          <span className="text-secondary text-xs">{truncateText(explanation, 120)}</span>
+          <span className="text-secondary text-xs">{truncateText(explanation, EXPLANATION_TOOLTIP_CHARS)}</span>
         </div>
       )}
       {traceId && (

@@ -1,8 +1,8 @@
 import { Link } from 'wouter';
 import type { CSSProperties } from 'react';
-import { formatScore } from '../lib/quality-utils.js';
+import { formatScore, percentOf } from '../lib/quality-utils.js';
 import type { TriggeredAlert } from '../types.js';
-import { PERCENT_MAX, PERCENT_MULTIPLIER } from '../lib/constants.js';
+import { PERCENT_MAX } from '../lib/constants.js';
 
 type AlertWithMeta = TriggeredAlert & { metricName?: string };
 
@@ -28,8 +28,8 @@ function ThresholdBar({ actual, threshold, direction }: {
   direction: 'above' | 'below';
 }) {
   const max = Math.max(actual, threshold) * 1.2 || 1;
-  const actualPct = Math.max(0, Math.min((actual / max) * PERCENT_MULTIPLIER, PERCENT_MAX));
-  const thresholdPct = Math.max(0, Math.min((threshold / max) * PERCENT_MULTIPLIER, PERCENT_MAX));
+  const actualPct = Math.max(0, Math.min(percentOf(actual, max), PERCENT_MAX));
+  const thresholdPct = Math.max(0, Math.min(percentOf(threshold, max), PERCENT_MAX));
   const isViolating = direction === 'below' ? actual < threshold : actual > threshold;
 
   return (

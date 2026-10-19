@@ -57,7 +57,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/consistent-type-definitions`~~ (landed) | 261 | 261 | 218 / 43 |
 | ~~`@typescript-eslint/explicit-function-return-type`~~ (46 of 253 landed) | 253 | 0 | 247 / 6 |
 | ~~`@stylistic/indent`~~ (landed) | 215 | 215 | 215 / 0 |
-| `local/no-magic-numbers-ignore-bitwise` (warn; enabled for non-test files, 155 measured 2026-10-18, 120 after the percent/`TIME_MS` consolidation, 89 after the direct swaps to existing constants) | 89 | 0 | 89 / excluded |
+| `local/no-magic-numbers-ignore-bitwise` (warn; enabled for non-test files, 155 measured 2026-10-18, 120 after the percent/`TIME_MS` consolidation, 89 after the direct swaps to existing constants, 57 after naming shared values) | 57 | 0 | 57 / excluded |
 | ~~`unicorn/no-array-sort`~~ (landed) | 65 | 0 | 38 / 27 |
 | ~~`@typescript-eslint/dot-notation`~~ (landed) | 49 | 49 | 22 / 27 |
 | ~~`@typescript-eslint/promise-function-async`~~ (landed) | 46 | 46 | 45 / 1 |

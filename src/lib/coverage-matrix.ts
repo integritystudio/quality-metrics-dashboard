@@ -1,5 +1,5 @@
 import type { CoverageMatrix, CoverageGapSummary, CoverageStatus } from '../types.js';
-import { PERCENT_MULTIPLIER } from './constants.js';
+import { percentOf } from './quality-utils.js';
 
 /**
  * Browser-side reading of the columnar coverage matrix (CVG-1).
@@ -46,7 +46,7 @@ export function summarizeCoverageGaps(matrix: CoverageMatrix): CoverageGapSummar
     }
     if (missingCount === 0) return;
     const coveragePercent = inputs.length > 0
-      ? Math.round(((inputs.length - missingCount) / inputs.length) * PERCENT_MULTIPLIER * PERCENT_ROUNDING) / PERCENT_ROUNDING
+      ? Math.round(percentOf(inputs.length - missingCount, inputs.length) * PERCENT_ROUNDING) / PERCENT_ROUNDING
       : 0;
     summaries.push({ metric, missingCount, coveragePercent });
   });

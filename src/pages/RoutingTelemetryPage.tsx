@@ -1,7 +1,7 @@
 import { useRoutingTelemetry, type RoutingTelemetryStrategyGroup } from '../hooks/useRoutingTelemetry.js';
 import { PageShell } from '../components/PageShell.js';
 import { PERCENT_MULTIPLIER, SKELETON_HEIGHT_MD, USD_DISPLAY_PRECISION } from '../lib/constants.js';
-import { formatPercent, byValueDesc } from '../lib/quality-utils.js';
+import { formatPercent, byValueDesc, percentOf } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
 
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
@@ -64,7 +64,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                         <td className="mono">{provider}</td>
                         <td className="mono">{count}</td>
                         <td className="mono">
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                          {formatPercent(percentOf(count, data.summary.routedSpans))}
                         </td>
                       </tr>
                     ))}
@@ -92,7 +92,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                         <td className="mono">{model}</td>
                         <td className="mono">{count}</td>
                         <td className="mono">
-                          {formatPercent((count / data.summary.routedSpans) * PERCENT_MULTIPLIER)}
+                          {formatPercent(percentOf(count, data.summary.routedSpans))}
                         </td>
                       </tr>
                     ))}

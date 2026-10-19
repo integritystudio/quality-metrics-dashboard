@@ -15,7 +15,7 @@ import {
   CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER,
   CHART_HEIGHT, CHART_STROKE_WIDTH, CHART_DOT_RADIUS, CHART_DOT_RADIUS_ACTIVE, CHART_DOT_RADIUS_PROJECTED,
   CHART_DASH_THRESHOLD, CHART_DASH_PROJECTED, TIME_MS, SCORE_FORMAT_PRECISION, COMPACT_UNIT_PRECISION,
-  PERCENT_MULTIPLIER,
+  PERCENT_MULTIPLIER, MINUTES_PER_HOUR, HOURS_PER_DAY, CHART_Y_PAD_RATIO, CHART_Y_PAD_MIN,
 } from '../lib/constants.js';
 import { formatPercent } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
@@ -35,9 +35,9 @@ function formatValue(v: number): string {
 function formatBreachTime(iso: string): string {
   const hours = (new Date(iso).getTime() - Date.now()) / TIME_MS.HOUR;
   if (hours <= 0) return 'threshold exceeded';
-  if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours < 48) return `${hours.toFixed(COMPACT_UNIT_PRECISION)}h`;
-  return `${(hours / 24).toFixed(COMPACT_UNIT_PRECISION)}d`;
+  if (hours < 1) return `${Math.round(hours * MINUTES_PER_HOUR)}m`;
+  if (hours < 2 * HOURS_PER_DAY) return `${hours.toFixed(COMPACT_UNIT_PRECISION)}h`;
+  return `${(hours / HOURS_PER_DAY).toFixed(COMPACT_UNIT_PRECISION)}d`;
 }
 
 export function TrendChart({
@@ -79,7 +79,7 @@ export function TrendChart({
     return <EmptyState message="Insufficient data" />;
   }
   const [yMin, yMax] = extent(allValues) as [number, number];
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  const yPad = (yMax - yMin) * CHART_Y_PAD_RATIO || CHART_Y_PAD_MIN;
 
   return (
     <div>

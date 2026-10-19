@@ -9,7 +9,7 @@ import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSumma
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, AdminRoleSchema, AdminUserRoleRowSchema, AdminUserSchema, AssignRoleRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, AdminMemberRowSchema, UpdateMemberRoleRequestSchema, ApiKeySchema, DashboardPermissionSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
-import { DEFAULT_PAGE_LIMIT, ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { SUPABASE_API_KEY_HEADER, SUPABASE_REST_PATH } from '../src/lib/postgrest-client.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
@@ -81,10 +81,10 @@ const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${OR_LIST.format(VALID_SORT
 const BEARER_PREFIX = 'Bearer ';
 
 const PaginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(DEFAULT_PAGE_LIMIT),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT),
   offset: z.coerce.number().int().min(0).default(0),
 });
-const ERR_INVALID_PAGINATION = 'Invalid pagination params. limit must be 1–200, offset must be >= 0.';
+const ERR_INVALID_PAGINATION = `Invalid pagination params. limit must be 1–${MAX_PAGE_LIMIT}, offset must be >= 0.`;
 
 const ERR_UNAUTHORIZED = 'Unauthorized';
 const ERR_FORBIDDEN = 'Forbidden';

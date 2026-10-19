@@ -9,6 +9,8 @@ export const ORG_ID_HEADER = 'X-Org-Id';
 
 /** Evaluation-list page size when the client sends no `limit`. */
 export const DEFAULT_PAGE_LIMIT = 50;
+/** Largest evaluation-list page a client may ask for. */
+export const MAX_PAGE_LIMIT = 200;
 
 /** UUID shape. The worker rejects an X-Org-Id, userId or roleId that fails it. */
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

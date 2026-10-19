@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode, type CSSProperties } from 'react';
-import { PERCENT_MAX, PERCENT_MULTIPLIER } from '../lib/constants.js';
+import { PERCENT_MAX } from '../lib/constants.js';
+import { percentOf } from '../lib/quality-utils.js';
 
 type SplitPaneProps = {
   left: ReactNode;
@@ -20,7 +21,7 @@ export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct 
     function onMouseMove(e: MouseEvent) {
       if (!draggingRef.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * PERCENT_MULTIPLIER;
+      const pct = percentOf(e.clientX - rect.left, rect.width);
       setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
     }
     function onMouseUp() { draggingRef.current = false; }

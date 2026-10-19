@@ -4,7 +4,7 @@ import { truncateId, plural, formatPercent } from '../lib/quality-utils.js';
 import { coverageStatusForCount, countAt, summarizeCoverageGaps } from '../lib/coverage-matrix.js';
 import {
   COVERAGE_GRID_HEADER_WIDTH, COVERAGE_GRID_CELL_SIZE,
-  COVERAGE_GRID_MAX_INPUTS,
+  COVERAGE_GRID_MAX_INPUTS, ID_DISPLAY_COMPACT_CHARS,
 } from '../lib/constants.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -81,7 +81,7 @@ function CoverageGridInner({ matrix }: CoverageGridProps) {
                 title={input}
                 className="text-secondary text-2xs coverage-header-cell"
               >
-                {truncateId(input, 8)}
+                {truncateId(input, ID_DISPLAY_COMPACT_CHARS)}
               </div>
             ))}
           </div>

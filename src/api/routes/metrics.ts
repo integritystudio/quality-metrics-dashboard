@@ -6,7 +6,7 @@ import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PARAM_METRIC_NAME_RE, isValidParam, jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, SortBySchema, ErrorMessage, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT } from '../../lib/constants.js';
-import { DEFAULT_PAGE_LIMIT } from '../../lib/worker-contract.js';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../../lib/worker-contract.js';
 import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
 import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
 import { computeMetricDetailView, previousWindow } from '../aggregates/metric-detail.js';
@@ -14,7 +14,7 @@ import { HttpStatus } from '../../lib/http-constants.js';
 
 const TopNSchema = z.coerce.number().int().min(1).max(50).default(DEFAULT_TOP_N);
 const BucketCountSchema = z.coerce.number().int().min(2).max(20).default(DEFAULT_BUCKET_COUNT);
-const LimitSchema = z.coerce.number().int().min(1).max(200).default(DEFAULT_PAGE_LIMIT);
+const LimitSchema = z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT);
 const OffsetSchema = z.coerce.number().int().min(0).default(0);
 const ScoreLabelSchema = z.string().max(100).optional();
 

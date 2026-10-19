@@ -29,7 +29,7 @@ import {
   SCORE_COLORS,
   type LabelFilterCategory,
 } from '../lib/quality-utils.js';
-import { EVAL_TABLE_EXPAND_COL_SIZE } from '../lib/constants.js';
+import { EVAL_TABLE_EXPAND_COL_SIZE, EXPLANATION_INLINE_CHARS } from '../lib/constants.js';
 import { EvaluationExpandedRow } from './EvaluationExpandedRow.js';
 import { TimestampCell } from './TimestampCell.js';
 import { ExpandChevron } from './ExpandChevron.js';
@@ -163,7 +163,7 @@ const columns = columnHelper.columns([
       const text = info.getValue() ?? '-';
       return (
         <span className="explanation truncate" title={text}>
-          {truncateText(text, 60)}
+          {truncateText(text, EXPLANATION_INLINE_CHARS)}
         </span>
       );
     },

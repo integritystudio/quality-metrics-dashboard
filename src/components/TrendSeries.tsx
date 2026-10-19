@@ -11,7 +11,7 @@ import {
 import { extent } from 'd3-array';
 import { format, differenceInMilliseconds } from 'date-fns';
 import type { TrendBucket } from '../hooks/useTrend.js';
-import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER, TIME_MS } from '../lib/constants.js';
+import { CHART_COLORS, CHART_HEIGHT, CHART_MARGIN, CHART_GRID_PROPS, CHART_AXIS_TICK, CHART_TOOLTIP_CONTENT_STYLE, CHART_TOOLTIP_LABEL_STYLE, CHART_YAXIS_WIDTH, CHART_YAXIS_TICK_FORMATTER, TIME_MS, DAYS_PER_WEEK, CHART_Y_PAD_RATIO, CHART_Y_PAD_MIN } from '../lib/constants.js';
 import { formatScore } from '../lib/quality-utils.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -29,7 +29,7 @@ const TREND_COLORS = {
 function formatTime(iso: string, spanDays: number): string {
   const d = new Date(iso);
   if (spanDays <= 1) return format(d, 'HH:mm');
-  if (spanDays <= 7) return format(d, 'EEE HH:mm');
+  if (spanDays <= DAYS_PER_WEEK) return format(d, 'EEE HH:mm');
   return format(d, 'MMM d');
 }
 
@@ -66,7 +66,7 @@ export function TrendSeries({ data, metricName }: TrendSeriesProps) {
   }
 
   const [yMin, yMax] = extent(allVals) as [number, number];
-  const yPad = (yMax - yMin) * 0.15 || 0.05;
+  const yPad = (yMax - yMin) * CHART_Y_PAD_RATIO || CHART_Y_PAD_MIN;
 
   return (
     <div role="img" aria-label={`Time series trend for ${metricName}`}>

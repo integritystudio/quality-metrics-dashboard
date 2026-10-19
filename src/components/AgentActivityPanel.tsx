@@ -11,7 +11,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import type { AgentStat, EvalMetricSummary } from '../hooks/useAgentStats.js';
-import { agentColorScale, scoreColor, scoreColorBand, formatCompactCount, formatPercent } from '../lib/quality-utils.js';
+import { agentColorScale, scoreColor, scoreColorBand, formatCompactCount, formatPercent, percentOf } from '../lib/quality-utils.js';
 import { TruncatedIdLink } from './TruncatedIdLink.js';
 import {
   ERROR_RATE_WARNING_THRESHOLD,
@@ -133,7 +133,7 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
           {table.getRowModel().rows.map(({ original: agent }) => {
             const color = colorOf(agent.agentName);
             const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
-            const invPct = (agent.invocations / maxInvocations) * PERCENT_MULTIPLIER;
+            const invPct = percentOf(agent.invocations, maxInvocations);
             const topSource = greatest(Object.entries(agent.sourceTypes), ([, count]) => count)?.[0];
             const isExpanded = expanded === agent.agentName;
             const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;

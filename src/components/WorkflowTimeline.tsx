@@ -14,6 +14,10 @@ const LANE_CENTER_OFFSET = LANE_PADDING_TOP + TURN_BLOCK_HEIGHT / 2;
 const LABEL_WIDTH = 120;
 const HANDOFF_MARKER_RADIUS = 7;
 const HEADER_HEIGHT = 28;
+/** Gap between a label and the edge it is anchored to. */
+const LABEL_INSET = 8;
+/** Drops a text baseline so the glyphs sit centred on the y they are given. */
+const TEXT_BASELINE_OFFSET = 4;
 /**
  * Maximum turns rendered in the SVG viewport.
  * Sessions with 10K+ turns would produce 400KB+ SVG without a cap.
@@ -164,7 +168,7 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
             <text
               key={t.turnIndex}
               x={turnX(t.turnIndex) + TURN_BLOCK_MIN_WIDTH / 2}
-              y={HEADER_HEIGHT - 8}
+              y={HEADER_HEIGHT - LABEL_INSET}
               textAnchor="middle"
               fontSize={9}
               fill="var(--text-muted)"
@@ -200,8 +204,8 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
               />
 
               <text
-                x={LABEL_WIDTH - 8}
-                y={laneTop + LANE_CENTER_OFFSET + 4}
+                x={LABEL_WIDTH - LABEL_INSET}
+                y={laneTop + LANE_CENTER_OFFSET + TEXT_BASELINE_OFFSET}
                 textAnchor="end"
                 fontSize={11}
                 fontWeight={600}
@@ -277,7 +281,7 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
               />
               <text
                 x={x}
-                y={midY + 4}
+                y={midY + TEXT_BASELINE_OFFSET}
                 textAnchor="middle"
                 fontSize={8}
                 fill={handoffColor}

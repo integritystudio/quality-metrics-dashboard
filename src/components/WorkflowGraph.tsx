@@ -17,7 +17,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import { group, mean, sum } from 'd3-array';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
 import { fmtDuration, formatCompactCount } from '../lib/quality-utils.js';
-import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { SCORE_CHIP_PRECISION, WORKFLOW_GRAPH_HEIGHT } from '../lib/constants.js';
 
 export const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
@@ -384,7 +384,7 @@ type WorkflowGraphProps = {
   containerRef?: React.RefObject<HTMLDivElement | null> | undefined;
 }
 
-export function WorkflowGraphView({ graph, onNodeClick, height = 600, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
+export function WorkflowGraphView({ graph, onNodeClick, height = WORKFLOW_GRAPH_HEIGHT, selectedAgents, criticalPath, containerRef }: WorkflowGraphProps) {
   const containerStyle = { '--workflow-graph-height': `${height}px` } as React.CSSProperties;
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   // The explicit <Edge> is not redundant despite matching the default: without it

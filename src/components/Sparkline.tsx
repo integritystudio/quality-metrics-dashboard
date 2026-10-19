@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { extent } from 'd3-array';
 import { scaleLinear } from 'd3-scale';
+import { SPARKLINE_COMPACT_HEIGHT, SPARKLINE_COMPACT_WIDTH } from '../lib/constants.js';
 
 type SparklineProps = {
   /** Array of score values (nulls allowed for gaps) */
@@ -15,7 +16,7 @@ type SparklineProps = {
   label?: string;
 }
 
-function SparklineInner({ data, width = 80, height = 24, color = 'var(--text-secondary)', label }: SparklineProps) {
+function SparklineInner({ data, width = SPARKLINE_COMPACT_WIDTH, height = SPARKLINE_COMPACT_HEIGHT, color = 'var(--text-secondary)', label }: SparklineProps) {
   const values = data.filter((v): v is number => v !== null && Number.isFinite(v));
   if (values.length < 2) return null;
 

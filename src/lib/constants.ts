@@ -44,6 +44,9 @@ export const TIME_MS = {
   HOUR: 3_600_000,
   DAY: 86_400_000,
 } as const;
+export const MINUTES_PER_HOUR = 60;
+export const HOURS_PER_DAY = 24;
+export const DAYS_PER_WEEK = 7;
 // Periods live in the worker-safe `periods.ts` module, re-exported here like the roles.
 export { PERIOD_KEYS, PeriodEnum, DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from './periods.js';
 export type { Period } from './periods.js';
@@ -168,10 +171,26 @@ export const COVERAGE_GRID_MAX_INPUTS = 30;
 export const FUNNEL_DROPOFF_WARN_PCT = 20;
 /** Minimum agent count to show workflow agent filter controls. */
 export const WORKFLOW_FILTER_MIN_AGENTS = 2;
+export const WORKFLOW_GRAPH_HEIGHT = 600;
 export const SPAN_TREE_INDENT = 20;
 export const SPAN_TREE_BASE_PADDING = 8;
 export const SPARKLINE_WIDTH = 160;
 export const SPARKLINE_HEIGHT = 28;
+/** The sparkline size inside a metric card, where there is less room. */
+export const SPARKLINE_COMPACT_WIDTH = 80;
+export const SPARKLINE_COMPACT_HEIGHT = 24;
+/** Explanation characters shown inline in a table cell or metric card. */
+export const EXPLANATION_INLINE_CHARS = 60;
+/** Explanation characters shown in a score tooltip. */
+export const EXPLANATION_TOOLTIP_CHARS = 120;
+/** Explanation characters shown in a session's evaluation list. */
+export const EXPLANATION_DETAIL_CHARS = 200;
+/** An id longer than this is shortened to its head and tail. */
+export const ID_DISPLAY_MAX_CHARS = 10;
+/** The same, for a narrow column header or an inline link. */
+export const ID_DISPLAY_COMPACT_CHARS = 8;
+/** Characters kept from each end of a shortened id. */
+export const ID_DISPLAY_EDGE_CHARS = 4;
 
 /** ConfidencePanel: minimum sample size for "sample size" confidence method. */
 export const CONFIDENCE_MIN_SAMPLE_SIZE = 50;
@@ -212,4 +231,8 @@ export const CHART_TOOLTIP_CONTENT_STYLE = {
 };
 export const CHART_TOOLTIP_LABEL_STYLE = { color: '#e6edf3' };
 export const CHART_YAXIS_WIDTH = 48;
+/** Y-axis headroom above and below the data, as a share of its range. */
+export const CHART_Y_PAD_RATIO = 0.15;
+/** Y-axis headroom when every value is equal, so the range is 0. */
+export const CHART_Y_PAD_MIN = 0.05;
 export const CHART_YAXIS_TICK_FORMATTER = (v: number): string => v.toFixed(SCORE_CHIP_PRECISION);

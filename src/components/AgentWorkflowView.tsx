@@ -6,7 +6,7 @@ import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
 import { agentColorScale, fmtDuration } from '../lib/quality-utils.js';
 import { criticalPath } from '../lib/critical-path.js';
-import { WORKFLOW_FILTER_MIN_AGENTS } from '../lib/constants.js';
+import { WORKFLOW_FILTER_MIN_AGENTS, WORKFLOW_GRAPH_HEIGHT } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';
 
@@ -28,7 +28,7 @@ export function AgentWorkflowView({
   graph,
   evaluation,
   onNodeClick,
-  height = 600,
+  height = WORKFLOW_GRAPH_HEIGHT,
 }: AgentWorkflowViewProps) {
   const [activeTab, setActiveTab] = useState<WorkflowTab>('dag');
 

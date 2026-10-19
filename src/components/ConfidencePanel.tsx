@@ -1,6 +1,6 @@
 import type { ConfidenceIndicator } from '../types.js';
 import { min as minOf, max as maxOf } from 'd3-array';
-import { SCORE_COLORS, formatScore, formatPercent, type ScoreColorBand } from '../lib/quality-utils.js';
+import { SCORE_COLORS, formatScore, formatPercent, percentOf, type ScoreColorBand } from '../lib/quality-utils.js';
 import {
   SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
   VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT,
@@ -29,7 +29,7 @@ function levelShape(level: string): string {
 }
 
 function VarianceBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min(PERCENT_MAX, (value / max) * PERCENT_MULTIPLIER) : 0;
+  const pct = max > 0 ? Math.min(PERCENT_MAX, percentOf(value, max)) : 0;
   const band: ScoreColorBand = pct < VARIANCE_LOW_PCT ? 'excellent' : pct < VARIANCE_MEDIUM_PCT ? 'adequate' : 'failing';
   return (
     <div className="variance-bar flex-center">

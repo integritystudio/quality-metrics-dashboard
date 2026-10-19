@@ -21,6 +21,7 @@ import {
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
   CODE_QUALITY_WARN_THRESHOLD,
+  EXPLANATION_DETAIL_CHARS,
 } from '../lib/constants.js';
 
 export function SessionDetailPage({ sessionId }: { sessionId: string }) {
@@ -241,7 +242,7 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
                     <div className="mono-xs">{e.evaluationName}</div>
                     {e.explanation && (
                       <div className="text-muted text-xs mt-0-5">
-                        {truncateText(e.explanation, 200)}
+                        {truncateText(e.explanation, EXPLANATION_DETAIL_CHARS)}
                       </div>
                     )}
                   </div>

@@ -36,6 +36,12 @@ import {
   SCORE_FORMAT_PRECISION,
   COMPACT_UNIT_PRECISION,
   TIME_MS,
+  MINUTES_PER_HOUR,
+  HOURS_PER_DAY,
+  DAYS_PER_WEEK,
+  ID_DISPLAY_MAX_CHARS,
+  ID_DISPLAY_EDGE_CHARS,
+  PERCENT_MULTIPLIER,
 } from './constants.js';
 export type FeatureRoleType = Role;
 
@@ -63,9 +69,14 @@ export function truncateText(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
-export function truncateId(id: string, max = 10): string {
+export function truncateId(id: string, max = ID_DISPLAY_MAX_CHARS): string {
   if (id.length <= max) return id;
-  return `${id.slice(0, 4)}\u2026${id.slice(-4)}`;
+  return `${id.slice(0, ID_DISPLAY_EDGE_CHARS)}\u2026${id.slice(-ID_DISPLAY_EDGE_CHARS)}`;
+}
+
+/** `part` as a percentage of `whole`. */
+export function percentOf(part: number, whole: number): number {
+  return (part / whole) * PERCENT_MULTIPLIER;
 }
 
 /** The fields of an evaluation that decide whether it is a failure or a hallucination indicator. */
@@ -317,9 +328,11 @@ export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
   },
 };
 
+const PATH_TAIL_SEGMENTS = 3;
+
 export function shortPath(fullPath: string): string {
   const parts = fullPath.replace(/\\/g, '/').split('/');
-  return parts.length > 3 ? `\u2026/${parts.slice(-3).join('/')}` : fullPath;
+  return parts.length > PATH_TAIL_SEGMENTS ? `\u2026/${parts.slice(-PATH_TAIL_SEGMENTS).join('/')}` : fullPath;
 }
 
 export function fmtDuration(ms: number, secDecimals = 1): string {
@@ -420,10 +433,10 @@ export function formatTimestamp(ts: string): string {
   const now = new Date();
   const diffMin = differenceInMinutes(now, d);
   if (diffMin < 1) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < MINUTES_PER_HOUR) return `${diffMin}m ago`;
   const diffHr = differenceInHours(now, d);
-  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffHr < HOURS_PER_DAY) return `${diffHr}h ago`;
   const diffDay = differenceInDays(now, d);
-  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffDay < DAYS_PER_WEEK) return `${diffDay}d ago`;
   return format(d, 'PP');
 }
