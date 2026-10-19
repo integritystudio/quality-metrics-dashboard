@@ -150,6 +150,8 @@ const typeSafetyRules = {
 const parentDistGlobs = ['./dist/**', '../dist/**', '../../dist/**', '../../../dist/**', '../../../../dist/**', '../../../../../dist/**'];
 
 export default tseslint.config(
+  // An inline /* eslint rule: … */ that changes nothing is a stale exemption; defaults to off.
+  { linterOptions: { reportUnusedInlineConfigs: 'error' } },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
