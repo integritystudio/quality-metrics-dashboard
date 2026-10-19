@@ -1,13 +1,6 @@
-import type { CSSProperties } from 'react';
 import { useQualityLive } from '../hooks/useQualityLive.js';
-import { formatTimestamp } from '../lib/quality-utils.js';
-import { SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW, SCORE_CHIP_PRECISION } from '../lib/constants.js';
-
-function scoreToBadgeColor(score: number): string {
-  if (score >= SCORE_THRESHOLD_GREEN) return 'var(--status-healthy)';
-  if (score >= SCORE_THRESHOLD_YELLOW) return 'var(--status-warning)';
-  return 'var(--status-critical)';
-}
+import { formatTimestamp, scoreColorBand } from '../lib/quality-utils.js';
+import { SCORE_CHIP_PRECISION } from '../lib/constants.js';
 
 export function QualityLiveIndicator() {
   const { data, isLoading, error } = useQualityLive();
@@ -38,7 +31,7 @@ export function QualityLiveIndicator() {
           key={m.name}
           title={`${m.name}: ${m.score.toFixed(SCORE_CHIP_PRECISION)} (${m.evaluatorType})`}
           className="mono text-xs chip gap-1 font-medium inline-flex-center quality-chip"
-          style={{ '--chip-color': scoreToBadgeColor(m.score) } as CSSProperties}
+          data-band={scoreColorBand(m.score)}
         >
           <span className="dot-xs" />
           {m.name.replace(/_/g, ' ')}

@@ -601,18 +601,11 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
       `KV_BATCH_MAX_BYTES`, `KV_VALUE_LIMIT_BYTES`) carry a one-line disable.
   - **Tests are not covered.** The parent's `local/no-magic-numbers-ignore-fixtures` variant was not copied.
-  - **Two band scales, each a copy of a parent one.** `SCORE_BAND_LOWER_BOUNDS` (`quality-utils.ts`) is
-    built from the parent's `SCORE_BAND_*` (`[0.4, 0.6, 0.8, 0.9]`, `lib/quality/score-bands.ts`), the
-    bands `scoreColorBand` uses for continuous scores. `SCORE_THRESHOLD_GREEN`/`YELLOW` (`constants.ts`,
-    0.8 / 0.5) are defined only here and restate the parent's `STEP_SCALE_EXCELLENT_THRESHOLD` /
-    `STEP_SCALE_ADEQUATE_THRESHOLD` (`quality-constants.ts`, used by `adaptiveScoreColorBand` for
-    step-scale scores) without importing them. The parent keeps both on purpose, so it does not pick one;
-    the decision is which kind of value each consumer shows:
-    - `QualityLiveIndicator` colours a live score with `>=`; `ConfidencePanel` labels evaluator agreement
-      `'excellent'` / `'adequate'` with `>`. So they disagree at exactly 0.8 and 0.5, and
-      `ConfidencePanel` calls 0.8–0.9 `'excellent'` where the main bands start it at 0.9.
-    - Continuous score: switch to `scoreColorBand` and delete the two constants. Step-scale or agreement
-      value: import the parent's `STEP_SCALE_*` instead of restating them.
+  - ~~**Two band scales.**~~ Resolved 2026-10-19: `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5, a copy of
+    the parent's step-scale `STEP_SCALE_*`) are deleted; `QualityLiveIndicator` and `ConfidencePanel`
+    now band through `scoreColorBand`, the parent's continuous `SCORE_BAND_*` (`[0.4, 0.6, 0.8, 0.9]`),
+    as `data-band`. Both gain the `good` and `poor` bands, and evaluator agreement below 0.5 is no
+    longer left unbanded. Live chips are still banded as `maximize`: `LiveMetric` carries no direction.
   - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
     `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
 - **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,

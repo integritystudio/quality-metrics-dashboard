@@ -1,8 +1,7 @@
 import type { ConfidenceIndicator } from '../types.js';
 import { min as minOf, max as maxOf } from 'd3-array';
-import { SCORE_COLORS, formatScore, formatPercent, percentOf, type ScoreColorBand } from '../lib/quality-utils.js';
+import { SCORE_COLORS, formatScore, formatPercent, percentOf, scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
 import {
-  SCORE_THRESHOLD_GREEN, SCORE_THRESHOLD_YELLOW,
   VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT,
   CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION,
   PERCENT_MAX, PERCENT_MULTIPLIER,
@@ -110,7 +109,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
             <span className="text-secondary">Agreement</span>
             <span
               className="mono agreement-value"
-              data-band={evaluatorAgreement > SCORE_THRESHOLD_GREEN ? 'excellent' : evaluatorAgreement > SCORE_THRESHOLD_YELLOW ? 'adequate' : undefined}
+              data-band={scoreColorBand(evaluatorAgreement)}
             >
               {formatPercent(evaluatorAgreement * PERCENT_MULTIPLIER, 0)}
             </span>

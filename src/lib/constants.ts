@@ -84,9 +84,6 @@ export function lookbackRange(lookbackMs: number): { start: string; end: string 
 
 /** Percentage of events sampled for T2 LLM evaluation. */
 export const LLM_SAMPLE_RATE = 10;
-/** Score band thresholds for quality indicator color coding. */
-export const SCORE_THRESHOLD_GREEN = 0.8;
-export const SCORE_THRESHOLD_YELLOW = 0.5;
 /** Error rate fraction above which agent activity is flagged as critical. */
 export const ERROR_RATE_WARNING_THRESHOLD = 0.1;
 /**

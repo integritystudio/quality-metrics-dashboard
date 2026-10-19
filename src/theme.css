@@ -927,10 +927,10 @@ details[open] > .cot-summary::before {
   border-radius: var(--radius);
 }
 .quality-chip {
-  background: color-mix(in srgb, var(--chip-color) var(--chip-tint), transparent);
-  color: var(--chip-color);
+  background: color-mix(in srgb, var(--band-fg) var(--chip-tint), transparent);
+  color: var(--band-fg);
 }
-.quality-chip .dot-xs { background: var(--chip-color); }
+.quality-chip .dot-xs { background: var(--band-fg); }
 .cqi-value {
   font-size: var(--font-size-3xl);
   line-height: 1.2;
