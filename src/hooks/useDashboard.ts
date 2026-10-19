@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { QualityDashboardSummary, RoleView, RoleViewType, Period } from '../types.js';
-import { POLL_INTERVAL_MS, STALE_TIME } from '../lib/constants.js';
+import { DATA_GATE_POLL_INTERVAL_MS, POLL_INTERVAL_MS, STALE_TIME } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 import { isWorkerNoData, WORKER_ERR_NO_DATA } from '../lib/worker-contract.js';
 
@@ -28,7 +28,11 @@ export function isNoDataSummary(data: QualityDashboardSummary | RoleView): data 
   return !('role' in data) && data.overallStatus === 'no_data';
 }
 
-export function useDashboard(period: Period, role?: RoleViewType): UseQueryResult<QualityDashboardSummary | RoleView> {
+export function useDashboard(
+  period: Period,
+  role?: RoleViewType,
+  refetchInterval: number = POLL_INTERVAL_MS,
+): UseQueryResult<QualityDashboardSummary | RoleView> {
   return useApiQuery<QualityDashboardSummary | RoleView>(
     ['dashboard', period, role],
     () => {
@@ -37,7 +41,7 @@ export function useDashboard(period: Period, role?: RoleViewType): UseQueryResul
       return `/api/dashboard?${params}`;
     },
     {
-      refetchInterval: POLL_INTERVAL_MS,
+      refetchInterval,
       staleTime: STALE_TIME.DEFAULT,
       retry: 3,
       onNotFound: dashboardNotFound,
@@ -45,8 +49,11 @@ export function useDashboard(period: Period, role?: RoleViewType): UseQueryResul
   );
 }
 
-/** Whether `period` has a dashboard summary, rather than the worker's no-data 404. */
-export function usePeriodHasData(period: Period): boolean {
-  const { data } = useDashboard(period);
-  return data !== undefined && !isNoDataSummary(data);
+/**
+ * Whether to offer `period`: false while its first check is loading and when the worker answers
+ * no-data, true otherwise. A failed check offers it, so an outage never hides a period that has data.
+ */
+export function useOfferPeriod(period: Period): boolean {
+  const { data, isError } = useDashboard(period, undefined, DATA_GATE_POLL_INTERVAL_MS);
+  return isError || (data !== undefined && !isNoDataSummary(data));
 }

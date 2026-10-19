@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper, stubFetch } from './support/query-harness.js';
+import { SERVER_ERROR_BODY, SERVER_ERROR_STATUS } from './support/page-harness.js';
 
 vi.mock('../contexts/AuthContext.js', () => ({
   useAuth: () => ({ getAccessToken: () => Promise.resolve(TEST_ACCESS_TOKEN), signOut: () => Promise.resolve() }),
@@ -67,6 +68,29 @@ describe('Layout gated period', () => {
     fireEvent.keyDown(document, { key: GATED_PERIOD_KEY });
 
     expect(onPeriodChange).toHaveBeenCalledWith(DATA_GATED_PERIOD);
+  });
+
+  it('offers the period when the check fails, so an outage never hides real data', async () => {
+    stubFetch(SERVER_ERROR_BODY, { status: SERVER_ERROR_STATUS });
+
+    renderLayout(SELECTED_PERIOD);
+
+    await waitFor(() => expect(gatedButton()).not.toBeNull());
+  });
+
+  it('reveals the button when a later check finds data', async () => {
+    const fetchSpy = stubFetch({ error: WORKER_ERR_NO_DATA }, { status: HttpStatus.NotFound });
+    const queryClient = renderLayout(SELECTED_PERIOD);
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    expect(gatedButton()).toBeNull();
+
+    stubFetch(SUMMARY_WITH_DATA);
+    await queryClient.invalidateQueries();
+
+    await waitFor(() => expect(gatedButton()).not.toBeNull());
   });
 
   it('keeps the button while the period is selected, even without data', () => {

@@ -68,6 +68,8 @@ export const PERIOD_MS = {
  * entries only on a run with `--days` at least this long, so until then every card is no-data.
  */
 export const DATA_GATED_PERIOD = '90d' satisfies Period;
+/** How often the header re-checks the gated period: KV is refreshed hourly (`ai.integritystudio.dashboard-refresh`). */
+export const DATA_GATE_POLL_INTERVAL_MS = TIME_MS.HOUR;
 /** Compute { start, end } ISO strings for a period key (e.g. '7d'). */
 export function computePeriodDates(period: Period): { start: string; end: string } {
   return lookbackRange(PERIOD_MS[period]);
