@@ -6,14 +6,12 @@
  * do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
-import { TEST_AUTH0_DOMAIN, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { serveSignedSession } from './support/signed-session.js';
 import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-
-type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
@@ -43,24 +41,7 @@ function withAdminAuth(
   };
 }
 
-let fetchMock: FetchMock;
-let tenant: TestIssuer;
-let token: string;
-
-beforeAll(async () => {
-  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
-  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const { fetchMock, authHeaders } = serveSignedSession(MOCK_AUTH0_ID);
 
 function findAuditLogCall(calls: unknown[][]) {
   return calls.find(([url]) =>
@@ -96,7 +77,7 @@ const ROLE_MUTATIONS: RoleMutation[] = [
 ];
 
 function requestMutation({ path, init }: RoleMutation) {
-  const headers = { ...init.headers as Record<string, string>, Authorization: `Bearer ${token}` };
+  const headers = { ...init.headers as Record<string, string>, ...authHeaders() };
   return app.request(path, { ...init, headers }, makeWorkerEnv(), makeCtx());
 }
 

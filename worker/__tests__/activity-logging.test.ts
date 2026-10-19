@@ -5,15 +5,13 @@
  * and that activity logging failures do not affect response status.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { MemoryKv } from './support/memory-kv.js';
-import { TEST_AUTH0_DOMAIN, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { serveSignedSession, type FetchMock } from './support/signed-session.js';
 import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-
-type FetchMock = Mock<FetchLike>;
 
 const DASHBOARD_KEY = 'dashboard:7d';
 
@@ -22,12 +20,6 @@ const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
 const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
 
-let tenant: TestIssuer;
-let token: string;
-
-function authHeaders() {
-  return { Authorization: `Bearer ${token}` };
-}
 
 function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boolean }) {
   const callCount = new Map<string, number>();
@@ -57,22 +49,7 @@ function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boo
   });
 }
 
-let fetchMock: FetchMock;
-
-beforeAll(async () => {
-  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
-  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const { fetchMock, authHeaders } = serveSignedSession(MOCK_AUTH0_ID);
 
 function findActivityCall(calls: unknown[][]) {
   return calls.find(([url]) => typeof url === 'string' && url.includes('/rest/v1/user_activity'));

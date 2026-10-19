@@ -7,13 +7,11 @@
  *   - mockAuditorAuthSequence: no dashboard.admin
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../index.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
-import { TEST_AUTH0_DOMAIN, createTestIssuer, type FetchLike, type TestIssuer } from './support/jwt.js';
+import { serveSignedSession, type FetchMock } from './support/signed-session.js';
 import { NO_STAFF_USER_IDS, TEST_SERVICE_ROLE_KEY, makeCtx, makeWorkerEnv } from './support/worker-env.js';
-
-type FetchMock = Mock<FetchLike>;
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-key-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000099';
@@ -103,29 +101,11 @@ function mockAuditorAuthSequence(fetchMock: FetchMock) {
   });
 }
 
-function adminHeaders() {
-  return { Authorization: `Bearer ${token}` };
-}
 
-let fetchMock: FetchMock;
-
-let tenant: TestIssuer;
-let token: string;
-
-beforeAll(async () => {
-  tenant = await createTestIssuer(TEST_AUTH0_DOMAIN);
-  token = await tenant.sign({ sub: MOCK_AUTH0_ID });
-});
+const { fetchMock, authHeaders, bearerToken } = serveSignedSession(MOCK_AUTH0_ID);
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock = vi.fn<FetchLike>();
-  vi.stubGlobal('fetch', tenant.serveJwks(fetchMock));
   fetchMock.mockImplementation(withOrgAdminAuth(() => Promise.resolve(new Response(null, { status: HttpStatus.Ok }))));
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
 });
 
 // ─── GET /api/admin/keys ──────────────────────────────────────────────────────
@@ -133,7 +113,7 @@ afterEach(() => {
 describe('GET /api/admin/keys', () => {
   it('returns 403 for non-admin (auditor) session', async () => {
     mockAuditorAuthSequence(fetchMock);
-    const res = await app.request('/api/admin/keys', { headers: adminHeaders() }, makeEnv(), makeCtx());
+    const res = await app.request('/api/admin/keys', { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
 
@@ -158,7 +138,7 @@ describe('GET /api/admin/keys', () => {
       return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
-    const res = await app.request('/api/admin/keys', { headers: adminHeaders() }, makeEnv(), makeCtx());
+    const res = await app.request('/api/admin/keys', { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
@@ -175,7 +155,7 @@ describe('GET /api/admin/keys', () => {
       return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
-    await app.request('/api/admin/keys', { headers: adminHeaders() }, makeEnv(), makeCtx());
+    await app.request('/api/admin/keys', { headers: authHeaders() }, makeEnv(), makeCtx());
 
     expect(capturedUrl).toContain(`user_id=eq.${encodeURIComponent(MOCK_APP_USER_ID)}`);
     expect(capturedUrl).toContain(`organization_id=eq.${encodeURIComponent(MOCK_ORG_ID)}`);
@@ -190,7 +170,7 @@ describe('GET /api/admin/keys', () => {
       return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
     }));
 
-    const res = await app.request('/api/admin/keys', { headers: adminHeaders() }, makeEnv(), makeCtx());
+    const res = await app.request('/api/admin/keys', { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
@@ -201,7 +181,7 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
   function rotateRequest(keyId: string) {
     return app.request(
       `/api/admin/keys/${keyId}/rotate`,
-      { method: 'POST', headers: adminHeaders() },
+      { method: 'POST', headers: authHeaders() },
       makeEnv(),
       makeCtx(),
     );
@@ -277,7 +257,7 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
     const headers = capturedFnInit?.headers as Record<string, string> | undefined;
     expect(headers?.Authorization).toBe(`Bearer ${TEST_SERVICE_ROLE_KEY}`);
     expect(headers?.apikey).toBe(TEST_SERVICE_ROLE_KEY);
-    expect(JSON.stringify(headers)).not.toContain(token);
+    expect(JSON.stringify(headers)).not.toContain(bearerToken());
     expect(JSON.parse(capturedFnInit?.body as string)).toEqual({ keyId: VALID_KEY_UUID, userId: MOCK_APP_USER_ID });
   });
 
