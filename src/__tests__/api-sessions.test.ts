@@ -17,6 +17,9 @@ import { makeEvaluation } from './support/fixtures.js';
 import { ErrorMessage } from '../lib/constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
+import {
+  ALERT_EVALUATION, KEY_ERAS, MCP_POST_TOOL, SESSION_START, TOKEN_METRICS, withBothSpellings, type Attributes,
+} from './support/integritystudio-key-rename.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
 type SessionDetailBody = JsonSafe<SessionDetailResponse>;
@@ -346,21 +349,6 @@ describe('GET /sessions/:sessionId when the span read hits its cap', () => {
 // case serves one session under one spelling and expects the same body. Hook
 // names are copied from real spans.
 describe('GET /sessions/:sessionId across the integritystudio.* key rename', () => {
-  const VENDOR_PREFIX = 'integritystudio.';
-  const DECOY_OFFSET = 1000;
-  const SESSION_START = { 'project.name': 'env-settings', 'context.message_count': 4, 'context.estimated_tokens': 9000, 'tasks.active': 2 };
-  const TOKEN_METRICS = { 'tokens.messages': 12, 'tokens.input': 100, 'tokens.output': 50, 'tokens.cache_read': 7, 'tokens.cache_creation': 3, 'tokens.model': 'claude-opus-5' };
-  const MCP_POST_TOOL = { 'mcp.tool': 'get_me' };
-  const ALERT_EVALUATION = { 'alerts.triggered_count': 3 };
-
-  type Attributes = Record<string, unknown>;
-  const withPrefix = (attrs: Attributes): Attributes =>
-    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [`${VENDOR_PREFIX}${key}`, value]));
-  const unprefixed = (attrs: Attributes): Attributes => attrs;
-  /** The unprefixed keys holding values no reader should surface when the prefixed key is present. */
-  const staleUnprefixed = (attrs: Attributes): Attributes =>
-    Object.fromEntries(Object.entries(attrs).map(([key, value]) => [key, typeof value === 'number' ? value + DECOY_OFFSET : `stale-${String(value)}`]));
-
   function hookSpanWire(hookName: string, spanId: string, attributes: Attributes) {
     return {
       ...makeSessionSpanWire(`hook:${hookName}`, { 'builtin.tool': undefined, [HOOK_ATTRIBUTES.NAME]: hookName, ...attributes }),
@@ -396,17 +384,14 @@ describe('GET /sessions/:sessionId across the integritystudio.* key rename', () 
     expect(body.alertSummary).toMatchObject({ totalFired: 3 });
   }
 
-  it.each([
-    ['post-rename integritystudio.*', withPrefix],
-    ['pre-rename unprefixed', unprefixed],
-  ])('reads %s keys', async (_era, write) => {
+  it.each(KEY_ERAS)('reads %s keys', async (_era, write) => {
     serveSession(write);
 
     await expectSessionRead();
   });
 
   it('prefers the integritystudio.* key when a span carries both', async () => {
-    serveSession(attrs => ({ ...staleUnprefixed(attrs), ...withPrefix(attrs) }));
+    serveSession(withBothSpellings);
 
     await expectSessionRead();
   });

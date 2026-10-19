@@ -21,7 +21,7 @@ import { routes } from '../lib/routes.js';
 import { ADMIN_VIEW, CUSTOMER_VIEW } from '../lib/admin-customer-strings.js';
 import type { AppSession } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper } from './support/query-harness.js';
-import { startFakeGateway } from './support/fake-gateway.js';
+import { startFakeGateway, type GatewayRoute } from './support/fake-gateway.js';
 import {
   BILLING_ACTIVE, ENTITLEMENTS_EMPTY, ENTITLEMENTS_GROWTH, ORG_A, ORG_B,
   QUOTA_GROWTH, QUOTA_UNINITIALIZED, USAGE_EMPTY, USAGE_SUMMARY,
@@ -77,6 +77,31 @@ function renderAt(path: string, ui: ReactNode, session: AppSession = STAFF_SESSI
 }
 
 const currentPath = (location: ReturnType<typeof memoryLocation>) => defined(location.history).at(-1);
+
+const SCREENS = {
+  billing: { path: routes.adminCustomerBilling, Page: AdminCustomerBillingPage },
+  usage: { path: routes.adminCustomerUsage, Page: AdminCustomerUsagePage },
+  quota: { path: routes.adminCustomerQuota, Page: AdminCustomerQuotaPage },
+  entitlements: { path: routes.adminCustomerEntitlements, Page: AdminCustomerEntitlementsPage },
+};
+type Screen = keyof typeof SCREENS;
+
+function renderScreen(name: Screen, orgId: string = ORG_A.id) {
+  const { path, Page } = SCREENS[name];
+  renderAt(path(orgId), <Page orgId={orgId} />);
+}
+
+/** Serve every fixture, with `overrides` replacing individual routes, then mount one screen for ORG_A. */
+function openScreen(name: Screen, overrides: Parameters<typeof startFakeGateway>[0] = {}) {
+  const gateway = startFakeGateway({ ...ALL_FIXTURES, ...overrides });
+  renderScreen(name);
+  return gateway;
+}
+
+function refuseForbidden(gateway: ReturnType<typeof startFakeGateway>, route: GatewayRoute) {
+  gateway.control.refuse = { status: HttpStatus.Forbidden };
+  gateway.control.refuseRoute = route;
+}
 
 afterEach(() => {
   cleanup();
@@ -220,15 +245,13 @@ describe('AdminCustomerBillingPage (ADMIN-CV-BILLING)', () => {
     ['canceled', 'Inactive', 'error'],
     ['trialing', 'Inactive', 'error'],
   ])('badges billing_status %s as %s / %s', async (status, label, tone) => {
-    startFakeGateway({ ...ALL_FIXTURES, billing: () => ({ ...BILLING_ACTIVE, billing_status: status }) });
-    renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
+    openScreen('billing', { billing: () => ({ ...BILLING_ACTIVE, billing_status: status }) });
     const badge = await screen.findByText(label);
     expect(badge).toHaveAttribute('data-tone', tone);
   });
 
   it('shows the plan row, "Renews on: —" and the Manage Billing label for an org with a billing account', async () => {
-    const gateway = startFakeGateway(ALL_FIXTURES);
-    renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
+    const gateway = openScreen('billing');
 
     expect(await screen.findByText('growth')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: CUSTOMER_VIEW.billing.defaultCardTitle })).toBeInTheDocument();
@@ -240,33 +263,29 @@ describe('AdminCustomerBillingPage (ADMIN-CV-BILLING)', () => {
   });
 
   it('shows the no-account note and the Choose a plan label without a billing account', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, billing: () => ({ ...BILLING_ACTIVE, has_billing_account: false }) });
-    renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
+    openScreen('billing', { billing: () => ({ ...BILLING_ACTIVE, has_billing_account: false }) });
     expect(await screen.findByText(CUSTOMER_VIEW.billing.noAccountNote)).toBeInTheDocument();
     expect(screen.getByText(CUSTOMER_VIEW.billing.choosePlan)).toBeInTheDocument();
   });
 
   it('shows the contract note and no label for an enterprise org without a billing account', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, billing: () => ({ ...BILLING_ACTIVE, current_plan: 'enterprise', has_billing_account: false }) });
-    renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
+    openScreen('billing', { billing: () => ({ ...BILLING_ACTIVE, current_plan: 'enterprise', has_billing_account: false }) });
     expect(await screen.findByText(CUSTOMER_VIEW.billing.contractNote)).toBeInTheDocument();
     expect(screen.queryByText(CUSTOMER_VIEW.billing.choosePlan)).not.toBeInTheDocument();
     expect(screen.queryByText(CUSTOMER_VIEW.billing.manageBilling)).not.toBeInTheDocument();
   });
 
   it('uses the display name, Cancels on and the formatted date when the gateway sends them', async () => {
-    startFakeGateway({
-      ...ALL_FIXTURES,
+    openScreen('billing', {
       billing: () => ({ ...BILLING_ACTIVE, plan_display_name: 'Growth', cancel_at_period_end: true, current_period_end: '2026-11-15T12:00:00Z' }),
     });
-    renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
     expect(await screen.findByRole('heading', { name: 'Growth' })).toBeInTheDocument();
     expect(screen.getByText(`${CUSTOMER_VIEW.billing.cancelsRow}:`).parentElement).toHaveTextContent('November 15, 2026');
   });
 
   it('shows the org name and id in the header, and a back link to the hub with the org selected', async () => {
     startFakeGateway(ALL_FIXTURES);
-    renderAt(routes.adminCustomerBilling(ORG_B.id), <AdminCustomerBillingPage orgId={ORG_B.id} />);
+    renderScreen('billing', ORG_B.id);
     expect(await screen.findByText(ORG_B.name)).toBeInTheDocument();
     expect(screen.getByText(`${ADMIN_VIEW.orgIdLabel}: ${ORG_B.id}`)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: new RegExp(ADMIN_VIEW.backToHub) })).toHaveAttribute('href', routes.adminCustomers(ORG_B.id));
@@ -274,9 +293,8 @@ describe('AdminCustomerBillingPage (ADMIN-CV-BILLING)', () => {
 
   it('replaces the card with the error and Try again on a failure', async () => {
     const gateway = startFakeGateway(ALL_FIXTURES);
-    gateway.control.refuse = { status: HttpStatus.Forbidden };
-    gateway.control.refuseRoute = 'billing';
-    renderAt(routes.adminCustomerBilling(ORG_A.id), <AdminCustomerBillingPage orgId={ORG_A.id} />);
+    refuseForbidden(gateway, 'billing');
+    renderScreen('billing');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(CUSTOMER_VIEW.errors.forbidden);
     gateway.control.refuse = null;
@@ -288,8 +306,7 @@ describe('AdminCustomerBillingPage (ADMIN-CV-BILLING)', () => {
 
 describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
   it('renders the period, the quota-backed total, the chart and the per-metric table', async () => {
-    startFakeGateway(ALL_FIXTURES);
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    openScreen('usage');
 
     expect(await screen.findByText(CUSTOMER_VIEW.usage.since('2026-10-01'))).toBeInTheDocument();
     // The bar reads the enforced quota, not the bucket total, once the quota has a plan.
@@ -305,8 +322,7 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
   });
 
   it('shows the bucket total alone when the quota is uninitialized, with no chart line or bar', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, quota: () => QUOTA_UNINITIALIZED });
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    openScreen('usage', { quota: () => QUOTA_UNINITIALIZED });
 
     expect(await screen.findByText(CUSTOMER_VIEW.usage.units(450))).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
@@ -318,23 +334,20 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
     [450000, 'warning', CUSTOMER_VIEW.usage.approachingAlertTitle],
     [500000, 'critical', CUSTOMER_VIEW.usage.reachedAlertTitle],
   ])('at %i of 500000 raises a %s alert: %s', async (monthlyUsed, status, title) => {
-    startFakeGateway({ ...ALL_FIXTURES, quota: () => ({ ...QUOTA_GROWTH, monthlyUsed }) });
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    openScreen('usage', { quota: () => ({ ...QUOTA_GROWTH, monthlyUsed }) });
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveAttribute('data-status', status);
     expect(alert).toHaveTextContent(title);
   });
 
   it('says "Unlimited plan" for a null monthly limit', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, quota: () => ({ ...QUOTA_GROWTH, monthlyLimit: null }) });
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    openScreen('usage', { quota: () => ({ ...QUOTA_GROWTH, monthlyLimit: null }) });
     expect(await screen.findByText(CUSTOMER_VIEW.usage.unlimitedPlan)).toBeInTheDocument();
     expect(screen.getByText(CUSTOMER_VIEW.usage.units(12345))).toBeInTheDocument();
   });
 
   it('shows "0 units" and neither chart nor table for a month with no buckets', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, usage: () => USAGE_EMPTY, quota: () => QUOTA_UNINITIALIZED });
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    openScreen('usage', { usage: () => USAGE_EMPTY, quota: () => QUOTA_UNINITIALIZED });
     expect(await screen.findByText(CUSTOMER_VIEW.usage.units(0))).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
@@ -342,12 +355,10 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
   });
 
   it('keeps the data on screen when a later poll fails, and shows the error only on a first-load failure', async () => {
-    const gateway = startFakeGateway(ALL_FIXTURES);
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    const gateway = openScreen('usage');
     await screen.findByText(CUSTOMER_VIEW.usage.since('2026-10-01'));
 
-    gateway.control.refuse = { status: HttpStatus.Forbidden };
-    gateway.control.refuseRoute = 'usage';
+    refuseForbidden(gateway, 'usage');
     fireEvent.click(screen.getByRole('button', { name: CUSTOMER_VIEW.common.refresh }));
     await waitFor(() => { expect(gateway.requestsFor('usage').length).toBeGreaterThan(1); });
 
@@ -356,17 +367,15 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
     cleanup();
 
     const failing = startFakeGateway(ALL_FIXTURES);
-    failing.control.refuse = { status: HttpStatus.Forbidden };
-    failing.control.refuseRoute = 'usage';
-    renderAt(routes.adminCustomerUsage(ORG_A.id), <AdminCustomerUsagePage orgId={ORG_A.id} />);
+    refuseForbidden(failing, 'usage');
+    renderScreen('usage');
     expect(await screen.findByRole('alert')).toHaveTextContent(CUSTOMER_VIEW.errors.forbidden);
   });
 });
 
 describe('AdminCustomerQuotaPage (ADMIN-CV-QUOTA)', () => {
   it('renders the plan badge and both rows with bars for an initialized quota', async () => {
-    startFakeGateway(ALL_FIXTURES);
-    renderAt(routes.adminCustomerQuota(ORG_A.id), <AdminCustomerQuotaPage orgId={ORG_A.id} />);
+    openScreen('quota');
 
     expect(await screen.findByText('Growth')).toHaveAttribute('data-tone', 'info');
     expect(screen.getByText(`${CUSTOMER_VIEW.quota.minute}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.usedOfLimit(5, 60));
@@ -376,8 +385,7 @@ describe('AdminCustomerQuotaPage (ADMIN-CV-QUOTA)', () => {
   });
 
   it('says "(Unlimited)" with no monthly bar for a null monthly limit', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, quota: () => ({ ...QUOTA_GROWTH, monthlyLimit: null }) });
-    renderAt(routes.adminCustomerQuota(ORG_A.id), <AdminCustomerQuotaPage orgId={ORG_A.id} />);
+    openScreen('quota', { quota: () => ({ ...QUOTA_GROWTH, monthlyLimit: null }) });
     expect(await screen.findByText(`${CUSTOMER_VIEW.quota.monthly}:`)).toBeInTheDocument();
     expect(screen.getByText(`${CUSTOMER_VIEW.quota.monthly}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.unlimited(12345));
     expect(screen.getAllByRole('progressbar')).toHaveLength(1);
@@ -389,16 +397,14 @@ describe('AdminCustomerQuotaPage (ADMIN-CV-QUOTA)', () => {
     [89, 'warning'],
     [90, 'danger'],
   ])('colours the minute bar at %i of 100 as %s', async (minuteUsed, tone) => {
-    startFakeGateway({ ...ALL_FIXTURES, quota: () => ({ ...QUOTA_GROWTH, minuteLimit: 100, minuteUsed }) });
-    renderAt(routes.adminCustomerQuota(ORG_A.id), <AdminCustomerQuotaPage orgId={ORG_A.id} />);
+    openScreen('quota', { quota: () => ({ ...QUOTA_GROWTH, minuteLimit: 100, minuteUsed }) });
     const bar = await screen.findByRole('progressbar', { name: /Minute/ });
     expect(bar).toHaveAttribute('data-tone', tone);
     expect(bar).toHaveAttribute('aria-valuenow', String(minuteUsed));
   });
 
   it('renders the uninitialized answer as the customer sees it, plus the admin note', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, quota: () => QUOTA_UNINITIALIZED });
-    renderAt(routes.adminCustomerQuota(ORG_A.id), <AdminCustomerQuotaPage orgId={ORG_A.id} />);
+    openScreen('quota', { quota: () => QUOTA_UNINITIALIZED });
 
     expect(await screen.findByText(ADMIN_VIEW.quotaUninitialized)).toBeInTheDocument();
     expect(screen.getByText(`${CUSTOMER_VIEW.quota.minute}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.usedOfLimit(0, 0));
@@ -411,8 +417,7 @@ describe('AdminCustomerQuotaPage (ADMIN-CV-QUOTA)', () => {
 
 describe('AdminCustomerEntitlementsPage (ADMIN-CV-ENTITLEMENTS)', () => {
   it('renders every value type, sorted by key and Title Cased', async () => {
-    startFakeGateway(ALL_FIXTURES);
-    renderAt(routes.adminCustomerEntitlements(ORG_A.id), <AdminCustomerEntitlementsPage orgId={ORG_A.id} />);
+    openScreen('entitlements');
 
     await screen.findByRole('table');
     const rows = screen.getAllByRole('row').slice(1).map((r) => r.textContent);
@@ -422,8 +427,7 @@ describe('AdminCustomerEntitlementsPage (ADMIN-CV-ENTITLEMENTS)', () => {
   });
 
   it('says so for an empty map', async () => {
-    startFakeGateway({ ...ALL_FIXTURES, entitlements: () => ENTITLEMENTS_EMPTY });
-    renderAt(routes.adminCustomerEntitlements(ORG_A.id), <AdminCustomerEntitlementsPage orgId={ORG_A.id} />);
+    openScreen('entitlements', { entitlements: () => ENTITLEMENTS_EMPTY });
     expect(await screen.findByText(CUSTOMER_VIEW.entitlements.empty)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
