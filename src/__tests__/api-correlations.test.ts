@@ -70,12 +70,10 @@ describe('GET /correlations', () => {
     expect(body).toEqual({ correlations: [], metrics: [] });
   });
 
-  it('accepts all valid periods', async () => {
-    for (const period of ['24h', '7d', '30d']) {
-      fixture.reset();
-      const res = await correlationRoutes.request(`/correlations?period=${period}`);
-      expect(res.status).toBe(200);
-    }
+  it.each(['24h', '7d', '30d'])('accepts period %s', async (period) => {
+    fixture.reset();
+    const res = await correlationRoutes.request(`/correlations?period=${period}`);
+    expect(res.status).toBe(200);
   });
 
   it('returns 500 when backend throws', async () => {

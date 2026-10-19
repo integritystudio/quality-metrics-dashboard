@@ -89,6 +89,7 @@ export async function pickWorkingJudgeApiKey(
     const apiKey = env[source];
     if (!apiKey) continue;
     try {
+      // eslint-disable-next-line no-await-in-loop -- keys are probed in precedence order and the first accepted one wins
       await probe(apiKey);
     } catch (error) {
       if (error instanceof JudgeProbeSetupError) throw error;

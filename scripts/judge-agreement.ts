@@ -187,6 +187,7 @@ async function sampleTurns(transcripts: readonly TranscriptInfo[], limit: number
     if (turns.length >= limit) break;
     transcriptsScanned++;
     let taken = 0;
+    // eslint-disable-next-line no-await-in-loop -- the sample limit breaks out, so later transcripts are never parsed
     for (const turn of await extractTurns(info)) {
       if (taken >= TURNS_PER_TRANSCRIPT_CAP || turns.length >= limit) break;
       if (estimateTurnTokens(turn) > MAX_SAMPLE_TURN_TOKENS) {

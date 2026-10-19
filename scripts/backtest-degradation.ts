@@ -274,6 +274,7 @@ async function main(): Promise<void> {
   }> = {};
 
   for (const name of metricNames) {
+    // eslint-disable-next-line no-await-in-loop -- one 100k-row result set at a time; concurrent sweeps would hold them all
     const rawEvals = await backend.queryEvaluations({
       evaluationName: name,
       startDate,

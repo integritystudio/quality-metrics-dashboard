@@ -1348,6 +1348,7 @@ describe('evaluateTurn in concurrent mode', () => {
     do {
       sequential.answerAll();
       concurrent.answerAll();
+      // eslint-disable-next-line no-await-in-loop -- one round at a time, see above
       await settle();
     } while (sequential.waiting.length + concurrent.waiting.length > 0);
     expect((await concurrentRun).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);

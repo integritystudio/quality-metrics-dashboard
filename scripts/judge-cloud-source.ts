@@ -106,6 +106,7 @@ export function transcriptsForSessions(
 async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<EvaluationResult[]> {
   const rows: EvaluationResult[] = [];
   for (const evaluator of JUDGE_PRODUCERS) {
+    // eslint-disable-next-line no-await-in-loop -- each producer is itself a multi-account sweep; they run one at a time
     const perAccount = await queryEachAccount(
       env,
       { limit: CLOUD_EVALUATION_LIMIT, rows: `${evaluator} rows`, truncates: 'the dedup set', logPrefix: CLI_PREFIX },

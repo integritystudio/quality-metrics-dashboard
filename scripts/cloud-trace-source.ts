@@ -100,6 +100,7 @@ export async function queryEachAccount<T>(
   for (const ref of accountRefsFromEnv(env)) {
     const apiKey = asString(env[ref]);
     if (apiKey === undefined) continue;
+    // eslint-disable-next-line no-await-in-loop -- accounts log in order, and a truncated one throws before the next query
     const rows = await query(accountBackend(apiKey));
     if (rows.length >= spec.limit) {
       throw new Error(`${ref}: cloud returned ${spec.limit} ${spec.rows}, so ${spec.truncates} may be truncated; narrow --days`);

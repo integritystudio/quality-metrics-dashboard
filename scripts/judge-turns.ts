@@ -153,6 +153,7 @@ export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
   const transcripts: TranscriptInfo[] = [];
 
   for (const filepath of listTelemetryJsonl(LOGS_FILE_PREFIX)) {
+    // eslint-disable-next-line no-await-in-loop -- files are streamed one at a time to bound memory
     for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
       const attrs = entry.attributes;
       if (attrs?.[HOOK_ATTRIBUTES.NAME] !== HOOK_NAME.TOKEN_METRICS) continue;

@@ -297,7 +297,7 @@ async function runClock<T>(work: Promise<T>): Promise<T> {
   // `settled` is set by the callback above, which neither TypeScript's flow
   // analysis nor eslint's loop analysis can see across the async boundary — the
   // condition is neither constant nor unmodified.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, no-unmodified-loop-condition
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, no-unmodified-loop-condition, no-await-in-loop
   while (!settled) await vi.advanceTimersByTimeAsync(BATCH_POLL_INTERVAL_MS);
   return work;
 }

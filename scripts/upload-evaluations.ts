@@ -805,7 +805,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       }
       for (const destination of [...batches.keys()]) {
         if (!ok) break;
-        // eslint-disable-next-line no-await-in-loop -- shipped state is saved up to the last accepted batch, so flushes abort in order
+        // eslint-disable-next-line no-await-in-loop -- destinations flush in order by contract: a failed send must stop the later ones
         ok = await flush(destination);
       }
 

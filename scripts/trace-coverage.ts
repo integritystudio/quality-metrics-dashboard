@@ -269,6 +269,7 @@ async function main(): Promise<number> {
 
   const results: AccountCoverage[] = [];
   for (const [ref, spans] of [...byRef].sort(([a], [b]) => ascending(a, b))) {
+    // eslint-disable-next-line no-await-in-loop -- accounts print as they are compared, in sorted order
     const cloud = await fetchCloudSpans(getOrThrow(apiKeys, ref), window);
     const result = compareAccount(ref, spans, cloud);
     printAccount(result);

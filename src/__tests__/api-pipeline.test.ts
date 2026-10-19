@@ -70,11 +70,9 @@ describe('GET /pipeline', () => {
     expect(body.stages.every((stage) => stage.entryCount === 0)).toBe(true);
   });
 
-  it('accepts all valid periods', async () => {
-    for (const period of ['24h', '7d', '30d']) {
-      const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
-      expect(res.status).toBe(200);
-    }
+  it.each(['24h', '7d', '30d'])('accepts period %s', async (period) => {
+    const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
+    expect(res.status).toBe(200);
   });
 
   it('returns 500 when backend throws', async () => {
