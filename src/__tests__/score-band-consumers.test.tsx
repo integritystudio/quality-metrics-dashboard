@@ -1,6 +1,8 @@
 /**
  * QualityLiveIndicator and ConfidencePanel band through scoreColorBand
- * (the parent's SCORE_BAND_* thresholds), exposed as `data-band`.
+ * (the parent's SCORE_BAND_* thresholds), exposed as `data-band`. The live
+ * indicator runs on the real query stack with only useAuth and fetch substituted;
+ * ConfidencePanel is rendered from props.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -36,12 +38,13 @@ describe('QualityLiveIndicator', () => {
     { name: 'coherence', score: 0.45, band: 'poor' },
     { name: 'hallucination', score: 0.05, band: 'excellent' },
     { name: 'hallucination', score: 0.9, band: 'failing' },
+    { name: 'Hallucination', score: 0.9, band: 'failing' },
   ])('bands $name at $score as $band', async ({ name, score, band }) => {
     stubFetch(liveData([{ name, score }]));
 
     render(<QualityLiveIndicator />, makeQueryWrapper());
 
-    const chip = await screen.findByTitle(new RegExp(`^${name}: `));
+    const chip = await screen.findByTitle((title) => title.startsWith(`${name}: `));
     expect(chip.dataset.band).toBe(band);
   });
 });

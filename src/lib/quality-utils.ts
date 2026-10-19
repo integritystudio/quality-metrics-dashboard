@@ -164,6 +164,10 @@ export function inferScoreDirection(
   return alertDirection === 'above' ? 'minimize' : 'maximize';
 }
 
+export function scoreDirectionForMetric(evaluationName: string): ScoreDirection {
+  return HALLUCINATION_RISK_EVALUATION_NAMES.has(evaluationName.toLowerCase()) ? 'minimize' : 'maximize';
+}
+
 const LABEL_ORDINAL_MAP: Record<string, { ordinal: number; category: LabelFilterCategory }> = {
   excellent: { ordinal: 4, category: 'Pass' },
   highly_relevant: { ordinal: 4, category: 'Pass' },
