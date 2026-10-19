@@ -1,11 +1,20 @@
 import { defineConfig, devices } from '@playwright/test';
 
 import { API_HOST, API_PORT } from './src/api/config.js';
+import { CLOUD_READ_CACHE_TTL_ENV } from './src/api/cloud-reads.js';
+import { TIME_MS } from './src/lib/constants.js';
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:5173';
 const API_HEALTH_URL = `http://${API_HOST}:${API_PORT}/api/health`;
 const isIntegration = process.env.INTEGRATION === '1';
 const SERVER_TIMEOUT_MS = 30_000;
+/**
+ * Longer than a whole chromium run: every spec and retry that reads a window the
+ * API server has already read gets the held result instead of another full-window
+ * read of the cloud store, whose D1 answered 500s under the run's load.
+ */
+const E2E_CLOUD_READ_CACHE_MINUTES = 15;
+const E2E_CLOUD_READ_CACHE_TTL_MS = E2E_CLOUD_READ_CACHE_MINUTES * TIME_MS.MINUTE;
 
 /**
  * The deployed dashboard Worker the integration project runs against.
@@ -92,6 +101,7 @@ export default defineConfig({
       env: {
         ...process.env,
         VITE_E2E: '1',
+        [CLOUD_READ_CACHE_TTL_ENV]: String(E2E_CLOUD_READ_CACHE_TTL_MS),
       },
     },
     {

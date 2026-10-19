@@ -13,3 +13,5 @@ export type Period = z.infer<typeof PeriodEnum>;
 export const DEFAULT_PERIOD = '7d' satisfies Period;
 /** Default period for metric detail views (wider window). */
 export const DEFAULT_PERIOD_DETAIL = '30d' satisfies Period;
+/** The period the dashboard opens on; the e2e worker fixture warms this read before any spec runs. */
+export const INITIAL_PERIOD = '30d' satisfies Period;
