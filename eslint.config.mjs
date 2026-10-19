@@ -11,6 +11,7 @@ import unicorn from 'eslint-plugin-unicorn';
 import vitest from '@vitest/eslint-plugin';
 import importX from 'eslint-plugin-import-x';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
+import { MAGIC_NUMBERS_OPTIONS, MAGIC_NUMBERS_RULE, noMagicNumbersIgnoreBitwise } from './eslint-rules/no-magic-numbers-ignore-bitwise.mjs';
 
 const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts', 'scripts/__tests__/**/*.ts'];
 
@@ -352,6 +353,16 @@ export default tseslint.config(
       'max-depth': ['warn', 4],
       'max-params': ['warn', 4],
       'no-await-in-loop': 'warn',
+    },
+  },
+  // Magic numbers, at the parent's level and options. Test files are left out:
+  // the parent gives them a fixture-exempting variant this package does not copy.
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    ignores: TEST_FILES,
+    plugins: { local: { rules: { [MAGIC_NUMBERS_RULE]: noMagicNumbersIgnoreBitwise } } },
+    rules: {
+      [`local/${MAGIC_NUMBERS_RULE}`]: ['warn', MAGIC_NUMBERS_OPTIONS],
     },
   },
   // Import graph rules. eslint-plugin-import does not support ESLint 10, so this
