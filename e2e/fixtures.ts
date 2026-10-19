@@ -2,6 +2,7 @@ import { test as base, expect, type Page } from '@playwright/test';
 
 import { API_HOST, API_PORT } from '../src/api/config.js';
 import { ContentType, HttpStatus } from '../src/lib/http-constants.js';
+import { INITIAL_PERIOD, TIME_MS } from '../src/lib/constants.js';
 
 // Must match TEST_TOKEN in src/stubs/auth0-e2e.ts
 export const MOCK_ME_RESPONSE = {
@@ -35,7 +36,12 @@ export async function mockMe(page: Page, body: unknown): Promise<void> {
   );
 }
 
-const HEALTH_URL = `http://${API_HOST}:${API_PORT}/api/health`;
+const API_URL = `http://${API_HOST}:${API_PORT}`;
+const HEALTH_URL = `${API_URL}/api/health`;
+/** The read the dashboard issues on load; cold, it is a full window read of the cloud store. */
+const INITIAL_DASHBOARD_URL = `${API_URL}/api/dashboard?period=${INITIAL_PERIOD}`;
+const WARM_UP_MINUTES = 5;
+const WARM_UP_TIMEOUT_MS = WARM_UP_MINUTES * TIME_MS.MINUTE;
 
 /**
  * Reason shown when a data-dependent spec is skipped.
@@ -59,9 +65,22 @@ export const NO_DATA_SKIP_REASON =
   'API reports hasData: false (no cloud evaluations in the last 7d) — these specs need rows in the cloud store, which `npm run populate -- --seed` does not provide';
 
 type WorkerFixtures = {
-  /** Whether /api/health reports a non-empty data window. Fetched once per worker. */
+  /**
+   * Whether /api/health reports a non-empty data window. Fetched once per worker,
+   * and when true the dashboard's opening read is made once here, so its cold
+   * full-window read of the cloud store runs before any spec's clock starts and
+   * the specs read the API server's held result.
+   */
   hasData: boolean;
 };
+
+async function warmInitialDashboardRead(): Promise<void> {
+  try {
+    await fetch(INITIAL_DASHBOARD_URL);
+  } catch {
+    // The specs that need this read report the failure themselves.
+  }
+}
 
 export const test = base.extend<object, WorkerFixtures>({
   hasData: [
@@ -78,9 +97,10 @@ export const test = base.extend<object, WorkerFixtures>({
         // than masking it as "no data", which would skip them silently.
         hasData = true;
       }
+      if (hasData) await warmInitialDashboardRead();
       await use(hasData);
     },
-    { scope: 'worker' },
+    { scope: 'worker', timeout: WARM_UP_TIMEOUT_MS },
   ],
 
   page: async ({ page }, use) => {

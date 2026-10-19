@@ -45,7 +45,7 @@ import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './contexts/CalibrationContext.js';
-import { ROLES } from './lib/constants.js';
+import { ROLES, INITIAL_PERIOD } from './lib/constants.js';
 import { lazyWithReload } from './lib/lazy-with-reload.js';
 import type {
   Period,
@@ -387,7 +387,7 @@ function CallbackHandler() {
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '') || '';
 
 export function App() {
-  const [period, setPeriod] = useState<Period>('30d');
+  const [period, setPeriod] = useState<Period>(INITIAL_PERIOD);
   const [, navigate] = useLocation();
 
   // Restore the deep link LoginPage carried through Auth0 as
