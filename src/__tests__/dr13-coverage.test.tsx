@@ -15,6 +15,8 @@ import type { TrendBucket } from '../hooks/useTrend.js';
 import type { ErrorResponse, TrendDetailResponse } from './support/api-responses.js';
 import { createFixtureServer, type FixtureServer } from './support/fixture-server.js';
 import { defined } from './support/defined.js';
+import { TIME_MS } from '../lib/constants.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 // Note: ResizeObserver stub is installed globally in setup.ts
 
@@ -59,30 +61,35 @@ function makeTrendBucket(overrides: Partial<TrendBucket> = {}): TrendBucket {
 }
 
 
+const RISING_SCORES = [0.5, 0.7, 0.9];
+const SCORES_WITH_GAP = [0.5, null, 0.9];
+const SCORE_PAIR = [0.5, 0.7];
+const SPARKLINE_EMPTY_CASES: Array<{ label: string; data: Array<number | null> }> = [
+  { label: 'fewer than 2 valid data points', data: [0.5] },
+  { label: 'empty data', data: [] },
+  { label: 'all values null', data: [null, null, null] },
+  { label: 'only 1 of multiple finite', data: [NaN, Infinity, 0.5] },
+];
+
 describe('Sparkline', () => {
-  it.each([
-    { label: 'fewer than 2 valid data points', data: [0.5] },
-    { label: 'empty data', data: [] },
-    { label: 'all values null', data: [null, null, null] },
-    { label: 'only 1 of multiple finite', data: [NaN, Infinity, 0.5] },
-  ])('renders null for $label', ({ data }) => {
+  it.each(SPARKLINE_EMPTY_CASES)('renders null for $label', ({ data }) => {
     const { container } = render(<Sparkline data={data} />);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders SVG with polyline when 2+ valid values', () => {
-    const { container } = render(<Sparkline data={[0.5, 0.7, 0.9]} />);
+    const { container } = render(<Sparkline data={RISING_SCORES} />);
     const svg = container.querySelector('svg');
     expect(svg).not.toBeNull();
     const polyline = container.querySelector('polyline');
     expect(polyline).not.toBeNull();
     const points = defined(polyline).getAttribute('points');
     expect(points).toBeTruthy();
-    expect(defined(points).split(' ')).toHaveLength(3);
+    expect(defined(points).split(' ')).toHaveLength(RISING_SCORES.length);
   });
 
   it('handles null gaps — excludes them from polyline points', () => {
-    const { container } = render(<Sparkline data={[0.5, null, 0.9]} />);
+    const { container } = render(<Sparkline data={SCORES_WITH_GAP} />);
     const polyline = container.querySelector('polyline');
     expect(polyline).not.toBeNull();
     // Only 2 valid values, so polyline has 2 points
@@ -90,24 +97,24 @@ describe('Sparkline', () => {
   });
 
   it('uses custom label as aria-label', () => {
-    render(<Sparkline data={[0.5, 0.7]} label="relevance trend" />);
+    render(<Sparkline data={SCORE_PAIR} label="relevance trend" />);
     expect(screen.getByLabelText('relevance trend')).toBeInTheDocument();
   });
 
   it('uses default aria-label when none provided', () => {
-    render(<Sparkline data={[0.5, 0.7]} />);
+    render(<Sparkline data={SCORE_PAIR} />);
     expect(screen.getByLabelText('Score trend sparkline')).toBeInTheDocument();
   });
 
   it('respects custom width and height', () => {
-    const { container } = render(<Sparkline data={[0.5, 0.7]} width={120} height={40} />);
+    const { container } = render(<Sparkline data={SCORE_PAIR} width={120} height={40} />);
     const svg = container.querySelector('svg');
     expect(svg).toHaveAttribute('width', '120');
     expect(svg).toHaveAttribute('height', '40');
   });
 
   it('uses custom color on polyline stroke', () => {
-    const { container } = render(<Sparkline data={[0.5, 0.7]} color="#ff0000" />);
+    const { container } = render(<Sparkline data={SCORE_PAIR} color="#ff0000" />);
     const polyline = container.querySelector('polyline');
     expect(polyline).toHaveAttribute('stroke', '#ff0000');
   });
@@ -116,6 +123,9 @@ describe('Sparkline', () => {
 
 // Pinned epoch for all time-relative assertions in this describe block
 const PINNED_NOW = new Date('2026-02-22T12:00:00.000Z');
+const HOURS_UNTIL_BREACH = 25;
+const MINUTES_UNTIL_BREACH = 30;
+const DAYS_UNTIL_BREACH = 3;
 
 describe('TrendChart', () => {
   beforeEach(() => {
@@ -160,7 +170,7 @@ describe('TrendChart', () => {
 
   it('shows breach time when projectedBreachTime is provided', () => {
     // Project breach 25h from pinned now — renders as "25.0h"
-    const futureIso = new Date(PINNED_NOW.getTime() + 25 * 60 * 60 * 1000).toISOString();
+    const futureIso = new Date(PINNED_NOW.getTime() + HOURS_UNTIL_BREACH * TIME_MS.HOUR).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: futureIso,
@@ -168,11 +178,11 @@ describe('TrendChart', () => {
     });
     render(<TrendChart trend={makeTrend()} dynamics={dynamics} metricName="relevance" />);
     expect(screen.getByText('Breach in:')).toBeInTheDocument();
-    expect(screen.getByText('25.0h')).toBeInTheDocument();
+    expect(screen.getByText(`${HOURS_UNTIL_BREACH}.0h`)).toBeInTheDocument();
   });
 
   it('shows "threshold exceeded" for breach in the past', () => {
-    const pastIso = new Date(PINNED_NOW.getTime() - 1 * 60 * 60 * 1000).toISOString();
+    const pastIso = new Date(PINNED_NOW.getTime() - TIME_MS.HOUR).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: pastIso,
@@ -184,26 +194,26 @@ describe('TrendChart', () => {
 
   it('shows breach in minutes for sub-1h breach', () => {
     // 30 minutes from pinned now → "30m"
-    const futureIso = new Date(PINNED_NOW.getTime() + 30 * 60 * 1000).toISOString();
+    const futureIso = new Date(PINNED_NOW.getTime() + MINUTES_UNTIL_BREACH * TIME_MS.MINUTE).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: futureIso,
       projectedStatus: 'warning',
     });
     render(<TrendChart trend={makeTrend()} dynamics={dynamics} metricName="relevance" />);
-    expect(screen.getByText('30m')).toBeInTheDocument();
+    expect(screen.getByText(`${MINUTES_UNTIL_BREACH}m`)).toBeInTheDocument();
   });
 
   it('shows breach in days for 2d+ breach', () => {
     // 3 days from pinned now → "3.0d"
-    const futureIso = new Date(PINNED_NOW.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    const futureIso = new Date(PINNED_NOW.getTime() + DAYS_UNTIL_BREACH * TIME_MS.DAY).toISOString();
     const dynamics = makeDynamics({
       velocity: 0.05,
       projectedBreachTime: futureIso,
       projectedStatus: 'warning',
     });
     render(<TrendChart trend={makeTrend()} dynamics={dynamics} metricName="relevance" />);
-    expect(screen.getByText('3.0d')).toBeInTheDocument();
+    expect(screen.getByText(`${DAYS_UNTIL_BREACH}.0d`)).toBeInTheDocument();
   });
 
   it('shows confidence percentage', () => {
@@ -275,15 +285,16 @@ describe('TrendSeries', () => {
 
   it('handles single-day span without error', () => {
     const now = new Date('2026-02-22T12:00:00Z');
+    const halfDayMs = TIME_MS.DAY / 2;
     const buckets: TrendBucket[] = [
       makeTrendBucket({
-        startTime: new Date(now.getTime() - 12 * 3600000).toISOString(),
+        startTime: new Date(now.getTime() - halfDayMs).toISOString(),
         endTime: now.toISOString(),
         avg: 0.82,
       }),
       makeTrendBucket({
         startTime: now.toISOString(),
-        endTime: new Date(now.getTime() + 12 * 3600000).toISOString(),
+        endTime: new Date(now.getTime() + halfDayMs).toISOString(),
         avg: 0.84,
       }),
     ];
@@ -507,7 +518,7 @@ describe('trends API route validation', () => {
   it('returns 404 for unknown metric', async () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/nonexistent-metric');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(HttpStatus.NotFound);
     const body = await res.json() as ErrorResponse;
     expect(body.error).toContain('nonexistent-metric');
   });
@@ -515,7 +526,7 @@ describe('trends API route validation', () => {
   it('returns 400 for invalid period param', async () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance?period=invalid');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = await res.json() as ErrorResponse;
     expect(body.error).toContain('Invalid period');
   });
@@ -527,7 +538,7 @@ describe('trends API route validation', () => {
   ])('returns 400 for buckets $label', async ({ buckets }) => {
     const app = await loadTrendRoutes();
     const res = await app.request(`/trends/relevance?period=7d&buckets=${buckets}`);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = await res.json() as ErrorResponse;
     expect(body.error).toContain('Invalid buckets');
   });
@@ -535,7 +546,7 @@ describe('trends API route validation', () => {
   it('returns 200 for valid known metric and default params', async () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as TrendDetailResponse;
     expect(body.metric).toBe('relevance');
   });
@@ -543,7 +554,7 @@ describe('trends API route validation', () => {
   it('returns 200 for valid period and buckets', async () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance?period=24h&buckets=5');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
 });

@@ -27,6 +27,10 @@ const NOW = new Date('2026-10-08T01:08:00.000Z');
 const METRIC = FIXTURE_METRIC;
 const TRACE_ID = 'a1b2c3d4e5f60718a1b2c3d4e5f60718';
 const SESSION_ID = 'session-1';
+const PREVIOUS_WEEK_SCORE = 0.3;
+/** Scores under the relevance warning, so the operator view carries alerting metrics. */
+const ALERTING_SCORES = [0.1, 0.2, 0.3];
+const HEALTHY_SCORES = [0.7, 0.8, 0.9];
 
 const sessionSpan: TraceSpan = {
   traceId: TRACE_ID,
@@ -104,11 +108,11 @@ describe('computeOrgEntries metric detail weeks', () => {
   it('baselines against the week starting at the UTC midnight 14 days back', async () => {
     const result = await compute([
       evaluation('current', '2026-10-05T12:00:00.000Z', { scoreValue: 0.5 }),
-      evaluation('previous-week start', '2026-09-24T00:00:00.000Z', { scoreValue: 0.3 }),
+      evaluation('previous-week start', '2026-09-24T00:00:00.000Z', { scoreValue: PREVIOUS_WEEK_SCORE }),
       evaluation('before the previous week', '2026-09-23T23:59:59.999Z', { scoreValue: 0.1 }),
     ]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend?.previousValue).toBe(0.3);
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend?.previousValue).toBe(PREVIOUS_WEEK_SCORE);
   });
 
   it('has no trend when the previous week holds no scores', async () => {
@@ -131,10 +135,10 @@ describe('computeOrgEntries metric detail weeks', () => {
   it('ends the previous week at the last ms before the current week starts', async () => {
     const result = await compute([
       evaluation('current', '2026-10-05T12:00:00.000Z', { scoreValue: 0.5 }),
-      evaluation('last ms of the previous week', '2026-09-30T23:59:59.999Z', { scoreValue: 0.3 }),
+      evaluation('last ms of the previous week', '2026-09-30T23:59:59.999Z', { scoreValue: PREVIOUS_WEEK_SCORE }),
     ]);
 
-    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend?.previousValue).toBe(0.3);
+    expect(entryValue<MetricDetail>(result, `metric:${METRIC}:7d`)?.trend?.previousValue).toBe(PREVIOUS_WEEK_SCORE);
   });
 
   it('writes no detail for evaluations whose name only resembles the metric', async () => {
@@ -161,8 +165,7 @@ describe('computeOrgEntries metric detail weeks', () => {
 describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRITES)', () => {
   /** Later on the same UTC day as NOW, so every window reads the same rows. */
   const LATER = new Date('2026-10-08T05:08:00.000Z');
-  // Scores under the relevance warning, so the operator view carries alerting metrics.
-  const rows = [0.1, 0.2, 0.3].map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
+  const rows = ALERTING_SCORES.map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
   let first: OrgComputation;
   let second: OrgComputation;
 
@@ -213,7 +216,7 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
 });
 
 describe('computeOrgEntries synthetic cohorts (BACKFILL-COHORT-COUNTS-AS-EVIDENCE)', () => {
-  const rows = [0.7, 0.8, 0.9].map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
+  const rows = HEALTHY_SCORES.map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
   const dashboardHashes = (result: OrgComputation) =>
     new Map(result.allEntries.filter(e => e.key.startsWith('dashboard:')).map(e => [e.key, e.hashBasis]));
 

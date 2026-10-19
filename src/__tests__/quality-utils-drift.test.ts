@@ -35,43 +35,102 @@ import {
   HALLUCINATION_RISK_THRESHOLD,
 } from '../lib/constants.js';
 
+const MAXIMIZE_BANDS: Array<[number, string]> = [
+  [1.0, 'excellent'],
+  [0.95, 'excellent'],
+  [0.9, 'excellent'],   // >= 0.9 threshold
+  [0.89, 'good'],
+  [0.8, 'good'],        // >= 0.8 threshold
+  [0.79, 'adequate'],
+  [0.6, 'adequate'],    // >= 0.6 threshold
+  [0.59, 'poor'],
+  [0.4, 'poor'],        // >= 0.4 threshold
+  [0.39, 'failing'],
+  [0.0, 'failing'],
+];
+
+const MINIMIZE_BANDS: Array<[number, string]> = [
+  [0.0, 'excellent'],   // 1 - 0.0 = 1.0 >= 0.9
+  [0.1, 'excellent'],   // 1 - 0.1 = 0.9 >= 0.9
+  [0.11, 'good'],       // 1 - 0.11 = 0.89 >= 0.8
+  [0.2, 'good'],        // 1 - 0.2 = 0.8 >= 0.8
+  [0.4, 'adequate'],    // 1 - 0.4 = 0.6 >= 0.6
+  [0.6, 'poor'],        // 1 - 0.6 = 0.4 >= 0.4
+  [0.61, 'failing'],    // 1 - 0.61 = 0.39
+];
+
+const EXCELLENT_SCORE = 0.95;
+const POOR_SCORE = 0.5;
+
+const LABEL_ORDINALS: Array<[string, number, string]> = [
+  ['excellent', 4, 'Pass'],
+  ['highly_relevant', 4, 'Pass'],
+  ['fully_faithful', 4, 'Pass'],
+  ['perfect', 4, 'Pass'],
+  ['relevant', 3, 'Pass'],
+  ['good', 3, 'Pass'],
+  ['faithful', 3, 'Pass'],
+  ['pass', 3, 'Pass'],
+  ['correct', 3, 'Pass'],
+  ['coherent', 3, 'Pass'],
+  ['complete', 3, 'Pass'],
+  ['appropriate', 3, 'Pass'],
+  ['partial', 2, 'Review'],
+  ['borderline', 2, 'Review'],
+  ['adequate', 2, 'Review'],
+  ['mixed', 2, 'Review'],
+  ['off_topic', 1, 'Fail'],
+  ['irrelevant', 1, 'Fail'],
+  ['not_relevant', 1, 'Fail'],
+  ['unfaithful', 1, 'Fail'],
+  ['fail', 1, 'Fail'],
+  ['incorrect', 1, 'Fail'],
+  ['incoherent', 1, 'Fail'],
+  ['incomplete', 1, 'Fail'],
+  ['inappropriate', 1, 'Fail'],
+  ['hallucinated', 0, 'Fail'],
+  ['fabricated', 0, 'Fail'],
+  ['toxic', 0, 'Fail'],
+  ['dangerous', 0, 'Fail'],
+];
+
+const EXCELLENT_ORDINAL = 4;
+
+const ORDINAL_CATEGORIES: Array<[number, string]> = [
+  [4, 'Pass'],
+  [3, 'Pass'],
+  [2, 'Review'],
+  [1, 'Fail'],
+  [0, 'Fail'],
+];
+
+const EXPECTED_HALLUCINATION_RISK_THRESHOLD = 0.15;
+
+// Mirrors the parent's own ROLE_DISPLAY_LIMITS test (qfe-roles-detail.test.ts)
+// so the two sides can be diffed by eye.
+const EXPECTED_ROLE_LIMITS = {
+  executive: { explanationTruncation: 80, maxWorstEvaluations: 1 },
+  operator: { explanationTruncation: 500, maxWorstEvaluations: 5 },
+  auditor: { explanationTruncation: 2000, maxWorstEvaluations: 10 },
+};
+
 
 describe('scoreColorBand', () => {
   describe('maximize direction (default)', () => {
-    it.each<[number, string]>([
-      [1.0, 'excellent'],
-      [0.95, 'excellent'],
-      [0.9, 'excellent'],   // >= 0.9 threshold
-      [0.89, 'good'],
-      [0.8, 'good'],        // >= 0.8 threshold
-      [0.79, 'adequate'],
-      [0.6, 'adequate'],    // >= 0.6 threshold
-      [0.59, 'poor'],
-      [0.4, 'poor'],        // >= 0.4 threshold
-      [0.39, 'failing'],
-      [0.0, 'failing'],
-    ])('score %f → %s', (score, expected) => {
+    it.each(MAXIMIZE_BANDS)('score %f → %s', (score, expected) => {
       expect(scoreColorBand(score, 'maximize')).toBe(expected);
     });
   });
 
   describe('minimize direction', () => {
-    it.each<[number, string]>([
-      [0.0, 'excellent'],   // 1 - 0.0 = 1.0 >= 0.9
-      [0.1, 'excellent'],   // 1 - 0.1 = 0.9 >= 0.9
-      [0.11, 'good'],       // 1 - 0.11 = 0.89 >= 0.8
-      [0.2, 'good'],        // 1 - 0.2 = 0.8 >= 0.8
-      [0.4, 'adequate'],    // 1 - 0.4 = 0.6 >= 0.6
-      [0.6, 'poor'],        // 1 - 0.6 = 0.4 >= 0.4
-      [0.61, 'failing'],    // 1 - 0.61 = 0.39
-    ])('score %f → %s', (score, expected) => {
+    it.each(MINIMIZE_BANDS)('score %f → %s', (score, expected) => {
       expect(scoreColorBand(score, 'minimize')).toBe(expected);
     });
   });
 
   it('defaults to maximize when direction omitted', () => {
-    expect(scoreColorBand(0.95)).toBe('excellent');
-    expect(scoreColorBand(0.5)).toBe('poor');
+    expect(scoreColorBand(EXCELLENT_SCORE)).toBe('excellent');
+    expect(scoreColorBand(POOR_SCORE)).toBe('poor');
   });
 });
 
@@ -92,37 +151,7 @@ describe('inferScoreDirection', () => {
 
 
 describe('labelToOrdinal', () => {
-  it.each([
-    ['excellent', 4, 'Pass'],
-    ['highly_relevant', 4, 'Pass'],
-    ['fully_faithful', 4, 'Pass'],
-    ['perfect', 4, 'Pass'],
-    ['relevant', 3, 'Pass'],
-    ['good', 3, 'Pass'],
-    ['faithful', 3, 'Pass'],
-    ['pass', 3, 'Pass'],
-    ['correct', 3, 'Pass'],
-    ['coherent', 3, 'Pass'],
-    ['complete', 3, 'Pass'],
-    ['appropriate', 3, 'Pass'],
-    ['partial', 2, 'Review'],
-    ['borderline', 2, 'Review'],
-    ['adequate', 2, 'Review'],
-    ['mixed', 2, 'Review'],
-    ['off_topic', 1, 'Fail'],
-    ['irrelevant', 1, 'Fail'],
-    ['not_relevant', 1, 'Fail'],
-    ['unfaithful', 1, 'Fail'],
-    ['fail', 1, 'Fail'],
-    ['incorrect', 1, 'Fail'],
-    ['incoherent', 1, 'Fail'],
-    ['incomplete', 1, 'Fail'],
-    ['inappropriate', 1, 'Fail'],
-    ['hallucinated', 0, 'Fail'],
-    ['fabricated', 0, 'Fail'],
-    ['toxic', 0, 'Fail'],
-    ['dangerous', 0, 'Fail'],
-  ] as Array<[string, number, string]>)('"%s" → ordinal %i, category %s', (label, ordinal, category) => {
+  it.each(LABEL_ORDINALS)('"%s" → ordinal %i, category %s', (label, ordinal, category) => {
     const result = labelToOrdinal(label);
     expect(result.ordinal).toBe(ordinal);
     expect(result.category).toBe(category);
@@ -130,9 +159,9 @@ describe('labelToOrdinal', () => {
   });
 
   it('normalizes case and hyphens', () => {
-    expect(labelToOrdinal('EXCELLENT').ordinal).toBe(4);
-    expect(labelToOrdinal('highly-relevant').ordinal).toBe(4);
-    expect(labelToOrdinal('Fully_Faithful').ordinal).toBe(4);
+    expect(labelToOrdinal('EXCELLENT').ordinal).toBe(EXCELLENT_ORDINAL);
+    expect(labelToOrdinal('highly-relevant').ordinal).toBe(EXCELLENT_ORDINAL);
+    expect(labelToOrdinal('Fully_Faithful').ordinal).toBe(EXCELLENT_ORDINAL);
   });
 
   it('unknown label → ordinal 2, Review, mapped false', () => {
@@ -143,13 +172,7 @@ describe('labelToOrdinal', () => {
 
 
 describe('ordinalToCategory', () => {
-  it.each<[number, string]>([
-    [4, 'Pass'],
-    [3, 'Pass'],
-    [2, 'Review'],
-    [1, 'Fail'],
-    [0, 'Fail'],
-  ])('ordinal %i → %s', (ordinal, expected) => {
+  it.each(ORDINAL_CATEGORIES)('ordinal %i → %s', (ordinal, expected) => {
     expect(ordinalToCategory(ordinal)).toBe(expected);
   });
 });
@@ -181,7 +204,7 @@ describe('hallucination flagging constants', () => {
   // names obs_hallucination_detection reads (src/tools/hallucination-detection.ts).
   // Change them together.
   it('pins the per-evaluation hallucination cutoff and names', () => {
-    expect(HALLUCINATION_RISK_THRESHOLD).toBe(0.15);
+    expect(HALLUCINATION_RISK_THRESHOLD).toBe(EXPECTED_HALLUCINATION_RISK_THRESHOLD);
     expect([...HALLUCINATION_RISK_EVALUATION_NAMES].toSorted()).toEqual(['hallucination', 'hallucination_risk']);
   });
 });
@@ -201,47 +224,39 @@ describe('ROLE_FEATURE_CONFIG', () => {
     expect(ROLE_FEATURE_CONFIG.executive.showVariance).toBe(false);
     expect(ROLE_FEATURE_CONFIG.executive.showAcceleration).toBe(false);
     expect(ROLE_FEATURE_CONFIG.executive.showRawExport).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.maxWorstEvaluations).toBe(1);
+    expect(ROLE_FEATURE_CONFIG.executive.maxWorstEvaluations).toBe(EXPECTED_ROLE_LIMITS.executive.maxWorstEvaluations);
   });
 
   it('operator shows operational metrics', () => {
     expect(ROLE_FEATURE_CONFIG.operator.showVariance).toBe(true);
     expect(ROLE_FEATURE_CONFIG.operator.showCorrelationRemediation).toBe(true);
     expect(ROLE_FEATURE_CONFIG.operator.showCoverageHeatmap).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.maxWorstEvaluations).toBe(5);
+    expect(ROLE_FEATURE_CONFIG.operator.maxWorstEvaluations).toBe(EXPECTED_ROLE_LIMITS.operator.maxWorstEvaluations);
   });
 
   it('auditor has full access with raw export', () => {
     expect(ROLE_FEATURE_CONFIG.auditor.showProvenance).toBe(true);
     expect(ROLE_FEATURE_CONFIG.auditor.showRawExport).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.auditor.maxWorstEvaluations).toBe(10);
-    expect(ROLE_FEATURE_CONFIG.auditor.explanationTruncation).toBe(2000);
+    expect(ROLE_FEATURE_CONFIG.auditor.maxWorstEvaluations).toBe(EXPECTED_ROLE_LIMITS.auditor.maxWorstEvaluations);
+    expect(ROLE_FEATURE_CONFIG.auditor.explanationTruncation).toBe(EXPECTED_ROLE_LIMITS.auditor.explanationTruncation);
   });
 });
 
 describe('ROLE_DISPLAY_LIMITS', () => {
   // The assertions above pin maxWorstEvaluations for all three roles but
   // explanationTruncation for the auditor only, so executive (80) and operator
-  // (500) could drift unnoticed. These pin the whole table, and mirror the
-  // parent's own ROLE_DISPLAY_LIMITS test (qfe-roles-detail.test.ts) so the two
-  // sides can be diffed by eye.
-  const EXPECTED = {
-    executive: { explanationTruncation: 80, maxWorstEvaluations: 1 },
-    operator: { explanationTruncation: 500, maxWorstEvaluations: 5 },
-    auditor: { explanationTruncation: 2000, maxWorstEvaluations: 10 },
-  };
-
+  // (500) could drift unnoticed. These pin the whole table.
   for (const role of ['executive', 'operator', 'auditor'] as const) {
     it(`${role} limits match the parent`, () => {
-      expect(ROLE_DISPLAY_LIMITS[role]).toEqual(EXPECTED[role]);
+      expect(ROLE_DISPLAY_LIMITS[role]).toEqual(EXPECTED_ROLE_LIMITS[role]);
     });
 
     it(`${role} config surfaces the limits from ROLE_DISPLAY_LIMITS`, () => {
       expect(ROLE_FEATURE_CONFIG[role].explanationTruncation).toBe(
-        EXPECTED[role].explanationTruncation,
+        EXPECTED_ROLE_LIMITS[role].explanationTruncation,
       );
       expect(ROLE_FEATURE_CONFIG[role].maxWorstEvaluations).toBe(
-        EXPECTED[role].maxWorstEvaluations,
+        EXPECTED_ROLE_LIMITS[role].maxWorstEvaluations,
       );
     });
   }
@@ -253,15 +268,17 @@ describe('ROLE_DISPLAY_LIMITS', () => {
 
 
 describe('truncateText', () => {
+  const TEXT = 'hello';
+
   it('returns original text when under limit', () => {
-    expect(truncateText('hello', 10)).toBe('hello');
+    expect(truncateText(TEXT, TEXT.length * 2)).toBe(TEXT);
   });
 
   it('truncates at max and appends ellipsis', () => {
-    expect(truncateText('hello world', 5)).toBe('hello...');
+    expect(truncateText(`${TEXT} world`, TEXT.length)).toBe(`${TEXT}...`);
   });
 
   it('returns original when exactly at limit', () => {
-    expect(truncateText('hello', 5)).toBe('hello');
+    expect(truncateText(TEXT, TEXT.length)).toBe(TEXT);
   });
 });

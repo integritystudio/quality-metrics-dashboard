@@ -71,9 +71,10 @@ describe('CQIHero', () => {
   });
 
   it('renders contribution segments with titles', () => {
-    const { container } = render(<CQIHero cqi={makeCQI()} />);
+    const cqi = makeCQI();
+    const { container } = render(<CQIHero cqi={cqi} />);
     const segments = container.querySelectorAll('[title*="weight"]');
-    expect(segments).toHaveLength(3);
+    expect(segments).toHaveLength(cqi.contributions.length);
   });
 
   it('renders screen reader table with caption', () => {
@@ -100,9 +101,10 @@ function makeEvalRows(): EvalRow[] {
 
 describe('EvaluationTable', () => {
   it('renders all evaluation rows', () => {
-    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const evaluations = makeEvalRows();
+    const { container } = render(<EvaluationTable evaluations={evaluations} />);
     const rows = container.querySelectorAll('tbody tr');
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(evaluations.length);
   });
 
   it('renders score values in table cells', () => {
@@ -122,11 +124,12 @@ describe('EvaluationTable', () => {
   });
 
   it('filters rows when category button clicked', () => {
-    const { container } = render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const evaluations = makeEvalRows();
+    const { container } = render(<EvaluationTable evaluations={evaluations} />);
     const failBtn = defined(screen.getAllByRole('button').find(b => b.textContent === 'Fail'));
     fireEvent.click(failBtn);
     const rows = container.querySelectorAll('tbody tr');
-    expect(rows.length).toBeLessThan(3);
+    expect(rows.length).toBeLessThan(evaluations.length);
   });
 
   it('renders empty state when no evaluations', () => {
@@ -156,9 +159,10 @@ describe('EvaluationTable', () => {
   });
 
   it('renders expand toggle on each row', () => {
-    render(<EvaluationTable evaluations={makeEvalRows()} />);
+    const evaluations = makeEvalRows();
+    render(<EvaluationTable evaluations={evaluations} />);
     const expandBtns = screen.getAllByLabelText('Expand row');
-    expect(expandBtns).toHaveLength(3);
+    expect(expandBtns).toHaveLength(evaluations.length);
   });
 
   it('expands row on click to show full detail', () => {
@@ -242,7 +246,7 @@ describe('CorrelationHeatmap', () => {
     const { correlations, metrics } = makeCorrelations();
     const { container } = render(<CorrelationHeatmap correlations={correlations} metrics={metrics} />);
     const headers = container.querySelectorAll('[role="columnheader"]');
-    expect(headers).toHaveLength(3);
+    expect(headers).toHaveLength(metrics.length);
   });
 
   it('renders diagonal cells as 1.00', () => {
@@ -254,7 +258,7 @@ describe('CorrelationHeatmap', () => {
     allCells.forEach(cell => {
       if (cell.textContent === '1.00') diagCount++;
     });
-    expect(diagCount).toBe(3);
+    expect(diagCount).toBe(metrics.length);
   });
 
   it('renders off-diagonal correlation values', () => {
@@ -286,6 +290,12 @@ function ShortcutConsumer({ shortcutKey, desc }: { shortcutKey: string; desc: st
   return <div data-testid="consumer">{desc}</div>;
 }
 
+const SHORTCUTS = [
+  { shortcutKey: 'h', desc: 'Go home' },
+  { shortcutKey: 's', desc: 'Search' },
+  { shortcutKey: '?', desc: 'Help' },
+];
+
 describe('KeyboardNavProvider', () => {
   it('renders children without infinite loop', () => {
     const { getByTestId } = render(
@@ -299,12 +309,10 @@ describe('KeyboardNavProvider', () => {
   it('registers multiple shortcuts without loop', () => {
     const { getAllByTestId } = render(
       <KeyboardNavProvider>
-        <ShortcutConsumer shortcutKey="h" desc="Go home" />
-        <ShortcutConsumer shortcutKey="s" desc="Search" />
-        <ShortcutConsumer shortcutKey="?" desc="Help" />
+        {SHORTCUTS.map(({ shortcutKey, desc }) => <ShortcutConsumer key={shortcutKey} shortcutKey={shortcutKey} desc={desc} />)}
       </KeyboardNavProvider>,
     );
-    expect(getAllByTestId('consumer')).toHaveLength(3);
+    expect(getAllByTestId('consumer')).toHaveLength(SHORTCUTS.length);
   });
 
   it('useKeyboardNav throws outside provider', () => {

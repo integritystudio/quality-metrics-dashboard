@@ -60,7 +60,7 @@ describe('GET /api/calibration', () => {
     const calibrationData = makeCalibrationData();
     const kv = makeKV({ 'meta:calibration': calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns distributions field in response body', async () => {
@@ -96,7 +96,7 @@ describe('GET /api/calibration', () => {
   it('returns 404 with error field when no calibration data exists in KV', async () => {
     const kv = makeKV({});
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(HttpStatus.NotFound);
     const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
@@ -152,17 +152,18 @@ describe('GET /api/calibration: malformed KV payload', () => {
   it('accepts percentiles outside 0–1, which unbounded metrics legitimately produce', async () => {
     // scoreValue is z.number().finite(), not a normalized 0–1 score — bounding
     // the schema would 500 a working route for any unbounded metric.
+    const LATENCY_P90_MS = 1_500;
     const res = await requestCalibration({
       'meta:calibration': {
         lastCalibrated: '2026-03-10T06:00:00.000Z',
-        distributions: { evaluation_latency: { p10: 12, p25: 40, p50: 118, p75: 402, p90: 1_500 } },
+        distributions: { evaluation_latency: { p10: 12, p25: 40, p50: 118, p75: 402, p90: LATENCY_P90_MS } },
         sampleCounts: { evaluation_latency: 88 },
       },
     });
 
     expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as CalibrationResponse;
-    expect(body.distributions.evaluation_latency?.p90).toBe(1_500);
+    expect(body.distributions.evaluation_latency?.p90).toBe(LATENCY_P90_MS);
   });
 
   it('strips unknown keys instead of rejecting, so a newer producer cannot 500 an older worker', async () => {

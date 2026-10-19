@@ -10,6 +10,8 @@ import { createFixtureServer, evalToWire, type FixtureServer } from './support/f
 
 import { coverageRoutes } from '../api/routes/coverage.js';
 import type { CoverageResponse, ErrorResponse } from './support/api-responses.js';
+import { PERCENT_MULTIPLIER } from '../lib/constants.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -46,12 +48,12 @@ describe('GET /coverage', () => {
 
   it('rejects invalid period with 400', async () => {
     const res = await coverageRoutes.request('/coverage?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('rejects invalid inputKey with 400', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=invalid');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = await res.json() as ErrorResponse;
     expect(body.error).toContain('inputKey');
   });
@@ -59,7 +61,7 @@ describe('GET /coverage', () => {
   it('returns the columnar matrix the Worker also serves', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d');
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as CoverageResponse;
     expect(body.period).toBe('7d');
     expect(body.metrics.toSorted()).toEqual(['coherence', 'relevance']);
@@ -67,7 +69,9 @@ describe('GET /coverage', () => {
     expect(body.counts).toHaveLength(body.metrics.length);
     for (const row of body.counts) expect(row).toHaveLength(body.inputs.length);
     // 3 of the 4 metric x input cells are evaluated.
-    expect(body.overallCoveragePercent).toBe(75);
+    const evaluatedCells = 3;
+    const totalCells = body.metrics.length * body.inputs.length;
+    expect(body.overallCoveragePercent).toBe((evaluatedCells / totalCells) * PERCENT_MULTIPLIER);
   });
 
   it('drops rule-based evaluations from the coverage universe', async () => {
@@ -93,17 +97,17 @@ describe('GET /coverage', () => {
 
   it('accepts inputKey=traceId', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=traceId');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('accepts inputKey=sessionId', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=sessionId');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await coverageRoutes.request('/coverage?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

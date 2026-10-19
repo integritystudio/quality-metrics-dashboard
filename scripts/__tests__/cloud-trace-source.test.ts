@@ -10,7 +10,9 @@ import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 
 const TRACE_ID = '0123456789abcdef0123456789abcdef';
 const START_NS = 1_790_553_614_235_000_000n; // 2026-09-28T00:00:14.235Z
-const END_NS = START_NS + 1_463_666n;
+const DURATION_NS = 1_463_666n;
+const END_NS = START_NS + DURATION_NS;
+const LATER_START_OFFSET_NS = 1_000n;
 const SCOPE = new Set(['2026-09-28']);
 
 function cloudSpan(spanId: string, overrides: Partial<TraceSpan> = {}): TraceSpan {
@@ -30,7 +32,7 @@ function cloudSpan(spanId: string, overrides: Partial<TraceSpan> = {}): TraceSpa
 
 describe('toLocalTraceSpan', () => {
   it('converts epoch nanos to HRT tuples and the status name to its OTel number', () => {
-    expect(toLocalTraceSpan(cloudSpan('00000000000000a1'))).toEqual({
+    const expected = {
       traceId: TRACE_ID,
       spanId: '00000000000000a1',
       name: 'hook:builtin-post-tool',
@@ -39,7 +41,9 @@ describe('toLocalTraceSpan', () => {
       duration: [0, 1_463_666],
       status: { code: 1 },
       attributes: { [SESSION_ATTRIBUTES.ID]: 's1' },
-    });
+    };
+
+    expect(toLocalTraceSpan(cloudSpan('00000000000000a1'))).toEqual(expected);
   });
 
   it('maps ERROR to 2, the code derive treats as a failed agent', () => {
@@ -59,7 +63,7 @@ describe('toLocalTraceSpan', () => {
 
 describe('mergeAccountSpans', () => {
   it('orders spans ascending by start time across accounts and stamps each with its account', () => {
-    const later = cloudSpan('00000000000000b2', { startTimeUnixNano: START_NS + 1_000n });
+    const later = cloudSpan('00000000000000b2', { startTimeUnixNano: START_NS + LATER_START_OFFSET_NS });
     const earlier = cloudSpan('00000000000000a1');
 
     const merged = mergeAccountSpans([

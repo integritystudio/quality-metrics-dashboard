@@ -20,16 +20,21 @@ import { YES_FLAG } from '../one-shot-eval.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { RELEVANCE_CRITERIA, FAITHFULNESS_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { TOKENS_PER_CHAR } from '../../../src/lib/core/constants-models.js';
-import { makeSizedTurn } from './support/fixtures.js';
+import { makeSizedTurn, SIZED_TURN_CHARS } from './support/fixtures.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
 const PRICING = { input: 5.0, output: 25.0, provider: 'anthropic' } as const;
 const ONE_MILLION = 1_000_000;
+const USD_PRECISION_DIGITS = 10;
+const TOOL_RESULT_CHARS = 2000;
+const LONG_INPUT_CHARS = 4000;
 /** 0–1 values that land exactly on the 1–5 grid: 0 → 1, 0.25 → 2, 0.5 → 3, 0.75 → 4, 1 → 5. */
 const SCORE_1 = 0;
 const SCORE_3 = 0.5;
 const SCORE_4 = 0.75;
 const SCORE_5 = 1;
+const GRID_LOWEST = 1;
+const GRID_HIGHEST = 5;
 
 function makeQualityTurn(overrides: Partial<QualityTurn>): QualityTurn {
   return {
@@ -88,8 +93,8 @@ describe('turnKey', () => {
 describe('estimateCallInputTokens', () => {
   it('counts only the parts the criterion reads', () => {
     // faithfulness reads output + context, never the user's input.
-    const short = makeSizedTurn({ userText: 'u', toolResults: ['c'.repeat(2000)] });
-    const long = makeSizedTurn({ userText: 'u'.repeat(4000), toolResults: ['c'.repeat(2000)] });
+    const short = makeSizedTurn({ userText: 'u', toolResults: ['c'.repeat(TOOL_RESULT_CHARS)] });
+    const long = makeSizedTurn({ userText: 'u'.repeat(LONG_INPUT_CHARS), toolResults: ['c'.repeat(TOOL_RESULT_CHARS)] });
     expect(estimateCallInputTokens(long, FAITHFULNESS_CRITERIA)).toBe(estimateCallInputTokens(short, FAITHFULNESS_CRITERIA));
     expect(estimateCallInputTokens(long, RELEVANCE_CRITERIA)).toBeGreaterThan(estimateCallInputTokens(short, RELEVANCE_CRITERIA));
     expect(estimateCallInputTokens(makeSizedTurn(), FAITHFULNESS_CRITERIA)).toBeGreaterThanOrEqual(PROMPT_OVERHEAD_TOKENS_ESTIMATE);
@@ -104,8 +109,8 @@ describe('estimateReferenceSpend', () => {
     expect(estimate.calls).toBe(2);
     expect(estimate.outputTokens).toBe(2 * OUTPUT_TOKENS_PER_CALL_ESTIMATE);
     const expectedUsd = (estimate.inputTokens * PRICING.input + estimate.outputTokens * PRICING.output) / ONE_MILLION;
-    expect(estimate.usd).toBeCloseTo(expectedUsd, 10);
-    expect(estimate.inputTokens).toBeGreaterThan(Math.ceil(1200 * TOKENS_PER_CHAR));
+    expect(estimate.usd).toBeCloseTo(expectedUsd, USD_PRECISION_DIGITS);
+    expect(estimate.inputTokens).toBeGreaterThan(Math.ceil((SIZED_TURN_CHARS.user + SIZED_TURN_CHARS.assistant) * TOKENS_PER_CHAR));
   });
 });
 
@@ -132,7 +137,7 @@ describe('compareToReference', () => {
       [makeQualityTurn({ perCriterion: { [RELEVANCE_EVAL_NAME]: SCORE_1 }, reference: { [RELEVANCE_EVAL_NAME]: SCORE_5 } })],
       'perCriterion',
     );
-    expect(defined(harsh.byCriterion[RELEVANCE_EVAL_NAME]).meanSignedDiff).toBe(-4);
+    expect(defined(harsh.byCriterion[RELEVANCE_EVAL_NAME]).meanSignedDiff).toBe(GRID_LOWEST - GRID_HIGHEST);
   });
 
   it('counts scores present on only one side instead of pairing them', () => {

@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { dashboardRoutes } from '../../src/api/routes/dashboard.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { evaluation } from './support/evaluations.js';
 import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
@@ -31,7 +32,7 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     const fromKv = kvValue(synced(), `dashboard:${period}`);
 
     const res = await dashboardRoutes.request(`/dashboard?period=${period}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const fromRoute = await res.json();
 
     expect(fromKv).toEqual(fromRoute);
@@ -49,7 +50,7 @@ describe('dashboard summary parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
       const fromKv = kvValue(synced(), `dashboard:7d:${role}`);
 
       const res = await dashboardRoutes.request(`/dashboard?period=7d&role=${role}`);
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(HttpStatus.Ok);
       const fromRoute = await res.json();
 
       expect(fromKv).toEqual(fromRoute);

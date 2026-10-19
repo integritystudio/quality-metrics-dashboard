@@ -23,6 +23,8 @@ import {
 import { defined } from '../../src/__tests__/support/defined.js';
 
 const MS_PER_MINUTE = 60_000;
+const RETRY_DELAYS_MS = [10, 20, 40];
+const SYNC_RETRY_WINDOW_MINUTES = { min: 15, max: 30 };
 
 describe('isTransientNetworkFailure', () => {
   it.each([
@@ -54,7 +56,7 @@ describe('runWithRetry', () => {
     const outcome = await runWithRetry({
       attempt: () => 'ok',
       shouldRetry: () => false,
-      delaysMs: [10, 20],
+      delaysMs: RETRY_DELAYS_MS,
       sleep: ms => { sleeps.push(ms); return Promise.resolve(); },
     });
 
@@ -70,41 +72,44 @@ describe('runWithRetry', () => {
     const outcome = await runWithRetry({
       attempt: n => { attempts.push(n); return defined(outcomes[n - 1]); },
       shouldRetry: o => o === 'fail',
-      delaysMs: [10, 20, 40],
+      delaysMs: RETRY_DELAYS_MS,
       sleep: ms => { sleeps.push(ms); return Promise.resolve(); },
     });
 
     expect(outcome).toBe('ok');
-    expect(attempts).toEqual([1, 2, 3]);
-    expect(sleeps).toEqual([10, 20]);
+    expect(attempts).toEqual(outcomes.map((_, i) => i + 1));
+    expect(sleeps).toEqual(RETRY_DELAYS_MS.slice(0, outcomes.length - 1));
   });
 
   it('gives up after the delays are exhausted and returns the last failure', async () => {
     let calls = 0;
+    const delaysMs = [1, 1];
 
     const outcome = await runWithRetry({
       attempt: () => { calls += 1; return 'fail'; },
       shouldRetry: () => true,
-      delaysMs: [1, 1],
+      delaysMs,
       sleep: noSleep,
     });
 
     expect(outcome).toBe('fail');
-    expect(calls).toBe(3);
+    expect(calls).toBe(delaysMs.length + 1);
   });
 
   it('announces each retry with the wait, the attempt numbers and the failed outcome', async () => {
     const announced: Array<[number, number, number, string]> = [];
+    const delaysMs = [5, 6];
+    const expectedAnnouncements = [[5, 1, 3, 'fail-1'], [6, 2, 3, 'fail-2']];
 
     await runWithRetry({
       attempt: (n) => `fail-${n}`,
       shouldRetry: () => true,
-      delaysMs: [5, 6],
+      delaysMs,
       sleep: noSleep,
       onRetry: (waitMs, failedAttempt, total, outcome) => { announced.push([waitMs, failedAttempt, total, outcome]); },
     });
 
-    expect(announced).toEqual([[5, 1, 3, 'fail-1'], [6, 2, 3, 'fail-2']]);
+    expect(announced).toEqual(expectedAnnouncements);
   });
 });
 
@@ -167,8 +172,8 @@ describe('pipeline exit-code contract', () => {
   it('bounds the sync retry window to between fifteen and thirty minutes', () => {
     const total = SYNC_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
 
-    expect(total).toBeGreaterThanOrEqual(15 * MS_PER_MINUTE);
-    expect(total).toBeLessThanOrEqual(30 * MS_PER_MINUTE);
+    expect(total).toBeGreaterThanOrEqual(SYNC_RETRY_WINDOW_MINUTES.min * MS_PER_MINUTE);
+    expect(total).toBeLessThanOrEqual(SYNC_RETRY_WINDOW_MINUTES.max * MS_PER_MINUTE);
   });
 });
 

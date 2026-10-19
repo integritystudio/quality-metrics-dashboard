@@ -15,6 +15,7 @@ import { anchorTurns, type Turn } from '../judge-turns.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME } from '../judge-criteria.js';
 import { turnSkip } from '../judge-selection.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
 
 const TRACE_ID = '0123456789abcdef0123456789abcdef';
 const SESSION = '1a2b3c4d-0000-4000-8000-000000000001';
@@ -23,6 +24,9 @@ const TURN_MS = Date.parse(TURN_AT);
 const NS_PER_MS = 1_000_000n;
 const MS_PER_S = 1000;
 const NS_PER_MS_NUM = 1_000_000;
+/** A span shortly after the turn's timestamp, inside the anchoring tolerance. */
+const SPAN_AFTER_TURN_MS = 10;
+const RECEIPT_LAG_HOURS = 36;
 
 function span(spanId: string, atMs: number, sessionId = SESSION): LocalTraceSpan {
   const hrt: [number, number] = [Math.floor(atMs / MS_PER_S), (atMs % MS_PER_S) * NS_PER_MS_NUM];
@@ -68,7 +72,7 @@ describe('spanScopeDates', () => {
 describe('indexCloudSpans', () => {
   it('stamps each span with the account that read it, so a turn anchors to that account and span', () => {
     const accounts = indexCloudSpans({
-      spans: [span('00000000000000b1', TURN_MS + 10)],
+      spans: [span('00000000000000b1', TURN_MS + SPAN_AFTER_TURN_MS)],
       accounts: new Map([['00000000000000b1', 'OBTOOL_API_KEY_B']]),
     });
     const t = turn();
@@ -79,7 +83,7 @@ describe('indexCloudSpans', () => {
   });
 
   it('leaves a span no account claimed unstamped, never withheld', () => {
-    const accounts = indexCloudSpans({ spans: [span('00000000000000b1', TURN_MS + 10)], accounts: new Map() });
+    const accounts = indexCloudSpans({ spans: [span('00000000000000b1', TURN_MS + SPAN_AFTER_TURN_MS)], accounts: new Map() });
     const t = turn();
 
     anchorTurns([t], accounts);
@@ -97,7 +101,7 @@ describe('judgedKeys', () => {
   });
 
   it('dates a pre-event-time row by its evaluatedAtMs attribute, not its receipt time', () => {
-    const receivedNs = BigInt(TURN_MS + 36 * 3_600_000) * NS_PER_MS;
+    const receivedNs = BigInt(TURN_MS + RECEIPT_LAG_HOURS * TIME_MS.HOUR) * NS_PER_MS;
     const legacy = (name: string) => row(name, { timestamp: receivedNs, attributes: { evaluatedAtMs: TURN_MS } });
 
     expect(turnSkip(turn(), judgedKeys([legacy(RELEVANCE_EVAL_NAME), legacy(COHERENCE_EVAL_NAME)]), { deliverableOnly: false }))

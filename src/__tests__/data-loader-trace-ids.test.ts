@@ -73,17 +73,18 @@ describe('loadEvaluationsByTraceIds', () => {
   });
 
   it('aggregates results from all per-traceId queries into a single flat array', async () => {
-    serveEvals([
+    const rows = [
       { traceId: 'trace-a', evaluationName: 'relevance' },
       { traceId: 'trace-a', evaluationName: 'coherence' },
       { traceId: 'trace-b', evaluationName: 'relevance' },
       { traceId: 'trace-b', evaluationName: 'coherence' },
-    ]);
+    ];
+    serveEvals(rows);
 
     const result = await loadEvaluationsByTraceIds(['trace-a', 'trace-b']);
 
-    // 2 traceIds × 2 evals each = 4 total
-    expect(result).toHaveLength(4);
+    // 2 traceIds × 2 evals each
+    expect(result).toHaveLength(rows.length);
   });
 
   it('deduplicates traceIds to avoid duplicate backend calls', async () => {

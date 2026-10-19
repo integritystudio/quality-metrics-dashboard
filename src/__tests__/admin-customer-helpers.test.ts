@@ -23,7 +23,11 @@ import {
   sortedEntitlements,
   titleCaseKey,
   usageTickLabel,
+  type QuotaLevel,
+  type QuotaTone,
 } from '../lib/admin-customer.js';
+import { DAYS_PER_MONTH_FOR_DAILY_QUOTA } from '../lib/admin-customer-constants.js';
+import { PERCENT_MAX } from '../lib/constants.js';
 import { UsageBucketSchema } from '../lib/validation/admin-customer-schemas.js';
 
 const bucket = (bucketDate: string, metricKey: string, totalQuantity: number, requestCount: number) =>
@@ -55,6 +59,7 @@ describe('usage aggregation (usage_summary_page.dart)', () => {
     bucket('2026-10-01', 'requests', 100, 10),
     bucket('2026-10-05', 'otel_spans', 300, 3),
   ];
+  const GRAND_TOTAL_QUANTITY = 450;
 
   it('sums every metric per date, dates ascending (aggregateUsageByDate + sortedDates)', () => {
     expect(aggregateUsageByDate(buckets)).toEqual([
@@ -71,7 +76,7 @@ describe('usage aggregation (usage_summary_page.dart)', () => {
   });
 
   it('totals the metrics (_grandTotalQuantity)', () => {
-    expect(grandTotalQuantity(aggregateUsageByMetric(buckets))).toBe(450);
+    expect(grandTotalQuantity(aggregateUsageByMetric(buckets))).toBe(GRAND_TOTAL_QUANTITY);
   });
 
   it('is empty for no buckets', () => {
@@ -123,8 +128,8 @@ describe('titleCaseKey (_formatMetricKey / _formatPlanKey / _formatKey)', () => 
 
 describe('dates', () => {
   it('formatRenewalDate: "Month D, YYYY" in local time (billing_status_page.dart)', () => {
-    expect(formatRenewalDate(new Date(2026, 9, 15, 12))).toBe('October 15, 2026');
-    expect(formatRenewalDate(new Date(2027, 0, 1))).toBe('January 1, 2027');
+    expect(formatRenewalDate(new Date('2026-10-15T12:00:00'))).toBe('October 15, 2026');
+    expect(formatRenewalDate(new Date('2027-01-01T00:00:00'))).toBe('January 1, 2027');
   });
 
   it('monthlyResetLabel: the first of the next UTC month (usage_summary_page.dart)', () => {
@@ -135,52 +140,63 @@ describe('dates', () => {
 
 describe('quota thresholds (QuotaThresholds 0.75 / 0.90)', () => {
   const LIMIT = 100;
-
-  it.each([
-    [74, 'normal'],
-    [75, 'warning'],
+  const BELOW_WARNING = 74;
+  const AT_WARNING = 75;
+  const AT_DANGER = 90;
+  const OVER_LIMIT = 150;
+  const USAGE_WITHOUT_LIMIT = 500;
+  const NEGATIVE_USAGE = -5;
+  const SMALL_USAGE = 5;
+  const JUST_UNDER_LIMIT = { used: 999, limit: 1000, percent: 99 };
+  const ONE_THIRD = { used: 1, limit: 3, percent: 33 };
+  const QUOTA_LEVEL_CASES: Array<[number, QuotaLevel]> = [
+    [BELOW_WARNING, 'normal'],
+    [AT_WARNING, 'warning'],
     [89, 'warning'],
-    [90, 'danger'],
+    [AT_DANGER, 'danger'],
     [99, 'danger'],
-    [100, 'reached'],
-    [150, 'reached'],
-  ])('%i of 100 is %s (_UsageBar._level)', (used, level) => {
-    expect(quotaLevel(used, LIMIT)).toBe(level);
-  });
-
-  it.each([
+    [LIMIT, 'reached'],
+    [OVER_LIMIT, 'reached'],
+  ];
+  const QUOTA_TONE_CASES: Array<[number, QuotaTone]> = [
     [0.74, 'normal'],
     [0.75, 'warning'],
     [0.89, 'warning'],
     [0.9, 'danger'],
-  ])('a ratio of %f draws %s (_QuotaRow bar colour)', (ratio, tone) => {
+  ];
+
+  it.each(QUOTA_LEVEL_CASES)('%i of 100 is %s (_UsageBar._level)', (used, level) => {
+    expect(quotaLevel(used, LIMIT)).toBe(level);
+  });
+
+  it.each(QUOTA_TONE_CASES)('a ratio of %f draws %s (_QuotaRow bar colour)', (ratio, tone) => {
     expect(quotaTone(ratio)).toBe(tone);
   });
 
   it('is normal with no limit or a zero limit', () => {
-    expect(quotaLevel(500, null)).toBe('normal');
-    expect(quotaLevel(500, 0)).toBe('normal');
-    expect(quotaRatio(500, null)).toBe(0);
-    expect(quotaRatio(500, 0)).toBe(0);
+    expect(quotaLevel(USAGE_WITHOUT_LIMIT, null)).toBe('normal');
+    expect(quotaLevel(USAGE_WITHOUT_LIMIT, 0)).toBe('normal');
+    expect(quotaRatio(USAGE_WITHOUT_LIMIT, null)).toBe(0);
+    expect(quotaRatio(USAGE_WITHOUT_LIMIT, 0)).toBe(0);
   });
 
   it('clamps the ratio to 0–1 and the percent to 100, rounded down', () => {
-    expect(quotaRatio(150, LIMIT)).toBe(1);
-    expect(quotaRatio(-5, LIMIT)).toBe(0);
-    expect(quotaPercent(150, LIMIT)).toBe(100);
-    expect(quotaPercent(999, 1000)).toBe(99);
-    expect(quotaPercent(1, 3)).toBe(33);
-    expect(quotaPercent(5, null)).toBe(0);
+    expect(quotaRatio(OVER_LIMIT, LIMIT)).toBe(1);
+    expect(quotaRatio(NEGATIVE_USAGE, LIMIT)).toBe(0);
+    expect(quotaPercent(OVER_LIMIT, LIMIT)).toBe(PERCENT_MAX);
+    expect(quotaPercent(JUST_UNDER_LIMIT.used, JUST_UNDER_LIMIT.limit)).toBe(JUST_UNDER_LIMIT.percent);
+    expect(quotaPercent(ONE_THIRD.used, ONE_THIRD.limit)).toBe(ONE_THIRD.percent);
+    expect(quotaPercent(SMALL_USAGE, null)).toBe(0);
   });
 
   it('colours a daily bar by its ratio to the monthly limit over 30 days (_barColor)', () => {
-    const monthly = 3000; // daily share 100
-    expect(dailyQuotaLine(monthly)).toBe(100);
+    const monthly = LIMIT * DAYS_PER_MONTH_FOR_DAILY_QUOTA;
+    expect(dailyQuotaLine(monthly)).toBe(LIMIT);
     expect(dailyQuotaLine(0)).toBeNull();
-    expect(dailyBarTone(74, monthly)).toBe('normal');
-    expect(dailyBarTone(75, monthly)).toBe('warning');
-    expect(dailyBarTone(90, monthly)).toBe('danger');
-    expect(dailyBarTone(1000, 0)).toBe('normal');
+    expect(dailyBarTone(BELOW_WARNING, monthly)).toBe('normal');
+    expect(dailyBarTone(AT_WARNING, monthly)).toBe('warning');
+    expect(dailyBarTone(AT_DANGER, monthly)).toBe('danger');
+    expect(dailyBarTone(USAGE_WITHOUT_LIMIT, 0)).toBe('normal');
   });
 });
 
@@ -198,7 +214,7 @@ describe('billingStatusBadge (_statusLabel + _statusColor)', () => {
 });
 
 describe('entitlement values (_EntitlementsGrid)', () => {
-  it.each([
+  const ENTITLEMENT_VALUE_CASES: Array<[unknown, string]> = [
     [true, 'Enabled'],
     [false, 'Disabled'],
     [null, 'N/A'],
@@ -206,7 +222,9 @@ describe('entitlement values (_EntitlementsGrid)', () => {
     [500000, '500000'],
     ['custom', 'custom'],
     [{ nested: 1 }, '{"nested":1}'],
-  ])('%j renders as %j', (value, expected) => {
+  ];
+
+  it.each(ENTITLEMENT_VALUE_CASES)('%j renders as %j', (value, expected) => {
     expect(formatEntitlementValue(value)).toBe(expected);
   });
 

@@ -40,9 +40,11 @@ describe('KV choke point (worker module source scan)', () => {
     const rawGets = workerSource.match(/\bkv\.get\(/g) ?? [];
     expect(rawGets).toHaveLength(1);
     // And it sits inside readKvEnvelope, not a route handler.
+    const envelopeSignature = 'async function readKvEnvelope';
+    const envelopeStart = workerSource.indexOf(envelopeSignature);
     const envelopeBody = workerSource.slice(
-      workerSource.indexOf('async function readKvEnvelope'),
-      workerSource.indexOf('function', workerSource.indexOf('async function readKvEnvelope') + 10),
+      envelopeStart,
+      workerSource.indexOf('function', envelopeStart + envelopeSignature.length),
     );
     expect(envelopeBody).toContain('kv.get(');
   });

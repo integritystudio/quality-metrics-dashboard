@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { correlationRoutes } from '../../src/api/routes/correlations.js';
 import { evaluation } from './support/evaluations.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-09T12:00:00.000Z');
@@ -28,7 +29,7 @@ describe('correlations parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     const fromKv = kvValue(synced(), `correlations:${period}`);
 
     const res = await correlationRoutes.request(`/correlations?period=${period}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const fromRoute = await res.json();
 
     expect(fromKv).toEqual(fromRoute);

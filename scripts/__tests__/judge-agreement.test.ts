@@ -19,8 +19,9 @@ import { defined } from '../../src/__tests__/support/defined.js';
 
 describe('parseArgs', () => {
   it('defaults the limit and accepts an explicit one', () => {
+    const EXPLICIT_LIMIT = 5;
     expect(parseArgs([YES_FLAG]).limit).toBe(DEFAULT_LIMIT);
-    expect(parseArgs([YES_FLAG, LIMIT_FLAG, '5']).limit).toBe(5);
+    expect(parseArgs([YES_FLAG, LIMIT_FLAG, String(EXPLICIT_LIMIT)]).limit).toBe(EXPLICIT_LIMIT);
   });
 
   it('refuses a limit above the hard maximum or not a positive integer', () => {
@@ -36,22 +37,25 @@ describe('agreement math', () => {
       { perCriterion: { [RELEVANCE_EVAL_NAME]: 0.75, [COHERENCE_EVAL_NAME]: 1 }, consolidated: { [RELEVANCE_EVAL_NAME]: 0.75, [COHERENCE_EVAL_NAME]: 0.5 } },
       { perCriterion: { [RELEVANCE_EVAL_NAME]: 0.5 }, consolidated: { [RELEVANCE_EVAL_NAME]: 1 } },
     ];
+    const PAIRED_TOTAL = 3;
+    const ABS_DIFF_TOTAL = 4;
     const { byCriterion, overall } = computeAgreement(turns);
 
     expect(byCriterion[RELEVANCE_EVAL_NAME]).toMatchObject({ paired: 2, exactMatches: 1, exactMatchRate: 0.5, meanAbsDiff: 1 });
     expect(byCriterion[COHERENCE_EVAL_NAME]).toMatchObject({ paired: 1, exactMatches: 0, exactMatchRate: 0, meanAbsDiff: 2 });
-    expect(overall).toMatchObject({ paired: 3, exactMatches: 1 });
-    expect(overall.exactMatchRate).toBeCloseTo(1 / 3);
-    expect(overall.meanAbsDiff).toBeCloseTo(4 / 3);
+    expect(overall).toMatchObject({ paired: PAIRED_TOTAL, exactMatches: 1 });
+    expect(overall.exactMatchRate).toBeCloseTo(1 / PAIRED_TOTAL);
+    expect(overall.meanAbsDiff).toBeCloseTo(ABS_DIFF_TOTAL / PAIRED_TOTAL);
   });
 
   it('rounds for exact match so a QAG fraction can still agree, and counts one-sided scores', () => {
     const turns: TurnScores[] = [
       { perCriterion: { [FAITHFULNESS_EVAL_NAME]: 0.8, [RELEVANCE_EVAL_NAME]: 0.5 }, consolidated: { [FAITHFULNESS_EVAL_NAME]: 0.75, [COHERENCE_EVAL_NAME]: 1 } },
     ];
+    const FAITHFULNESS_SCALE_POINT_DIFF = 0.2;
     const { byCriterion } = computeAgreement(turns);
     expect(byCriterion[FAITHFULNESS_EVAL_NAME]).toMatchObject({ paired: 1, exactMatches: 1 });
-    expect(defined(byCriterion[FAITHFULNESS_EVAL_NAME]).meanAbsDiff).toBeCloseTo(0.2);
+    expect(defined(byCriterion[FAITHFULNESS_EVAL_NAME]).meanAbsDiff).toBeCloseTo(FAITHFULNESS_SCALE_POINT_DIFF);
     expect(byCriterion[RELEVANCE_EVAL_NAME]).toMatchObject({ paired: 0, exactMatchRate: null, meanAbsDiff: null, perCriterionOnly: 1 });
     expect(byCriterion[COHERENCE_EVAL_NAME]).toMatchObject({ paired: 0, consolidatedOnly: 1 });
   });

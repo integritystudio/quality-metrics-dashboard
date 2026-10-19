@@ -175,6 +175,9 @@ describe('two-key combo dispatch', () => {
 });
 
 
+const COMBO_TIMEOUT_MS = 500;
+const WITHIN_TIMEOUT_MS = 400;
+
 describe('combo timeout', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
@@ -182,7 +185,7 @@ describe('combo timeout', () => {
   it('clears pending after 500ms so a late second key does not fire the combo', () => {
     const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    act(() => { vi.advanceTimersByTime(501); });
+    act(() => { vi.advanceTimersByTime(COMBO_TIMEOUT_MS + 1); });
     act(() => { fireEvent.keyDown(document, { key: 'h' }); });
     expect(action).not.toHaveBeenCalled();
   });
@@ -190,7 +193,7 @@ describe('combo timeout', () => {
   it('fires combo when second key arrives before the 500ms timeout', () => {
     const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
-    act(() => { vi.advanceTimersByTime(400); });
+    act(() => { vi.advanceTimersByTime(WITHIN_TIMEOUT_MS); });
     act(() => { fireEvent.keyDown(document, { key: 'h' }); });
     expect(action).toHaveBeenCalledOnce();
   });
@@ -201,7 +204,7 @@ describe('combo timeout', () => {
     const action = renderHomeCombo();
     act(() => { fireEvent.keyDown(document, { key: 'g' }); });
     // Advance exactly to the timeout boundary
-    act(() => { vi.advanceTimersByTime(500); });
+    act(() => { vi.advanceTimersByTime(COMBO_TIMEOUT_MS); });
     act(() => { fireEvent.keyDown(document, { key: 'h' }); });
     // Pending was cleared by the timer at 500ms; action must not fire
     expect(action).not.toHaveBeenCalled();

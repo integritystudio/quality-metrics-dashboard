@@ -74,8 +74,9 @@ describe('number arguments', () => {
   });
 
   it('positiveIntArg accepts whole numbers from 1', () => {
+    const LIMIT = 250;
     expect(positiveIntArg('--limit', '1')).toBe(1);
-    expect(positiveIntArg('--limit', '250')).toBe(250);
+    expect(positiveIntArg('--limit', String(LIMIT))).toBe(LIMIT);
   });
 
   it.each(['0', '-3', '1.5', '7d', 'ten', ''])('positiveIntArg rejects %j', (raw) => {
@@ -83,7 +84,8 @@ describe('number arguments', () => {
   });
 
   it('positiveNumberArg accepts fractions but not zero', () => {
-    expect(positiveNumberArg('--hours', '1.5')).toBe(1.5);
+    const FRACTIONAL_HOURS = 1.5;
+    expect(positiveNumberArg('--hours', String(FRACTIONAL_HOURS))).toBe(FRACTIONAL_HOURS);
     expect(() => positiveNumberArg('--hours', '0')).toThrow('--hours must be a positive number');
   });
 
@@ -99,7 +101,8 @@ describe('number arguments', () => {
 
 describe('exitOnCliArgError', () => {
   it('returns what the reader returns', () => {
-    expect(exitOnCliArgError('[x]', () => 3)).toBe(3);
+    const READER_RESULT = 3;
+    expect(exitOnCliArgError('[x]', () => READER_RESULT)).toBe(READER_RESULT);
   });
 
   it('prints the message and exits 1 on a CliArgError', () => {

@@ -90,7 +90,7 @@ describe('UsageSummarySchema (UsageSummaryData.fromJson, UsageBucket)', () => {
     const parsed = UsageSummarySchema.parse(USAGE_SUMMARY);
     expect(parsed.orgId).toBe(ORG_A.id);
     expect(parsed.periodStart).toBe('2026-10-01');
-    expect(parsed.buckets).toHaveLength(3);
+    expect(parsed.buckets).toHaveLength(USAGE_SUMMARY.buckets.length);
     expect(parsed.buckets[0]).toEqual({ bucketDate: '2026-10-05', metricKey: 'requests', totalQuantity: 50, requestCount: 5, avgLatencyMs: null });
   });
 

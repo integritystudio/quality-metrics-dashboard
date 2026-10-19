@@ -9,6 +9,7 @@ import type { EvaluationResult } from '../../../src/backends/index.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { agentStatsKey, type AgentStatsResponse } from '../../src/api/aggregates/agent-stats.js';
 import { HOOK_NAME } from '../../src/api/api-constants.js';
 import { agentRoutes } from '../../src/api/routes/agents.js';
@@ -17,6 +18,10 @@ import { evaluation, isoToNs } from './support/evaluations.js';
 import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
 const NOW = new Date('2026-10-08T01:08:00.000Z');
+/** general-purpose runs twice in the week, once with an error. */
+const WEEK_INVOCATIONS = [['general-purpose', 2], ['Explore', 1]];
+const WEEK_GENERAL_PURPOSE_ERROR_RATE = 0.5;
+const MONTH_INVOCATIONS = [['general-purpose', 3], ['Explore', 1]];
 
 type AgentSpanFixture = {
   agentName: string;
@@ -64,7 +69,7 @@ const fixture = serveParityFixture({ evaluations, spans });
 
 async function routeValue(period: string): Promise<AgentStatsResponse> {
   const res = await agentRoutes.request(`/agents?period=${period}`);
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(HttpStatus.Ok);
   return (await res.json()) as AgentStatsResponse;
 }
 
@@ -81,11 +86,11 @@ describe('agents page parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     const week = await routeValue('7d');
     const month = await routeValue('30d');
 
-    expect(week.agents.map(a => [a.agentName, a.invocations])).toEqual([['general-purpose', 2], ['Explore', 1]]);
-    expect(month.agents.map(a => [a.agentName, a.invocations])).toEqual([['general-purpose', 3], ['Explore', 1]]);
+    expect(week.agents.map(a => [a.agentName, a.invocations])).toEqual(WEEK_INVOCATIONS);
+    expect(month.agents.map(a => [a.agentName, a.invocations])).toEqual(MONTH_INVOCATIONS);
     expect(week.agents[0]?.evalSummary).toEqual({ relevance: { avg: 0.8, min: 0.8, max: 0.8, count: 1 } });
     expect(month.agents[0]?.evalSummary).toEqual({ relevance: { avg: 0.7, min: 0.6, max: 0.8, count: 2 } });
-    expect(week.agents[0]?.errorRate).toBe(0.5);
+    expect(week.agents[0]?.errorRate).toBe(WEEK_GENERAL_PURPOSE_ERROR_RATE);
   });
 
   it('no longer writes the bare meta:agents list the page could not read', () => {

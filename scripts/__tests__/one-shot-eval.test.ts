@@ -116,22 +116,26 @@ describe.each(SCRIPTS)('$name run-once files', ({ refusalReason, MARKER_FILENAME
 
 describe('formatUsd', () => {
   it('prefixes a dollar sign and fixes the decimals', () => {
-    expect(formatUsd(1.81234)).toBe('$1.8123');
+    const UNROUNDED_USD = 1.81234;
+    expect(formatUsd(UNROUNDED_USD)).toBe('$1.8123');
     expect(formatUsd(0)).toBe('$0.0000');
   });
 });
 
 describe('spendCapReason', () => {
   it('allows an estimate at the cap and refuses one above it, with the remedy', () => {
-    expect(spendCapReason(8, 8)).toBeUndefined();
-    expect(spendCapReason(8.5, 8)).toBe('estimated spend $8.5000 exceeds the $8 cap');
-    expect(spendCapReason(8.5, 8, 'lower --limit')).toBe('estimated spend $8.5000 exceeds the $8 cap; lower --limit');
+    const CAP_USD = 8;
+    const OVER_CAP_USD = 8.5;
+    expect(spendCapReason(CAP_USD, CAP_USD)).toBeUndefined();
+    expect(spendCapReason(OVER_CAP_USD, CAP_USD)).toBe('estimated spend $8.5000 exceeds the $8 cap');
+    expect(spendCapReason(OVER_CAP_USD, CAP_USD, 'lower --limit')).toBe('estimated spend $8.5000 exceeds the $8 cap; lower --limit');
   });
 });
 
 describe('tableRow', () => {
   it('pads the name column and right-aligns each cell', () => {
     const CELL = 6;
-    expect(tableRow(CELL, 'overall', 3, '50.0%')).toBe(`${'overall'.padEnd(TABLE_NAME_WIDTH)}     3 50.0%`);
+    const OVERALL_COUNT = 3;
+    expect(tableRow(CELL, 'overall', OVERALL_COUNT, '50.0%')).toBe(`${'overall'.padEnd(TABLE_NAME_WIDTH)}     3 50.0%`);
   });
 });

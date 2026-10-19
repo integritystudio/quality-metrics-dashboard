@@ -11,7 +11,8 @@ afterEach(cleanup);
 
 const ISO = '2026-10-12T08:00:00.000Z';
 const MS = Date.parse(ISO);
-const NS = BigInt(MS) * 1_000_000n;
+const NANOS_PER_MS = 1_000_000n;
+const NS = BigInt(MS) * NANOS_PER_MS;
 
 describe('timestampToMs', () => {
   it.each([

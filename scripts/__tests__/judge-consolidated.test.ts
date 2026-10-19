@@ -45,6 +45,11 @@ const TOOL_RESULT = 'export function login() { /* … */ }';
 const TURN_KEY = '2026-02-09T01:11:15';
 const FAKE_STEPS = '1. Read the input\n2. Compare with the output\n3. Check every claim';
 const DEFAULT_SCORE = 4;
+const DEFAULT_SCORE_NORMALIZED = 0.75;
+const LOW_SCORE = 2;
+const LOW_SCORE_NORMALIZED = 0.25;
+const FRACTIONAL_SCORE = 3.5;
+const FIVE_POINT_SCALE = [1, 2, 3, 4, 5];
 const OUT_OF_RANGE_SCORE = G_EVAL_MAX_SCORE + 1;
 
 const ALL_TOOL_NAMES = [
@@ -175,7 +180,7 @@ describe('buildConsolidatedSchema', () => {
     expect(Object.keys(verdict.properties)).toEqual([REASONING_KEY, SCORE_KEY]);
     expect(verdict.required).toEqual([REASONING_KEY, SCORE_KEY]);
     expect(verdict.additionalProperties).toBe(false);
-    expect(verdict.properties[SCORE_KEY]).toMatchObject({ type: 'integer', enum: [1, 2, 3, 4, 5] });
+    expect(verdict.properties[SCORE_KEY]).toMatchObject({ type: 'integer', enum: FIVE_POINT_SCALE });
   });
 });
 
@@ -247,7 +252,7 @@ describe('parseConsolidatedResponse', () => {
   });
 
   it.each([
-    ['a fraction', 3.5],
+    ['a fraction', FRACTIONAL_SCORE],
     ['zero', 0],
     ['a string', '4'],
     ['missing', undefined],
@@ -269,7 +274,7 @@ describe('parseConsolidatedResponse', () => {
 describe('toNormalizedScore', () => {
   it('maps the 1-5 scale onto 0-1 exactly as G-Eval does', () => {
     expect(toNormalizedScore(G_EVAL_MIN_SCORE)).toBe(0);
-    expect(toNormalizedScore(4)).toBe(0.75);
+    expect(toNormalizedScore(DEFAULT_SCORE)).toBe(DEFAULT_SCORE_NORMALIZED);
     expect(toNormalizedScore(G_EVAL_MAX_SCORE)).toBe(1);
   });
 
@@ -315,27 +320,27 @@ describe('evaluateTurnConsolidated', () => {
   });
 
   it('normalizes scores like G-Eval and derives hallucination as 1 - faithfulness', async () => {
-    const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: 4, [FAITHFULNESS_EVAL_NAME]: 2 });
+    const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: DEFAULT_SCORE, [FAITHFULNESS_EVAL_NAME]: LOW_SCORE });
     const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set());
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
-    expect(defined(byName[RELEVANCE_EVAL_NAME]).scoreValue).toBe(0.75);
+    expect(defined(byName[RELEVANCE_EVAL_NAME]).scoreValue).toBe(DEFAULT_SCORE_NORMALIZED);
     expect(defined(byName[RELEVANCE_EVAL_NAME]).explanation).toBe(`${RELEVANCE_EVAL_NAME} reasoning`);
-    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(0.25);
-    expect(defined(byName.hallucination).scoreValue).toBe(0.75);
+    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(LOW_SCORE_NORMALIZED);
+    expect(defined(byName.hallucination).scoreValue).toBe(1 - LOW_SCORE_NORMALIZED);
     expect(defined(byName.hallucination).explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
   });
 
   it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
     const calls: RecordedCall[] = [];
-    const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: 2, hallucination: 5 }, calls);
+    const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: LOW_SCORE, hallucination: G_EVAL_MAX_SCORE }, calls);
     const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set(), { criteria: DIRECT });
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
     const schemaCalls = calls.filter(c => c.options?.schema);
     expect(schemaCalls).toHaveLength(1);
     expect((defined(defined(schemaCalls[0]).options).schema as { required: string[] }).required).toContain('hallucination');
-    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(0.25);
+    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(LOW_SCORE_NORMALIZED);
     // 5 = no fabrication on HALLUCINATION_CRITERIA, stored higher-is-worse.
     expect(defined(byName.hallucination).scoreValue).toBe(0);
     expect(defined(byName.hallucination).explanation).toBe('hallucination reasoning');

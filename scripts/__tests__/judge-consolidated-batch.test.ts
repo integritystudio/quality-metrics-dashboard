@@ -18,6 +18,7 @@ import {
 } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../../src/lib/validation/dashboard-schemas.js';
+import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE } from '../../../src/lib/judge/llm-judge-constants.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
@@ -32,6 +33,9 @@ const TEMPERATURE = 0.1;
 const FAST_MS = 5;
 const BASE = { model: MODEL, maxTokens: PROVIDER_MAX_TOKENS, temperature: TEMPERATURE, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
 const VERDICT_SCORE = 4;
+const VERDICT_FAITHFULNESS = (VERDICT_SCORE - G_EVAL_MIN_SCORE) / G_EVAL_SCORE_RANGE;
+const VERDICT_HALLUCINATION = 1 - VERDICT_FAITHFULNESS;
+const COST_CLOSE_TO_DIGITS = 10;
 const STEPS_TEXT = '1. Read the input.\n2. Read the output.\n3. Compare them.';
 const STEPS_PROMPT_MARKER = 'Generate detailed evaluation steps';
 
@@ -140,8 +144,8 @@ describe('evaluateTurnsConsolidatedBatched', () => {
     const [records] = await evaluateTurnsConsolidatedBatched(batch, [makeTurn({ toolResults: ['config.yaml: port 8080'] })], new Set());
 
     const byName = Object.fromEntries(defined(records).map(r => [r.evaluationName, r.scoreValue]));
-    expect(byName[FAITHFULNESS_EVAL_NAME]).toBe(0.75);
-    expect(byName[HALLUCINATION_EVAL_NAME]).toBe(0.25);
+    expect(byName[FAITHFULNESS_EVAL_NAME]).toBe(VERDICT_FAITHFULNESS);
+    expect(byName[HALLUCINATION_EVAL_NAME]).toBe(VERDICT_HALLUCINATION);
   });
 
   it('skips criteria that already have a record', async () => {
@@ -168,6 +172,6 @@ describe('estimateJudgeRun (consolidated)', () => {
 
   it('prices at the batch rate under --batch', () => {
     const turns = [makeTurn({ toolResults: ['x'.repeat(4000)] })];
-    expect(estimateJudgeRun(turns, true, true).costUsd).toBeCloseTo(estimateJudgeRun(turns, false, true).costUsd * BATCH_PRICE_RATIO, 10);
+    expect(estimateJudgeRun(turns, true, true).costUsd).toBeCloseTo(estimateJudgeRun(turns, false, true).costUsd * BATCH_PRICE_RATIO, COST_CLOSE_TO_DIGITS);
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import { selectTurns, turnSkip, WEBHOOK_SECRET_ENV } from '../judge-selection.js';
 import { COHERENCE_EVAL_NAME, HAIKU_MODEL, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
-import { judgedByKey } from '../judge-dedup.js';
+import { judgedByKey, turnKeyOf } from '../judge-dedup.js';
 import { type Turn } from '../judge-turns.js';
 
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
@@ -24,7 +24,7 @@ function turn(id: string, extra: Partial<Turn> = {}): Turn {
 /** The dedup keys a turn with no tool results needs: relevance and coherence. */
 function judgedKeys(...turns: Turn[]): Set<string> {
   return new Set(turns.flatMap((t) => [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]
-    .map((name) => judgedByKey(t.sessionId, name, t.timestamp.slice(0, 19), HAIKU_MODEL))));
+    .map((name) => judgedByKey(t.sessionId, name, turnKeyOf(t.timestamp), HAIKU_MODEL))));
 }
 
 const opts = { limit: Number.POSITIVE_INFINITY, deliverableOnly: true, env: ENV };
@@ -41,7 +41,7 @@ describe('selectTurns', () => {
 
   it('selects a turn with any criterion still missing', () => {
     const t = turn('1');
-    const onlyRelevance = new Set([judgedByKey(t.sessionId, RELEVANCE_EVAL_NAME, t.timestamp.slice(0, 19), HAIKU_MODEL)]);
+    const onlyRelevance = new Set([judgedByKey(t.sessionId, RELEVANCE_EVAL_NAME, turnKeyOf(t.timestamp), HAIKU_MODEL)]);
 
     expect(selectTurns([t], onlyRelevance, opts).selected).toEqual([t]);
   });

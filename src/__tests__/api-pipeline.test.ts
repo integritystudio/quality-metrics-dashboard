@@ -11,6 +11,7 @@ import { createFixtureServer, evalToWire, type FixtureServer } from './support/f
 import { pipelineRoutes } from '../api/routes/pipeline.js';
 import type { PipelineResult } from '../types.js';
 import { recentEvalNanos } from './support/fixtures.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -45,12 +46,12 @@ describe('GET /pipeline', () => {
 
   it('rejects invalid period with 400', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with period and pipeline data', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as PipelineResponse;
     expect(body.period).toBe('7d');
     expect(body.stages.map((stage) => stage.name)).toEqual(['ingested', 'scored', 'evaluated', 'alerted']);
@@ -72,12 +73,12 @@ describe('GET /pipeline', () => {
 
   it.each(['24h', '7d', '30d', '90d'])('accepts period %s', async (period) => {
     const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await pipelineRoutes.request('/pipeline?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

@@ -142,7 +142,7 @@ describe('createBatchProvider', () => {
     expect(await gamma).toEqual({ text: 're:gamma' });
     expect(client.create).toHaveBeenCalledTimes(1);
     const requests = defined(submitted[0]);
-    expect(new Set(requests.map(r => r.custom_id)).size).toBe(3);
+    expect(new Set(requests.map(r => r.custom_id)).size).toBe(requests.length);
     expect(defined(requests[0]).params).toEqual({
       model: MODEL,
       max_tokens: MAX_TOKENS,
@@ -153,14 +153,15 @@ describe('createBatchProvider', () => {
   });
 
   it('polls until the batch has ended and only then reads results', async () => {
-    const { client } = fakeClient({ statuses: ['in_progress', 'in_progress', 'ended'], results: echo });
+    const polls: PollOutcome[] = ['in_progress', 'in_progress', 'ended'];
+    const { client } = fakeClient({ statuses: polls, results: echo });
     const provider = await createBatchProvider({ ...BASE, client });
 
     const one = provider.generate('one');
     await provider.flush();
 
     expect(await one).toEqual({ text: 're:one' });
-    expect(client.retrieve).toHaveBeenCalledTimes(3);
+    expect(client.retrieve).toHaveBeenCalledTimes(polls.length);
     expect(client.results).toHaveBeenCalledTimes(1);
     expect(client.cancel).not.toHaveBeenCalled();
   });

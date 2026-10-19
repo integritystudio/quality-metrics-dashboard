@@ -144,7 +144,7 @@ describe('computeSessionDetail across the integritystudio.* key rename', () => {
       { messages: 12, inputTokens: 100, outputTokens: 50, cacheRead: 7, cacheCreation: 3, model: 'claude-opus-5' },
     ]);
     expect(detail.mcpUsage).toEqual({ get_me: 1 });
-    expect(detail.alertSummary.totalFired).toBe(3);
+    expect(detail.alertSummary.totalFired).toBe(ALERT_EVALUATION['alerts.triggered_count']);
   }
 
   it.each(KEY_ERAS)('reads %s keys', (_era, write) => {
@@ -194,12 +194,13 @@ describe('computeSessionDetail timespan', () => {
   });
 
   it('rounds the duration to one decimal hour', () => {
+    const ROUNDED_DURATION_HOURS = 1.1;
     const detail = detailOf([], [
       evaluation('start', '2026-10-01T00:00:00.000Z'),
       evaluation('end', '2026-10-01T01:04:00.000Z'),
     ]);
 
-    expect(detail.timespan?.durationHours).toBe(1.1);
+    expect(detail.timespan?.durationHours).toBe(ROUNDED_DURATION_HOURS);
   });
 
   it('has zero duration for a single evaluation', () => {

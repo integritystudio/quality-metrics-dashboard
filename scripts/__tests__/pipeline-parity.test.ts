@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { pipelineRoutes } from '../../src/api/routes/pipeline.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { evaluation } from './support/evaluations.js';
 import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
@@ -30,7 +31,7 @@ describe('pipeline parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     const fromKv = kvValue(synced(), `pipeline:${period}`);
 
     const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const fromRoute = await res.json();
 
     expect(fromKv).toEqual(fromRoute);

@@ -3,13 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
+import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
 import { anchorTurns, turnSourceFields, type Turn } from '../judge-turns.js';
 import { EVALUATION_RESULT_EVENT, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../derive-evaluations.js';
 import { fingerprint, mapRecord, routeRecord } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { NANOSECONDS_PER_MILLISECOND, TIME_MS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
 // TKR8 Phase 1: evaluations carry the account of what they score, and upload
@@ -23,7 +24,7 @@ const SESSION = 's1';
 
 /** Epoch ms for a time on the fixture day. */
 const at = (hhmm: string): number => Date.parse(`2026-09-23T${hhmm}:00.000Z`);
-const hrTime = (ms: number): [number, number] => [Math.floor(ms / 1000), (ms % 1000) * 1_000_000];
+const hrTime = (ms: number): [number, number] => [Math.floor(ms / TIME_MS.SECOND), (ms % TIME_MS.SECOND) * NANOSECONDS_PER_MILLISECOND];
 
 type SpanFixture = { spanId: string; traceId: string; atMs: number; ref?: string | null; sessionId?: string }
 
@@ -45,7 +46,7 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
 
   const index = (spans: SpanFixture[]): AccountIndex => {
     writeFileSync(join(dir, 'traces-2026-09-23.jsonl'), `${spans.map(span => spanLine(span)).join('\n')}\n`);
-    return buildAccountIndex(dir, 7, NOW);
+    return buildAccountIndex(dir, ACCOUNT_INDEX_WINDOW_DAYS, NOW);
   };
 
   /** A session that ran `/login` between two turns, both on one trace id. */
@@ -141,8 +142,9 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
     });
 
     it('writes span id then stamp as the last record fields, neither as an attribute', () => {
+      const LAST_FIELDS = ['spanId', 'identityKeyRef'];
       const out = toOTelRecord(record({ spanId: 's-a', identityKeyRef: GMAIL_REF })) as Record<string, unknown>;
-      expect(Object.keys(out).slice(-2)).toEqual(['spanId', 'identityKeyRef']);
+      expect(Object.keys(out).slice(-LAST_FIELDS.length)).toEqual(LAST_FIELDS);
       expect(out.identityKeyRef).toBe(GMAIL_REF);
       expect(out.attributes).not.toHaveProperty('identityKeyRef');
       expect(out.attributes).not.toHaveProperty('spanId');
@@ -160,8 +162,9 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
   });
 
   describe('derive: span stamps', () => {
+    const SPAN_START_SEC = 1707400000;
     const measurable = (spanId: string): TraceSpan => ({
-      traceId: 't1', spanId, name: 'hook:session-start', startTime: [1707400000, 0], duration: [1, 0],
+      traceId: 't1', spanId, name: 'hook:session-start', startTime: [SPAN_START_SEC, 0], duration: [1, 0],
       attributes: { [SESSION_ATTRIBUTES.ID]: SESSION },
     });
 
@@ -184,7 +187,8 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       traceId: 't1',
       ...extra,
     });
-    const MAX_AGE_MS = 36 * 3_600_000;
+    const MAX_AGE_HOURS = 36;
+    const MAX_AGE_MS = MAX_AGE_HOURS * TIME_MS.HOUR;
 
     it("reads the record's stamp for routing but never puts it in the shipped payload", () => {
       const mapped = mapRecord(evalLine({ identityKeyRef: GMAIL_REF }), NOW, MAX_AGE_MS);

@@ -15,6 +15,8 @@ import {
   isOrgMembershipRole,
 } from '../../src/lib/org-rbac.js';
 
+const EVERY_PERMISSION_COUNT = 10;
+
 describe('DASHBOARD_ROLE_BY_MEMBERSHIP', () => {
   it('maps the five membership roles exactly per spec', () => {
     expect(DASHBOARD_ROLE_BY_MEMBERSHIP).toEqual({
@@ -32,7 +34,7 @@ describe('PERMISSIONS_BY_DASHBOARD_ROLE', () => {
     const perms = PERMISSIONS_BY_DASHBOARD_ROLE.owner;
     expect(perms).toContain('dashboard.admin');
     expect(perms).toContain('dashboard.executive');
-    expect(perms).toHaveLength(10);
+    expect(perms).toHaveLength(EVERY_PERMISSION_COUNT);
   });
 
   it('admin holds admin + data reads but NO exec/operator/auditor views', () => {
@@ -55,7 +57,7 @@ describe('PERMISSIONS_BY_DASHBOARD_ROLE', () => {
     expect(perms).toContain('dashboard.executive');
     expect(perms).toContain('dashboard.operator');
     expect(perms).toContain('dashboard.auditor');
-    expect(perms).toHaveLength(9);
+    expect(perms).toHaveLength(EVERY_PERMISSION_COUNT - 1);
   });
 });
 

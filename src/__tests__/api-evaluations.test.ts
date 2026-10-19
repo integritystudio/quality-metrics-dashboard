@@ -11,6 +11,7 @@ import { createFixtureServer, evalToWire, type FixtureServer } from './support/f
 import { evaluationRoutes } from '../api/routes/evaluations.js';
 import type { TraceEvaluationsResponse } from './support/api-responses.js';
 import { makeEvaluation } from './support/fixtures.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -32,7 +33,7 @@ beforeEach(() => {
 describe('GET /evaluations/trace/:traceId', () => {
   it('returns 200 with evaluations array for valid traceId', async () => {
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as TraceEvaluationsResponse;
     expect(body).toHaveProperty('evaluations');
     expect(Array.isArray(body.evaluations)).toBe(true);
@@ -49,6 +50,6 @@ describe('GET /evaluations/trace/:traceId', () => {
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

@@ -174,7 +174,8 @@ describe('HealthOverview', () => {
     });
     const { container } = render(<HealthOverview dashboard={dash} />);
     const counts = container.querySelectorAll('.summary-count');
-    expect(counts).toHaveLength(4);
+    const SUMMARY_COUNT_CELLS = 4;
+    expect(counts).toHaveLength(SUMMARY_COUNT_CELLS);
     expect(within(counts[0] as HTMLElement).getByText('7')).toBeInTheDocument();
     expect(within(counts[0] as HTMLElement).getByText('Total')).toBeInTheDocument();
     expect(within(counts[1] as HTMLElement).getByText('3')).toBeInTheDocument();

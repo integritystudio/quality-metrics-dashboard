@@ -64,7 +64,8 @@ describe('judgePricing', () => {
 
 describe('token estimates', () => {
   it('sums text lengths and rounds the token estimate up', () => {
-    expect(totalChars(['ab', '', 'cde'])).toBe(5);
+    const SUMMED_LENGTH = 5;
+    expect(totalChars(['ab', '', 'cde'])).toBe(SUMMED_LENGTH);
     expect(totalChars([])).toBe(0);
     expect(charsToTokens(0)).toBe(0);
     expect(charsToTokens(1)).toBe(1);

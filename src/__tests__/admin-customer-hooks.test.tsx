@@ -56,6 +56,7 @@ vi.mock('../contexts/AuthContext.js', () => ({
 
 const SHORT_TIMEOUT_MS = 1;
 const LONG_TIMEOUT_MS = 60_000;
+const EXPECTED_USAGE_POLL_INTERVAL_MS = 30_000;
 
 function makeWrapper() {
   const { wrapper: QueryWrapper, queryClient } = makeQueryWrapper();
@@ -129,7 +130,7 @@ describe('what the hooks send', () => {
     const [query] = queryClient.getQueryCache().findAll();
     const [observer] = defined(query).observers;
     expect(defined(observer).options.refetchInterval).toBe(USAGE_POLL_INTERVAL_MS);
-    expect(USAGE_POLL_INTERVAL_MS).toBe(30_000);
+    expect(USAGE_POLL_INTERVAL_MS).toBe(EXPECTED_USAGE_POLL_INTERVAL_MS);
   });
 });
 

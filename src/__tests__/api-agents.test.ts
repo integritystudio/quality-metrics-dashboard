@@ -21,6 +21,9 @@ import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
+
+const CLOSE_TO_DIGITS = 3;
 
 let fixture: FixtureServer;
 
@@ -74,14 +77,14 @@ beforeEach(() => {
 describe('GET /agents', () => {
   it('returns 400 for invalid period', async () => {
     const res = await agentRoutes.request('/agents?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = (await res.json()) as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with empty agents array when no spans', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = (await res.json()) as AgentListResponse;
     expect(Array.isArray(body.agents)).toBe(true);
     expect(body.agents).toHaveLength(0);
@@ -102,7 +105,7 @@ describe('GET /agents', () => {
   // the route sends ISO-datetime bounds (date-only would cause 500 from Zod).
   it('succeeds with valid date bounds — would 500 if date-only strings reached queryTraces', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('aggregates spans into agent records', async () => {
@@ -126,7 +129,8 @@ describe('GET /agents', () => {
 
     const res = await agentRoutes.request('/agents?period=7d');
     const body = (await res.json()) as AgentListResponse;
-    expect(defined(body.agents[0]).errorRate).toBeCloseTo(0.5, 3);
+    const oneOfTwoErrored = 1 / 2;
+    expect(defined(body.agents[0]).errorRate).toBeCloseTo(oneOfTwoErrored, CLOSE_TO_DIGITS);
   });
 
   it('agent record has required fields', async () => {
@@ -162,7 +166,7 @@ describe('GET /agents', () => {
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/traces');
     const res = await agentRoutes.request('/agents?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 
@@ -172,7 +176,7 @@ describe('GET /agents/:sessionId', () => {
     fixture.setEvals([evalToWire(makeEvaluation({ traceId: 'trace-001', timestamp: EVAL_NANOS }))]);
 
     const res = await agentRoutes.request('/agents/sess-001');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = (await res.json()) as AgentDetailResponse;
     expect(body).toHaveProperty('sessionId', 'sess-001');
   });
@@ -188,7 +192,7 @@ describe('GET /agents/:sessionId', () => {
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/traces');
     const res = await agentRoutes.request('/agents/sess-001');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 
@@ -203,7 +207,7 @@ describe('GET /agents/:sessionId/graph', () => {
 
     const res = await agentRoutes.request('/agents/sess-001/graph');
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = (await res.json()) as AgentGraphResponse;
     expect(Object.keys(body).toSorted()).toEqual(['evaluation', 'graph', 'sessionId']);
     expect(body.sessionId).toBe('sess-001');
@@ -240,12 +244,12 @@ describe('GET /agents/:sessionId/graph', () => {
 
   it('returns 400 for an invalid sessionId', async () => {
     const res = await agentRoutes.request('/agents/bad%20id/graph');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/traces');
     const res = await agentRoutes.request('/agents/sess-001/graph');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
