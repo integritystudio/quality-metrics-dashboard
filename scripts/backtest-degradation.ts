@@ -47,6 +47,9 @@ const DEFAULT_BACKTEST_DAYS = 90;
 /** Configurations printed in the console summary. */
 const SUMMARY_TOP_CONFIGS = 5;
 const F1_DISPLAY_PRECISION = 3;
+/** Widths of the Rank and Config columns in the summary table header. */
+const RANK_COLUMN_WIDTH = 4;
+const CONFIG_COLUMN_WIDTH = 43;
 /** Configurations per metric kept in the results file. */
 const RESULTS_TOP_CONFIGS = 10;
 const DEFAULT_OUTPUT_FILE = 'backtest-results.json';
@@ -211,7 +214,7 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
     if (!r) continue;
     const tag = r === currentConfigResult ? ' [prod]' : '';
     console.log(
-      `${String(rank + 1).padStart(4)} | ${formatConfig(r.config).padEnd(43)} | ` +
+      `${String(rank + 1).padStart(RANK_COLUMN_WIDTH)} | ${formatConfig(r.config).padEnd(CONFIG_COLUMN_WIDTH)} | ` +
       `${r.tapr.f1.toFixed(F1_DISPLAY_PRECISION)}  | ${r.tapr.precision.toFixed(F1_DISPLAY_PRECISION)}  | ` +
       `${r.tapr.recall.toFixed(F1_DISPLAY_PRECISION)}  | ${Math.round(r.tapr.detectionDelay)}ms${tag}`,
     );

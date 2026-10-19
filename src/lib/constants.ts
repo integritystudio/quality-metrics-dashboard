@@ -136,9 +136,13 @@ export const STALE_TIME = {
   AGGREGATE: 60_000,
 } as const;
 export const DEFAULT_TOP_N = 5;
+export const MAX_TOP_N = 50;
 export const DEFAULT_BUCKET_COUNT = 10;
+export const MAX_BUCKET_COUNT = 20;
 /** Time buckets per trend series: what the page requests, the route defaults to, and the sync writes. */
 export const DEFAULT_TREND_BUCKETS = 10;
+export const MIN_TREND_BUCKETS = 3;
+export const MAX_TREND_BUCKETS = 30;
 
 export const SKELETON_HEIGHT_SM = 200;
 export const SKELETON_HEIGHT_MD = 300;

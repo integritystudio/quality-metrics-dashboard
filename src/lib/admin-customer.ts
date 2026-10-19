@@ -59,12 +59,14 @@ export function grandTotalQuantity(totals: readonly MetricTotal[]): number {
 }
 
 const DAY_OF_MONTH = /^\d+$/;
+/** Year, month and day. */
+const ISO_DATE_PART_COUNT = 3;
 
 /** `_DailyBarChart._dayLabel`: "2026-03-15" → "15"; malformed or day 0 → "" so nothing renders. */
 export function dayLabel(isoDate: string): string {
   const parts = isoDate.split('-');
   const dayPart = parts[2];
-  if (parts.length < 3 || dayPart === undefined || !DAY_OF_MONTH.test(dayPart)) return '';
+  if (parts.length < ISO_DATE_PART_COUNT || dayPart === undefined || !DAY_OF_MONTH.test(dayPart)) return '';
   const day = Number.parseInt(dayPart, 10);
   return day === 0 ? '' : String(day);
 }

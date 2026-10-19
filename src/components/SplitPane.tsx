@@ -10,7 +10,17 @@ type SplitPaneProps = {
   maxPct?: number;
 }
 
-export function SplitPane({ left, right, initialSplit = 50, minPct = 25, maxPct = 75 }: SplitPaneProps) {
+const DEFAULT_SPLIT_PCT = 50;
+const DEFAULT_MIN_SPLIT_PCT = 25;
+const DEFAULT_MAX_SPLIT_PCT = 75;
+
+export function SplitPane({
+  left,
+  right,
+  initialSplit = DEFAULT_SPLIT_PCT,
+  minPct = DEFAULT_MIN_SPLIT_PCT,
+  maxPct = DEFAULT_MAX_SPLIT_PCT,
+}: SplitPaneProps) {
   const [splitPct, setSplitPct] = useState(initialSplit);
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);

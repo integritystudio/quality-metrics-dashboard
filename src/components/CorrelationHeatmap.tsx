@@ -14,6 +14,9 @@ type CorrelationHeatmapProps = {
 // WCAG 2.1 contrast ratio formula anchors — these specific values are required by the algorithm.
 const CONTRAST_DARK = '#111';
 const CONTRAST_LIGHT = '#fff';
+const RGB_CHANNEL_COUNT = 3;
+/** Fallback abbreviation length for a metric missing from SHORT_NAMES. */
+const SHORT_NAME_MAX_CHARS = 6;
 
 const SHORT_NAMES: Record<string, string> = {
   faithfulness: 'Faith',
@@ -26,7 +29,7 @@ const SHORT_NAMES: Record<string, string> = {
 };
 
 function shortName(metric: string): string {
-  return SHORT_NAMES[metric] ?? metric.slice(0, 6);
+  return SHORT_NAMES[metric] ?? metric.slice(0, SHORT_NAME_MAX_CHARS);
 }
 
 /**
@@ -37,7 +40,7 @@ function shortName(metric: string): string {
 function contrastText(pearsonR: number): string {
   const bg = colorScale(pearsonR);
   const m = bg.match(/\d+/g);
-  if (!m || m.length < 3) return CONTRAST_DARK;
+  if (!m || m.length < RGB_CHANNEL_COUNT) return CONTRAST_DARK;
   const [r = 0, g = 0, b = 0] = m.map(Number);
   // sRGB relative luminance (WCAG 2.1)
   const toLinear = (c: number) => {

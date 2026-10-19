@@ -259,7 +259,7 @@ export type SeedResult = {
   canaryCount: number;
 }
 
-type ScoreRange = readonly [min: number, max: number];
+type ScoreRange = { readonly min: number; readonly max: number };
 
 type SeedMetric = {
   evalName: string;
@@ -274,16 +274,26 @@ type SeedMetric = {
 
 /** Hallucination's draw; faithfulness is seeded as its complement. */
 const SEED_HALLUCINATION: SeedMetric = {
-  evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination', hashKey: 'hal', normal: [0.0, 0.09], canary: [0.50, 0.80],
+  evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination', hashKey: 'hal',
+  normal: { min: 0.0, max: 0.09 }, canary: { min: 0.50, max: 0.80 },
 };
 
 /** In record order. */
 const SEED_METRICS: readonly SeedMetric[] = [
-  { evalName: RELEVANCE_EVAL_NAME, label: 'Relevance', hashKey: 'rel', normal: [0.70, 1.0], canary: [0.10, 0.35] },
-  { evalName: COHERENCE_EVAL_NAME, label: 'Coherence', hashKey: 'coh', normal: [0.75, 1.0], canary: [0.15, 0.40] },
+  {
+    evalName: RELEVANCE_EVAL_NAME, label: 'Relevance', hashKey: 'rel',
+    normal: { min: 0.70, max: 1.0 }, canary: { min: 0.10, max: 0.35 },
+  },
+  {
+    evalName: COHERENCE_EVAL_NAME, label: 'Coherence', hashKey: 'coh',
+    normal: { min: 0.75, max: 1.0 }, canary: { min: 0.15, max: 0.40 },
+  },
   { ...SEED_HALLUCINATION, evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
   SEED_HALLUCINATION,
-  { evalName: TOOL_CORRECTNESS_CRITERIA.name, label: 'Tool correctness', hashKey: 'tc', normal: [0.75, 1.0], canary: [0.10, 0.30], needsTools: true },
+  {
+    evalName: TOOL_CORRECTNESS_CRITERIA.name, label: 'Tool correctness', hashKey: 'tc',
+    normal: { min: 0.75, max: 1.0 }, canary: { min: 0.10, max: 0.30 }, needsTools: true,
+  },
 ];
 
 export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
@@ -299,7 +309,7 @@ export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedR
     for (const metric of SEED_METRICS) {
       if (metric.needsTools && turn.toolResults.length === 0) continue;
       if (existingKeys.has(turnScoreKey(turn.sessionId, metric.evalName, turnKey))) continue;
-      const [min, max] = canary ? metric.canary : metric.normal;
+      const { min, max } = canary ? metric.canary : metric.normal;
       const drawn = hashToScore(`${metric.hashKey}:${turn.sessionId}:${turnKey}`, min, max);
       const score = metric.evalName === FAITHFULNESS_EVAL_NAME ? normalizeScore(1 - drawn) : drawn;
       evals.push(createEvalRecord(turn, {

@@ -16,8 +16,16 @@ const HANDOFF_MARKER_RADIUS = 7;
 const HEADER_HEIGHT = 28;
 /** Gap between a label and the edge it is anchored to. */
 const LABEL_INSET = 8;
-/** Drops a text baseline so the 8–11px labels here sit centred on the y they are given. */
+/** Drops the lane and handoff labels' baseline so they sit centred on the y they are given. */
 const TEXT_BASELINE_OFFSET = 4;
+/** The same drop for the turn number inside a turn block. */
+const TURN_LABEL_BASELINE_OFFSET = 5;
+const ERROR_STRIPE_WIDTH = 4;
+/** Gap between a turn block's error stripe and its right edge. */
+const ERROR_STRIPE_INSET = 2;
+/** Agent names longer than this are cut to AGENT_LABEL_KEPT_CHARS plus an ellipsis. */
+const AGENT_LABEL_MAX_CHARS = 12;
+const AGENT_LABEL_KEPT_CHARS = 10;
 /**
  * Maximum turns rendered in the SVG viewport.
  * Sessions with 10K+ turns would produce 400KB+ SVG without a cap.
@@ -88,8 +96,8 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
       />
       {turn.hasError && (
         <rect
-          x={width - 6}
-          width={4}
+          x={width - ERROR_STRIPE_WIDTH - ERROR_STRIPE_INSET}
+          width={ERROR_STRIPE_WIDTH}
           height={TURN_BLOCK_HEIGHT}
           rx={2}
           fill="var(--status-critical)"
@@ -98,7 +106,7 @@ function TurnBlock({ turn, color, width, x, y }: TurnBlockProps) {
       )}
       <text
         x={width / 2}
-        y={TURN_BLOCK_HEIGHT / 2 + 5}
+        y={TURN_BLOCK_HEIGHT / 2 + TURN_LABEL_BASELINE_OFFSET}
         textAnchor="middle"
         fontSize={10}
         fill={color}
@@ -212,7 +220,7 @@ export function WorkflowTimeline({ turns, handoffs = NO_HANDOFFS, agentNames, se
                 fill={color}
                 fontFamily="var(--font-mono)"
               >
-                {agentName.length > 12 ? `${agentName.slice(0, 10)}\u2026` : agentName}
+                {agentName.length > AGENT_LABEL_MAX_CHARS ? `${agentName.slice(0, AGENT_LABEL_KEPT_CHARS)}\u2026` : agentName}
               </text>
 
               {laneTurns.map(turn => (

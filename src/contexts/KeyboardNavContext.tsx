@@ -46,6 +46,8 @@ export function useKeyboardNav() {
 }
 
 const IGNORED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+/** How long a combo prefix waits for its second key. */
+const COMBO_TIMEOUT_MS = 500;
 
 export function KeyboardNavProvider({ children }: { children: ReactNode }) {
   const shortcutsRef = useRef<Shortcut[]>([]);
@@ -133,7 +135,7 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
       const hasCombo = shortcutsRef.current.some(s => s.key.startsWith(`${key} `));
       if (hasCombo) {
         pendingRef.current = key;
-        pendingTimerRef.current = setTimeout(() => { pendingRef.current = null; }, 500);
+        pendingTimerRef.current = setTimeout(() => { pendingRef.current = null; }, COMBO_TIMEOUT_MS);
       }
     }
 

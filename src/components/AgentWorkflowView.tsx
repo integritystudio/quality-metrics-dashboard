@@ -10,6 +10,9 @@ import { WORKFLOW_FILTER_MIN_AGENTS, WORKFLOW_GRAPH_HEIGHT } from '../lib/consta
 
 type WorkflowTab = 'dag' | 'timeline';
 
+/** Positions the duration filter slider offers across its range. */
+const DURATION_SLIDER_STEPS = 200;
+
 type AgentWorkflowViewProps = {
   graph: WorkflowGraph;
   evaluation?: MultiAgentEvaluation;
@@ -117,7 +120,7 @@ export function AgentWorkflowView({
   const showFilter = agentNames.length >= WORKFLOW_FILTER_MIN_AGENTS;
   const showControls = graph.nodes.length > 0;
 
-  const sliderStep = Math.max(1, Math.round(maxDurationMs / 200));
+  const sliderStep = Math.max(1, Math.round(maxDurationMs / DURATION_SLIDER_STEPS));
 
   return (
     <div>

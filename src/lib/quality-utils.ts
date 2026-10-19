@@ -206,8 +206,11 @@ export function labelToOrdinal(label: string): LabelOrdinal {
   return { ordinal: 2, category: 'Review', mapped: false };
 }
 
+/** Lowest label ordinal that reads as a pass. */
+const PASS_MIN_ORDINAL = 3;
+
 export function ordinalToCategory(ordinal: number): LabelFilterCategory {
-  if (ordinal >= 3) return 'Pass';
+  if (ordinal >= PASS_MIN_ORDINAL) return 'Pass';
   if (ordinal === 2) return 'Review';
   return 'Fail';
 }
