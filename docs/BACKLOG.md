@@ -531,9 +531,17 @@ in a comment on the type itself.
       `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`, which now
       iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **sync-to-kv still defaults to
       `--days=30`**, and `computeOrgKvEntries` skips any period longer than that, so no `:90d` KV entry is
-      written and the 90d button serves `ERR_NO_DATA` until a run passes `--days=90`. The default was left
-      alone deliberately: an org already holds ~1.65 GB in memory at 30 days, and the evaluation read spans
-      `METRIC_DETAIL_WINDOWS` × the window. The parity tests' `it.each` period lists do not cover `90d`.
+      written until a run passes `--days=90`. The default was left alone deliberately: an org already
+      holds ~1.65 GB in memory at 30 days, and the evaluation read spans `METRIC_DETAIL_WINDOWS` × the
+      window. The parity tests' `it.each` period lists do not cover `90d`.
+    - **So the header hides 90d until it has data.** `DATA_GATED_PERIOD` (`constants.ts`) names it;
+      `Layout` asks `usePeriodHasData` — `useDashboard` for that period, which maps the worker's
+      `ERR_NO_DATA` 404 to a `no_data` summary — and shows the button, and registers shortcut `4`, only
+      once a real summary comes back, or while 90d is the selected period. `Layout.test.tsx` covers all
+      three states against the real query stack. The cost is one `/api/dashboard?period=90d` poll per
+      `POLL_INTERVAL_MS` on every page, a KV read that 404s until the data exists. Lifting the gate means
+      deleting `DATA_GATED_PERIOD` once a scheduled sync writes 90d; e2e asserts only the three
+      always-offered periods, since the fourth depends on the environment's data.
     - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
       `KV_BATCH_MAX_BYTES`, `KV_VALUE_LIMIT_BYTES`) carry a one-line disable.
   - **13 `unicorn/no-array-callback-reference` errors are on this branch** (`TruncatedList.tsx`, `App.tsx`,
