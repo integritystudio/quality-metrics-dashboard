@@ -10,6 +10,8 @@
  * counterparts now live in several files:
  *   - ROLE_DISPLAY_LIMITS, ROLE_FEATURE_CONFIG        → `qfe-role-config.ts`
  *   - scoreColorBand, labelToOrdinal, ordinalToCategory → `qfe-label-ordinals.ts`
+ * The exception is the SCORE_BAND_* thresholds, imported through `./score-bands.ts`
+ * from the parent's import-free `score-bands.ts`.
  *
  * ⚠️ Nothing enforces this sync. `src/__tests__/quality-utils-drift.test.ts`
  * pins these values against literals in its own file, not against the parent,
@@ -27,6 +29,7 @@ export type LabelOrdinal = {
 }
 
 import { scaleLinear, scaleOrdinal, scaleThreshold, type ScaleThreshold } from 'd3-scale';
+import { SCORE_BAND_ADEQUATE, SCORE_BAND_EXCELLENT, SCORE_BAND_GOOD, SCORE_BAND_POOR } from './score-bands.js';
 import {
   type Role,
   AGENT_PALETTE,
@@ -135,7 +138,7 @@ export function scoreColor(value: number, direction?: ScoreDirection): string {
 }
 
 const SCORE_BANDS_ASCENDING: ScoreColorBand[] = ['failing', 'poor', 'adequate', 'good', 'excellent'];
-const SCORE_BAND_LOWER_BOUNDS = [0.4, 0.6, 0.8, 0.9];
+const SCORE_BAND_LOWER_BOUNDS = [SCORE_BAND_POOR, SCORE_BAND_ADEQUATE, SCORE_BAND_GOOD, SCORE_BAND_EXCELLENT];
 
 function bandScale(lowerBounds: number[]): ScaleThreshold<number, ScoreColorBand, ScoreColorBand> {
   return scaleThreshold<number, ScoreColorBand>()

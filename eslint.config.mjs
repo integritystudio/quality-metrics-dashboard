@@ -299,7 +299,7 @@ export default tseslint.config(
           },
           {
             group: ['@parent/*'],
-            message: '@parent is confined to the boundary modules: src/api/parent/*, src/types.ts, src/lib/validation/dashboard-schemas.ts, src/lib/otel-attributes.ts (scripts/ excepted).',
+            message: '@parent is confined to the boundary modules: src/api/parent/*, src/types.ts, src/lib/validation/dashboard-schemas.ts, src/lib/otel-attributes.ts, src/lib/score-bands.ts (scripts/ excepted).',
           },
         ],
       }],
@@ -312,6 +312,7 @@ export default tseslint.config(
       'src/types.ts',
       'src/lib/validation/dashboard-schemas.ts',
       'src/lib/otel-attributes.ts',
+      'src/lib/score-bands.ts',
       'scripts/**/*.ts',
     ],
     rules: {
