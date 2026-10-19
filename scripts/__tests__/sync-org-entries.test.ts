@@ -187,7 +187,7 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
     const after = dashboardEntries(second);
 
     expect(after.length).toBeGreaterThan(0);
-    expect(after.map(e => e.key).sort()).toEqual([...before.keys()].sort());
+    expect(after.map(e => e.key).toSorted()).toEqual([...before.keys()].toSorted());
     for (const e of after) {
       expect(e.hashBasis, e.key).toBeDefined();
       expect(e.hashBasis, e.key).toBe(before.get(e.key));

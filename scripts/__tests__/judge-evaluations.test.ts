@@ -838,7 +838,7 @@ describe('evaluateTurn', () => {
     ]);
 
     const evals = await evaluateTurn(judge, turn, otherModel);
-    expect(evals.map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+    expect(evals.map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
   });
 
   it('tracks failures in evalFailures on metric error', async () => {
@@ -1351,8 +1351,8 @@ describe('evaluateTurn in concurrent mode', () => {
       // eslint-disable-next-line no-await-in-loop -- one round at a time, see above
       await settle();
     } while (sequential.waiting.length + concurrent.waiting.length > 0);
-    expect((await concurrentRun).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
-    expect((await sequentialRun).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+    expect((await concurrentRun).map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
+    expect((await sequentialRun).map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
   });
 });
 
@@ -1373,7 +1373,7 @@ describe('evaluateTurnsBatched', () => {
 
     expect(flush).toHaveBeenCalledTimes(1);
     expect(perTurn).toHaveLength(2);
-    expect(defined(perTurn[0]).map(e => e.evaluationName).sort()).toEqual(['coherence', 'relevance']);
+    expect(defined(perTurn[0]).map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
     expect(defined(perTurn[1]).map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'hallucination', 'tool_correctness']));
     expect(evalFailures).toEqual({});
   });

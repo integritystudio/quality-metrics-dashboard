@@ -88,7 +88,7 @@ const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 
 export function AlertList({ alerts }: { alerts: AlertWithMeta[] }) {
   if (alerts.length === 0) return null;
 
-  const sorted = [...alerts].sort((a, b) =>
+  const sorted = alerts.toSorted((a, b) =>
     (SEVERITY_ORDER[a.severity] ?? 2) - (SEVERITY_ORDER[b.severity] ?? 2)
   );
 

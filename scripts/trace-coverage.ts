@@ -146,7 +146,7 @@ export function compareAccount(
   for (const [key, startMs] of cloud) {
     if (!localKeys.has(key)) dayOf(utcDay(startMs)).cloudOnly++;
   }
-  const days = [...byDay.values()].sort((a, b) => ascending(a.day, b.day));
+  const days = [...byDay.values()].toSorted((a, b) => ascending(a.day, b.day));
   const totalLocal = localKeys.size;
   const matched = sum(days, d => d.matched);
   return {
@@ -157,14 +157,14 @@ export function compareAccount(
     coverage: totalLocal === 0 ? 1 : matched / totalLocal,
     missingBySession: [...missingBySession]
       .map(([sessionId, missing]) => ({ sessionId, missing }))
-      .sort((a, b) => b.missing - a.missing)
+      .toSorted((a, b) => b.missing - a.missing)
       .slice(0, TOP_MISSING_SESSIONS),
   };
 }
 
 function readLocalSpans(dir: string, window: CoverageWindow, windowDays: number, nowMs: number): LocalSpan[] {
   // One extra day of files: a span near midnight can sit in the neighbouring day's file.
-  const files = readdirSync(dir).filter((f) => fileInWindow(f, TRACE_FILE_PATTERN, windowDays + 1, nowMs)).sort();
+  const files = readdirSync(dir).filter((f) => fileInWindow(f, TRACE_FILE_PATTERN, windowDays + 1, nowMs)).toSorted();
   const spans: LocalSpan[] = [];
   const warnUnreadable = (file: string, err: unknown): void => console.warn(`${CLI_PREFIX} skipping ${file}: ${String(err)}`);
   for (const record of traceFileRecords(dir, files, warnUnreadable)) {
@@ -268,7 +268,7 @@ async function main(): Promise<number> {
   }
 
   const results: AccountCoverage[] = [];
-  for (const [ref, spans] of [...byRef].sort(([a], [b]) => ascending(a, b))) {
+  for (const [ref, spans] of [...byRef].toSorted(([a], [b]) => ascending(a, b))) {
     // eslint-disable-next-line no-await-in-loop -- accounts print as they are compared, in sorted order
     const cloud = await fetchCloudSpans(getOrThrow(apiKeys, ref), window);
     const result = compareAccount(ref, spans, cloud);

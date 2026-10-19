@@ -62,8 +62,8 @@ describe('GET /coverage', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as CoverageResponse;
     expect(body.period).toBe('7d');
-    expect([...body.metrics].sort()).toEqual(['coherence', 'relevance']);
-    expect([...body.inputs].sort()).toEqual(['trace-1', 'trace-2']);
+    expect(body.metrics.toSorted()).toEqual(['coherence', 'relevance']);
+    expect(body.inputs.toSorted()).toEqual(['trace-1', 'trace-2']);
     expect(body.counts).toHaveLength(body.metrics.length);
     for (const row of body.counts) expect(row).toHaveLength(body.inputs.length);
     // 3 of the 4 metric x input cells are evaluated.

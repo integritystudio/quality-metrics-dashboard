@@ -118,7 +118,7 @@ describe('GET /compliance/verifications', () => {
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
     const body = await res.json() as VerificationsResponse;
     expect(body.count).toBe(2);
-    expect(body.verifications.map((v) => v.sessionId).sort()).toEqual(['sess-1', 'sess-2']);
+    expect(body.verifications.map((v) => v.sessionId).toSorted()).toEqual(['sess-1', 'sess-2']);
   });
 
   it('returns 500 when a verification file cannot be read', async () => {

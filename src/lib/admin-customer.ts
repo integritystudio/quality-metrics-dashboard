@@ -29,7 +29,7 @@ export type DailyUsage = {
 /** `aggregateUsageByDate` + the chart's `sortedDates`: one total per date, ascending. */
 export function aggregateUsageByDate(buckets: readonly UsageBucket[]): DailyUsage[] {
   return rollups(buckets, group => sum(group, b => b.totalQuantity), b => b.bucketDate)
-    .sort(([a], [b]) => ascending(a, b))
+    .toSorted(([a], [b]) => ascending(a, b))
     .map(([date, total]) => ({ date, total }));
 }
 
@@ -50,7 +50,7 @@ export function aggregateUsageByMetric(buckets: readonly UsageBucket[]): MetricT
     b => b.metricKey,
   )
     .map(([metricKey, totals]) => ({ metricKey, ...totals }))
-    .sort((a, b) => b.totalQuantity - a.totalQuantity);
+    .toSorted((a, b) => b.totalQuantity - a.totalQuantity);
 }
 
 /** `_grandTotalQuantity`. */
@@ -169,5 +169,5 @@ export function formatEntitlementValue(value: unknown): string {
 
 /** `_EntitlementsGrid`'s rows: sorted by key, ascending. */
 export function sortedEntitlements(entitlements: Record<string, unknown>): Array<[string, unknown]> {
-  return Object.entries(entitlements).sort(([a], [b]) => ascending(a, b));
+  return Object.entries(entitlements).toSorted(([a], [b]) => ascending(a, b));
 }

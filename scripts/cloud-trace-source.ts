@@ -62,7 +62,7 @@ export function toLocalTraceSpan(span: TraceSpan): LocalTraceSpan | null {
 
 /** Identity-map secret names set in `env`, sorted so the first account to claim a span is stable. */
 export function accountRefsFromEnv(env: NodeJS.ProcessEnv): string[] {
-  return Object.keys(env).filter((name) => IDENTITY_KEY_REF_PATTERN.test(name) && asString(env[name])).sort();
+  return Object.keys(env).filter((name) => IDENTITY_KEY_REF_PATTERN.test(name) && asString(env[name])).toSorted();
 }
 
 /** HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
@@ -152,7 +152,7 @@ export function mergeAccountSpans(
       accounts.set(span.spanId, ref);
     }
   }
-  const ordered = [...seen.values()].sort((a, b) => {
+  const ordered = [...seen.values()].toSorted((a, b) => {
     const byTime = a.span.startTimeUnixNano - b.span.startTimeUnixNano;
     if (byTime !== 0n) return byTime < 0n ? -1 : 1;
     return ascending(a.span.spanId, b.span.spanId);

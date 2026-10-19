@@ -11,7 +11,7 @@ export function FreqBarGrid({ entries, max, color }: FreqBarGridProps) {
   return (
     <div className="freq-grid">
       {[...entries]
-        .sort(byValueDesc)
+        .toSorted(byValueDesc)
         .map(([key, count]) => (
           <FreqBar key={key} label={key} count={count} max={max} color={color} />
         ))

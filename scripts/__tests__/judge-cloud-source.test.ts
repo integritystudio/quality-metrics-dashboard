@@ -54,7 +54,7 @@ describe('spanScopeDates', () => {
   it('adds the day after the last date once it has started, for spans past midnight', () => {
     const now = Date.parse('2026-09-28T06:00:00.000Z');
 
-    expect([...spanScopeDates(new Set(['2026-09-26', '2026-09-27']), now)].sort())
+    expect([...spanScopeDates(new Set(['2026-09-26', '2026-09-27']), now)].toSorted())
       .toEqual(['2026-09-26', '2026-09-27', '2026-09-28']);
   });
 

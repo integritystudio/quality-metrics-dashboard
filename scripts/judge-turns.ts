@@ -86,7 +86,7 @@ export function anchorTurns(turns: Turn[], index: AccountIndex): void {
   for (const [sessionId, sessionTurns] of group(turns, turn => turn.sessionId)) {
     const timed = sessionTurns
       .map((turn) => ({ turn, atMs: Date.parse(turn.timestamp) }))
-      .sort((a, b) => a.atMs - b.atMs);
+      .toSorted((a, b) => a.atMs - b.atMs);
     timed.forEach(({ turn, atMs }, i) => {
       const nextMs = timed[i + 1]?.atMs;
       const ref = turnAccount(index, sessionId, atMs, nextMs);

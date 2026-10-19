@@ -106,7 +106,7 @@ export function selectTurns(turns: readonly Turn[], existingKeys: Set<string>, o
     }
   }
   selection.pending = selection.selected.length;
-  selection.selected = selection.selected.sort(byTurnTime).slice(0, opts.limit);
+  selection.selected = selection.selected.toSorted(byTurnTime).slice(0, opts.limit);
   return selection;
 }
 

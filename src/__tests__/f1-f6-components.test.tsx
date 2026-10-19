@@ -151,7 +151,7 @@ describe('EvaluationTable', () => {
     fireEvent.click(sortButton);
     const second = header.getAttribute('aria-sort');
 
-    expect([first, second].sort()).toEqual(['ascending', 'descending']);
+    expect([first, second].toSorted()).toEqual(['ascending', 'descending']);
     expect(header.textContent).toContain(second === 'ascending' ? '\u2191' : '\u2193');
   });
 

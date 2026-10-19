@@ -22,6 +22,6 @@ export function datedJsonlName(prefix: string, date: string): string {
 export function listTelemetryJsonl(prefix: string, dir: string = TELEMETRY_DIR): string[] {
   return readdirSync(dir)
     .filter(f => f.startsWith(`${prefix}-`) && f.endsWith(JSONL_EXTENSION))
-    .sort()
+    .toSorted()
     .map(f => join(dir, f));
 }

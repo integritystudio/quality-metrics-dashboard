@@ -90,7 +90,7 @@ export class MemoryKv {
   }
 
   list({ prefix = '', cursor, limit = DEFAULT_LIST_LIMIT }: KvListOptions = {}): Promise<KvListResult> {
-    const names = [...this.#entries.keys()].filter((name) => name.startsWith(prefix)).sort();
+    const names = [...this.#entries.keys()].filter((name) => name.startsWith(prefix)).toSorted();
     const start = cursor === undefined ? 0 : Number(cursor);
     if (!Number.isSafeInteger(start) || start < 0) return Promise.reject(new Error(`Invalid list cursor: ${cursor}`));
     const end = start + limit;

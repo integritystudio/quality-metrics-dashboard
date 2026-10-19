@@ -38,8 +38,7 @@ qualityRoutes.get('/quality/live', async (c) => {
 
   for (const [name, evals] of evaluationsByMetric) {
     const sorted = evals
-      .slice()
-      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
+      .toSorted((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
       .slice(0, EVAL_LIMIT);
 
     for (const ev of sorted) {

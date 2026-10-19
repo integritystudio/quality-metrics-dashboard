@@ -100,7 +100,7 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
     if (!existsSync(docsDir)) return [];
     return readdirSync(docsDir)
       .filter(f => f.startsWith(resultsPrefix) && f.endsWith(RESULTS_SUFFIX))
-      .sort();
+      .toSorted();
   };
   const refusalReason = (docsDir: string): string | undefined => {
     const marker = join(docsDir, markerFilename);

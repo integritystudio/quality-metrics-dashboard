@@ -633,7 +633,7 @@ describe('a per-criterion --batch run cut short by the wall clock', () => {
 
     expect(submitted).toHaveLength(2);
     expect(client.cancel).toHaveBeenCalledTimes(1);
-    expect(perTurn.map(records => records.map(r => r.evaluationName).sort())).toEqual([[COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME], []]);
+    expect(perTurn.map(records => records.map(r => r.evaluationName).toSorted())).toEqual([[COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME], []]);
     expect(failureClasses).toMatchObject({ 'wall-clock': 2, other: 0 });
     expect(evalFailures).toEqual({ [RELEVANCE_EVAL_NAME]: 1, [COHERENCE_EVAL_NAME]: 1 });
     expect(batch.failure).toBeUndefined();

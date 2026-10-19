@@ -69,7 +69,7 @@ describe('loadEvaluationsByTraceIds', () => {
 
     await loadEvaluationsByTraceIds(traceIds);
 
-    expect(requestedTraceIds().sort()).toEqual(traceIds);
+    expect(requestedTraceIds().toSorted()).toEqual(traceIds);
   });
 
   it('aggregates results from all per-traceId queries into a single flat array', async () => {
@@ -107,6 +107,6 @@ describe('loadEvaluationsByTraceIds', () => {
 
     const result = await loadEvaluationsByTraceIds(['trace-ok', 'trace-bad', 'trace-also-ok']);
 
-    expect(result.map((e) => e.traceId).sort()).toEqual(['trace-also-ok', 'trace-ok']);
+    expect(result.map((e) => e.traceId).toSorted()).toEqual(['trace-also-ok', 'trace-ok']);
   });
 });

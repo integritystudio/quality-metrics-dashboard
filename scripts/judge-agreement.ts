@@ -302,7 +302,7 @@ export function computeAgreement(turns: readonly TurnScores[]): AgreementSummary
   }
 
   const byCriterion = Object.fromEntries(
-    [...sums.entries()].sort(([x], [y]) => ascending(x, y)).map(([name, entry]) => [name, finishAgreement(entry)]),
+    [...sums.entries()].toSorted(([x], [y]) => ascending(x, y)).map(([name, entry]) => [name, finishAgreement(entry)]),
   );
   return { byCriterion, overall: finishAgreement(overall) };
 }

@@ -442,7 +442,7 @@ function inWindow(file: string, windowDays: number, nowMs: number): boolean {
 /** Evaluation files in the date window, oldest first. */
 export function windowFiles(dir: string, windowDays: number, nowMs: number): string[] {
   try {
-    return readdirSync(dir).filter((f) => inWindow(f, windowDays, nowMs)).sort();
+    return readdirSync(dir).filter((f) => inWindow(f, windowDays, nowMs)).toSorted();
   } catch {
     return [];
   }

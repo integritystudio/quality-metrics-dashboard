@@ -203,7 +203,7 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
 
   const top5 = results
     .slice()
-    .sort((a, b) => b.tapr.f1 - a.tapr.f1)
+    .toSorted((a, b) => b.tapr.f1 - a.tapr.f1)
     .slice(0, SUMMARY_TOP_CONFIGS);
 
   for (let rank = 0; rank < top5.length; rank++) {
@@ -330,7 +330,7 @@ async function main(): Promise<void> {
           bestByRecall: sweepResult.bestByRecall,
           top10ByF1: sweepResult.results
             .slice()
-            .sort((a, b) => b.tapr.f1 - a.tapr.f1)
+            .toSorted((a, b) => b.tapr.f1 - a.tapr.f1)
             .slice(0, RESULTS_TOP_CONFIGS),
         },
       ])

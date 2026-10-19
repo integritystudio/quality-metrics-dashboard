@@ -93,6 +93,9 @@ const typeSafetyRules = {
   // A bare callback reference silently receives every argument the iterator
   // passes: `xs.map(parseInt)` reads the index as the radix.
   'unicorn/no-array-callback-reference': 'error',
+  // `.sort()` whose value is used mutates the receiver, which may be a caller's
+  // array; a bare `xs.sort()` statement stays allowed (allowExpressionStatement).
+  'unicorn/no-array-sort': 'error',
   'unicorn/prefer-node-protocol': 'error',
   'radix': 'error',
   'no-param-reassign': ['error', { props: false }],

@@ -170,7 +170,7 @@ describe('GET /quality/live', () => {
     const res = await qualityRoutes.request('/quality/live');
     const body = await res.json() as QualityLiveResponse;
     const names = body.metrics.map((m) => m.name);
-    expect(names).toEqual([...names].sort());
+    expect(names).toEqual(names.toSorted());
   });
 
   it('each metric has name, score, evaluatorType, timestamp', async () => {

@@ -182,7 +182,7 @@ describe('hallucination flagging constants', () => {
   // Change them together.
   it('pins the per-evaluation hallucination cutoff and names', () => {
     expect(HALLUCINATION_RISK_THRESHOLD).toBe(0.15);
-    expect([...HALLUCINATION_RISK_EVALUATION_NAMES].sort()).toEqual(['hallucination', 'hallucination_risk']);
+    expect([...HALLUCINATION_RISK_EVALUATION_NAMES].toSorted()).toEqual(['hallucination', 'hallucination_risk']);
   });
 });
 

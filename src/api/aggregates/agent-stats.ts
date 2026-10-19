@@ -213,7 +213,7 @@ export function computeAgentStats(
       dailyCounts: d.dailyCounts,
       evalSummary,
     };
-  }).sort((a, b) => b.invocations - a.invocations);
+  }).toSorted((a, b) => b.invocations - a.invocations);
 
   return { period, startDate, endDate, agents };
 }

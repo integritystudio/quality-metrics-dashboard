@@ -212,7 +212,7 @@ export function extractClusterIds(nodes: WorkflowNode[]): string[] {
   for (const n of nodes) {
     if (n.clusterId) seen.add(n.clusterId);
   }
-  return [...seen].sort();
+  return [...seen].toSorted();
 }
 
 /** How the laid-out nodes are presented: which are dimmed, which are critical, what a click does. */

@@ -205,10 +205,10 @@ describe('GET /agents/:sessionId/graph', () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as AgentGraphResponse;
-    expect(Object.keys(body).sort()).toEqual(['evaluation', 'graph', 'sessionId']);
+    expect(Object.keys(body).toSorted()).toEqual(['evaluation', 'graph', 'sessionId']);
     expect(body.sessionId).toBe('sess-001');
     expect(body.evaluation?.turns.map(t => t.agentName)).toEqual(['general-purpose', 'Explore']);
-    expect(body.graph.nodes.map(n => n.id).sort()).toEqual(['Explore', 'general-purpose']);
+    expect(body.graph.nodes.map(n => n.id).toSorted()).toEqual(['Explore', 'general-purpose']);
   });
 
   // The route once scored a step as failed only on status 'ERROR', so a span that

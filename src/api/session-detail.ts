@@ -335,7 +335,7 @@ function computeTokenMetrics(spans: SessionSpan[]): TokenMetrics {
       cacheCreation: renamedAttr(s, TOKEN_ATTRIBUTES.CACHE_CREATION, 'tokens.cache_creation', 'number') ?? 0,
       model: renamedAttr(s, TOKEN_ATTRIBUTES.MODEL, 'tokens.model', 'string') ?? '',
     }))
-    .sort((a, b) => a.messages - b.messages);
+    .toSorted((a, b) => a.messages - b.messages);
 
   const tokenTotals = {
     input: 0, output: 0, cacheRead: 0, cacheCreation: 0, messages: 0,
@@ -371,7 +371,7 @@ function computeSpanLatency(spans: SessionSpan[]): SpanLatency {
   const spanBreakdown = Object.fromEntries(rollup(spans, group => group.length, s => s.name));
   const hookDurations = rollup(
     spans.filter(s => (s.durationMs ?? 0) > 0),
-    group => group.map(s => s.durationMs ?? 0).sort(ascending),
+    group => group.map(s => s.durationMs ?? 0).toSorted(ascending),
     s => s.name,
   );
   const hookLatency: Record<string, { count: number; avg: number; p50: number; p95: number; max: number }> = {};
@@ -454,7 +454,7 @@ function computeEvalBreakdown(evaluations: SessionEvaluation[]): EvalBreakdownEn
     ev => ev.evaluationName,
   );
   return Array.from(evalByName, ([name, d]) => {
-    const sorted = d.scores.sort(ascending);
+    const sorted = d.scores.toSorted(ascending);
     const avg = mean(sorted);
     return {
       name,
@@ -474,7 +474,7 @@ function computeFileAccess(spans: SessionSpan[]): FileAccessEntry[] {
   }
   return Object.entries(fileCount)
     .map(([path, count]) => ({ path, count }))
-    .sort((a, b) => b.count - a.count)
+    .toSorted((a, b) => b.count - a.count)
     .slice(0, FILE_ACCESS_TOP_N);
 }
 

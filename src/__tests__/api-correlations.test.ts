@@ -53,7 +53,7 @@ describe('GET /correlations', () => {
   it('metrics array contains metric names from data', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
     const body = await res.json() as CorrelationsResponse;
-    expect([...body.metrics].sort()).toEqual(['coherence', 'relevance']);
+    expect(body.metrics.toSorted()).toEqual(['coherence', 'relevance']);
   });
 
   it('correlates each metric pair once, in name order', async () => {
