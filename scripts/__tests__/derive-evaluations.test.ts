@@ -907,13 +907,13 @@ describe('detectInputDrift', () => {
   };
 
   it('is quiet when only the synthetic span carries the operation and the hook spans keep their names', () => {
-    const spans = [...agentSpans('hook:agent.operation.finalize').map(withoutOperation), syntheticInvokeSpan];
+    const spans = [...agentSpans('hook:agent.operation.finalize').map(span => withoutOperation(span)), syntheticInvokeSpan];
 
     expect(detectInputDrift(spans, null)).toEqual([]);
   });
 
   it('still flags renamed hook spans when only the synthetic span records the invocation', () => {
-    const spans = [...agentSpans('hook:agent.lifecycle.finalize').map(withoutOperation), syntheticInvokeSpan];
+    const spans = [...agentSpans('hook:agent.lifecycle.finalize').map(span => withoutOperation(span)), syntheticInvokeSpan];
 
     expect(detectInputDrift(spans, null)).toEqual([
       expect.stringMatching(new RegExp(`^${DAY}: 1 spans record agent invocations, but none is named`)),

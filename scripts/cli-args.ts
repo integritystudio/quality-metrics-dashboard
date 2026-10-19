@@ -53,26 +53,30 @@ function optionName(flag: string): string {
   return name.endsWith(INLINE_VALUE_SEPARATOR) ? name.slice(0, -INLINE_VALUE_SEPARATOR.length) : name;
 }
 
-/**
- * Parse `argv` against `spec`. Throws `CliArgError` when a value flag has no
- * argument (including `--limit --dry-run`, which `parseArgs` would read as the
- * value `--dry-run`), when a switch is given a value, and, with
- * `allowUnknown: false`, on an undeclared flag or a positional argument.
- */
-export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown = true }: CliParseOptions = {}): CliArgs {
-  const valueNames = new Set((spec.values ?? []).map(optionName));
-  const switchNames = new Set((spec.switches ?? []).map(optionName));
-  const options: ParseArgsOptionsConfig = {};
-  for (const name of valueNames) options[name] = { type: 'string' };
-  for (const name of switchNames) options[name] = { type: 'boolean' };
-  const { values, positionals, tokens } = parseArgs({
+/** `parseArgs` with the settings every script shares; `tokens` carries how each flag was written. */
+function parseTokens(argv: readonly string[], options: ParseArgsOptionsConfig) {
+  return parseArgs({
     args: [...argv],
     options,
     strict: false,
     allowPositionals: true,
     tokens: true,
   });
+}
 
+type CliTokens = NonNullable<ReturnType<typeof parseTokens>['tokens']>;
+
+/**
+ * Throw on a value flag with no argument (including `--limit --dry-run`, which
+ * `parseArgs` would read as the value `--dry-run`), on a switch given a value,
+ * and, unless unknown flags are allowed, on an undeclared one.
+ */
+function validateTokens(
+  tokens: CliTokens,
+  valueNames: ReadonlySet<string>,
+  switchNames: ReadonlySet<string>,
+  allowUnknown: boolean,
+): void {
   for (const token of tokens) {
     if (token.kind !== 'option') continue;
     if (valueNames.has(token.name)) {
@@ -85,6 +89,23 @@ export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown 
       throw new CliArgError(`Unknown argument: ${token.rawName}`, 'unknown');
     }
   }
+}
+
+/**
+ * Parse `argv` against `spec`. Throws `CliArgError` when a value flag has no
+ * argument (including `--limit --dry-run`, which `parseArgs` would read as the
+ * value `--dry-run`), when a switch is given a value, and, with
+ * `allowUnknown: false`, on an undeclared flag or a positional argument.
+ */
+export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown = true }: CliParseOptions = {}): CliArgs {
+  const valueNames = new Set((spec.values ?? []).map(flag => optionName(flag)));
+  const switchNames = new Set((spec.switches ?? []).map(flag => optionName(flag)));
+  const options: ParseArgsOptionsConfig = {};
+  for (const name of valueNames) options[name] = { type: 'string' };
+  for (const name of switchNames) options[name] = { type: 'boolean' };
+  const { values, positionals, tokens } = parseTokens(argv, options);
+
+  validateTokens(tokens, valueNames, switchNames, allowUnknown);
   const [positional] = positionals;
   if (!allowUnknown && positional !== undefined) throw new CliArgError(`Unknown argument: ${positional}`, 'unknown');
 

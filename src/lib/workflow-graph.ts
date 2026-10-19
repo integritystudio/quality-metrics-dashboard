@@ -47,14 +47,51 @@ export function buildWorkflowGraph(
   return inferFromSpans(spans);
 }
 
-function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
-  const agentTurns = new Map<string, Array<typeof evaluation.turns[number]>>();
+type EvaluationTurn = MultiAgentEvaluation['turns'][number];
+type AgentTiming = { id: string; minStart: number; maxEnd: number };
+
+/** Total tokens across the spans that report them, or null when none does. */
+function totalTokensOf(spans: TraceSpan[]): number | null {
+  let tokenSum = 0;
+  let tokenCount = 0;
+  for (const s of spans) {
+    const v = s.attributes?.[ATTR_TOTAL_TOKENS];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      tokenSum += v;
+      tokenCount++;
+    }
+  }
+  return tokenCount > 0 ? tokenSum : null;
+}
+
+/** A span group's first start and last end, in nanoseconds. A span with no end counts as instant. */
+function spanBoundsNs(spans: TraceSpan[]): { minStart: number; maxEnd: number } {
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+  for (const s of spans) {
+    const start = Number(s.startTimeUnixNano);
+    if (start < minStart) minStart = start;
+    const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
+    if (end > maxEnd) maxEnd = end;
+  }
+  return { minStart, maxEnd };
+}
+
+/**
+ * Turns per agent, the count of turns with no agent to attribute them to, and the
+ * root: the agent holding the lowest turnIndex, broken lexicographically.
+ */
+function groupTurnsByAgent(turns: EvaluationTurn[]): {
+  agentTurns: Map<string, EvaluationTurn[]>;
+  droppedTurns: number;
+  rootAgentName: string | null;
+} {
+  const agentTurns = new Map<string, EvaluationTurn[]>();
   let droppedTurns = 0;
-  // Root: agent with lowest turnIndex, lexicographic tiebreak
   let rootAgentName: string | null = null;
   let minTurnIndex = Infinity;
 
-  for (const turn of evaluation.turns) {
+  for (const turn of turns) {
     if (turn.agentName == null) {
       droppedTurns++;
       continue;
@@ -72,72 +109,77 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
     }
   }
 
-  const spansByAgent = groupByAttribute(spans, GENAI_AGENT_ATTRIBUTES.AGENT_NAME);
+  return { agentTurns, droppedTurns, rootAgentName };
+}
 
-  // Per-agent span timing bounds used to compute handoff latency.
-  const agentLastEndNs = new Map<string, number>();
-  const agentFirstStartNs = new Map<string, number>();
+/** Per-agent span timing bounds, used to compute handoff latency. */
+function agentSpanBounds(spansByAgent: Map<string, TraceSpan[]>): {
+  firstStartNs: Map<string, number>;
+  lastEndNs: Map<string, number>;
+} {
+  const firstStartNs = new Map<string, number>();
+  const lastEndNs = new Map<string, number>();
   for (const [agentId, agentGroup] of spansByAgent) {
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of agentGroup) {
-      const start = Number(s.startTimeUnixNano);
-      if (start < minStart) minStart = start;
-      const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
-      if (end > maxEnd) maxEnd = end;
-    }
-    if (Number.isFinite(minStart)) agentFirstStartNs.set(agentId, minStart);
-    if (Number.isFinite(maxEnd)) agentLastEndNs.set(agentId, maxEnd);
+    const { minStart, maxEnd } = spanBoundsNs(agentGroup);
+    if (Number.isFinite(minStart)) firstStartNs.set(agentId, minStart);
+    if (Number.isFinite(maxEnd)) lastEndNs.set(agentId, maxEnd);
   }
+  return { firstStartNs, lastEndNs };
+}
 
+/**
+ * Time from the source agent's last span end to the target's first span start.
+ * Zero-latency handoffs count — the target may start exactly when the source ends —
+ * but a negative or non-finite gap means the two did not hand over in sequence.
+ */
+function handoffLatencyMs(sourceEnd: number | undefined, targetStart: number | undefined): number | null {
+  if (sourceEnd === undefined || targetStart === undefined) return null;
+  const gapNs = targetStart - sourceEnd;
+  if (gapNs < 0 || !Number.isFinite(gapNs)) return null;
+  return Math.round(gapNs / NS_TO_MS);
+}
+
+function evaluationNodes(
+  agentTurns: Map<string, EvaluationTurn[]>,
+  spansByAgent: Map<string, TraceSpan[]>,
+): WorkflowNode[] {
   const nodes: WorkflowNode[] = [];
   for (const [agentName, turns] of agentTurns) {
-    const evaluationScore = mean(turns, t => t.relevance) ?? null;
-
+    const agentGroup = spansByAgent.get(agentName) ?? [];
     let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
     let durationMs = 0;
-    for (const s of spansByAgent.get(agentName) ?? []) {
+    for (const s of agentGroup) {
       if (s.name === SPAN_NAME_TOOL_CALL) toolCallCount++;
-      const v = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        tokenSum += v;
-        tokenCount++;
-      }
       durationMs += s.durationMs ?? 0;
     }
-    const totalTokens = tokenCount > 0 ? tokenSum : null;
 
     nodes.push({
       id: agentName,
       label: agentName,
-      evaluationScore,
+      evaluationScore: mean(turns, t => t.relevance) ?? null,
       toolCallCount,
-      totalTokens,
+      totalTokens: totalTokensOf(agentGroup),
       durationMs,
       turnCount: turns.length,
       hasError: turns.some(t => t.hasError),
     });
   }
+  return nodes;
+}
 
-  // Deduplicate edges, guard NaN scores
+/** One edge per source→target pair, first occurrence winning, with NaN scores guarded. */
+function evaluationEdges(
+  handoffs: MultiAgentEvaluation['handoffs'],
+  bounds: ReturnType<typeof agentSpanBounds>,
+): WorkflowEdge[] {
   const seenEdges = new Set<string>();
   const edges: WorkflowEdge[] = [];
-  for (const h of evaluation.handoffs) {
+  for (const h of handoffs) {
     const key = `${h.sourceAgent}->${h.targetAgent}`;
     if (seenEdges.has(key)) continue;
     seenEdges.add(key);
     const score = Number.isFinite(h.score) ? h.score : 0;
-
-    // Compute handoff latency: time from source agent's last span end to target's first span start.
-    // Use >= to include zero-latency handoffs (target starts exactly when source ends).
-    const sourceEnd = agentLastEndNs.get(h.sourceAgent);
-    const targetStart = agentFirstStartNs.get(h.targetAgent);
-    const gapNs = sourceEnd !== undefined && targetStart !== undefined ? targetStart - sourceEnd : null;
-    const latencyMs = gapNs !== null && gapNs >= 0 && Number.isFinite(gapNs)
-      ? Math.round(gapNs / NS_TO_MS)
-      : null;
+    const latencyMs = handoffLatencyMs(bounds.lastEndNs.get(h.sourceAgent), bounds.firstStartNs.get(h.targetAgent));
 
     edges.push({
       id: key,
@@ -149,8 +191,61 @@ function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[
       label: buildEdgeLabel(score.toFixed(SCORE_CHIP_PRECISION), latencyMs),
     });
   }
+  return edges;
+}
 
+function buildFromEvaluation(evaluation: MultiAgentEvaluation, spans: TraceSpan[]): WorkflowGraph {
+  const { agentTurns, droppedTurns, rootAgentName } = groupTurnsByAgent(evaluation.turns);
+  const spansByAgent = groupByAttribute(spans, GENAI_AGENT_ATTRIBUTES.AGENT_NAME);
+  const nodes = evaluationNodes(agentTurns, spansByAgent);
+  const edges = evaluationEdges(evaluation.handoffs, agentSpanBounds(spansByAgent));
   return { nodes, edges, rootNodeId: rootAgentName, workflowShape: classifyShape(nodes, edges), droppedTurns };
+}
+
+/** A node built from spans alone: no evaluation, so no score. */
+function inferredNode(agentId: string, agentGroup: TraceSpan[]): WorkflowNode {
+  let toolCallCount = 0;
+  let durationMs = 0;
+  let hasError = false;
+  for (const s of agentGroup) {
+    if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
+    durationMs += s.durationMs ?? 0;
+    if (s.status?.code === 'ERROR') hasError = true;
+  }
+  return {
+    id: agentId,
+    label: agentId,
+    evaluationScore: null,
+    toolCallCount,
+    totalTokens: totalTokensOf(agentGroup),
+    durationMs,
+    turnCount: agentGroup.length,
+    hasError,
+  };
+}
+
+/** An edge between each consecutive pair of agents whose spans did not overlap. */
+function inferredEdges(agentTimings: AgentTiming[]): WorkflowEdge[] {
+  const edges: WorkflowEdge[] = [];
+  for (let i = 0; i < agentTimings.length - 1; i++) {
+    const curr = agentTimings[i];
+    const next = agentTimings[i + 1];
+    if (!curr || !next) continue;
+    // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss
+    if (curr.maxEnd > next.minStart + SPAN_SEQUENCE_EPSILON_NS) continue;
+    const latencyMs = handoffLatencyMs(curr.maxEnd, next.minStart);
+    edges.push({
+      id: `${curr.id}->${next.id}`,
+      source: curr.id,
+      target: next.id,
+      // null distinguishes inferred edges (no evaluation data) from a real handoff score of 0
+      handoffScore: null,
+      contextPreserved: false,
+      latencyMs,
+      label: buildEdgeLabel('inferred', latencyMs),
+    });
+  }
+  return edges;
 }
 
 function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
@@ -161,65 +256,15 @@ function inferFromSpans(spans: TraceSpan[]): WorkflowGraph {
   }
 
   const nodes: WorkflowNode[] = [];
-  const agentTimings: Array<{ id: string; minStart: number; maxEnd: number }> = [];
-
+  const agentTimings: AgentTiming[] = [];
   for (const [agentId, agentGroup] of agentSpans) {
-    let toolCallCount = 0;
-    let tokenSum = 0;
-    let tokenCount = 0;
-    let durationMs = 0;
-    let hasError = false;
-    let minStart = Infinity;
-    let maxEnd = -Infinity;
-    for (const s of agentGroup) {
-      if (s.name.startsWith(SPAN_NAME_TOOL_PREFIX)) toolCallCount++;
-      const tv = s.attributes?.[ATTR_TOTAL_TOKENS];
-      if (typeof tv === 'number' && Number.isFinite(tv)) { tokenSum += tv; tokenCount++; }
-      durationMs += s.durationMs ?? 0;
-      if (s.status?.code === 'ERROR') hasError = true;
-      const start = Number(s.startTimeUnixNano);
-      if (start < minStart) minStart = start;
-      const end = s.endTimeUnixNano != null ? Number(s.endTimeUnixNano) : start;
-      if (end > maxEnd) maxEnd = end;
-    }
-    nodes.push({
-      id: agentId,
-      label: agentId,
-      evaluationScore: null,
-      toolCallCount,
-      totalTokens: tokenCount > 0 ? tokenSum : null,
-      durationMs,
-      turnCount: agentGroup.length,
-      hasError,
-    });
-    agentTimings.push({ id: agentId, minStart, maxEnd });
+    nodes.push(inferredNode(agentId, agentGroup));
+    agentTimings.push({ id: agentId, ...spanBoundsNs(agentGroup) });
   }
 
   agentTimings.sort((a, b) => a.minStart - b.minStart);
 
-  const edges: WorkflowEdge[] = [];
-  for (let i = 0; i < agentTimings.length - 1; i++) {
-    const curr = agentTimings[i];
-    const next = agentTimings[i + 1];
-    if (!curr || !next) continue;
-    // Use epsilon tolerance to catch near-concurrent spans that a strict <= would miss
-    if (curr.maxEnd <= next.minStart + SPAN_SEQUENCE_EPSILON_NS) {
-      const key = `${curr.id}->${next.id}`;
-      const gapNs = next.minStart - curr.maxEnd;
-      const latencyMs = gapNs >= 0 && Number.isFinite(gapNs) ? Math.round(gapNs / NS_TO_MS) : null;
-      edges.push({
-        id: key,
-        source: curr.id,
-        target: next.id,
-        // null distinguishes inferred edges (no evaluation data) from a real handoff score of 0
-        handoffScore: null,
-        contextPreserved: false,
-        latencyMs,
-        label: buildEdgeLabel('inferred', latencyMs),
-      });
-    }
-  }
-
+  const edges = inferredEdges(agentTimings);
   const rootNodeId = agentTimings[0]?.id ?? null;
   return { nodes, edges, rootNodeId, workflowShape: classifyShape(nodes, edges), droppedTurns: 0 };
 }

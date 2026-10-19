@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { scaleSequential } from 'd3-scale';
 import { interpolateRdYlGn } from 'd3-scale-chromatic';
 import { formatScore } from '../lib/quality-utils.js';
@@ -32,6 +32,68 @@ const colorScale = scaleSequential(interpolateRdYlGn).domain([-1, 1]);
 
 function corrKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** A metric's correlation with itself, which is 1 by construction and carries no data. */
+const DIAGONAL_VALUE = 1;
+
+const CELL_CLASS = 'mono-xs font-medium flex-center justify-center heatmap-cell';
+
+function cellTooltip(rowMetric: string, colMetric: string, corr: CorrelationFeature | undefined): string {
+  if (!corr) return `${rowMetric} vs ${colMetric}: no data`;
+  return `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`;
+}
+
+/** The self-correlation cell: never clickable, never toxic, always 1. */
+function HeatmapDiagonalCell({ metric }: { metric: string }): ReactNode {
+  const label = DIAGONAL_VALUE.toFixed(SCORE_CHIP_PRECISION);
+  return (
+    <div
+      role="gridcell"
+      aria-label={`${metric} vs ${metric}: ${label}`}
+      title={`${metric}: diagonal (${label})`}
+      data-diagonal="true"
+      className={CELL_CLASS}
+      style={{ '--heatmap-cell-bg': 'var(--bg-surface)' } as CSSProperties}
+    >
+      {label}
+    </div>
+  );
+}
+
+function HeatmapCell({ rowMetric, colMetric, corr, onCellClick }: {
+  rowMetric: string;
+  colMetric: string;
+  corr: CorrelationFeature | undefined;
+  onCellClick: ((rowMetric: string, colMetric: string) => void) | undefined;
+}): ReactNode {
+  const value = corr?.pearsonR ?? 0;
+  const isToxic = corr?.isKnownToxicCombo ?? false;
+  const clickable = onCellClick !== undefined;
+  const activate = (): void => {
+    onCellClick?.(rowMetric, colMetric);
+  };
+  const activateOnKey = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      activate();
+    }
+  };
+  return (
+    <div
+      role="gridcell"
+      aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
+      data-toxic={isToxic ? 'true' : undefined}
+      title={cellTooltip(rowMetric, colMetric, corr)}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? activate : undefined}
+      onKeyDown={clickable ? activateOnKey : undefined}
+      className={`${CELL_CLASS}${clickable ? ' cursor-pointer' : ''}`}
+      style={{ '--heatmap-cell-bg': colorScale(value) } as CSSProperties}
+    >
+      {value.toFixed(SCORE_CHIP_PRECISION)}
+    </div>
+  );
 }
 
 export function CorrelationHeatmap({ correlations, metrics, onCellClick }: CorrelationHeatmapProps) {
@@ -80,38 +142,19 @@ export function CorrelationHeatmap({ correlations, metrics, onCellClick }: Corre
             {shortName(rowMetric)}
           </div>
 
-          {metrics.map((colMetric, ci) => {
-            const isDiag = ri === ci;
-            const corr = isDiag ? undefined : corrMap.get(corrKey(rowMetric, colMetric));
-            const value = isDiag ? 1 : corr?.pearsonR ?? 0;
-            const isToxic = corr?.isKnownToxicCombo ?? false;
-            const bg = isDiag ? 'var(--bg-surface)' : colorScale(value);
-
-            const tooltip = isDiag
-              ? `${rowMetric}: diagonal (1.00)`
-              : corr
-                ? `${corr.metricA} vs ${corr.metricB}\npearsonR: ${corr.pearsonR.toFixed(SCORE_DISPLAY_PRECISION)}\nlagHours: ${corr.lagHours}\npValue: ${formatScore(corr.pValue)}\nsignificant: ${corr.significant}`
-                : `${rowMetric} vs ${colMetric}: no data`;
-
-            const clickable = !isDiag && onCellClick !== undefined;
-            return (
-              <div
-                key={`${rowMetric}-${colMetric}`}
-                role="gridcell"
-                aria-label={`${rowMetric} vs ${colMetric}: ${value.toFixed(SCORE_CHIP_PRECISION)}`}
-                data-toxic={isToxic ? 'true' : undefined}
-                data-diagonal={isDiag ? 'true' : undefined}
-                title={tooltip}
-                tabIndex={clickable ? 0 : undefined}
-                onClick={clickable ? () => onCellClick(rowMetric, colMetric) : undefined}
-                onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCellClick(rowMetric, colMetric); } } : undefined}
-                className={`mono-xs font-medium flex-center justify-center heatmap-cell${clickable ? ' cursor-pointer' : ''}`}
-                style={{ '--heatmap-cell-bg': bg } as CSSProperties}
-              >
-                {value.toFixed(SCORE_CHIP_PRECISION)}
-              </div>
-            );
-          })}
+          {metrics.map((colMetric, ci) => (
+            ri === ci
+              ? <HeatmapDiagonalCell key={`${rowMetric}-${colMetric}`} metric={rowMetric} />
+              : (
+                <HeatmapCell
+                  key={`${rowMetric}-${colMetric}`}
+                  rowMetric={rowMetric}
+                  colMetric={colMetric}
+                  corr={corrMap.get(corrKey(rowMetric, colMetric))}
+                  onCellClick={onCellClick}
+                />
+              )
+          ))}
         </div>
       ))}
 

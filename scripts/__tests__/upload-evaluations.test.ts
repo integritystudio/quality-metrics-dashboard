@@ -270,7 +270,7 @@ describe('fingerprint', () => {
     const b = '{"r":"judged"}';
     const before = [a, b];
     const after = [b, a];
-    expect(new Set(before.map(fingerprint))).toEqual(new Set(after.map(fingerprint)));
+    expect(new Set(before.map(line => fingerprint(line)))).toEqual(new Set(after.map(line => fingerprint(line))));
   });
 });
 

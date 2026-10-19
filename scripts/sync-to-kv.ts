@@ -79,6 +79,23 @@ type CloudflareConfig = {
   namespaceId: string;
 }
 
+/** `account_id` and the first `[[kv_namespaces]]` id in wrangler.toml, where it has them. */
+function wranglerIds(tomlPath: string): { accountId: string | undefined; namespaceId: string | undefined } {
+  const raw = readFileSync(tomlPath, 'utf8');
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseToml(raw);
+  } catch (err) {
+    throw new Error(`Failed to parse ${tomlPath}: ${describeUnknown(err)}`, { cause: err });
+  }
+  const kvNamespaces = Array.isArray(parsed.kv_namespaces) ? parsed.kv_namespaces : [];
+  const firstNs = kvNamespaces[0] as Record<string, unknown> | undefined;
+  return {
+    accountId: typeof parsed.account_id === 'string' ? parsed.account_id : undefined,
+    namespaceId: typeof firstNs?.id === 'string' ? firstNs.id : undefined,
+  };
+}
+
 function resolveCloudflareConfig(): CloudflareConfig {
   const envNamespaceId = process.env.KV_NAMESPACE_ID;
   const envAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -86,19 +103,9 @@ function resolveCloudflareConfig(): CloudflareConfig {
 
   const tomlPath = join(import.meta.dirname, '..', 'wrangler.toml');
   if (existsSync(tomlPath)) {
-    const raw = readFileSync(tomlPath, 'utf8');
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = parseToml(raw);
-    } catch (err) {
-      throw new Error(`Failed to parse ${tomlPath}: ${describeUnknown(err)}`, { cause: err });
-    }
-    const accountId = envAccountId ??
-      (typeof parsed.account_id === 'string' ? parsed.account_id : undefined);
-    const kvNamespaces = Array.isArray(parsed.kv_namespaces) ? parsed.kv_namespaces : [];
-    const firstNs = kvNamespaces[0] as Record<string, unknown> | undefined;
-    const namespaceId = envNamespaceId ??
-      (typeof firstNs?.id === 'string' ? firstNs.id : undefined);
+    const fromToml = wranglerIds(tomlPath);
+    const accountId = envAccountId ?? fromToml.accountId;
+    const namespaceId = envNamespaceId ?? fromToml.namespaceId;
     if (accountId && namespaceId) return { accountId, namespaceId };
   }
 
@@ -405,6 +412,63 @@ export function chunkKvPairs<T extends { key: string; value: string }>(
  * A connection failure defers only its own chunk, so later chunks still land
  * and the next run retries the rest; it throws only when every request failed.
  */
+/** Credit the keys the API accepted; the rest are left for the next run to retry. */
+function creditWritten(
+  unsuccessfulKeys: string[] | null | undefined,
+  batch: EnvelopedKVPair[],
+  batchLabel: string,
+  writtenKeys: Set<string>,
+): void {
+  const failed = new Set(unsuccessfulKeys ?? []);
+  if (failed.size > 0) {
+    console.warn(`[sync-to-kv] ${failed.size} key(s) not written in batch${batchLabel} — will retry on next run: ${previewKeys([...failed])}`);
+  }
+  for (const e of batch) {
+    if (!failed.has(e.key)) writtenKeys.add(e.key);
+  }
+}
+
+type ChunkOutcome = { kind: 'written' | 'limit-hit' } | { kind: 'deferred'; error: unknown };
+
+/**
+ * Write one chunk. A write-limit refusal stops the run, a connection failure
+ * defers only this chunk, and anything else throws.
+ */
+async function putChunk(batch: EnvelopedKVPair[], batchLabel: string, writtenKeys: Set<string>): Promise<ChunkOutcome> {
+  const { namespaceId, accountId } = getCloudflareConfig();
+  try {
+    const { data: result, response } = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
+      account_id: accountId,
+      body: batch,
+    }).withResponse();
+    // A null result carries no key info, so every batch key is credited. It comes
+    // from a {"result": null} body or from a 204 that kvSdkFetch rewrote to one.
+    if (result == null) {
+      const answer = response.headers.get(KV_ORIGINAL_STATUS_HEADER) === String(HttpStatus.NoContent)
+        ? 'API answered HTTP 204 with no body'
+        : 'API returned null result';
+      console.warn(`[sync-to-kv] bulk put${batchLabel}: ${answer} — crediting all ${batch.length} keys as written`);
+    }
+    creditWritten(result?.unsuccessful_keys, batch, batchLabel, writtenKeys);
+    return { kind: 'written' };
+  } catch (err) {
+    if (err instanceof CloudflareAPIError &&
+        err.errors.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE)) {
+      console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred.`);
+      return { kind: 'limit-hit' };
+    }
+    if (err instanceof CloudflareAPIConnectionError) {
+      console.warn(
+        `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ${
+          describeFetchError(err.cause ?? err)}`,
+      );
+      return { kind: 'deferred', error: err };
+    }
+    console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${describeUnknown(err)}`);
+    throw new Error(`Cloudflare KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
+  }
+}
+
 export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
   const writtenKeys = new Set<string>();
   if (entries.length === 0) return writtenKeys;
@@ -417,45 +481,12 @@ export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
       for (const e of batch) writtenKeys.add(e.key);
       continue;
     }
-    const { namespaceId, accountId } = getCloudflareConfig();
-    try {
-      // eslint-disable-next-line no-await-in-loop -- the write-limit arm below returns, so later chunks must not already be in flight
-      const { data: result, response } = await getCloudflareClient().kv.namespaces.bulkUpdate(namespaceId, {
-        account_id: accountId,
-        body: batch,
-      }).withResponse();
-      // A null result carries no key info, so every batch key is credited. It comes
-      // from a {"result": null} body or from a 204 that kvSdkFetch rewrote to one.
-      if (result == null) {
-        const answer = response.headers.get(KV_ORIGINAL_STATUS_HEADER) === String(HttpStatus.NoContent)
-          ? 'API answered HTTP 204 with no body'
-          : 'API returned null result';
-        console.warn(`[sync-to-kv] bulk put${batchLabel}: ${answer} — crediting all ${batch.length} keys as written`);
-      }
-      const failed = new Set(result?.unsuccessful_keys ?? []);
-      if (failed.size > 0) {
-        console.warn(`[sync-to-kv] ${failed.size} key(s) not written in batch${batchLabel} — will retry on next run: ${previewKeys([...failed])}`);
-      }
-      for (const e of batch) {
-        if (!failed.has(e.key)) writtenKeys.add(e.key);
-      }
-    } catch (err) {
-      if (err instanceof CloudflareAPIError &&
-          err.errors.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE)) {
-        console.warn(`[sync-to-kv] KV write limit hit — ${batch.length} entries deferred.`);
-        return writtenKeys;
-      }
-      if (err instanceof CloudflareAPIConnectionError) {
-        connectionFailures++;
-        lastConnectionError = err;
-        console.warn(
-          `[sync-to-kv] bulk put${batchLabel} could not connect — ${batch.length} entries deferred to the next run: ${
-            describeFetchError(err.cause ?? err)}`,
-        );
-        continue;
-      }
-      console.error(`[sync-to-kv] bulk put failed${batchLabel}: ${describeUnknown(err)}`);
-      throw new Error(`Cloudflare KV bulk put failed for ${batch.length} entries${batchLabel}.`, { cause: err });
+    // eslint-disable-next-line no-await-in-loop -- the write-limit arm below returns, so later chunks must not already be in flight
+    const outcome = await putChunk(batch, batchLabel, writtenKeys);
+    if (outcome.kind === 'limit-hit') return writtenKeys;
+    if (outcome.kind === 'deferred') {
+      connectionFailures++;
+      lastConnectionError = outcome.error;
     }
   }
   if (connectionFailures === chunks.length) {
@@ -602,64 +633,72 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   return result;
 }
 
-async function main(): Promise<void> {
-  if (!CloudBackend.isConfigured()) {
-    console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
-    process.exit(1);
-  }
-  if (WRITE_BUDGET < RECOMMENDED_MIN_BUDGET) {
-    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${RECOMMENDED_MIN_BUDGET}); high-priority entries may be skipped`);
-  }
-  console.log(
-    `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}${
-      HOME_ORG_ID ? ` orgScoping=on home=${HOME_ORG_ID}` : ' orgScoping=off (HOME_ORG_ID unset — legacy bare keys only)'}`,
-  );
+/** Everything one run's orgs contribute, merged. */
+type OrgsComputation = {
+  orgIds: Array<string | null>;
+  allEntries: KVEntry[];
+  evalsByTrace: Map<string, EvaluationResult[]>;
+  referencedTraceIds: Set<string>;
+  homeComputation: OrgComputation | null;
+  hitCap: boolean;
+  perOrgSummaries: string[];
+};
 
-  const now = new Date();
+/**
+ * Fold one org's entries into the run. Dual-write: the home org (and legacy
+ * mode) also emits the bare key so pre-cutover readers keep serving identical
+ * content. P8 removes that arm.
+ */
+function mergeOrgResult(agg: OrgsComputation, res: OrgComputation, orgId: string | null, isHome: boolean): void {
+  for (const e of res.allEntries) {
+    if (orgId) agg.allEntries.push({ ...e, key: orgPrefixedKey(orgId, e.key) });
+    if (isHome) agg.allEntries.push(e);
+  }
+  for (const [traceId, evals] of res.evalsByTrace) {
+    for (const ev of evals) pushTo(agg.evalsByTrace, traceId, ev);
+  }
+  for (const id of res.referencedTraceIds) agg.referencedTraceIds.add(id);
+}
 
-  // Org-scoping P4: null = pre-tenancy legacy mode (bare keys, single default-scope
-  // query). With HOME_ORG_ID set, each discovered org is computed under its own
-  // server-side scope; the home org's entries are dual-written (bare + prefixed).
+/**
+ * Compute every org's entries. Org-scoping P4: null = pre-tenancy legacy mode
+ * (bare keys, single default-scope query). With HOME_ORG_ID set, each discovered
+ * org is computed under its own server-side scope.
+ */
+async function computeAllOrgs(now: Date): Promise<OrgsComputation> {
   const orgIds: Array<string | null> = HOME_ORG_ID ? await discoverOrgIds(now) : [null];
-
-  const allEntries: KVEntry[] = [];
-  const evalsByTrace = new Map<string, EvaluationResult[]>();
-  const referencedTraceIds = new Set<string>();
-  let homeComputation: OrgComputation | null = null;
-  let hitCap = false;
-  const perOrgSummaries: string[] = [];
+  const agg: OrgsComputation = {
+    orgIds,
+    allEntries: [],
+    evalsByTrace: new Map(),
+    referencedTraceIds: new Set(),
+    homeComputation: null,
+    hitCap: false,
+    perOrgSummaries: [],
+  };
 
   for (const orgId of orgIds) {
     const backend = new CloudBackend({ ...(orgId ? { orgId } : {}), fetch: http1Fetch });
     const isHome = orgId === null || orgId === HOME_ORG_ID;
     // eslint-disable-next-line no-await-in-loop -- an org is computed whole in memory (~1.65 GB on prd), so orgs must not overlap
     const res = await computeOrgEntries(backend, now, isHome);
-    if (isHome) homeComputation = res;
-    hitCap ||= res.hitCap;
-    perOrgSummaries.push(
+    if (isHome) agg.homeComputation = res;
+    agg.hitCap ||= res.hitCap;
+    agg.perOrgSummaries.push(
       `${orgId ?? 'legacy'}: entries=${res.allEntries.length} evals=${res.evalCount} spans=${res.spanCount} periods=[${res.periodCounts}]${
         res.hitCap ? ' CAP-HIT' : ''}`,
     );
-
-    for (const e of res.allEntries) {
-      if (orgId) allEntries.push({ ...e, key: orgPrefixedKey(orgId, e.key) });
-      // Dual-write: the home org (and legacy mode) also emits the bare key so
-      // pre-cutover readers keep serving identical content. P8 removes this arm.
-      if (isHome) allEntries.push(e);
-    }
-    for (const [traceId, evals] of res.evalsByTrace) {
-      for (const ev of evals) pushTo(evalsByTrace, traceId, ev);
-    }
-    for (const id of res.referencedTraceIds) referencedTraceIds.add(id);
+    mergeOrgResult(agg, res, orgId, isHome);
   }
 
-  const traceIds = homeComputation?.traceIds ?? [];
+  return agg;
+}
 
-  const prevState = loadSyncState();
-  const changed = filterChanged(allEntries, prevState);
-
-  // Every-run bookkeeping keys: the legacy bare heartbeat, the org-prefixed
-  // per-org heartbeats, and the global system heartbeat for /api/health (P5).
+/**
+ * Every-run bookkeeping keys: the legacy bare heartbeat, the org-prefixed
+ * per-org heartbeats, and the global system heartbeat for /api/health (P5).
+ */
+function buildMetaEntries(now: Date, orgIds: ReadonlyArray<string | null>): KVEntry[] {
   const heartbeat = toKVValue(now.toISOString());
   const metaEntries: KVEntry[] = [
     { key: META_LAST_SYNC_KEY, value: heartbeat },
@@ -670,22 +709,151 @@ async function main(): Promise<void> {
     }
     metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: heartbeat });
   }
+  return metaEntries;
+}
+
+/**
+ * Nothing changed: refresh the heartbeat keys (legacy, per-org and global system)
+ * and the local sidecar's lastChecked, so it reflects this run.
+ *
+ * Updating meta:syncCoverage in KV here would burn 1 write per no-op run without
+ * changing stable data; KV consumers read meta:lastSync to see when sync last ran.
+ */
+async function refreshHeartbeatOnly(prevState: SyncState, metaEntries: KVEntry[], now: Date): Promise<void> {
+  const staleMeta = filterChanged(metaEntries, prevState);
+  if (staleMeta.length > 0) {
+    recordWritten(prevState, staleMeta, await kvBulkPut(staleMeta));
+    if (!dryRun) saveSyncState(prevState);
+  }
+  const prevCoverage = loadLastCoverage();
+  if (prevCoverage && !dryRun) {
+    saveLastCoverage({ ...prevCoverage, lastChecked: now.toISOString() });
+  }
+}
+
+/**
+ * Delete KV keys that were tracked in local state but are no longer computed —
+ * entries whose trace or session was pruned from the query window on this run.
+ * A failed delete keeps its key in state so the next run retries it.
+ */
+async function pruneStaleKeys(newState: SyncState, computedKeys: ReadonlySet<string>): Promise<void> {
+  const staleKeys = [...newState.keys()].filter(k => !computedKeys.has(k));
+  if (staleKeys.length === 0) return;
+  console.log(`[sync-to-kv] Pruning ${staleKeys.length} stale KV key(s) dropped from local state`);
+  const failedDeletes = await kvBulkDelete(staleKeys);
+  for (const key of staleKeys) {
+    if (!failedDeletes.has(key)) newState.delete(key);
+  }
+}
+
+/** Additional runs after this one needed to drain the trace backlog. */
+function runsRemaining(traceChangedCount: number, traceBudget: number): number | null {
+  if (traceBudget > 0) return Math.ceil(Math.max(0, traceChangedCount - traceBudget) / traceBudget);
+  return traceChangedCount > 0 ? null : 0;
+}
+
+/**
+ * Write meta:syncCoverage, then persist it locally so the no-change path can
+ * refresh lastChecked without recomputing.
+ *
+ * syncedTraces reflects best-known state from the local state file, not a
+ * confirmed live KV scan: it may over-count if a prior write failed silently.
+ */
+async function writeCoverage(args: {
+  newState: SyncState;
+  now: Date;
+  traceIds: readonly string[];
+  referencedTraceIds: ReadonlySet<string>;
+  traceChangedCount: number;
+  traceBudget: number;
+  deferred: number;
+}): Promise<void> {
+  const { newState, now, traceIds, referencedTraceIds, traceChangedCount, traceBudget, deferred } = args;
+  const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith(TRACE_KEY_PREFIX));
+  const syncedReferencedCount = syncedTraceKeys
+    .filter(k => referencedTraceIds.has(k.slice(TRACE_KEY_PREFIX.length))).length;
+  const coverage = {
+    totalTraces: traceIds.length,
+    syncedTraces: syncedTraceKeys.length,
+    coveragePercent: coveragePercent(syncedTraceKeys.length, traceIds.length),
+    referencedCoverage: coveragePercent(syncedReferencedCount, referencedTraceIds.size),
+    runsRemaining: runsRemaining(traceChangedCount, traceBudget),
+    /** Entries computed this run that were not written because they exceed the KV budget. */
+    deferred,
+    // timestamp: when stable coverage numbers were last computed/changed (not updated on no-op runs)
+    timestamp: now.toISOString(),
+    // lastChecked: when sync last ran regardless of whether data changed (refreshed even on no-op runs)
+    lastChecked: now.toISOString(),
+  };
+  // Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
+  // does not burn a KV write every run. `deferred` is intentionally included — a change in the
+  // backlog size triggers a write so the latest count is always visible.
+  const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
+  const coverageEntry: KVEntry = {
+    key: META_SYNC_COVERAGE_KEY,
+    value: toKVValue(coverage),
+    hashBasis: JSON.stringify(stableCoverage),
+  };
+  if (filterChanged([coverageEntry], newState).length > 0) {
+    const coverageWrittenKeys = await kvBulkPut([coverageEntry]);
+    recordWritten(newState, [coverageEntry], coverageWrittenKeys);
+    if (coverageWrittenKeys.has(coverageEntry.key) && !dryRun) saveSyncState(newState);
+  }
+  if (!dryRun) saveLastCoverage(coverage);
+}
+
+/**
+ * KV write-budget instrumentation (P4): total and per-scope counts, so the plan's
+ * monthly write allowance can be checked against a concrete number (this counter ×
+ * cron runs). Warns when a single run exceeds --max-writes; the cap itself is
+ * enforced upstream by --budget.
+ */
+function writeScopeCounter(writtenKeys: ReadonlySet<string>): string {
+  const writesByScope = new Map<string, number>();
+  for (const key of writtenKeys) {
+    const orgMatch = ORG_KEY_PREFIX_RE.exec(key);
+    const scope = orgMatch
+      ? orgMatch[0].slice(0, -1)
+      : (key === SYSTEM_LAST_SYNC_KEY ? WRITE_SCOPE.SYSTEM : WRITE_SCOPE.LEGACY);
+    incrementIn(writesByScope, scope);
+  }
+  if (writtenKeys.size > MAX_WRITES_PER_RUN) {
+    console.warn(
+      `[sync-to-kv] WRITE BUDGET WARNING: ${writtenKeys.size} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN}`,
+    );
+  }
+  return [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
+}
+
+function logRunStart(): void {
+  if (WRITE_BUDGET < RECOMMENDED_MIN_BUDGET) {
+    console.warn(`[sync-to-kv] --budget=${WRITE_BUDGET} is below recommended minimum (${RECOMMENDED_MIN_BUDGET}); high-priority entries may be skipped`);
+  }
+  console.log(
+    `[sync-to-kv] Starting run${dryRun ? ' (dry-run)' : ''} budget=${WRITE_BUDGET} days=${maxDays}${
+      HOME_ORG_ID ? ` orgScoping=on home=${HOME_ORG_ID}` : ' orgScoping=off (HOME_ORG_ID unset — legacy bare keys only)'}`,
+  );
+}
+
+async function main(): Promise<void> {
+  if (!CloudBackend.isConfigured()) {
+    console.error('[sync-to-kv] CloudBackend is not configured. Set OBTOOL_API_URL and OBTOOL_API_KEY env vars.');
+    process.exit(1);
+  }
+  logRunStart();
+
+  const now = new Date();
+  const computation = await computeAllOrgs(now);
+  const { allEntries, evalsByTrace, referencedTraceIds, hitCap, perOrgSummaries } = computation;
+  const traceIds = computation.homeComputation?.traceIds ?? [];
+
+  const prevState = loadSyncState();
+  const changed = filterChanged(allEntries, prevState);
+  const metaEntries = buildMetaEntries(now, computation.orgIds);
 
   if (changed.length === 0) {
     console.log(`[sync-to-kv] No-op: computed=${allEntries.length} unchanged=${allEntries.length} changed=0 written=0 deferred=0`);
-    // Still update the heartbeat keys (legacy, per-org, and global system)
-    const staleMeta = filterChanged(metaEntries, prevState);
-    if (staleMeta.length > 0) {
-      recordWritten(prevState, staleMeta, await kvBulkPut(staleMeta));
-      if (!dryRun) saveSyncState(prevState);
-    }
-    // Refresh lastChecked in the local sidecar so it reflects this run even when nothing changed.
-    // KV consumers can use meta:lastSync (written above) to see when sync last ran; updating
-    // meta:syncCoverage in KV here would burn 1 write per no-op run without changing stable data.
-    const prevCoverage = loadLastCoverage();
-    if (prevCoverage && !dryRun) {
-      saveLastCoverage({ ...prevCoverage, lastChecked: now.toISOString() });
-    }
+    await refreshHeartbeatOnly(prevState, metaEntries, now);
     return;
   }
 
@@ -711,17 +879,7 @@ async function main(): Promise<void> {
   for (const e of metaEntries) computedKeys.add(e.key);
   computedKeys.add(META_SYNC_COVERAGE_KEY);
 
-  // Delete KV keys that were tracked in local state but are no longer computed.
-  // This covers entries whose trace/session was pruned from the query window on this run.
-  const staleKeys = [...newState.keys()].filter(k => !computedKeys.has(k));
-  if (staleKeys.length > 0) {
-    console.log(`[sync-to-kv] Pruning ${staleKeys.length} stale KV key(s) dropped from local state`);
-    const failedDeletes = await kvBulkDelete(staleKeys);
-    // Remove successfully deleted keys; keep failed ones so the next run retries.
-    for (const key of staleKeys) {
-      if (!failedDeletes.has(key)) newState.delete(key);
-    }
-  }
+  await pruneStaleKeys(newState, computedKeys);
 
   if (!dryRun) saveSyncState(newState);
 
@@ -732,67 +890,22 @@ async function main(): Promise<void> {
   const limitDeferred = toWrite.filter(e => !metaKeySet.has(e.key) && !writtenKeys.has(e.key)).length;
   const actualDeferred = deferred + limitDeferred;
 
-  // syncedTraces reflects best-known state from the local state file, not a confirmed live KV scan.
-  // It may over-count if a prior wrangler write failed silently.
-  const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith(TRACE_KEY_PREFIX));
-  const syncedReferencedCount = syncedTraceKeys
-    .filter(k => referencedTraceIds.has(k.slice(TRACE_KEY_PREFIX.length))).length;
-  const coverage = {
-    totalTraces: traceIds.length,
-    syncedTraces: syncedTraceKeys.length,
-    coveragePercent: coveragePercent(syncedTraceKeys.length, traceIds.length),
-    referencedCoverage: coveragePercent(syncedReferencedCount, referencedTraceIds.size),
-    // runsRemaining: additional runs after this one needed to drain the trace backlog
-    runsRemaining: traceBudget > 0
-      ? Math.ceil(Math.max(0, traceChanged.length - traceBudget) / traceBudget)
-      : (traceChanged.length > 0 ? null : 0),
-    /** Entries computed this run that were not written because they exceed the KV budget. */
+  await writeCoverage({
+    newState,
+    now,
+    traceIds,
+    referencedTraceIds,
+    traceChangedCount: traceChanged.length,
+    traceBudget,
     deferred: actualDeferred,
-    // timestamp: when stable coverage numbers were last computed/changed (not updated on no-op runs)
-    timestamp: now.toISOString(),
-    // lastChecked: when sync last ran regardless of whether data changed (refreshed even on no-op runs)
-    lastChecked: now.toISOString(),
-  };
-  // Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
-  // does not burn a KV write every run. `deferred` is intentionally included — a change in the
-  // backlog size triggers a write so the latest count is always visible.
-  const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
-  const coverageEntry: KVEntry = {
-    key: META_SYNC_COVERAGE_KEY,
-    value: toKVValue(coverage),
-    hashBasis: JSON.stringify(stableCoverage),
-  };
-  if (filterChanged([coverageEntry], newState).length > 0) {
-    const coverageWrittenKeys = await kvBulkPut([coverageEntry]);
-    recordWritten(newState, [coverageEntry], coverageWrittenKeys);
-    if (coverageWrittenKeys.has(coverageEntry.key) && !dryRun) saveSyncState(newState);
-  }
-  // Persist coverage data so the early-return path can refresh lastChecked without recomputing.
-  if (!dryRun) saveLastCoverage(coverage);
+  });
 
-  // KV write-budget instrumentation (P4): total and per-scope counts, so the
-  // plan's monthly write allowance can be checked against a concrete number
-  // (this counter × cron runs). Warns when a single run exceeds
-  // --max-writes; the cap itself is enforced upstream by --budget.
-  const writesByScope = new Map<string, number>();
-  for (const key of writtenKeys) {
-    const orgMatch = ORG_KEY_PREFIX_RE.exec(key);
-    const scope = orgMatch
-      ? orgMatch[0].slice(0, -1)
-      : (key === SYSTEM_LAST_SYNC_KEY ? WRITE_SCOPE.SYSTEM : WRITE_SCOPE.LEGACY);
-    incrementIn(writesByScope, scope);
-  }
-  const writeCounter = [...writesByScope.entries()].map(([scope, n]) => `${scope}=${n}`).join(' ');
-  if (writtenKeys.size > MAX_WRITES_PER_RUN) {
-    console.warn(
-      `[sync-to-kv] WRITE BUDGET WARNING: ${writtenKeys.size} KV writes this run exceeds --max-writes=${MAX_WRITES_PER_RUN}`,
-    );
-  }
+  const writeCounter = writeScopeCounter(writtenKeys);
 
   console.log(
     `[sync-to-kv] Done: computed=${allEntries.length} changed=${changed.length} ` +
     `unchanged=${allEntries.length - changed.length} written=${writtenKeys.size} deferred=${actualDeferred}${
-      dryRun ? ' (dry-run, no KV writes)' : '' 
+      dryRun ? ' (dry-run, no KV writes)' : ''
     } | kvWrites[${writeCounter}]` +
     ` | traces=${traceIds.length} | per-org: ${perOrgSummaries.join(' · ')}${
       hitCap ? ' | WARNING: query hit page cap — results may be truncated' : ''}`,

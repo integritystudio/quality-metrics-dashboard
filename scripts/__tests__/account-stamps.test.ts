@@ -44,7 +44,7 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
   });
 
   const index = (spans: SpanFixture[]): AccountIndex => {
-    writeFileSync(join(dir, 'traces-2026-09-23.jsonl'), `${spans.map(spanLine).join('\n')}\n`);
+    writeFileSync(join(dir, 'traces-2026-09-23.jsonl'), `${spans.map(span => spanLine(span)).join('\n')}\n`);
     return buildAccountIndex(dir, 7, NOW);
   };
 

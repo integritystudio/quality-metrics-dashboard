@@ -412,6 +412,33 @@ async function scoreTurnWithReference(
 // ---------------------------------------------------------------------------
 
 
+/** The three cells one path contributes: exact-match rate, MAE and bias. */
+function statCells(stats: ReferenceDistance | undefined): [string, string, string] {
+  return [
+    formatRate(stats?.exactMatchRate ?? null),
+    formatDiff(stats?.meanAbsDiff ?? null),
+    formatDiff(stats?.meanSignedDiff ?? null),
+  ];
+}
+
+/** One criterion's row: the two paths side by side, and which came closer. */
+function criterionRow(
+  name: string,
+  closer: Side | 'tie',
+  perCriterion: ReferenceSummary,
+  consolidated: ReferenceSummary,
+): string {
+  const a = name === 'overall' ? perCriterion.overall : perCriterion.byCriterion[name];
+  const b = name === 'overall' ? consolidated.overall : consolidated.byCriterion[name];
+  return tableRow(
+    TABLE_CELL_WIDTH,
+    name,
+    Math.max(a?.paired ?? 0, b?.paired ?? 0),
+    ...statCells(a),
+    ...statCells(b),
+  ) + padCell(closer, CLOSER_CELL_WIDTH);
+}
+
 function printTable(
   perCriterion: ReferenceSummary,
   consolidated: ReferenceSummary,
@@ -428,21 +455,7 @@ function printTable(
     : 'consolidated';
   const rows: Array<[string, Side | 'tie']> = [...Object.entries(verdict), ['overall', overallCloser]];
   for (const [name, closer] of rows) {
-    const a = name === 'overall' ? perCriterion.overall : perCriterion.byCriterion[name];
-    const b = name === 'overall' ? consolidated.overall : consolidated.byCriterion[name];
-    console.log(
-      tableRow(
-        TABLE_CELL_WIDTH,
-        name,
-        Math.max(a?.paired ?? 0, b?.paired ?? 0),
-        formatRate(a?.exactMatchRate ?? null),
-        formatDiff(a?.meanAbsDiff ?? null),
-        formatDiff(a?.meanSignedDiff ?? null),
-        formatRate(b?.exactMatchRate ?? null),
-        formatDiff(b?.meanAbsDiff ?? null),
-        formatDiff(b?.meanSignedDiff ?? null),
-      ) + padCell(closer, CLOSER_CELL_WIDTH),
-    );
+    console.log(criterionRow(name, closer, perCriterion, consolidated));
   }
   console.log(
     `\n[quality] reference: ${reference.calls} calls, ${reference.inputTokens} input / ${reference.outputTokens} output tokens, `

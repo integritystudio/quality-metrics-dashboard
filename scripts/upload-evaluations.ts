@@ -224,6 +224,142 @@ function truncate(value: string, max: number): string {
   return value.length > max ? value.slice(0, max) : value;
 }
 
+/** The record's `attributes` object, or an empty one when it carries none. */
+function recordAttributes(r: Record<string, unknown>): Record<string, unknown> {
+  return (typeof r.attributes === 'object' && r.attributes !== null)
+    ? r.attributes as Record<string, unknown>
+    : {};
+}
+
+/** The record's event time in ms, or NaN when it has none to parse. */
+function recordEventMs(r: Record<string, unknown>): number {
+  const timestamp = asString(r.timestamp);
+  return timestamp ? Date.parse(timestamp) : NaN;
+}
+
+/**
+ * The webhook requires one of scoreValue/scoreLabel/errorType; these records
+ * only ever carry a numeric score, so a missing one is unshippable.
+ */
+function scoreValueOf(attrs: Record<string, unknown>): number | undefined {
+  const raw = attrs[EVALUATION_ATTRS.SCORE_VALUE];
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : undefined;
+}
+
+type RecordCore = {
+  evaluationName: string;
+  scoreValue: number;
+  cohort: string | undefined;
+  tMs: number;
+};
+
+/** The fields every payload needs, or the reason this record cannot ship. */
+function readCore(
+  r: Record<string, unknown>,
+  attrs: Record<string, unknown>,
+  nowMs: number,
+  maxAgeMs: number,
+): RecordCore | MapSkip {
+  const cohort = asString(attrs[EVALUATION_ATTRS.COHORT]);
+  const legacyType = asString(attrs[LEGACY_EVALUATOR_TYPE_ATTR]);
+  // Canary scores are synthetic and would drag every average they land in.
+  // Checked on both fields for the same reason `filterCanary` in sync-to-kv
+  // does: pre-OBP16 records mark a canary in the overloaded legacy field,
+  // post-OBP16 ones in `cohort`.
+  if (cohort === CANARY_COHORT || legacyType === CANARY_EVALUATOR_TYPE) return 'canary';
+
+  const tMs = recordEventMs(r);
+  if (!Number.isNaN(tMs) && nowMs - tMs > maxAgeMs) return 'too-old';
+
+  const evaluationName = asString(attrs[EVALUATION_ATTRS.NAME]);
+  if (!evaluationName) return 'no-name';
+
+  const scoreValue = scoreValueOf(attrs);
+  if (scoreValue === undefined) return 'no-score';
+
+  return { evaluationName, scoreValue, cohort, tMs };
+}
+
+/** Score-shaped optional fields; an absent one is left off the payload entirely. */
+function scoreFields(attrs: Record<string, unknown>): Partial<EvaluationPayload> {
+  const fields: Partial<EvaluationPayload> = {};
+  // COMPAT until 2026-10-29: records written before 2026-09-29 carry the unit under the old key.
+  const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]) ?? asString(attrs[LEGACY_SCORE_UNIT_ATTR]);
+  if (scoreUnit) fields.scoreUnit = scoreUnit;
+  const scoreLabel = asString(attrs[EVALUATION_ATTRS.SCORE_LABEL]);
+  if (scoreLabel) fields.scoreLabel = truncate(scoreLabel, WEBHOOK_MAX_NAME_LENGTH);
+  const explanation = asString(attrs[EVALUATION_ATTRS.EXPLANATION]);
+  if (explanation) fields.explanation = truncate(explanation, WEBHOOK_MAX_EXPLANATION_LENGTH);
+  // Top-level since 2026-09-30 so readers populate EvaluationResult.judgeModel; the
+  // metadata copy it replaced was never read back (JUDGE-MODEL-METADATA-ONLY).
+  const judgeModel = asString(attrs[EVALUATION_ATTRS.JUDGE_MODEL]);
+  if (judgeModel) fields.judgeModel = truncate(judgeModel, WEBHOOK_MAX_NAME_LENGTH);
+  return fields;
+}
+
+/** Correlation ids. toOTelRecord puts trace and span top-level; the quality-evaluation hook puts them in attributes, so both are read. */
+function idFields(r: Record<string, unknown>, attrs: Record<string, unknown>): Partial<EvaluationPayload> {
+  const fields: Partial<EvaluationPayload> = {};
+  const traceId = asString(r.traceId) ?? asString(attrs['trace.id']);
+  if (traceId) fields.traceId = traceId;
+  const spanId = asString(r.spanId) ?? asString(attrs['span.id']);
+  if (spanId) fields.spanId = spanId;
+  const sessionId = asString(attrs[EVALUATION_ATTRS.SESSION_ID]);
+  if (sessionId) fields.sessionId = sessionId;
+  const responseId = asString(attrs[EVALUATION_ATTRS.RESPONSE_ID]);
+  if (responseId) fields.responseId = responseId;
+  return fields;
+}
+
+/**
+ * Fields the webhook has no slot for ride in `metadata`, which the flush keeps
+ * in the row's `attributes`. evaluatedAt keeps the ISO string form for auditability.
+ */
+function recordMetadata(r: Record<string, unknown>): Record<string, unknown> | undefined {
+  const metadata: Record<string, unknown> = {};
+  const timestamp = asString(r.timestamp);
+  if (timestamp) metadata.evaluatedAt = timestamp;
+  const schemaUrl = asString(r[SCHEMA_URL_FIELD]);
+  if (schemaUrl) metadata.schemaUrl = schemaUrl;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+/** Explanation is the only unbounded-ish field left, so it is dropped and the size retried once. */
+function fitsWebhookLimit(payload: EvaluationPayload): boolean {
+  if (Buffer.byteLength(JSON.stringify(payload)) <= MAX_EVALUATION_BYTES) return true;
+  delete payload.explanation;
+  return Buffer.byteLength(JSON.stringify(payload)) <= MAX_EVALUATION_BYTES;
+}
+
+function buildPayload(core: RecordCore, r: Record<string, unknown>, attrs: Record<string, unknown>): EvaluationPayload {
+  const evaluator = asString(attrs[EVALUATION_ATTRS.PRODUCER])
+    ?? asString(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR])
+    ?? 'unknown';
+  const evaluatorType = asString(attrs[EVALUATION_ATTRS.EVALUATOR_KIND])
+    ?? asString(attrs[LEGACY_EVALUATOR_TYPE_ATTR])
+    ?? 'rule';
+
+  const payload: EvaluationPayload = {
+    evaluationName: truncate(core.evaluationName, WEBHOOK_MAX_NAME_LENGTH),
+    evaluator: truncate(evaluator, WEBHOOK_MAX_NAME_LENGTH),
+    evaluatorType: truncate(evaluatorType, WEBHOOK_MAX_NAME_LENGTH),
+    scoreValue: core.scoreValue,
+    serviceName: UPLOAD_SERVICE_NAME,
+    ...scoreFields(attrs),
+    ...idFields(r, attrs),
+  };
+
+  // Only the webhook's enum values: one outside it would get the whole batch rejected.
+  if (core.cohort && WEBHOOK_COHORTS.has(core.cohort)) payload.cohort = core.cohort;
+  // Supply evaluatedAtMs so the flush dates the row to when the evaluation
+  // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
+  if (!Number.isNaN(core.tMs)) payload.evaluatedAtMs = core.tMs;
+  const metadata = recordMetadata(r);
+  if (metadata) payload.metadata = metadata;
+  payload.evaluationId = evaluationId(r);
+  return payload;
+}
+
 /**
  * Map one on-disk record to a webhook payload.
  *
@@ -239,88 +375,12 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   const r = record as Record<string, unknown>;
   if (r.name !== EVALUATION_RESULT_EVENT) return { skip: 'not-an-evaluation' };
 
-  const attrs = (typeof r.attributes === 'object' && r.attributes !== null)
-    ? r.attributes as Record<string, unknown>
-    : {};
+  const attrs = recordAttributes(r);
+  const core = readCore(r, attrs, nowMs, maxAgeMs);
+  if (typeof core === 'string') return { skip: core };
 
-  const cohort = asString(attrs[EVALUATION_ATTRS.COHORT]);
-  const legacyType = asString(attrs[LEGACY_EVALUATOR_TYPE_ATTR]);
-  // Canary scores are synthetic and would drag every average they land in.
-  // Checked on both fields for the same reason `filterCanary` in sync-to-kv
-  // does: pre-OBP16 records mark a canary in the overloaded legacy field,
-  // post-OBP16 ones in `cohort`.
-  if (cohort === CANARY_COHORT || legacyType === CANARY_EVALUATOR_TYPE) return { skip: 'canary' };
-
-  const timestamp = asString(r.timestamp);
-  const tMs = timestamp ? Date.parse(timestamp) : NaN;
-  if (!Number.isNaN(tMs) && nowMs - tMs > maxAgeMs) return { skip: 'too-old' };
-
-  const evaluationName = asString(attrs[EVALUATION_ATTRS.NAME]);
-  if (!evaluationName) return { skip: 'no-name' };
-
-  const scoreRaw = attrs[EVALUATION_ATTRS.SCORE_VALUE];
-  const scoreValue = typeof scoreRaw === 'number' && Number.isFinite(scoreRaw) ? scoreRaw : undefined;
-  // The webhook requires one of scoreValue/scoreLabel/errorType; these records
-  // only ever carry a numeric score, so a missing one is unshippable.
-  if (scoreValue === undefined) return { skip: 'no-score' };
-
-  const evaluator = asString(attrs[EVALUATION_ATTRS.PRODUCER])
-    ?? asString(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR])
-    ?? 'unknown';
-  const evaluatorType = asString(attrs[EVALUATION_ATTRS.EVALUATOR_KIND])
-    ?? legacyType
-    ?? 'rule';
-
-  const explanation = asString(attrs[EVALUATION_ATTRS.EXPLANATION]);
-  // COMPAT until 2026-10-29: records written before 2026-09-29 carry the unit under the old key.
-  const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]) ?? asString(attrs[LEGACY_SCORE_UNIT_ATTR]);
-  const scoreLabel = asString(attrs[EVALUATION_ATTRS.SCORE_LABEL]);
-  // toOTelRecord puts the trace id top-level; the quality-evaluation hook puts
-  // it in attributes. Read both.
-  const traceId = asString(r.traceId) ?? asString(attrs['trace.id']);
-  const spanId = asString(r.spanId) ?? asString(attrs['span.id']);
-  const sessionId = asString(attrs[EVALUATION_ATTRS.SESSION_ID]);
-  const judgeModel = asString(attrs[EVALUATION_ATTRS.JUDGE_MODEL]);
-  const responseId = asString(attrs[EVALUATION_ATTRS.RESPONSE_ID]);
-
-  const payload: EvaluationPayload = {
-    evaluationName: truncate(evaluationName, WEBHOOK_MAX_NAME_LENGTH),
-    evaluator: truncate(evaluator, WEBHOOK_MAX_NAME_LENGTH),
-    evaluatorType: truncate(evaluatorType, WEBHOOK_MAX_NAME_LENGTH),
-    scoreValue,
-    serviceName: UPLOAD_SERVICE_NAME,
-  };
-  if (scoreUnit) payload.scoreUnit = scoreUnit;
-  if (scoreLabel) payload.scoreLabel = truncate(scoreLabel, WEBHOOK_MAX_NAME_LENGTH);
-  if (explanation) payload.explanation = truncate(explanation, WEBHOOK_MAX_EXPLANATION_LENGTH);
-  if (traceId) payload.traceId = traceId;
-  if (spanId) payload.spanId = spanId;
-  if (sessionId) payload.sessionId = sessionId;
-  if (responseId) payload.responseId = responseId;
-  // Only the webhook's enum values: one outside it would get the whole batch rejected.
-  if (cohort && WEBHOOK_COHORTS.has(cohort)) payload.cohort = cohort;
-  // Top-level since 2026-09-30 so readers populate EvaluationResult.judgeModel; the
-  // metadata copy it replaced was never read back (JUDGE-MODEL-METADATA-ONLY).
-  if (judgeModel) payload.judgeModel = truncate(judgeModel, WEBHOOK_MAX_NAME_LENGTH);
-
-  // Supply evaluatedAtMs so the flush dates the row to when the evaluation
-  // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
-  if (!Number.isNaN(tMs)) payload.evaluatedAtMs = tMs;
-
-  // Fields the webhook has no slot for ride in `metadata`, which the flush keeps
-  // in the row's `attributes`. evaluatedAt keeps the ISO string form for auditability.
-  const metadata: Record<string, unknown> = {};
-  if (timestamp) metadata.evaluatedAt = timestamp;
-  const schemaUrl = asString(r[SCHEMA_URL_FIELD]);
-  if (schemaUrl) metadata.schemaUrl = schemaUrl;
-  if (Object.keys(metadata).length > 0) payload.metadata = metadata;
-  payload.evaluationId = evaluationId(r);
-
-  if (Buffer.byteLength(JSON.stringify(payload)) > MAX_EVALUATION_BYTES) {
-    // Explanation is the only unbounded-ish field left; drop it and retry once.
-    delete payload.explanation;
-    if (Buffer.byteLength(JSON.stringify(payload)) > MAX_EVALUATION_BYTES) return { skip: 'too-large' };
-  }
+  const payload = buildPayload(core, r, attrs);
+  if (!fitsWebhookLimit(payload)) return { skip: 'too-large' };
 
   if (IDENTITY_KEY_REF_FIELD in r) {
     const raw = r[IDENTITY_KEY_REF_FIELD];
@@ -681,15 +741,222 @@ function recordSkip(skips: Record<string, number>, delivered: string[], skip: Ma
   if (skip !== 'too-old') delivered.push(fp);
 }
 
-export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
-  let opts: Options;
+/** Counters and inputs one run shares across its files. */
+type RunState = {
+  readonly opts: Options;
+  readonly baseUrl: string;
+  readonly secret: string | undefined;
+  readonly nowMs: number;
+  readonly maxAgeMs: number;
+  readonly manifest: Map<string, string> | undefined;
+  readonly accounts: AccountIndex;
+  readonly shipped: Record<string, string[]>;
+  readonly skips: Record<string, number>;
+  readonly sentByDestination: Record<string, number>;
+  readonly heldForKey: Record<string, number>;
+  readonly routedBy: Record<RouteBasis, number>;
+  readonly matchedKeys: Set<string>;
+  sent: number;
+  parseErrors: number;
+  alreadyShipped: number;
+  withheld: number;
+  notInManifest: number;
+};
+
+type RecordOutcome = {
+  kind: 'record';
+  payload: EvaluationPayload;
+  fp: string;
+  key: string | undefined;
+  route: Route;
+  basis: RouteBasis;
+};
+
+type LineOutcome =
+  | { kind: 'already-shipped' | 'parse-error' | 'not-in-manifest' }
+  | { kind: 'skip'; skip: MapSkip; fp: string }
+  | RecordOutcome;
+
+function isRecordOutcome(outcome: LineOutcome): outcome is RecordOutcome {
+  return outcome.kind === 'record';
+}
+
+/**
+ * The manifest key this payload would match, whether the manifest covers it, and
+ * the account ref it names. Without a manifest every record is covered.
+ */
+function manifestMatch(manifest: Map<string, string> | undefined, payload: EvaluationPayload | undefined): {
+  key: string | undefined;
+  covered: boolean;
+  ref: string | undefined;
+} {
+  if (!manifest) return { key: undefined, covered: true, ref: undefined };
+  const key = payload ? payloadManifestKey(payload) : undefined;
+  if (key === undefined || !manifest.has(key)) return { key, covered: false, ref: undefined };
+  return { key, covered: true, ref: manifest.get(key) };
+}
+
+/** Read one line and decide what becomes of it: counted, skipped, or routed to a batch. */
+function classifyLine(state: RunState, line: string, done: ReadonlySet<string>): LineOutcome {
+  const fp = fingerprint(line);
+  if (done.has(fp)) return { kind: 'already-shipped' };
+  let parsed: unknown;
   try {
-    opts = parseArgs(argv);
+    parsed = JSON.parse(line);
+  } catch {
+    return { kind: 'parse-error' };
+  }
+  const mapped = mapRecord(parsed, state.nowMs, state.maxAgeMs);
+  const { key, covered, ref } = manifestMatch(state.manifest, mapped.payload);
+  // Not ours to touch: left unrecorded so a normal run handles it as before.
+  if (!covered) return { kind: 'not-in-manifest' };
+  if (mapped.skip) return { kind: 'skip', skip: mapped.skip, fp };
+  const { route, basis }: { route: Route; basis: RouteBasis } = ref === undefined
+    ? routeRecord(mapped, state.accounts)
+    : { route: { kind: 'keyed', ref }, basis: 'stamp' };
+  return { kind: 'record', payload: mapped.payload, fp, key, route, basis };
+}
+
+/** Count an outcome that ships nothing. */
+function tallyOutcome(state: RunState, outcome: LineOutcome, delivered: string[]): void {
+  switch (outcome.kind) {
+    case 'already-shipped':
+      state.alreadyShipped++;
+      return;
+    case 'parse-error':
+      state.parseErrors++;
+      return;
+    case 'not-in-manifest':
+      state.notInManifest++;
+      return;
+    case 'skip':
+      recordSkip(state.skips, delivered, outcome.skip, outcome.fp);
+      return;
+    case 'record':
+      return;
+  }
+}
+
+function noteRouted(state: RunState, outcome: RecordOutcome): void {
+  if (outcome.key !== undefined) state.matchedKeys.add(outcome.key);
+  state.routedBy[outcome.basis]++;
+}
+
+/**
+ * Count a record this run cannot deliver. False once it is counted, so the
+ * caller can tell a sendable delivery from a consumed one.
+ */
+function isSendable(state: RunState, delivery: Delivery, fp: string, delivered: string[]): delivery is Extract<Delivery, { kind: 'send' }> {
+  if (delivery.kind === 'withheld') {
+    // Unmapped account: consumed unsent, never re-examined (TKR3).
+    state.withheld++;
+    delivered.push(fp);
+    return false;
+  }
+  if (delivery.kind === 'held-for-key') {
+    // Left unrecorded so a run that has the key ships it.
+    increment(state.heldForKey, delivery.ref);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Ship one file's records, batched per destination. Returns false when a send
+ * failed, which stops the run: `state.shipped[file]` then holds everything a
+ * 2xx confirmed and nothing more.
+ */
+async function processFile(state: RunState, file: string): Promise<boolean> {
+  const { opts } = state;
+  const done = new Set(state.shipped[file] ?? []);
+
+  /** One pending batch per destination: `WEBHOOK_DESTINATION` or a key ref. */
+  const batches = new Map<string, Array<{ payload: EvaluationPayload; fp: string }>>();
+  /** Confirmed-delivered fingerprints for this file, recorded only after a 2xx. */
+  const delivered: string[] = [...done];
+
+  const flush = async (destination: string): Promise<boolean> => {
+    const batch = batches.get(destination) ?? [];
+    if (batch.length === 0) return true;
+    if (!opts.dryRun) {
+      const res = await sendBatch(destination, batch.map((b) => b.payload), state.baseUrl, state.secret);
+      if (!res.ok) {
+        console.error(`[upload-evaluations] POST failed for ${file} (${destination}): ${res.detail}`);
+        return false;
+      }
+    }
+    state.sent += batch.length;
+    increment(state.sentByDestination, destination, batch.length);
+    // Record only what the worker accepted. A batch that never got a 2xx is
+    // left unrecorded so the next run retries it — the one direction that
+    // errs toward a duplicate rather than toward silent data loss.
+    for (const b of batch) delivered.push(b.fp);
+    batches.delete(destination);
+    if (!opts.dryRun) await sleep(INTER_BATCH_DELAY_MS);
+    return true;
+  };
+  const pendingCount = (): number => sum(batches.values(), b => b.length);
+
+  let ok = true;
+  for (const line of readFileSync(join(TELEMETRY_DIR, file), 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    if (state.sent + pendingCount() >= opts.limit) break;
+    const outcome = classifyLine(state, line, done);
+    if (!isRecordOutcome(outcome)) {
+      tallyOutcome(state, outcome, delivered);
+      continue;
+    }
+    noteRouted(state, outcome);
+    const delivery = deliveryFor(outcome.route);
+    if (!isSendable(state, delivery, outcome.fp, delivered)) continue;
+    const { destination } = delivery;
+    const batch = pushTo(batches, destination, { payload: outcome.payload, fp: outcome.fp });
+    // eslint-disable-next-line no-await-in-loop -- a full batch ships before the next record is routed
+    if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
+  }
+  for (const destination of [...batches.keys()]) {
+    if (!ok) break;
+    // eslint-disable-next-line no-await-in-loop -- destinations flush in order by contract: a failed send must stop the later ones
+    ok = await flush(destination);
+  }
+
+  state.shipped[file] = delivered;
+  return ok;
+}
+
+function summaryLine(state: RunState, fileCount: number): string {
+  const { opts, manifest, heldForKey, parseErrors } = state;
+  return `[upload-evaluations]${opts.dryRun ? ' dry-run:' : ''} ` +
+    `sent=${state.sent} files=${fileCount} alreadyShipped=${state.alreadyShipped} skipped[${formatCounts(state.skips)}]` +
+    ` byDestination[${formatCounts(state.sentByDestination)}] withheld=${state.withheld}` +
+    ` routedBy[${formatCounts(state.routedBy)}]${
+      Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : ''
+    }${parseErrors ? ` parseErrors=${parseErrors}` : ''
+    }${manifest ? ` onlyKeys[matched=${state.matchedKeys.size} of ${manifest.size} notInManifest=${state.notInManifest}]` : ''}`;
+}
+
+/** Parsed options, or the exit code to return for a command line the user can fix. */
+function readOptions(argv: string[]): Options | number {
+  try {
+    return parseArgs(argv);
   } catch (err) {
     if (!(err instanceof CliArgError)) throw err;
     console.error(`[upload-evaluations] ${err.message}`);
     return 1;
   }
+}
+
+/**
+ * The flush dates rows by evaluatedAtMs, so a targeted re-ship of old records is
+ * correctly dated and needs no age guard.
+ */
+function effectiveMaxAgeMs(opts: Options, manifest: Map<string, string> | undefined): number {
+  return manifest ? Number.POSITIVE_INFINITY : opts.maxAgeMs;
+}
+
+export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
+  const opts = readOptions(argv);
+  if (typeof opts === 'number') return opts;
   const { baseUrl, secret } = resolveSendConfig();
   if (!secret && !opts.dryRun) {
     console.error('[upload-evaluations] INJECT_HMAC_SECRET is not set — nothing can be signed. Run under `doppler run --project integrity-studio --config prd`.');
@@ -697,12 +964,6 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }
 
   const manifest = opts.onlyKeysPath ? parseKeyManifest(readFileSync(opts.onlyKeysPath, 'utf8')) : undefined;
-  // The flush dates rows by evaluatedAtMs, so a targeted re-ship of old records
-  // is correctly dated and needs no age guard.
-  const maxAgeMs = manifest ? Number.POSITIVE_INFINITY : opts.maxAgeMs;
-  const matchedKeys = new Set<string>();
-  let notInManifest = 0;
-
   const nowMs = Date.now();
   const shipped = pruneShipped(loadShipped(TELEMETRY_DIR), opts.windowDays, nowMs);
   const files = windowFiles(TELEMETRY_DIR, opts.windowDays, nowMs);
@@ -711,105 +972,35 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return 0;
   }
 
-  const accounts = buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, nowMs);
-  const skips: Record<string, number> = {};
-  const sentByDestination: Record<string, number> = {};
-  let sent = 0;
-  let parseErrors = 0;
-  let alreadyShipped = 0;
-  let withheld = 0;
-  const heldForKey: Record<string, number> = {};
-  const routedBy: Record<RouteBasis, number> = { stamp: 0, span: 0, join: 0 };
+  const state: RunState = {
+    opts,
+    baseUrl,
+    secret,
+    nowMs,
+    maxAgeMs: effectiveMaxAgeMs(opts, manifest),
+    manifest,
+    accounts: buildAccountIndex(TELEMETRY_DIR, ACCOUNT_INDEX_WINDOW_DAYS, nowMs),
+    shipped,
+    skips: {},
+    sentByDestination: {},
+    heldForKey: {},
+    routedBy: { stamp: 0, span: 0, join: 0 },
+    matchedKeys: new Set<string>(),
+    sent: 0,
+    parseErrors: 0,
+    alreadyShipped: 0,
+    withheld: 0,
+    notInManifest: 0,
+  };
 
   // try/finally, not a trailing save: an unexpected throw anywhere below would
   // otherwise skip saveShipped and lose the fingerprints of batches this run
   // already delivered, which the next run re-sends as duplicates.
   try {
     for (const file of files) {
-      if (sent >= opts.limit) break;
-      const done = new Set(shipped[file] ?? []);
-
-      /** One pending batch per destination: `WEBHOOK_DESTINATION` or a key ref. */
-      const batches = new Map<string, Array<{ payload: EvaluationPayload; fp: string }>>();
-      /** Confirmed-delivered fingerprints for this file, recorded only after a 2xx. */
-      const delivered: string[] = [...done];
-
-      const flush = async (destination: string): Promise<boolean> => {
-        const batch = batches.get(destination) ?? [];
-        if (batch.length === 0) return true;
-        if (!opts.dryRun) {
-          const res = await sendBatch(destination, batch.map((b) => b.payload), baseUrl, secret);
-          if (!res.ok) {
-            console.error(`[upload-evaluations] POST failed for ${file} (${destination}): ${res.detail}`);
-            return false;
-          }
-        }
-        sent += batch.length;
-        increment(sentByDestination, destination, batch.length);
-        // Record only what the worker accepted. A batch that never got a 2xx is
-        // left unrecorded so the next run retries it — the one direction that
-        // errs toward a duplicate rather than toward silent data loss.
-        for (const b of batch) delivered.push(b.fp);
-        batches.delete(destination);
-        if (!opts.dryRun) await sleep(INTER_BATCH_DELAY_MS);
-        return true;
-      };
-      const pendingCount = (): number => sum(batches.values(), b => b.length);
-
-      let ok = true;
-      for (const line of readFileSync(join(TELEMETRY_DIR, file), 'utf8').split('\n')) {
-        if (!line.trim()) continue;
-        if (sent + pendingCount() >= opts.limit) break;
-        const fp = fingerprint(line);
-        if (done.has(fp)) { alreadyShipped++; continue; }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          parseErrors++;
-          continue;
-        }
-        const mapped = mapRecord(parsed, nowMs, maxAgeMs);
-        const key = manifest && mapped.payload ? payloadManifestKey(mapped.payload) : undefined;
-        if (manifest && (key === undefined || !manifest.has(key))) {
-          // Not ours to touch: left unrecorded so a normal run handles it as before.
-          notInManifest++;
-          continue;
-        }
-        if (mapped.skip) {
-          recordSkip(skips, delivered, mapped.skip, fp);
-          continue;
-        }
-        const manifestRef = key === undefined ? undefined : manifest?.get(key);
-        const { route, basis }: { route: Route; basis: RouteBasis } = manifestRef
-          ? { route: { kind: 'keyed', ref: manifestRef }, basis: 'stamp' }
-          : routeRecord(mapped, accounts);
-        if (key !== undefined) matchedKeys.add(key);
-        routedBy[basis]++;
-        const delivery = deliveryFor(route);
-        if (delivery.kind === 'withheld') {
-          // Unmapped account: consumed unsent, never re-examined (TKR3).
-          withheld++;
-          delivered.push(fp);
-          continue;
-        }
-        if (delivery.kind === 'held-for-key') {
-          // Left unrecorded so a run that has the key ships it.
-          increment(heldForKey, delivery.ref);
-          continue;
-        }
-        const { destination } = delivery;
-        const batch = pushTo(batches, destination, { payload: mapped.payload, fp });
-        // eslint-disable-next-line no-await-in-loop -- a full batch ships before the next record is routed
-        if (batch.length >= MAX_BATCH_SIZE && !(await flush(destination))) { ok = false; break; }
-      }
-      for (const destination of [...batches.keys()]) {
-        if (!ok) break;
-        // eslint-disable-next-line no-await-in-loop -- destinations flush in order by contract: a failed send must stop the later ones
-        ok = await flush(destination);
-      }
-
-      shipped[file] = delivered;
+      if (state.sent >= opts.limit) break;
+      // eslint-disable-next-line no-await-in-loop -- files ship in order: a failed send must stop the later ones
+      const ok = await processFile(state, file);
       if (!ok) {
         console.error('[upload-evaluations] aborted on send failure — state saved up to the last accepted batch');
         return UPLOAD_EXIT_SEND_FAILED;
@@ -819,15 +1010,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     if (!opts.dryRun) saveShipped(TELEMETRY_DIR, shipped);
   }
 
-  console.log(
-    `[upload-evaluations]${opts.dryRun ? ' dry-run:' : ''} ` +
-    `sent=${sent} files=${files.length} alreadyShipped=${alreadyShipped} skipped[${formatCounts(skips)}]` +
-    ` byDestination[${formatCounts(sentByDestination)}] withheld=${withheld}` +
-    ` routedBy[${formatCounts(routedBy)}]${
-      Object.keys(heldForKey).length ? ` heldForKey[${formatCounts(heldForKey)}]` : '' 
-    }${parseErrors ? ` parseErrors=${parseErrors}` : '' 
-    }${manifest ? ` onlyKeys[matched=${matchedKeys.size} of ${manifest.size} notInManifest=${notInManifest}]` : ''}`,
-  );
+  console.log(summaryLine(state, files.length));
   return 0;
 }
 

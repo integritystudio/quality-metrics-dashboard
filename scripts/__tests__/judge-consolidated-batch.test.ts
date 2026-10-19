@@ -78,7 +78,7 @@ function fakeClient() {
       return Promise.resolve(makeBatch('in_progress'));
     }),
     retrieve: vi.fn(() => Promise.resolve(makeBatch('ended'))),
-    results: vi.fn(() => Promise.resolve(Readable.from(defined(submitted.at(-1)).map(answer)))),
+    results: vi.fn(() => Promise.resolve(Readable.from(defined(submitted.at(-1)).map(request => answer(request))))),
     cancel: vi.fn(() => Promise.resolve(makeBatch('canceling'))),
   } satisfies BatchClient;
   return { client, submitted };
@@ -123,7 +123,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
 
     expect(submitted).toHaveLength(2);
     // Two criteria without tool results; steps are shared across turns through the cache.
-    expect(defined(submitted[0]).map(promptOf).every(p => p.includes(STEPS_PROMPT_MARKER))).toBe(true);
+    expect(defined(submitted[0]).map(request => promptOf(request)).every(p => p.includes(STEPS_PROMPT_MARKER))).toBe(true);
     expect(submitted[0]).toHaveLength(2);
     // One verdict call per turn, not one per criterion.
     expect(submitted[1]).toHaveLength(turns.length);

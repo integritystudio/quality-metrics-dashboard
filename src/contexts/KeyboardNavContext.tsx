@@ -49,6 +49,12 @@ const IGNORED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 /** How long a combo prefix waits for its second key. */
 const COMBO_TIMEOUT_MS = 500;
 
+/** A keystroke typed into a form field, or carrying a modifier, is not a shortcut. */
+function isIgnoredKeydown(e: KeyboardEvent): boolean {
+  if (IGNORED_TAGS.has((e.target as HTMLElement | null)?.tagName ?? '')) return true;
+  return e.ctrlKey || e.metaKey || e.altKey;
+}
+
 export function KeyboardNavProvider({ children }: { children: ReactNode }) {
   const shortcutsRef = useRef<Shortcut[]>([]);
   const [shortcuts, setShortcuts] = useState<Shortcut[]>([]);
@@ -89,8 +95,7 @@ export function KeyboardNavProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
-      if (IGNORED_TAGS.has((e.target as HTMLElement | null)?.tagName ?? '')) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isIgnoredKeydown(e)) return;
 
       const key = e.key;
 

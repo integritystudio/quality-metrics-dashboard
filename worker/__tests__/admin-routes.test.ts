@@ -24,6 +24,7 @@ const ADMIN_PERMISSIONS = ['dashboard.read', 'dashboard.executive', 'dashboard.o
 
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
+const VALID_KEY_UUID = 'd3333333-3333-4333-8333-333333333333';
 
 const mockAssets = {
   fetch: vi.fn().mockResolvedValue(new Response('SPA', { status: HttpStatus.Ok })),
@@ -110,6 +111,34 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+// ─── Authentication (every /api/admin/* route) ─────────────────────────────────
+
+/**
+ * Pins the wiring, not the guards: registerAdminRoutes is exported, so nothing in the type
+ * system stops a caller mounting these routes on an app without the /api/* authenticate
+ * middleware. An unauthenticated request must be refused before any handler runs.
+ */
+const ADMIN_ROUTES: ReadonlyArray<readonly [method: string, path: string]> = [
+  ['GET', '/api/admin/members'],
+  ['POST', `/api/admin/members/${VALID_USER_UUID}/role`],
+  ['DELETE', `/api/admin/members/${VALID_USER_UUID}`],
+  ['GET', '/api/admin/users'],
+  ['GET', '/api/admin/roles'],
+  ['POST', `/api/admin/users/${VALID_USER_UUID}/roles`],
+  ['DELETE', `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`],
+  ['GET', '/api/admin/keys'],
+  ['POST', `/api/admin/keys/${VALID_KEY_UUID}/rotate`],
+];
+
+describe.each(ADMIN_ROUTES)('%s %s', (method, path) => {
+  it('returns 401 without a bearer token', async () => {
+    const res = await app.request(path, { method }, makeEnv());
+    expect(res.status).toBe(HttpStatus.Unauthorized);
+    // No Supabase call may precede the refusal.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 // ─── GET /api/admin/users ──────────────────────────────────────────────────────

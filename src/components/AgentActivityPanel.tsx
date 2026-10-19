@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { greatest, max, sum } from 'd3-array';
 import {
   createColumnHelper,
@@ -84,6 +84,158 @@ function errorRateTone(rate: number): StatTone {
   return 'critical';
 }
 
+/** Error-rate band behind the cell's `data-err-status`. */
+function errorStatus(rate: number): 'ok' | 'warn' | 'critical' {
+  if (rate === 0) return 'ok';
+  return rate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
+}
+
+/** The source type that accounts for the most invocations, if the agent records any. */
+function topSourceType(sourceTypes: AgentStat['sourceTypes']): string | undefined {
+  return greatest(Object.entries(sourceTypes), ([, count]) => count)?.[0];
+}
+
+/** The detail row revealed under an expanded agent. */
+function AgentExpandedPanel({ agent, color }: { agent: AgentStat; color: string }): ReactNode {
+  return (
+    <tr className="eval-expanded-panel">
+      <td colSpan={columns.length} className="border-b">
+        <EvalSummaryRow evalSummary={agent.evalSummary} />
+
+        {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
+          <div className="border-b-subtle mb-1 pad-panel-section">
+            <div className="flex-center-gap-3">
+              <div className="text-xs text-muted uppercase shrink-0">
+                Daily Activity
+              </div>
+              <Sparkline
+                data={agent.dailyCounts}
+                width={SPARKLINE_WIDTH}
+                height={SPARKLINE_HEIGHT}
+                color={color}
+                label={`Daily invocations for ${agent.agentName}`}
+              />
+              <span className="mono text-muted text-2xs shrink-0">
+                peak {max(agent.dailyCounts) ?? 0}/day
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="agent-expanded-grid">
+          <IdListColumn
+            label="Sessions"
+            ids={agent.sessionIds}
+            totalCount={agent.sessionCount}
+            isTruncated={agent.sessionIdsTruncated}
+            routeFn={routes.session}
+          />
+          <IdListColumn
+            label="Traces"
+            ids={agent.traceIds}
+            totalCount={agent.traceIdsTotal}
+            isTruncated={agent.traceIdsTruncated}
+            routeFn={routes.trace}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** One agent's summary row, plus its detail row while expanded. */
+function AgentActivityRow({ agent, color, maxInvocations, isExpanded, onToggle }: {
+  agent: AgentStat;
+  color: string;
+  maxInvocations: number;
+  isExpanded: boolean;
+  onToggle: (agentName: string) => void;
+}): ReactNode {
+  const errStatus = errorStatus(agent.errorRate);
+  const invPct = percentOf(agent.invocations, maxInvocations);
+  const topSource = topSourceType(agent.sourceTypes);
+  const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
+  const toggle = (): void => {
+    if (hasLinks) onToggle(agent.agentName);
+  };
+
+  return (
+    <>
+      <tr
+        className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
+        style={{ '--agent-color': color } as CSSProperties}
+        onClick={toggle}
+      >
+        <td>
+          <div className="flex-center gap-2">
+            {hasLinks && (
+              <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
+            )}
+            <span className="dot-sm agent-dot" />
+            <span className="mono-xs text-primary break-all">
+              {agent.agentName}
+            </span>
+          </div>
+        </td>
+
+        <td>
+          <div className="flex-center gap-2">
+            <span className="mono-xs agent-inv-count">
+              {agent.invocations}
+            </span>
+            <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
+          </div>
+        </td>
+
+        <td>
+          <div className="flex-center gap-1-5">
+            <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
+              {agent.errors > 0 ? formatPercent(agent.errorRate * PERCENT_MULTIPLIER) : '\u2014'}
+            </span>
+            {agent.errors > 0 && (
+              <span className="text-muted text-xs">
+                ({agent.errors})
+              </span>
+            )}
+          </div>
+        </td>
+
+        <td>
+          <span className="mono-xs">
+            {agent.sessionCount}
+          </span>
+        </td>
+
+        <td>
+          <span className="mono-xs text-secondary">
+            {formatCompactCount(agent.avgOutputSize)}
+          </span>
+        </td>
+
+        <td>
+          {agent.rateLimitCount > 0 ? (
+            <span className="mono-xs badge-warning">
+              {agent.rateLimitCount}x
+            </span>
+          ) : (
+            <span className="text-muted text-xs">{'\u2014'}</span>
+          )}
+        </td>
+
+        <td>
+          {topSource ? (
+            <span className="mono text-muted text-2xs uppercase">
+              {topSource}
+            </span>
+          ) : <span className="text-muted">{'\u2014'}</span>}
+        </td>
+      </tr>
+
+      {isExpanded && <AgentExpandedPanel agent={agent} color={color} />}
+    </>
+  );
+}
+
 type AgentActivityPanelProps = {
   agents: AgentStat[];
 }
@@ -111,6 +263,10 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
 
   const maxInvocations = Math.max(max(agents, a => a.invocations) ?? 0, 1);
 
+  const toggleExpanded = (agentName: string): void => {
+    setExpanded(prev => (prev === agentName ? null : agentName));
+  };
+
   return (
     <div className="overflow-x-auto">
       <table className="data-table sla-table agent-activity-table">
@@ -130,133 +286,16 @@ export function AgentActivityPanel({ agents }: AgentActivityPanelProps) {
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map(({ original: agent }) => {
-            const color = colorOf(agent.agentName);
-            const errStatus = agent.errorRate === 0 ? 'ok' : agent.errorRate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
-            const invPct = percentOf(agent.invocations, maxInvocations);
-            const topSource = greatest(Object.entries(agent.sourceTypes), ([, count]) => count)?.[0];
-            const isExpanded = expanded === agent.agentName;
-            const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
-
-            return (
-              <Fragment key={agent.agentName}>
-                <tr
-                  className={`valign-middle${isExpanded ? ' eval-row-expanded' : ''}${hasLinks ? ' cursor-pointer' : ''}`}
-                  style={{ '--agent-color': color } as CSSProperties}
-                  onClick={() => { if (hasLinks) setExpanded(isExpanded ? null : agent.agentName); }}
-                >
-                  <td>
-                    <div className="flex-center gap-2">
-                      {hasLinks && (
-                        <ExpandChevron expanded={isExpanded} className="text-2xs text-muted shrink-0" />
-                      )}
-                      <span className="dot-sm agent-dot" />
-                      <span className="mono-xs text-primary break-all">
-                        {agent.agentName}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td>
-                    <div className="flex-center gap-2">
-                      <span className="mono-xs agent-inv-count">
-                        {agent.invocations}
-                      </span>
-                      <BarIndicator value={invPct} color={color} opacity={0.7} className="flex-1 agent-inv-bar" />
-                    </div>
-                  </td>
-
-                  <td>
-                    <div className="flex-center gap-1-5">
-                      <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
-                        {agent.errors > 0 ? formatPercent(agent.errorRate * PERCENT_MULTIPLIER) : '\u2014'}
-                      </span>
-                      {agent.errors > 0 && (
-                        <span className="text-muted text-xs">
-                          ({agent.errors})
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td>
-                    <span className="mono-xs">
-                      {agent.sessionCount}
-                    </span>
-                  </td>
-
-                  <td>
-                    <span className="mono-xs text-secondary">
-                      {formatCompactCount(agent.avgOutputSize)}
-                    </span>
-                  </td>
-
-                  <td>
-                    {agent.rateLimitCount > 0 ? (
-                      <span className="mono-xs badge-warning">
-                        {agent.rateLimitCount}x
-                      </span>
-                    ) : (
-                      <span className="text-muted text-xs">{'\u2014'}</span>
-                    )}
-                  </td>
-
-                  <td>
-                    {topSource ? (
-                      <span className="mono text-muted text-2xs uppercase">
-                        {topSource}
-                      </span>
-                    ) : <span className="text-muted">{'\u2014'}</span>}
-                  </td>
-                </tr>
-
-                {isExpanded && (
-                  <tr className="eval-expanded-panel">
-                    <td colSpan={columns.length} className="border-b">
-                      <EvalSummaryRow evalSummary={agent.evalSummary} />
-
-                      {agent.dailyCounts.length > 1 && agent.dailyCounts.some(v => v > 0) && (
-                        <div className="border-b-subtle mb-1 pad-panel-section">
-                          <div className="flex-center-gap-3">
-                            <div className="text-xs text-muted uppercase shrink-0">
-                              Daily Activity
-                            </div>
-                            <Sparkline
-                              data={agent.dailyCounts}
-                              width={SPARKLINE_WIDTH}
-                              height={SPARKLINE_HEIGHT}
-                              color={colorOf(agent.agentName)}
-                              label={`Daily invocations for ${agent.agentName}`}
-                            />
-                            <span className="mono text-muted text-2xs shrink-0">
-                              peak {max(agent.dailyCounts) ?? 0}/day
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="agent-expanded-grid">
-                        <IdListColumn
-                          label="Sessions"
-                          ids={agent.sessionIds}
-                          totalCount={agent.sessionCount}
-                          isTruncated={agent.sessionIdsTruncated}
-                          routeFn={routes.session}
-                        />
-                        <IdListColumn
-                          label="Traces"
-                          ids={agent.traceIds}
-                          totalCount={agent.traceIdsTotal}
-                          isTruncated={agent.traceIdsTruncated}
-                          routeFn={routes.trace}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
+          {table.getRowModel().rows.map(({ original: agent }) => (
+            <AgentActivityRow
+              key={agent.agentName}
+              agent={agent}
+              color={colorOf(agent.agentName)}
+              maxInvocations={maxInvocations}
+              isExpanded={expanded === agent.agentName}
+              onToggle={toggleExpanded}
+            />
+          ))}
         </tbody>
       </table>
     </div>

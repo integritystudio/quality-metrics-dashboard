@@ -50,6 +50,7 @@ import { lazyWithReload } from './lib/lazy-with-reload.js';
 import type {
   Period,
   QualityDashboardSummary,
+  RoleView,
   RoleViewType,
   MetricDetailResult,
   MetricDynamics,
@@ -110,6 +111,20 @@ function DashboardPage({ period }: { period: Period }) {
   );
 }
 
+/** Dispatch on the role discriminant; a role with no view renders nothing. */
+function RoleDashboard({ data }: { data: RoleView }): ReactNode {
+  switch (data.role) {
+    case 'executive':
+      return <ExecutiveView data={data} />;
+    case 'operator':
+      return <OperatorView data={data} />;
+    case 'auditor':
+      return <AuditorView data={data} />;
+    default:
+      return null;
+  }
+}
+
 export function RolePage({ role, period }: { role: RoleViewType; period: Period }) {
   const { session, isLoading: authLoading } = useAuth();
   const { data, isLoading, error } = useDashboard(period, role);
@@ -132,16 +147,7 @@ export function RolePage({ role, period }: { role: RoleViewType; period: Period 
   if (data && isNoDataSummary(data)) return <NoEvaluationData />;
   if (!data || !('role' in data)) return <MetricGridSkeleton />;
 
-  switch (data.role) {
-    case 'executive':
-      return <ExecutiveView data={data} />;
-    case 'operator':
-      return <OperatorView data={data} />;
-    case 'auditor':
-      return <AuditorView data={data} />;
-    default:
-      return null;
-  }
+  return <RoleDashboard data={data} />;
 }
 
 function snapshotToEvalRow(s: {
@@ -271,7 +277,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
 
       <ViewSection title="Evaluations">
         <div className="card">
-          <EvaluationDetail worst={detail.worstEvaluations.map(snapshotToEvalRow)} best={detail.bestEvaluations.map(snapshotToEvalRow)} metricName={name} period={period} />
+          <EvaluationDetail worst={detail.worstEvaluations.map(s => snapshotToEvalRow(s))} best={detail.bestEvaluations.map(s => snapshotToEvalRow(s))} metricName={name} period={period} />
         </div>
       </ViewSection>
     </div>

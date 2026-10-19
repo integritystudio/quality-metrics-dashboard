@@ -8,6 +8,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
+import type { ReactNode } from 'react';
 import { extent } from 'd3-array';
 import type { MetricDynamics, MetricTrend } from '../types.js';
 import {
@@ -42,6 +43,83 @@ function formatBreachTime(iso: string): string {
   return `${(hours / HOURS_PER_DAY).toFixed(COMPACT_UNIT_PRECISION)}d`;
 }
 
+type TrendPoint = { label: string; value: number; projected?: number };
+
+/**
+ * Previous and current, plus a projected point when the dynamics carry a
+ * velocity. The current point takes a `projected` value of its own so the
+ * dashed line bridges from it instead of starting in mid-air.
+ */
+function buildTrendSeries(trend: MetricTrend, dynamics: MetricDynamics | undefined): { data: TrendPoint[]; projected: boolean } {
+  const data: TrendPoint[] = [
+    { label: 'Previous', value: trend.previousValue },
+    { label: 'Current', value: trend.currentValue },
+  ];
+  if (!dynamics || dynamics.velocity === 0) return { data, projected: false };
+  data.push({
+    label: 'Projected',
+    value: trend.currentValue, // actual line ends here
+    projected: trend.currentValue + dynamics.velocity,
+  });
+  const current = data[1];
+  if (current) current.projected = trend.currentValue;
+  return { data, projected: true };
+}
+
+/** The padded y domain over actual, projected and threshold values; null when there is nothing to plot. */
+function trendYDomain(
+  data: readonly TrendPoint[],
+  warningThreshold: number | undefined,
+  criticalThreshold: number | undefined,
+): [number, number] | null {
+  const allValues: number[] = [];
+  for (const d of data) {
+    allValues.push(d.value);
+    if (d.projected != null) allValues.push(d.projected);
+  }
+  if (warningThreshold != null) allValues.push(warningThreshold);
+  if (criticalThreshold != null) allValues.push(criticalThreshold);
+  if (allValues.length === 0) return null;
+  const [yMin, yMax] = extent(allValues) as [number, number];
+  const yPad = (yMax - yMin) * CHART_Y_PAD_RATIO || CHART_Y_PAD_MIN;
+  return [yMin - yPad, yMax + yPad];
+}
+
+/** Velocity, acceleration, projected breach and confidence, under the chart. */
+function TrendDynamics({ dynamics }: { dynamics: MetricDynamics | undefined }): ReactNode {
+  if (!dynamics) return null;
+  return (
+    <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
+      <div>
+        <span className="font-semibold">Velocity:</span>{' '}
+        <span className="mono">
+          {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
+        </span>
+      </div>
+      <div>
+        <span className="font-semibold">Acceleration:</span>{' '}
+        <span className="mono">
+          {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
+        </span>
+      </div>
+      {dynamics.projectedBreachTime && (
+        <div>
+          <span className="font-semibold">Breach in:</span>{' '}
+          <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
+            {formatBreachTime(dynamics.projectedBreachTime)}
+          </span>
+        </div>
+      )}
+      <div>
+        <span className="font-semibold">Confidence:</span>{' '}
+        <span className="mono">
+          {formatPercent(dynamics.confidence * PERCENT_MULTIPLIER, 0)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function TrendChart({
   trend,
   dynamics,
@@ -53,35 +131,11 @@ export function TrendChart({
     return <EmptyState message="No trend data available" />;
   }
 
-  const data: Array<{ label: string; value: number; projected?: number }> = [
-    { label: 'Previous', value: trend.previousValue },
-    { label: 'Current', value: trend.currentValue },
-  ];
-
-  if (dynamics && dynamics.velocity !== 0) {
-    const projectedValue = trend.currentValue + dynamics.velocity;
-    data.push({
-      label: 'Projected',
-      value: trend.currentValue, // actual line ends here
-      projected: projectedValue,
-    });
-    // Set current point's projected value to bridge the dashed line
-    const current = data[1];
-    if (current) current.projected = trend.currentValue;
-  }
-
-  const allValues: number[] = [];
-  for (const d of data) {
-    allValues.push(d.value);
-    if (d.projected != null) allValues.push(d.projected);
-  }
-  if (warningThreshold != null) allValues.push(warningThreshold);
-  if (criticalThreshold != null) allValues.push(criticalThreshold);
-  if (allValues.length === 0) {
+  const { data, projected } = buildTrendSeries(trend, dynamics);
+  const yDomain = trendYDomain(data, warningThreshold, criticalThreshold);
+  if (!yDomain) {
     return <EmptyState message="Insufficient data" />;
   }
-  const [yMin, yMax] = extent(allValues) as [number, number];
-  const yPad = (yMax - yMin) * CHART_Y_PAD_RATIO || CHART_Y_PAD_MIN;
 
   return (
     <div>
@@ -95,7 +149,7 @@ export function TrendChart({
               stroke={CHART_COLORS.grid}
             />
             <YAxis
-              domain={[yMin - yPad, yMax + yPad]}
+              domain={yDomain}
               tick={CHART_AXIS_TICK}
               stroke={CHART_COLORS.grid}
               tickFormatter={CHART_YAXIS_TICK_FORMATTER}
@@ -131,7 +185,7 @@ export function TrendChart({
               activeDot={{ r: CHART_DOT_RADIUS_ACTIVE }}
               connectNulls
             />
-            {dynamics && dynamics.velocity !== 0 && (
+            {projected && (
               <Line
                 type="monotone"
                 dataKey="projected"
@@ -145,36 +199,7 @@ export function TrendChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      {dynamics && (
-        <div className="flex-wrap text-xs gap-6 mt-2 py-2 chart-dynamics">
-          <div>
-            <span className="font-semibold">Velocity:</span>{' '}
-            <span className="mono">
-              {dynamics.velocity >= 0 ? '+' : ''}{formatValue(dynamics.velocity)}/hr
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold">Acceleration:</span>{' '}
-            <span className="mono">
-              {dynamics.acceleration >= 0 ? '+' : ''}{formatValue(dynamics.acceleration)}/hr
-            </span>
-          </div>
-          {dynamics.projectedBreachTime && (
-            <div>
-              <span className="font-semibold">Breach in:</span>{' '}
-              <span className="mono chart-breach-time" data-status={dynamics.projectedStatus}>
-                {formatBreachTime(dynamics.projectedBreachTime)}
-              </span>
-            </div>
-          )}
-          <div>
-            <span className="font-semibold">Confidence:</span>{' '}
-            <span className="mono">
-              {formatPercent(dynamics.confidence * PERCENT_MULTIPLIER, 0)}
-            </span>
-          </div>
-        </div>
-      )}
+      <TrendDynamics dynamics={dynamics} />
     </div>
   );
 }

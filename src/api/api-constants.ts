@@ -80,7 +80,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function convert(value: unknown): unknown {
   if (typeof value === 'bigint') return value.toString();
-  if (Array.isArray(value)) return value.map(convert);
+  if (Array.isArray(value)) return value.map(item => convert(item));
   if (isPlainObject(value)) {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, convert(v)]));
   }

@@ -10,6 +10,7 @@ import stylistic from '@stylistic/eslint-plugin';
 import unicorn from 'eslint-plugin-unicorn';
 import vitest from '@vitest/eslint-plugin';
 import importX from 'eslint-plugin-import-x';
+import sonarjs from 'eslint-plugin-sonarjs';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import { MAGIC_NUMBERS_OPTIONS, MAGIC_NUMBERS_RULE, noMagicNumbersIgnoreBitwise } from './eslint-rules/no-magic-numbers-ignore-bitwise.mjs';
 
@@ -351,6 +352,7 @@ export default tseslint.config(
   {
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
     rules: {
+      'complexity': ['warn', 12],
       'max-depth': ['warn', 4],
       'max-params': ['warn', 4],
       'no-await-in-loop': 'warn',
@@ -364,6 +366,19 @@ export default tseslint.config(
     plugins: { local: { rules: { [MAGIC_NUMBERS_RULE]: noMagicNumbersIgnoreBitwise } } },
     rules: {
       [`local/${MAGIC_NUMBERS_RULE}`]: ['warn', MAGIC_NUMBERS_OPTIONS],
+    },
+  },
+  // A literal spelled three times is a name waiting to be given; the third copy
+  // is where a rename starts missing one of them. Repeated literals in tests are
+  // fixture ids and expected values, and hoisting them would hide what each
+  // assertion checks — the parent switches the rule off for its test block, and
+  // `ignores` does the same here without depending on block order.
+  {
+    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    ignores: TEST_FILES,
+    plugins: { sonarjs },
+    rules: {
+      'sonarjs/no-duplicate-string': 'warn',
     },
   },
   // Import graph rules. eslint-plugin-import does not support ESLint 10, so this

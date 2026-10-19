@@ -399,6 +399,60 @@ export type ScoreCalibration = {
   sampleSize?: number;
 }
 
+/** What a strategy needs to band one value. */
+type BandInput = {
+  value: number;
+  direction: ScoreDirection;
+  calibration: ScoreCalibration | undefined;
+};
+
+/** The org's own percentiles, but only once enough samples back them. */
+function quantileBand({ value, direction, calibration }: BandInput): ScoreColorBand {
+  if (!calibration || (calibration.sampleSize !== undefined && calibration.sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
+    return scoreColorBand(value, direction);
+  }
+  return quantileBandOf(empiricalCDF(value, calibration.distribution));
+}
+
+function logBand({ value }: BandInput): ScoreColorBand {
+  const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
+  const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
+  return scoreColorBand(logNorm, 'maximize');
+}
+
+function binaryBand({ value }: BandInput): ScoreColorBand {
+  return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
+}
+
+function stepBand({ value }: BandInput): ScoreColorBand {
+  if (value >= STEP_SCALE_EXCELLENT_THRESHOLD) return 'excellent';
+  return value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
+}
+
+function percentileRankBand({ value, direction, calibration }: BandInput): ScoreColorBand {
+  if (!calibration) return scoreColorBand(value, direction);
+  return scoreColorBand(empiricalCDF(value, calibration.distribution), 'maximize');
+}
+
+function uniformBand({ value, direction }: BandInput): ScoreColorBand {
+  return scoreColorBand(value, direction);
+}
+
+/**
+ * One bander per strategy. A `Record` over the union is the exhaustiveness
+ * check a `switch` needed a `default` for: a new strategy fails to compile
+ * until it is listed here.
+ */
+const BAND_BY_STRATEGY: Record<ScaleStrategy, (input: BandInput) => ScoreColorBand> = {
+  quantile: quantileBand,
+  log: logBand,
+  binary: binaryBand,
+  step: stepBand,
+  categorical: uniformBand,
+  percentile_rank: percentileRankBand,
+  uniform: uniformBand,
+};
+
 export function adaptiveScoreColorBand(
   value: number,
   metric: string,
@@ -406,28 +460,7 @@ export function adaptiveScoreColorBand(
   calibration?: ScoreCalibration,
 ): ScoreColorBand {
   const strategy = METRIC_SCALE_STRATEGY[metric] ?? 'uniform';
-  switch (strategy) {
-    case 'quantile': {
-      if (!calibration || (calibration.sampleSize !== undefined && calibration.sampleSize < MIN_QUANTILE_SAMPLE_SIZE)) {
-        return scoreColorBand(value, direction);
-      }
-      return quantileBandOf(empiricalCDF(value, calibration.distribution));
-    }
-    case 'log': {
-      const clamped = Math.max(value, NUMERICAL_MIN_DENOMINATOR);
-      const logNorm = Math.min(1, -Math.log10(clamped) / LOG_SCALE_DIVISOR);
-      return scoreColorBand(logNorm, 'maximize');
-    }
-    case 'binary': return value >= BINARY_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : 'failing';
-    case 'step': return value >= STEP_SCALE_EXCELLENT_THRESHOLD ? 'excellent' : value >= STEP_SCALE_ADEQUATE_THRESHOLD ? 'adequate' : 'failing';
-    case 'categorical': return scoreColorBand(value, direction);
-    case 'percentile_rank': {
-      if (!calibration) return scoreColorBand(value, direction);
-      return scoreColorBand(empiricalCDF(value, calibration.distribution), 'maximize');
-    }
-    case 'uniform':
-    default: return scoreColorBand(value, direction);
-  }
+  return BAND_BY_STRATEGY[strategy]({ value, direction, calibration });
 }
 
 
