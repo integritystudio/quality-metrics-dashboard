@@ -25,7 +25,7 @@ import {
 import { seedEvaluations } from '../judge-evaluations.js';
 import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { type Turn } from '../judge-turns.js';
-import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/validation/dashboard-schemas.js';
+import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/core/shared-schemas.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';

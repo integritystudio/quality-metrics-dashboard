@@ -1,6 +1,7 @@
 /** Keys for the already-judged set, and the records that count as this script's. */
 
-import { LLM_EVALUATOR_TYPE, type EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
+import { LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
+import type { EvaluationCohort } from '../../src/lib/core/shared-schemas.js';
 import { CANARY_COHORT } from './evaluation-constants.js';
 import { EVALUATION_ATTRS, LEGACY_EVALUATOR_TYPE_ATTR, NORMAL_COHORT, SEED_COHORT, BACKFILL_COHORT, SEED_EVALUATOR_TYPE, TRACE_BACKFILL_EVALUATOR_TYPE } from './eval-record.js';
 import { HAIKU_MODEL } from './judge-criteria.js';

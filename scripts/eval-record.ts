@@ -4,7 +4,7 @@
  * records does not load the judge.
  */
 
-import type { EvaluatorType, EvaluatorKind, EvaluationCohort } from '../../src/lib/validation/dashboard-schemas.js';
+import type { EvaluatorType, EvaluatorKind, EvaluationCohort } from '../../src/lib/core/shared-schemas.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { knownLabelSchema, type KnownLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
