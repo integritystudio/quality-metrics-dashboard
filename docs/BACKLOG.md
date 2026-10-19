@@ -28,7 +28,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference` and `no-await-in-loop` on 2026-10-18. 486 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop` and `unicorn/no-array-sort` on 2026-10-18. 421 hits remain, none autofixable (the earlier "601" counted all 253 `explicit-function-return-type` hits, 46 of which had landed). Source: session 2026-10-12 |
 | DASH-ERRORDETAIL-OPTIONAL | `ErrorDetail.tool`/`errorType` are optional but always set | P4 | Pre-existing, not from the return-type work. Source: session 2026-10-16 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-VENDOR-ATTR-LITERALS | Vendor `integritystudio.*` span-attribute keys spelled inline | Done 2026-10-17 | 12 groups / 48 keys in `src/lib/hook-attributes.ts`; ~110 literals replaced across 6 modules and 13 test files. Awaiting changelog migration. Source: session 2026-10-17 |
@@ -58,7 +58,7 @@ the live config, with the plugins the dashboard does not install loaded from the
 | ~~`@typescript-eslint/explicit-function-return-type`~~ (46 of 253 landed) | 253 | 0 | 247 / 6 |
 | ~~`@stylistic/indent`~~ (landed) | 215 | 215 | 215 / 0 |
 | `local/no-magic-numbers-ignore-bitwise` (warn) | 160 | 0 | 158 / 2 |
-| `unicorn/no-array-sort` | 65 | 0 | 38 / 27 |
+| ~~`unicorn/no-array-sort`~~ (landed) | 65 | 0 | 38 / 27 |
 | ~~`@typescript-eslint/dot-notation`~~ (landed) | 49 | 49 | 22 / 27 |
 | ~~`@typescript-eslint/promise-function-async`~~ (landed) | 46 | 46 | 45 / 1 |
 | `complexity` 12 (warn) | 39 | 0 | 36 / 3 |
@@ -421,6 +421,38 @@ and every one was fixed by hand; the rule only ever offers suggestions.
   `judge-evaluations.test.ts`'s `do…while` over answered judge rounds.
 - `npm run lint` exits 0 under `--max-warnings 0` with the rule on.
 
+**`unicorn/no-array-sort` landed 2026-10-18** at the parent's bare `error`, beside the other unicorn rules
+in `typeSafetyRules`, so `src/`, `worker/` and `scripts/` and every test tree — the parent has no test
+exemption for it either. All 65 hits matched the table exactly, 38 source / 27 test, and all were fixed by
+hand: the rule offers suggestions, never an autofix.
+- **It does not flag mutation; it flags a `.sort()` whose value is used.** `allowExpressionStatement`
+  defaults to `true` and the parent's bare `error` takes that default, so a standalone `xs.sort(…)`
+  statement stays legal — seven remain and are correctly silent (`workflow-graph.ts`,
+  `code-quality-summary.ts`, `routes/quality.ts`, `account-stamps.ts`, `sync-to-kv.ts` and two in
+  `worker/index.ts`). The one shape it always reports is `[...xs].sort()`, spread-and-mutate.
+- 🔴 **`[...xs].sort()` → `xs.toSorted()` is valid only when `xs` is an Array**, which is why the rule
+  offers two suggestions and leaves the choice to a human. 6 of the 23 spreads were unwrapped (`body.metrics`,
+  `body.inputs`, `names`, `alerts`, `evals`, `loaded.spans`); the other 17 are over a Map, Set or iterator
+  and keep the spread. **`tsc` is the gate** — unwrapping `[...HALLUCINATION_RISK_EVALUATION_NAMES]` failed
+  with `Property 'toSorted' does not exist on type 'ReadonlySet<string>'`, so the wrong guess costs a round
+  trip rather than a runtime `TypeError`. Unwrap on belief, then typecheck.
+- 🔴 **The hazard the rule exists for was live once**: `computeEvalBreakdown` did
+  `const sorted = d.scores.sort(ascending)` (`src/api/session-detail.ts`), reordering the d3 rollup's own
+  stored array. Nothing reads `d.scores` after it today, so it was latent, not a defect — but the general
+  form, a site that relies on the in-place sort *and* uses the return value, is a silent behaviour change
+  under this rule and neither lint, `tsc` nor the tests would catch it. Check each named-variable or
+  property receiver before converting; a `.map`/`.filter`/`Object.entries`/`Array.from`/`readdirSync`/
+  `.slice()` receiver is inert by construction, and most of the 65 were.
+- **A `.slice()` before the sort becomes redundant** — dropped at `routes/metrics.ts` and `routes/quality.ts`,
+  since `toSorted()` already copies. `.toSorted()` with no comparator keeps `.sort()`'s string ordering.
+- ⚠️ **`toSorted` is ES2023, so adopting this rule moves the floor.** Both tsconfigs already set
+  `lib: ["ES2023"]`; Node and workerd have it, and no `worker/` production file had a hit. The browser
+  bundle does gain it (`AlertList.tsx`, `FreqBarGrid.tsx`, `WorkflowGraph.tsx`, `lib/admin-customer.ts`),
+  which needs Chrome 110 / Safari 16 / Firefox 115. This package pins no `browserslist` and no
+  `build.target`, and Vite does not polyfill a prototype method in any case, so the floor is accepted
+  rather than configured.
+
+
 
 **`explicit-function-return-type` is on for `src/api`, `src/hooks` and `src/lib` only** (landed
 2026-10-16, at `error`; the parent has it tree-wide at `warn`). 46 sites annotated there. It is
@@ -488,7 +520,7 @@ in a comment on the type itself.
   `no-unreachable-loop`,
   ~~`no-unmodified-loop-condition`~~ (landed 2026-10-17), `no-unreachable` (off here via tseslint's
   `eslint-recommended`).
-- **unicorn.** `no-array-sort`, ~~`no-array-callback-reference`~~ (landed 2026-10-18),
+- **unicorn.** ~~`no-array-sort`~~ and ~~`no-array-callback-reference`~~ (both landed 2026-10-18),
   `prefer-number-properties` (partly covered here by `no-restricted-globals` and `radix`).
 - **regexp.** ~~`regexp/no-super-linear-move`~~ (landed 2026-10-17).
 - **TypeScript.** `dot-notation`, `explicit-function-return-type` (warn), `method-signature-style: property`,
