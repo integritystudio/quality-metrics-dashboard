@@ -1,10 +1,9 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import type { Period } from '../types.js';
+import { PERIOD_KEYS } from '../lib/constants.js';
 import { ShortcutOverlay } from './ShortcutOverlay.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { AccountBadge } from './AccountBadge.js';
-
-const PERIODS: Period[] = ['24h', '7d', '30d'];
 
 export function Layout({
   period,
@@ -29,7 +28,7 @@ export function Layout({
         <h1>Quality Metrics</h1>
         <div className="header-actions">
           <div className="period-selector">
-            {PERIODS.map((p) => (
+            {PERIOD_KEYS.map((p) => (
               <button
                 key={p}
                 className={`period-btn ${p === period ? 'active' : ''}`}

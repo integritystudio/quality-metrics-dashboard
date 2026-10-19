@@ -51,7 +51,7 @@ export const DAYS_PER_WEEK = 7;
 export { PERIOD_KEYS, PeriodEnum, DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from './periods.js';
 export type { Period } from './periods.js';
 /** Period string → day count. */
-export const VALID_PERIODS = { '24h': 1, '7d': 7, '30d': 30 } satisfies Record<Period, number>;
+export const VALID_PERIODS = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 } satisfies Record<Period, number>;
 /** Shared Zod schema for period query param validation (default: '7d'). */
 export const PeriodSchema = PeriodEnum.default(DEFAULT_PERIOD);
 /**
@@ -62,6 +62,7 @@ export const PERIOD_MS = {
   '24h': VALID_PERIODS['24h'] * TIME_MS.DAY,
   '7d': VALID_PERIODS['7d'] * TIME_MS.DAY,
   '30d': VALID_PERIODS['30d'] * TIME_MS.DAY,
+  '90d': VALID_PERIODS['90d'] * TIME_MS.DAY,
 } satisfies Record<Period, number>;
 /** Compute { start, end } ISO strings for a period key (e.g. '7d'). */
 export function computePeriodDates(period: Period): { start: string; end: string } {

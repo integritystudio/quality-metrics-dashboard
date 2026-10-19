@@ -70,7 +70,7 @@ describe('GET /pipeline', () => {
     expect(body.stages.every((stage) => stage.entryCount === 0)).toBe(true);
   });
 
-  it.each(['24h', '7d', '30d'])('accepts period %s', async (period) => {
+  it.each(['24h', '7d', '30d', '90d'])('accepts period %s', async (period) => {
     const res = await pipelineRoutes.request(`/pipeline?period=${period}`);
     expect(res.status).toBe(200);
   });

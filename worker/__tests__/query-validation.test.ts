@@ -80,8 +80,8 @@ beforeEach(() => {
 
 describe('400 with the failing field\'s error', () => {
   it.each([
-    ['/api/trends/m?period=1y', 'Invalid period. Must be 24h, 7d, or 30d.'],
-    ['/api/dashboard?period=', 'Invalid period. Must be 24h, 7d, or 30d.'],
+    ['/api/trends/m?period=1y', 'Invalid period. Must be 24h, 7d, 30d, or 90d.'],
+    ['/api/dashboard?period=', 'Invalid period. Must be 24h, 7d, 30d, or 90d.'],
     ['/api/dashboard?role=ceo', 'Invalid role. Must be executive, operator, or auditor.'],
     ['/api/metrics/m/evaluations?limit=0', 'Invalid pagination params. limit must be 1–200, offset must be >= 0.'],
     ['/api/metrics/m/evaluations?offset=-1', 'Invalid pagination params. limit must be 1–200, offset must be >= 0.'],
@@ -95,7 +95,7 @@ describe('400 with the failing field\'s error', () => {
 
   it('reports period before the fields after it', async () => {
     const res = await get('/api/metrics/m/evaluations?period=1y&sortBy=random');
-    expect(await res.json()).toEqual({ error: 'Invalid period. Must be 24h, 7d, or 30d.' });
+    expect(await res.json()).toEqual({ error: 'Invalid period. Must be 24h, 7d, 30d, or 90d.' });
   });
 });
 

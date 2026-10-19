@@ -34,6 +34,7 @@ type MessageParams = Anthropic.Messages.MessageCreateParamsNonStreaming;
 type GenerateResult = Awaited<ReturnType<LLMProvider['generate']>>;
 
 /** Polling cadence while a batch is `in_progress`. */
+// eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
 export const BATCH_POLL_INTERVAL_MS = 25 * TIME_MS.SECOND;
 /** Quiet time after the last `generate()` before the queue ships on its own. */
 const BATCH_IDLE_FLUSH_MS = DURATION_MS.FIVE_SECONDS;
@@ -42,7 +43,7 @@ const BATCH_IDLE_FLUSH_MS = DURATION_MS.FIVE_SECONDS;
  * Every batch in the run shares it: the judge's own per-call timeout is sized
  * to cover it, so a call is bounded by the run, not by the batch it lands in.
  */
-export const BATCH_WALL_CLOCK_MS = 3 * TIME_MS.HOUR;
+export const BATCH_WALL_CLOCK_MS = DURATION_MS.THREE_HOURS;
 /**
  * How long a batch cancelled at the wall clock gets to reach `ended`, which is
  * when the results of the requests it had already answered become readable.

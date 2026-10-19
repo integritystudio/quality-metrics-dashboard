@@ -77,7 +77,7 @@ qualityRoutes.get('/quality/live', async (c) => {
  * Mirrors the KV-backed worker route for use in local dev.
  *
  * Query params:
- *   period: '24h' | '7d' | '30d' (default: '7d')
+ *   period: '24h' | '7d' | '30d' | '90d' (default: '7d')
  */
 qualityRoutes.get('/degradation-signals', validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');

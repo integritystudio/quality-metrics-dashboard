@@ -12,7 +12,7 @@ pipelineRoutes.onError(handleRouteError);
  * Returns pipeline funnel: 4-stage evaluation flow with drop-off metrics.
  *
  * Query params:
- *   period: '24h' | '7d' | '30d' (default: '7d')
+ *   period: '24h' | '7d' | '30d' | '90d' (default: '7d')
  */
 pipelineRoutes.get('/pipeline', validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');

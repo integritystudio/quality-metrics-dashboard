@@ -249,6 +249,7 @@ export const KV_BATCH_SIZE = 5_000;
  * Byte cap per bulk PUT. Requests up to 30 MB succeeded, but one dropped connection
  * defers its whole request, so smaller requests lose less (KV-SYNC-LAG-AND-APRIL-RECOUNT).
  */
+// eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
 export const KV_BATCH_MAX_BYTES = 8 * BYTES.MB;
 /** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
 const SCRIPT_DIR = importMetaDirname(import.meta);

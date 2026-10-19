@@ -17,7 +17,7 @@ import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { BYTES, SECONDS } from '../parent/units.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { PERCENT_MULTIPLIER, PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, TIME_MS, type Period } from '../../lib/constants.js';
+import { PERCENT_MULTIPLIER, PERIOD_KEYS, PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, TIME_MS, type Period } from '../../lib/constants.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { pushTo } from '../../lib/collections.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
@@ -58,8 +58,6 @@ const META_CALIBRATION_KEY = 'meta:calibration';
 export const TRACE_KEY_PREFIX = 'trace:';
 export const TRACE_EVALS_KEY_PREFIX = 'evaluations:trace:';
 
-const PERIODS = ['24h', '7d', '30d'] as const;
-
 const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
@@ -74,6 +72,7 @@ const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
  */
 const MAX_COVERAGE_COLUMNS = 500;
 /** Cloudflare KV's per-value limit. A value past it fails its whole bulk-put batch (`kvBulkPut` throws). */
+// eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
 const KV_VALUE_LIMIT_BYTES = 25 * BYTES.MB;
 /** Fraction of the limit at which the sync warns, so the column cap is lowered before a write fails. */
 const KV_VALUE_WARN_RATIO = 0.8;
@@ -612,7 +611,7 @@ function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KV
 function computeAgentStatsEntries(allSpans: TraceSpan[], orgEvals: OrgEvaluations, now: Date, maxDaysMs: number): KVEntry[] {
   const agentSpans = allSpans.filter(isAgentFinalizeSpan);
   const entries: KVEntry[] = [];
-  for (const period of PERIODS.filter(p => PERIOD_MS[p] <= maxDaysMs)) {
+  for (const period of PERIOD_KEYS.filter(p => PERIOD_MS[p] <= maxDaysMs)) {
     const { windowStart } = agentStatsWindow(period, now);
     const spans = agentSpans.filter(span => timestampToMs(span.startTimeUnixNano) >= windowStart.getTime());
     const stats = computeAgentStats(spans, orgEvals.between(windowStart.getTime()), period, now);
@@ -698,7 +697,7 @@ export async function computeOrgKvEntries(backend: OrgReadBackend, now: Date, op
 
   const groupedByPeriod = new Map<Period, EvaluationsByName>();
   const periodCounts: string[] = [];
-  for (const period of PERIODS.filter(p => PERIOD_MS[p] <= maxDaysMs)) {
+  for (const period of PERIOD_KEYS.filter(p => PERIOD_MS[p] <= maxDaysMs)) {
     const start = new Date(nowMs - PERIOD_MS[period]);
     const evals = orgEvals.between(start.getTime());
     periodCounts.push(`${period}:${evals.length}`);

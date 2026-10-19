@@ -14,7 +14,7 @@ coverageRoutes.onError(handleRouteError);
  * status and gaps derivable by the reader (CVG-1).
  *
  * Query params:
- *   period: '24h' | '7d' | '30d' (default: '7d')
+ *   period: '24h' | '7d' | '30d' | '90d' (default: '7d')
  *   inputKey: 'traceId' | 'sessionId' (default: 'traceId')
  */
 const CoverageQuery = z.object({ period: PeriodSchema, inputKey: InputKeySchema });

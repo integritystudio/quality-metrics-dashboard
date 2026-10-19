@@ -70,7 +70,7 @@ describe('GET /correlations', () => {
     expect(body).toEqual({ correlations: [], metrics: [] });
   });
 
-  it.each(['24h', '7d', '30d'])('accepts period %s', async (period) => {
+  it.each(['24h', '7d', '30d', '90d'])('accepts period %s', async (period) => {
     fixture.reset();
     const res = await correlationRoutes.request(`/correlations?period=${period}`);
     expect(res.status).toBe(200);

@@ -5,13 +5,13 @@ import type { EvaluationResult, HumanVerificationEvent } from '../types.js';
 import { queryVerifications as queryVerificationsLib } from './parent/verification-events.js';
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
-import { TIME_MS, PERIOD_MS, lookbackRange } from '../lib/constants.js';
+import { PERIOD_MS, lookbackRange } from '../lib/constants.js';
 import { isoToNs, toIsoWindowBound } from './api-constants.js';
 import { SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 
 const DEFAULT_LOOKBACK_7D = PERIOD_MS['7d'];
 const DEFAULT_LOOKBACK_30D = PERIOD_MS['30d'];
-const DEFAULT_LOOKBACK_90D = 90 * TIME_MS.DAY;
+const DEFAULT_LOOKBACK_90D = PERIOD_MS['90d'];
 
 const LIMIT_EVALS_BULK = 100_000;
 const LIMIT_EVALS_METRIC = 10_000;

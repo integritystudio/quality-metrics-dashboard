@@ -56,6 +56,8 @@ test.describe('Keyboard Shortcuts', () => {
     await expect(page.locator('.period-btn.active')).toHaveText('7d');
     await page.keyboard.press('3');
     await expect(page.locator('.period-btn.active')).toHaveText('30d');
+    await page.keyboard.press('4');
+    await expect(page.locator('.period-btn.active')).toHaveText('90d');
   });
 });
 

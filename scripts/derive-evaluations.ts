@@ -49,7 +49,7 @@ import type { AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedSourceFlags } from './pipeline-stages.js';
-import { TIME_MS } from '../../src/lib/core/units.js';
+import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
@@ -155,7 +155,7 @@ const TRANSCRIPT_READ_CONCURRENCY = 8;
  * duplicate row per run (AGENT-HEURISTIC-INPROGRESS-DUPLICATES). Skip them;
  * the next scheduled run will score the completed session on a stable span.
  */
-const MIN_SESSION_COMPLETION_AGE_MS = 12 * TIME_MS.HOUR;
+const MIN_SESSION_COMPLETION_AGE_MS = DURATION_MS.TWELVE_HOURS;
 
 /**
  * The Agent tool's pre- and post-tool hook spans. Derive matched their old
