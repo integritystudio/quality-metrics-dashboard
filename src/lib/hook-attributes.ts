@@ -92,6 +92,8 @@ export const CODE_ATTRIBUTES = {
   SURVIVAL_RATE: 'integritystudio.code.quality.survival_rate',
   CHURN_RATE: 'integritystudio.code.quality.churn_rate',
   DELETION_RATE: 'integritystudio.code.quality.deletion_rate',
+  /** The seed commit a checkpoint measures; with agent, window and kind it identifies the checkpoint. */
+  SEED_CHANGE_ID: 'vcs.change.id',
 } as const;
 
 export const CODE_STRUCTURE_ATTRIBUTES = {

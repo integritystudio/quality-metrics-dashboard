@@ -108,6 +108,32 @@ function isoOrEmpty(latestMs: number): string {
   return latestMs > 0 ? new Date(latestMs).toISOString() : '';
 }
 
+function startMs(span: CodeQualitySpan): number {
+  const ms = timestampToMs(span.startTimeUnixNano);
+  return Number.isFinite(ms) ? ms : -Infinity;
+}
+
+/**
+ * One span per checkpoint: re-measuring a seed writes a second span for the same
+ * window, and the later one supersedes it. The cloud returns spans in no fixed
+ * order, so "later" is the start time. A span without a seed commit is kept as is.
+ */
+export function latestCheckpointSpans(checkpointSpans: readonly CodeQualitySpan[]): CodeQualitySpan[] {
+  const latest = new Map<string, CodeQualitySpan>();
+  const unkeyed: CodeQualitySpan[] = [];
+  for (const span of checkpointSpans) {
+    const commit = attrStr(span, CODE_ATTRIBUTES.SEED_CHANGE_ID);
+    if (commit === 'unknown') {
+      unkeyed.push(span);
+      continue;
+    }
+    const key = [commit, attrStr(span, ATTR.AGENT_NAME), attrStr(span, CODE_ATTRIBUTES.CHECKPOINT_WINDOW), contentKindOf(span)].join(KEY_SEP);
+    const kept = latest.get(key);
+    if (!kept || startMs(span) >= startMs(kept)) latest.set(key, span);
+  }
+  return [...latest.values(), ...unkeyed];
+}
+
 /** Checkpoint rates grouped by (agentName, agentVersion, window, cohort, contentKind). */
 function accumulateWindows(checkpointSpans: readonly CodeQualitySpan[]): Map<string, WindowAcc> {
   const windowAcc = new Map<string, WindowAcc>();
@@ -199,7 +225,7 @@ export function summarizeCodeQuality(
   checkpointSpans: readonly CodeQualitySpan[],
   invocationSpans: readonly CodeQualitySpan[],
 ): CodeQualityResponse {
-  const survivalByAgentWindow = toAgentWindowStats(accumulateWindows(checkpointSpans));
+  const survivalByAgentWindow = toAgentWindowStats(accumulateWindows(latestCheckpointSpans(checkpointSpans)));
   const versionRollout = toVersionStats(accumulateVersions(invocationSpans))
     .toSorted((a, b) => b.invocationCount - a.invocationCount);
 

@@ -40,14 +40,14 @@ beforeEach(() => {
 
 let spanSeq = 0;
 
-function checkpoint(attrs: Record<string, unknown>) {
+function checkpoint(attrs: Record<string, unknown>, startNs = RECENT_NS) {
   spanSeq++;
   return spanToWire({
     traceId: `trace-${spanSeq}`,
     spanId: `span-${spanSeq}`,
     name: 'code-survival-checkpoint',
-    startTimeUnixNano: RECENT_NS,
-    endTimeUnixNano: RECENT_NS + SPAN_DURATION_NS,
+    startTimeUnixNano: startNs,
+    endTimeUnixNano: startNs + SPAN_DURATION_NS,
     attributes: {
       [CODE_ATTRIBUTES.EVENT]: 'survival_checkpoint',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: AGENT,
@@ -129,6 +129,23 @@ describe('GET /code-quality', () => {
     const [row] = (await get()).survivalByAgentWindow;
 
     expect(row).toMatchObject({ avgSurvivalRate: 0.75, avgChurnRate: 0.25 });
+  });
+
+  it('counts a re-measured checkpoint once, at its latest span, whatever order the spans arrive in', async () => {
+    const SEED = 'a'.repeat(40);
+    const OTHER_SEED = 'b'.repeat(40);
+    const EARLIER_NS = RECENT_NS - SPAN_DURATION_NS;
+    fixture.setTraces([
+      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.8 }),
+      // The superseded span arrives after the one that replaced it.
+      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.2 }, EARLIER_NS),
+      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: OTHER_SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.4 }),
+    ]);
+
+    const [row] = (await get()).survivalByAgentWindow;
+
+    expect(row?.checkpointCount).toBe(2);
+    expect(row?.avgSurvivalRate).toBeCloseTo(0.6);
   });
 
   it('labels baseline invocations in the version rollout', async () => {
