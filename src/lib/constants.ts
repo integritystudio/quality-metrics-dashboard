@@ -63,6 +63,11 @@ export const PERIOD_MS = {
   '30d': VALID_PERIODS['30d'] * TIME_MS.DAY,
   '90d': VALID_PERIODS['90d'] * TIME_MS.DAY,
 } satisfies Record<Period, number>;
+/**
+ * The period the header offers only once its dashboard has data: sync-to-kv writes its KV
+ * entries only on a run with `--days` at least this long, so until then every card is no-data.
+ */
+export const DATA_GATED_PERIOD = '90d' satisfies Period;
 /** Compute { start, end } ISO strings for a period key (e.g. '7d'). */
 export function computePeriodDates(period: Period): { start: string; end: string } {
   return lookbackRange(PERIOD_MS[period]);

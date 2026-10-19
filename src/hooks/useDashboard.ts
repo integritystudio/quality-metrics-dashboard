@@ -44,3 +44,9 @@ export function useDashboard(period: Period, role?: RoleViewType): UseQueryResul
     },
   );
 }
+
+/** Whether `period` has a dashboard summary, rather than the worker's no-data 404. */
+export function usePeriodHasData(period: Period): boolean {
+  const { data } = useDashboard(period);
+  return data !== undefined && !isNoDataSummary(data);
+}

@@ -8,10 +8,9 @@ test.describe('Dashboard Home', () => {
     await expect(page.locator('.card-link').first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test('displays period selector with 4 options', async ({ page }) => {
+  test('displays the always-offered periods', async ({ page }) => {
     await page.goto('/');
-    const buttons = page.locator('.period-btn');
-    await expect(buttons).toHaveCount(4);
+    await expect(page.locator('.period-btn')).toContainText(['24h', '7d', '30d']);
   });
 
   test('switches period via period-btn', async ({ page }) => {

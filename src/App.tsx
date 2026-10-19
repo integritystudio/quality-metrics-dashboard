@@ -336,7 +336,6 @@ function GlobalShortcuts({ setPeriod, navigate }: {
   useShortcut('1', 'Switch to 24h', 'Period', useCallback(() => setPeriod('24h'), [setPeriod]));
   useShortcut('2', 'Switch to 7d', 'Period', useCallback(() => setPeriod('7d'), [setPeriod]));
   useShortcut('3', 'Switch to 30d', 'Period', useCallback(() => setPeriod('30d'), [setPeriod]));
-  useShortcut('4', 'Switch to 90d', 'Period', useCallback(() => setPeriod('90d'), [setPeriod]));
   useShortcut('g h', 'Go to home', 'Navigation', useCallback(() => navigate('/'), [navigate]));
   useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
   useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
