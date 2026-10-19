@@ -13,8 +13,26 @@ if [ ! -f "$TREE_PATH" ]; then
   exit 1
 fi
 
-# Extract total tokens from the first line that has a count (skipping any header line).
-total_tokens=$(grep -oE '[0-9,]+ tokens' "$TREE_PATH" | head -1 | cut -d' ' -f1)
+# Total = sum of the top-level entries; the tree has one root per packed directory.
+total_tokens=$(awk '
+/^(├|└)── .*\([0-9,]+ tokens\)/ {
+  match($0, /\([0-9,]+ tokens\)/)
+  count = substr($0, RSTART + 1, RLENGTH - 2)
+  sub(/ tokens/, "", count)
+  gsub(/,/, "", count)
+  sum += count
+  found = 1
+}
+END {
+  if (!found) exit
+  digits = sprintf("%d", sum)
+  while (length(digits) > 3) {
+    grouped = "," substr(digits, length(digits) - 2) grouped
+    digits = substr(digits, 1, length(digits) - 3)
+  }
+  print digits grouped
+}
+' "$TREE_PATH")
 if [ -z "$total_tokens" ]; then
   total_tokens="unknown"
 fi
