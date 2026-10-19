@@ -521,11 +521,12 @@ in a comment on the type itself.
     (12, 3, 16, 8) match only unrelated constants (`MONTHS_PER_YEAR`, `BITS.BYTE`, …), so none was swapped.
     - `MIN_SESSION_COMPLETION_AGE_MS` and `BATCH_WALL_CLOCK_MS` use new `DURATION_MS.TWELVE_HOURS` /
       `THREE_HOURS`, added to the parent's `src/lib/core/units.ts` on parent branch
-      `feat/duration-ms-twelve-three-hours`. 🔴 **Land that branch on the parent's main first.** `scripts/`
-      imports `units.ts` from the parent checkout by source path, so until it has the members
-      `typecheck:scripts` fails (2 × TS2339), lint reports 8 `no-unsafe-*` errors, and both values are
-      `undefined` at run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the
-      batch wall clock would be silently disabled.
+      `feat/duration-ms-twelve-three-hours`, merged into the parent's local main as `ab2ecd00` (not yet
+      pushed). 🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
+      redirects that to the parent's `dist/`, so a checkout or build without the members fails
+      `typecheck:scripts` (2 × TS2339) and lint (8 `no-unsafe-*`), and leaves both values `undefined` at
+      run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the batch wall clock
+      are silently disabled. Rebuild the parent after pulling.
     - `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is now a full period (`PERIOD_KEYS`,
       `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`, which now
       iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **sync-to-kv still defaults to
