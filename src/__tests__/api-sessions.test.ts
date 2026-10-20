@@ -20,6 +20,7 @@ import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-
 import {
   ALERT_EVALUATION, KEY_ERAS, MCP_POST_TOOL, SESSION_START, TOKEN_METRICS, withBothSpellings, type Attributes,
 } from './support/integritystudio-key-rename.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 /** The route's payload as the page's hook reads it: one declaration, shared with the page test. */
 type SessionDetailBody = JsonSafe<SessionDetailResponse>;
@@ -59,7 +60,7 @@ beforeEach(() => {
 describe('GET /sessions/:sessionId', () => {
   it('returns 200 with sessionId in response', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as SessionDetailBody;
     expect(body).toHaveProperty('sessionId', 'sess-abc');
   });
@@ -108,7 +109,7 @@ describe('GET /sessions/:sessionId', () => {
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(body).toHaveProperty('logSummary');
     const log = body.logSummary.logs[0];
     expect(log).not.toHaveProperty('body');
@@ -223,7 +224,8 @@ describe('GET /sessions/:sessionId', () => {
   it('computes hook latency stats per span name', async () => {
     const START_NS = 1737000000_000_000_000n;
     const NS_PER_MS = 1_000_000n;
-    fixture.setTraces([3000n, 1000n, 2000n].map((ms, index) => ({
+    const HOOK_DURATIONS_MS = [3000n, 1000n, 2000n];
+    fixture.setTraces(HOOK_DURATIONS_MS.map((ms, index) => ({
       ...makeSessionSpanWire(),
       span_id: `span-${index}`,
       end_time_ns: String(START_NS + ms * NS_PER_MS),
@@ -246,20 +248,23 @@ describe('GET /sessions/:sessionId', () => {
   });
 
   it('computes dataSources total from all sources', async () => {
-    fixture.setTraces([makeSessionSpanWire()]);
+    const spans = [makeSessionSpanWire()];
     // session.id must be in attributes so the client-side sessionId filter passes.
-    fixture.setLogs([logToWire({ timestamp: '2026-01-01T00:00:00.000Z', attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc' } })]);
-    fixture.setEvals([evalToWire(makeEvaluation({ sessionId: 'sess-abc' }))]);
+    const logs = [logToWire({ timestamp: '2026-01-01T00:00:00.000Z', attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc' } })];
+    const evals = [evalToWire(makeEvaluation({ sessionId: 'sess-abc' }))];
+    fixture.setTraces(spans);
+    fixture.setLogs(logs);
+    fixture.setEvals(evals);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
-    expect(body.dataSources.total).toBe(3); // 1 span + 1 log + 1 eval
+    expect(body.dataSources.total).toBe(spans.length + logs.length + evals.length);
   });
 
   it('returns 500 when queryTraces throws', async () => {
     fixture.failPath('/v1/traces');
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 
   // An unparseable bound used to reach BigInt(NaN) in the loaders and answer 500.
@@ -268,7 +273,7 @@ describe('GET /sessions/:sessionId', () => {
     ['endDate', '2026-13-45'],
   ])('returns 400 for an invalid %s', async (param, value) => {
     const res = await sessionRoutes.request(`/sessions/sess-abc?${param}=${value}`);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     expect(await res.json()).toEqual({ error: ErrorMessage.InvalidDateBound });
   });
 
@@ -277,7 +282,7 @@ describe('GET /sessions/:sessionId', () => {
     ['ISO datetime', 'startDate=2026-01-01T00:00:00.000Z&endDate=2026-01-31T23:59:59.999Z'],
   ])('accepts %s bounds', async (_form, query) => {
     const res = await sessionRoutes.request(`/sessions/sess-abc?${query}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 });
 
@@ -337,7 +342,7 @@ describe('GET /sessions/:sessionId when the span read hits its cap', () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(body.dataSources.traces).toMatchObject({ count: LIMIT_SESSION_SPANS, truncated: true });
     expect(body.spanBreakdown).toEqual({ 'hook:builtin-post-tool': LIMIT_SESSION_SPANS });
   });
@@ -369,7 +374,7 @@ describe('GET /sessions/:sessionId across the integritystudio.* key rename', () 
     const res = await sessionRoutes.request('/sessions/sess-abc');
     const body = await res.json() as SessionDetailBody;
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     expect(body.sessionInfo).toMatchObject({
       projectName: 'env-settings',
       initialMessageCount: 4,

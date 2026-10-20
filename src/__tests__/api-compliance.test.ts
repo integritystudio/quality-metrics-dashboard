@@ -26,6 +26,7 @@ const { telemetryDir, previousTelemetryDir } = await vi.hoisted(async () => {
 import { complianceRoutes } from '../api/routes/compliance.js';
 import type { SlaComplianceResponse, VerificationsResponse } from './support/api-responses.js';
 import type { HumanVerificationEvent } from '../types.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -42,12 +43,13 @@ afterAll(async () => {
 const VERIFICATIONS_SUBDIR = 'verifications';
 const JSONL_SUFFIX = '.jsonl';
 const ONE_HOUR_MS = 3_600_000;
+const ISO_DATE_LENGTH = 'YYYY-MM-DD'.length;
 
 const verificationsDir = join(telemetryDir, VERIFICATIONS_SUBDIR);
 
 /** The day file queryVerifications reads for `iso`, named by its UTC date. */
 function dayFile(iso: string): string {
-  return join(verificationsDir, `${iso.slice(0, 10)}${JSONL_SUFFIX}`);
+  return join(verificationsDir, `${iso.slice(0, ISO_DATE_LENGTH)}${JSONL_SUFFIX}`);
 }
 
 function makeVerification(sessionId: string): HumanVerificationEvent {
@@ -81,12 +83,12 @@ afterAll(() => {
 describe('GET /compliance/sla', () => {
   it('rejects invalid period with 400', async () => {
     const res = await complianceRoutes.request('/compliance/sla?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with period, results, noSLAsConfigured', async () => {
     const res = await complianceRoutes.request('/compliance/sla?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as SlaComplianceResponse;
     expect(body).toEqual({ period: '7d', results: [], noSLAsConfigured: true });
   });
@@ -94,7 +96,7 @@ describe('GET /compliance/sla', () => {
   it('returns 500 when data-loader throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await complianceRoutes.request('/compliance/sla?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 
@@ -103,12 +105,12 @@ describe('GET /compliance/sla', () => {
 describe('GET /compliance/verifications', () => {
   it('rejects invalid period with 400', async () => {
     const res = await complianceRoutes.request('/compliance/verifications?period=bad');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with period, count, verifications', async () => {
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as VerificationsResponse;
     expect(body).toEqual({ period: '7d', count: 0, verifications: [] });
   });
@@ -125,6 +127,6 @@ describe('GET /compliance/verifications', () => {
     // A directory where the day's JSONL file should be: listed, then unreadable.
     mkdirSync(dayFile(new Date().toISOString()), { recursive: true });
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

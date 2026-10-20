@@ -26,10 +26,13 @@ import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, TASK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
-import { TIME_MS } from '../../../src/lib/core/units.js';
+import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_SECOND, TIME_MS } from '../../../src/lib/core/units.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 // Test Data Factories
+
+const SPAN_START_SEC = 1707400000;
+const secondsToHrTime = (seconds: number): [number, number] => [Math.floor(seconds), Math.round((seconds % 1) * NANOSECONDS_PER_SECOND)];
 
 function makeSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, unknown> }): TraceSpan {
   const { attributes: attrOverrides, ...rest } = overrides;
@@ -37,8 +40,8 @@ function makeSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, 
     traceId: 'trace-001',
     spanId: 'span-001',
     name: 'hook:builtin-post-tool',
-    startTime: [1707400000, 0],
-    endTime: [1707400001, 0],
+    startTime: [SPAN_START_SEC, 0],
+    endTime: [SPAN_START_SEC + 1, 0],
     duration: [1, 0],
     status: { code: 0 },
     ...rest,
@@ -62,7 +65,8 @@ describe('scoreTask', () => {
   });
 
   it('returns 0.5 for in_progress tasks', () => {
-    expect(scoreTask(new Set(['pending', 'in_progress']))).toBe(0.5);
+    const IN_PROGRESS_SCORE = 0.5;
+    expect(scoreTask(new Set(['pending', 'in_progress']))).toBe(IN_PROGRESS_SCORE);
   });
 
   it('returns 0.0 for pending-only tasks', () => {
@@ -289,7 +293,7 @@ describe('deriveTaskCompletionPerSession', () => {
 
     const evals = deriveTaskCompletionPerSession();
     expect(evals).toHaveLength(1);
-    expect(defined(evals[0]).scoreValue).toBe(0.75); // (1.0 + 0.5) / 2
+    expect(defined(evals[0]).scoreValue).toBe((STATUS_SCORES.completed + STATUS_SCORES.in_progress) / 2);
   });
 
   it('uses ratio fallback for old data without status attributes', () => {
@@ -359,16 +363,17 @@ describe('deriveTaskCompletionPerSession', () => {
 
 describe('deriveEvaluationLatency', () => {
   it('derives a latency record from a well-formed measurable span', () => {
+    const LATENCY_SECONDS = 2.5;
     const record = deriveEvaluationLatency(makeSpan({
       name: 'hook:session-start',
-      startTime: [1707400000, 0],
-      duration: [2, 500_000_000],
+      startTime: [SPAN_START_SEC, 0],
+      duration: secondsToHrTime(LATENCY_SECONDS),
     }));
 
     expect(record).not.toBeNull();
     assertDefined(record);
     expect(record.evaluationName).toBe('evaluation_latency');
-    expect(record.scoreValue).toBe(2.5);
+    expect(record.scoreValue).toBe(LATENCY_SECONDS);
     expect(record.scoreUnit).toBe('seconds');
     expect(record.explanation).toContain('2.5');
     expect(record.timestamp).toBe('2024-02-08T13:46:40.000Z');
@@ -411,13 +416,14 @@ describe('deriveEvaluationLatency', () => {
 describe('readScope', () => {
   const now = new Date('2026-10-04T12:00:00.000Z');
   const named = new Set(['2026-09-30']);
+  const DEFAULT_DAYS = 3;
 
   it('bounds an unscoped read to the last N UTC days, today included', () => {
-    expect(readScope(null, 3, now)).toEqual(new Set(['2026-10-02', '2026-10-03', '2026-10-04']));
+    expect(readScope(null, DEFAULT_DAYS, now)).toEqual(new Set(['2026-10-02', '2026-10-03', '2026-10-04']));
   });
 
   it("keeps the caller's dates", () => {
-    expect(readScope(named, 3, now)).toBe(named);
+    expect(readScope(named, DEFAULT_DAYS, now)).toBe(named);
   });
 });
 
@@ -447,27 +453,28 @@ describe('carryForwardDistributions', () => {
   });
   const MARCH = '2026-03-23T19:54:35.514Z';
   const SEPTEMBER = '2026-09-29T00:01:18.387Z';
+  const P50 = { carried: 0.5, stale: 0.6, fresh: 0.7 };
 
   it('keeps the previous entry, with its own window, for a metric this run could not recompute', () => {
-    const previous = { task_completion: entry(0.5, MARCH), tool_correctness: entry(0.6, MARCH) };
-    const fresh = { tool_correctness: entry(0.7, SEPTEMBER) };
+    const previous = { task_completion: entry(P50.carried, MARCH), tool_correctness: entry(P50.stale, MARCH) };
+    const fresh = { tool_correctness: entry(P50.fresh, SEPTEMBER) };
 
     const merged = carryForwardDistributions(previous, fresh);
 
-    expect(merged.task_completion).toEqual(entry(0.5, MARCH));
+    expect(merged.task_completion).toEqual(entry(P50.carried, MARCH));
   });
 
   it('always prefers a freshly computed entry', () => {
     const merged = carryForwardDistributions(
-      { tool_correctness: entry(0.6, MARCH) },
-      { tool_correctness: entry(0.7, SEPTEMBER) },
+      { tool_correctness: entry(P50.stale, MARCH) },
+      { tool_correctness: entry(P50.fresh, SEPTEMBER) },
     );
 
-    expect(merged).toEqual({ tool_correctness: entry(0.7, SEPTEMBER) });
+    expect(merged).toEqual({ tool_correctness: entry(P50.fresh, SEPTEMBER) });
   });
 
   it('returns the fresh entries when there is no previous state', () => {
-    const fresh = { tool_correctness: entry(0.7, SEPTEMBER) };
+    const fresh = { tool_correctness: entry(P50.fresh, SEPTEMBER) };
 
     expect(carryForwardDistributions(undefined, fresh)).toEqual(fresh);
   });
@@ -534,15 +541,20 @@ describe('deriveAll', () => {
 // task tracking never fired. Both spellings live in the local files, so each
 // behavior is pinned for both.
 
+/** The hooks' own timing of one post-tool call on 2026-09-28. */
+const RENAMED_SPAN_TIMING: Pick<TraceSpan, 'startTime' | 'endTime' | 'duration'> = {
+  startTime: [1790553614, 235000000],
+  endTime: [1790553614, 236463666],
+  duration: [0, 1463666],
+};
+
 /** A post-rename builtin post-tool span, shaped like the hooks write it today. */
 function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
   return {
     traceId: 'trace-001',
     spanId: 'span-001',
     name: 'hook:builtin-post-tool',
-    startTime: [1790553614, 235000000],
-    endTime: [1790553614, 236463666],
-    duration: [0, 1463666],
+    ...RENAMED_SPAN_TIMING,
     status: { code: 1 },
     attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc', [HOOK_ATTRIBUTES.NAME]: 'builtin-post-tool', ...attributes },
   };
@@ -700,8 +712,8 @@ function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId:
     spanId,
     name: `hook:agent.operation.${phase}`,
     startTime: [startSec, 0],
-    endTime: [startSec, 1_000_000],
-    duration: [0, 1_000_000],
+    endTime: [startSec, NANOSECONDS_PER_MILLISECOND],
+    duration: [0, NANOSECONDS_PER_MILLISECOND],
     status: { code: OTEL_STATUS_OK },
     attributes: {
       [SESSION_ATTRIBUTES.ID]: 'sess-agents',
@@ -864,6 +876,9 @@ describe('detectInputDrift', () => {
   const DAY_START_SEC = 1_790_553_600; // 2026-09-28T00:00:00Z
   const DAY = '2026-09-28';
   const TOOL_SPANS_PER_DAY = 25;
+  const TOO_FEW_TOOL_SPANS = 5;
+  const AGENT_FINALIZE_OFFSET_SEC = 10;
+  const SYNTHETIC_INVOKE_OFFSET_SEC = 5;
 
   function toolSpans(count: number, attributes: Record<string, unknown>, fromIndex = 0): TraceSpan[] {
     return Array.from({ length: count }, (_, i) => ({
@@ -876,7 +891,7 @@ describe('detectInputDrift', () => {
   function agentSpans(name: string): TraceSpan[] {
     return [
       { ...agentHookSpan('prepare', 'Explore', 'span-p1', DAY_START_SEC), name: name.replace('finalize', 'prepare') },
-      { ...agentHookSpan('finalize', 'Explore', 'span-f1', DAY_START_SEC + 10), name },
+      { ...agentHookSpan('finalize', 'Explore', 'span-f1', DAY_START_SEC + AGENT_FINALIZE_OFFSET_SEC), name },
     ];
   }
 
@@ -901,7 +916,7 @@ describe('detectInputDrift', () => {
     attributes: Object.fromEntries(Object.entries(span.attributes).filter(([key]) => key !== GENAI_CORE_ATTRIBUTES.OPERATION_NAME)),
   });
   const syntheticInvokeSpan: TraceSpan = {
-    ...agentHookSpan('finalize', 'Explore', 'span-i1', DAY_START_SEC + 5),
+    ...agentHookSpan('finalize', 'Explore', 'span-i1', DAY_START_SEC + SYNTHETIC_INVOKE_OFFSET_SEC),
     name: 'invoke_agent Explore',
     attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-agents', [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent', [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'Explore' },
   };
@@ -954,7 +969,7 @@ describe('detectInputDrift', () => {
   });
 
   it('ignores a day with too few tool spans to judge', () => {
-    const fewMissing = toolSpans(5, {});
+    const fewMissing = toolSpans(TOO_FEW_TOOL_SPANS, {});
 
     expect(detectInputDrift(fewMissing, null)).toEqual([]);
   });
@@ -967,7 +982,8 @@ describe('detectInputDrift', () => {
 });
 
 describe('deriveAgentHeuristics', () => {
-  const SINCE_MS = 1707400000_000;
+  const SINCE_MS = SPAN_START_SEC * TIME_MS.SECOND;
+  const LATE_SPAN_OFFSET_SEC = 50;
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'derive-agent-heuristics-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
@@ -1016,8 +1032,8 @@ describe('deriveAgentHeuristics', () => {
       prompt('Fix the build'),
       reply([{ type: 'text', text: 'Fixed the build.' }]),
     ]);
-    const first = makeSpan({ spanId: 'span-early', startTime: [1707400000, 0] });
-    const last = makeSpan({ spanId: 'span-late', startTime: [1707400050, 0] });
+    const first = makeSpan({ spanId: 'span-early', startTime: [SPAN_START_SEC, 0] });
+    const last = makeSpan({ spanId: 'span-late', startTime: [SPAN_START_SEC + LATE_SPAN_OFFSET_SEC, 0] });
 
     const records = await deriveAgentHeuristics([last, first], SINCE_MS, new Map([['sess-abc', path]]));
 
@@ -1034,7 +1050,7 @@ describe('deriveAgentHeuristics', () => {
 
   it('reads no span that starts before the floor', async () => {
     const path = transcript('agent.jsonl', [prompt('Review'), reply([{ type: 'text', text: 'Done.' }])]);
-    const early = subagentStop(path, { startTime: [1707399999, 0] });
+    const early = subagentStop(path, { startTime: [SPAN_START_SEC - 1, 0] });
 
     const records = await deriveAgentHeuristics([early], SINCE_MS, new Map([['sess-abc', path]]));
 
@@ -1046,8 +1062,8 @@ describe('deriveAgentHeuristics', () => {
       prompt('Fix the build'),
       reply([{ type: 'text', text: 'Done.' }]),
     ]);
-    const spanA = makeSpan({ spanId: 'span-early', startTime: [1707400000, 0] });
-    const spanB = makeSpan({ spanId: 'span-late', startTime: [1707400050, 0] });
+    const spanA = makeSpan({ spanId: 'span-early', startTime: [SPAN_START_SEC, 0] });
+    const spanB = makeSpan({ spanId: 'span-late', startTime: [SPAN_START_SEC + LATE_SPAN_OFFSET_SEC, 0] });
 
     const [recordsA, recordsB] = await Promise.all([
       deriveAgentHeuristics([spanA], SINCE_MS, new Map([['sess-abc', path]])),

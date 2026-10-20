@@ -25,11 +25,19 @@ import {
 import { seedEvaluations } from '../judge-evaluations.js';
 import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { type Turn } from '../judge-turns.js';
+import { turnKeyOf } from '../judge-dedup.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/core/shared-schemas.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { MINUTES_PER_HOUR } from '../../src/lib/constants.js';
 import { defined } from '../../src/__tests__/support/defined.js';
+
+const FIXTURE_DAY = '2026-02-25';
+const FIXTURE_YEAR = new Date(FIXTURE_DAY).getUTCFullYear();
+const SPAN_START_S = Date.parse(`${FIXTURE_DAY}T00:00:00Z`) / TIME_MS.SECOND;
+const CLOSE_TO_DIGITS = 3;
 
 // Helpers
 
@@ -39,8 +47,8 @@ function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<str
     traceId: 'trace-pipeline-001',
     spanId: 'span-001',
     name: 'hook:builtin-post-tool',
-    startTime: [1740441600, 0], // 2026-02-25T00:00:00Z
-    endTime: [1740441601, 0],
+    startTime: [SPAN_START_S, 0],
+    endTime: [SPAN_START_S + 1, 0],
     duration: [1, 0],
     status: { code: 0 },
     ...rest,
@@ -117,7 +125,7 @@ describe('pipeline contract: derive → judge', () => {
     expect(typeof ev.evaluationName).toBe('string');
     expect(typeof ev.timestamp).toBe('string');
     // ISO timestamp parseable to construct turnKey (first 19 chars)
-    const turnKey = ev.timestamp.slice(0, 19);
+    const turnKey = turnKeyOf(ev.timestamp);
     expect(turnKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
   });
 });
@@ -175,7 +183,7 @@ describe('pipeline contract: judge seed output', () => {
     const { evals } = seedEvaluations([makeTurn()], new Set());
     const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
     const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
+    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, CLOSE_TO_DIGITS);
   });
 
   it('canary evaluations carry cohort "canary", others "seed"', () => {
@@ -183,7 +191,7 @@ describe('pipeline contract: judge seed output', () => {
     const turns = Array.from({ length: 200 }, (_, i) =>
       makeTurn({
         sessionId: `canary-pipeline-${i}`,
-        timestamp: `2026-02-25T${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00.000Z`,
+        timestamp: `${FIXTURE_DAY}T${String(Math.floor(i / MINUTES_PER_HOUR)).padStart(2, '0')}:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:00.000Z`,
       })
     );
     const { evals, canaryCount } = seedEvaluations(turns, new Set());
@@ -248,7 +256,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
       // CloudBackend.queryEvaluations() checks these fields
       expect(typeof record.timestamp).toBe('string');
       const ts = new Date(record.timestamp as string);
-      expect(ts.getFullYear()).toBe(2026);
+      expect(ts.getFullYear()).toBe(FIXTURE_YEAR);
 
       const attrs = record.attributes as Record<string, unknown>;
       const evalName = attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] as string;
@@ -264,7 +272,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
     const turns = Array.from({ length: 100 }, (_, i) =>
       makeTurn({
         sessionId: `filter-test-${i}`,
-        timestamp: `2026-02-25T00:${String(i % 60).padStart(2, '0')}:00.000Z`,
+        timestamp: `${FIXTURE_DAY}T00:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:00.000Z`,
       })
     );
     const { evals } = seedEvaluations(turns, new Set());
@@ -285,7 +293,7 @@ describe('pipeline contract: judge → sync-to-kv', () => {
       sessionId: 'dedup-test',
       timestamp: '2026-02-25T00:00:00.000Z',
     });
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turnKeyOf(turn.timestamp);
 
     // First pass: no existing keys
     const { evals: firstPass } = seedEvaluations([turn], new Set());

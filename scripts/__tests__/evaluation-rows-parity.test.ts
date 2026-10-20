@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { metricsRoutes } from '../../src/api/routes/metrics.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { evaluation } from './support/evaluations.js';
 import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
@@ -49,7 +50,7 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
 
     // Route default sort is timestamp-desc; with one row per metric the order is deterministic.
     const res = await metricsRoutes.request(`/metrics/${metric}/evaluations?period=${period}&limit=200`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const fromRoute = await res.json() as { rows: unknown[]; total: number };
 
     expect(fromKv?.rows).toEqual(fromRoute.rows);

@@ -411,9 +411,11 @@ describe('applyClusterCollapse', () => {
   const edgeBC = makeEdge({ id: 'bc', source: 'b', target: 'c' });
 
   it('returns original nodes/edges when no clusters collapsed', () => {
-    const result = applyClusterCollapse([nodeA, nodeB, nodeC], [edgeAB, edgeBC], new Set());
-    expect(result.nodes).toHaveLength(3);
-    expect(result.edges).toHaveLength(2);
+    const nodes = [nodeA, nodeB, nodeC];
+    const edges = [edgeAB, edgeBC];
+    const result = applyClusterCollapse(nodes, edges, new Set());
+    expect(result.nodes).toHaveLength(nodes.length);
+    expect(result.edges).toHaveLength(edges.length);
   });
 
   it('replaces cluster members with a single synthetic node', () => {
@@ -460,11 +462,12 @@ describe('applyClusterCollapse', () => {
   });
 
   it('averages evaluationScore across cluster members', () => {
-    const n1 = makeNode({ id: 'n1', clusterId: 'cx', evaluationScore: 0.8 });
-    const n2 = makeNode({ id: 'n2', clusterId: 'cx', evaluationScore: 0.6 });
+    const MEMBER_SCORES = { n1: 0.8, n2: 0.6 };
+    const n1 = makeNode({ id: 'n1', clusterId: 'cx', evaluationScore: MEMBER_SCORES.n1 });
+    const n2 = makeNode({ id: 'n2', clusterId: 'cx', evaluationScore: MEMBER_SCORES.n2 });
     const result = applyClusterCollapse([n1, n2], [], new Set(['cx']));
     const clusterNode = result.nodes.find(n => n.id.includes('cx'));
-    expect(clusterNode?.evaluationScore).toBeCloseTo(0.7);
+    expect(clusterNode?.evaluationScore).toBeCloseTo((MEMBER_SCORES.n1 + MEMBER_SCORES.n2) / 2);
   });
 
   it('sets evaluationScore to null when all members have null score', () => {

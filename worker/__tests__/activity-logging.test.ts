@@ -17,6 +17,7 @@ const DASHBOARD_KEY = 'dashboard:7d';
 
 const MOCK_AUTH0_ID = 'auth0|test-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
+const ASYNC_LOG_FLUSH_MS = 10;
 
 const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
 
@@ -70,7 +71,7 @@ describe('logActivity: view routes', () => {
     expect(res.status).toBe(HttpStatus.Ok);
 
     // Wait for microtasks to allow async activity logging to be queued
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeDefined();
@@ -87,7 +88,7 @@ describe('logActivity: view routes', () => {
     const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeWorkerEnv(), makeCtx());
     expect(res.status).toBe(HttpStatus.NotFound);
 
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
     const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
     expect(activityCall).toBeUndefined();

@@ -12,6 +12,7 @@ import {
   fitContextForJudge,
   CONTEXT_TRUNCATION_MARKER,
   MAX_TOOL_CONTEXT_ITEMS,
+  MAX_TURN_TEXT_LEN,
   transcriptPathOf,
   type TranscriptInfo,
 } from '../judge-turns.js';
@@ -37,7 +38,7 @@ import {
   LEGACY_SCORE_UNIT_ATTR,
   type EvalRecord,
 } from '../eval-record.js';
-import { judgedByKey } from '../judge-dedup.js';
+import { judgedByKey, TIMESTAMP_TURN_KEY_LEN } from '../judge-dedup.js';
 import { HAIKU_MODEL, JUDGE_MAX_TOKENS } from '../judge-criteria.js';
 import {
   evalFailures,
@@ -65,6 +66,7 @@ import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
+import { MINUTES_PER_HOUR } from '../../src/lib/constants.js';
 import { makeTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -73,11 +75,14 @@ import { TRANSCRIPT_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 
 // Test Data Factories
 
+const NOT_A_STRING = 42;
+const DEFAULT_SCORE = 0.85;
+
 function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
   return {
     timestamp: '2026-02-09T01:11:15.525Z',
     evaluationName: 'relevance',
-    scoreValue: 0.85,
+    scoreValue: DEFAULT_SCORE,
     explanation: 'Test explanation',
     evaluator: 'dashboard:judge-evaluations',
     evaluatorType: 'llm',
@@ -112,7 +117,7 @@ describe('isSystemPrompt', () => {
   });
 
   it('returns false for non-string input', () => {
-    expect(isSystemPrompt(42 as unknown as string)).toBe(false);
+    expect(isSystemPrompt(NOT_A_STRING as unknown as string)).toBe(false);
   });
 });
 
@@ -171,7 +176,7 @@ describe('extractTextFromContent', () => {
 
   it('returns empty string for non-string non-array', () => {
     expect(extractTextFromContent(null)).toBe('');
-    expect(extractTextFromContent(42)).toBe('');
+    expect(extractTextFromContent(NOT_A_STRING)).toBe('');
     expect(extractTextFromContent(undefined)).toBe('');
   });
 
@@ -400,7 +405,7 @@ describe('extractTurns', () => {
   });
 
   it('truncates long text to MAX_TURN_TEXT_LEN', async () => {
-    const longText = 'x'.repeat(10000);
+    const longText = 'x'.repeat(MAX_TURN_TEXT_LEN * 2);
     const filepath = writeTranscript([
       {
         type: 'user',
@@ -417,8 +422,8 @@ describe('extractTurns', () => {
     ]);
 
     const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(defined(turns[0]).userText.length).toBe(8000);
-    expect(defined(turns[0]).assistantText.length).toBe(8000);
+    expect(defined(turns[0]).userText.length).toBe(MAX_TURN_TEXT_LEN);
+    expect(defined(turns[0]).assistantText.length).toBe(MAX_TURN_TEXT_LEN);
   });
 
   it('handles malformed JSON lines gracefully', async () => {
@@ -461,11 +466,13 @@ describe('transcriptPathOf', () => {
 
 describe('normalizeScore', () => {
   it('rounds to 4 decimal places', () => {
-    expect(normalizeScore(0.123456789)).toBe(0.1235);
+    const UNROUNDED_SCORE = 0.123456789;
+    const ROUNDED_SCORE = 0.1235;
+    expect(normalizeScore(UNROUNDED_SCORE)).toBe(ROUNDED_SCORE);
   });
 
   it('preserves exact values', () => {
-    expect(normalizeScore(0.85)).toBe(0.85);
+    expect(normalizeScore(DEFAULT_SCORE)).toBe(DEFAULT_SCORE);
   });
 
   it('handles 0 and 1', () => {
@@ -475,30 +482,34 @@ describe('normalizeScore', () => {
 });
 
 describe('hashToScore', () => {
+  const UPPER_HALF = { min: 0.5, max: 1.0 };
+  const NARROW_RANGE = { min: 0.3, max: 0.9 };
+  const SAMPLE_COUNT = 100;
+
   it('returns deterministic scores for same input', () => {
-    const score1 = hashToScore('test:abc', 0.5, 1.0);
-    const score2 = hashToScore('test:abc', 0.5, 1.0);
+    const score1 = hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max);
+    const score2 = hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max);
     expect(score1).toBe(score2);
   });
 
   it('returns different scores for different inputs', () => {
-    const score1 = hashToScore('test:abc', 0.5, 1.0);
-    const score2 = hashToScore('test:def', 0.5, 1.0);
+    const score1 = hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max);
+    const score2 = hashToScore('test:def', UPPER_HALF.min, UPPER_HALF.max);
     expect(score1).not.toBe(score2);
   });
 
   it('returns scores within specified range', () => {
-    for (let i = 0; i < 100; i++) {
-      const score = hashToScore(`input-${i}`, 0.3, 0.9);
-      expect(score).toBeGreaterThanOrEqual(0.3);
-      expect(score).toBeLessThanOrEqual(0.9);
+    for (let i = 0; i < SAMPLE_COUNT; i++) {
+      const score = hashToScore(`input-${i}`, NARROW_RANGE.min, NARROW_RANGE.max);
+      expect(score).toBeGreaterThanOrEqual(NARROW_RANGE.min);
+      expect(score).toBeLessThanOrEqual(NARROW_RANGE.max);
     }
   });
 
   it('returns 4 decimal precision', () => {
     const score = hashToScore('test', 0.0, 1.0);
     const decimals = score.toString().split('.')[1]?.length ?? 0;
-    expect(decimals).toBeLessThanOrEqual(4);
+    expect(decimals).toBeLessThanOrEqual(EVAL_SCORE_PRECISION);
   });
 });
 
@@ -530,7 +541,7 @@ describe('seedEvaluations', () => {
 
   it('skips evaluations that exist in the dedup set', () => {
     const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     const existingKeys = new Set([
       `${turn.sessionId}:relevance:${turnKey}`,
       `${turn.sessionId}:coherence:${turnKey}`,
@@ -548,7 +559,8 @@ describe('seedEvaluations', () => {
 
     const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
     const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, 3);
+    const CLOSE_TO_DIGITS = 3;
+    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, CLOSE_TO_DIGITS);
   });
 
   // OBP16: this used to assert the inverse of the correct behaviour — that a
@@ -575,7 +587,7 @@ describe('seedEvaluations', () => {
     );
     const { evals } = seedEvaluations(turns, new Set());
 
-    const nonCanary = evals.filter(ev => !isCanaryTurn(ev.sessionId, ev.timestamp.slice(0, 19)));
+    const nonCanary = evals.filter(ev => !isCanaryTurn(ev.sessionId, ev.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN)));
 
     // faithfulness and tool_correctness are seeded too; their bands are not pinned here.
     const bands: Array<[name: string, low: number, high: number]> = [
@@ -599,7 +611,7 @@ describe('seedEvaluations', () => {
 
   it('backfill: partial existingKeys (only hallucination) still seeds missing metrics (H1)', () => {
     const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     // Only hallucination is already covered — relevance/coherence/faithfulness are missing
     const existingKeys = new Set([`${turn.sessionId}:hallucination:${turnKey}`]);
 
@@ -613,7 +625,7 @@ describe('seedEvaluations', () => {
 
   it('backfill idempotency: second run with all keys emits nothing (H1)', () => {
     const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
     const existingKeys = new Set(SEED_METRICS.map(m => `${turn.sessionId}:${m}:${turnKey}`));
 
@@ -622,11 +634,13 @@ describe('seedEvaluations', () => {
   });
 
   it('canary turns get intentionally low scores (B6)', () => {
+    const CANARY_RELEVANCE_MAX = 0.35;
+    const CANARY_HALLUCINATION_MIN = 0.50;
     // Generate enough turns to likely hit a canary (~2% rate)
     const turns = Array.from({ length: 200 }, (_, i) =>
       makeTurn({
         sessionId: `canary-test-${i}`,
-        timestamp: `2026-02-09T01:${String(i % 60).padStart(2, '0')}:${String(Math.floor(i / 60)).padStart(2, '0')}.000Z`,
+        timestamp: `2026-02-09T01:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:${String(Math.floor(i / MINUTES_PER_HOUR)).padStart(2, '0')}.000Z`,
         toolResults: ['ctx'],
       })
     );
@@ -640,8 +654,8 @@ describe('seedEvaluations', () => {
 
     expect(relevance.length).toBeGreaterThan(0);
     expect(hallucination.length).toBeGreaterThan(0);
-    expect(relevance.filter(score => !(score <= 0.35))).toEqual([]);
-    expect(hallucination.filter(score => !(score >= 0.50))).toEqual([]);
+    expect(relevance.filter(score => !(score <= CANARY_RELEVANCE_MAX))).toEqual([]);
+    expect(hallucination.filter(score => !(score >= CANARY_HALLUCINATION_MIN))).toEqual([]);
   });
 });
 
@@ -654,7 +668,7 @@ describe('toOTelRecord', () => {
 
     const attrs = record.attributes as Record<string, unknown>;
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('relevance');
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(0.85);
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(DEFAULT_SCORE);
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('Test explanation');
     expect(attrs[EVALUATION_ATTRS.PRODUCER]).toBe('dashboard:judge-evaluations');
     expect(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).toBe('llm');
@@ -702,27 +716,31 @@ describe('toOTelRecord', () => {
 });
 
 describe('processBatch', () => {
+  const CONCURRENCY = 3;
+
   it('processes all items', async () => {
     const items = [1, 2, 3, 4, 5];
     const results = await processBatch(items, 2, 0, (n) => Promise.resolve(n * 2));
-    expect(results).toEqual([2, 4, 6, 8, 10]);
+    expect(results).toEqual(items.map(n => n * 2));
   });
 
   it('handles empty array', async () => {
-    const results = await processBatch([], 3, 0, (n: number) => Promise.resolve(n));
+    const results = await processBatch([], CONCURRENCY, 0, (n: number) => Promise.resolve(n));
     expect(results).toEqual([]);
   });
 
   it('continues on individual failures', async () => {
     const items = [1, 2, 3];
-    const results = await processBatch(items, 3, 0, (n) => {
-      if (n === 2) throw new Error('fail');
+    const failing = 2;
+    const results = await processBatch(items, CONCURRENCY, 0, (n) => {
+      if (n === failing) throw new Error('fail');
       return Promise.resolve(n);
     });
-    expect(results).toEqual([1, 3]);
+    expect(results).toEqual(items.filter(n => n !== failing));
   });
 
   it('respects concurrency limit', async () => {
+    const WORK_MS = 10;
     let maxConcurrent = 0;
     let current = 0;
 
@@ -730,7 +748,7 @@ describe('processBatch', () => {
     await processBatch(items, 2, 0, async (n) => {
       current++;
       maxConcurrent = Math.max(maxConcurrent, current);
-      await new Promise(r => setTimeout(r, 10));
+      await new Promise(r => setTimeout(r, WORK_MS));
       current--;
       return n;
     });
@@ -744,8 +762,9 @@ describe('processBatch', () => {
 // G-Eval makes 2 calls: (1) step generation, (2) evaluation scoring (1-5 scale).
 // QAG makes 2 calls: (1) statement extraction (JSON array), (2) verdict per statement.
 const MOCK_GEVAL_STEPS = '1. Check quality\n2. Assess completeness\n3. Verify accuracy';
+const MOCK_GEVAL_SCORE = 4;
 
-function mockResponse(prompt: string, gEvalScore = 4): { text: string } {
+function mockResponse(prompt: string, gEvalScore = MOCK_GEVAL_SCORE): { text: string } {
   if (prompt.includes('Generate detailed')) {
     return { text: MOCK_GEVAL_STEPS };
   }
@@ -758,7 +777,7 @@ function mockResponse(prompt: string, gEvalScore = 4): { text: string } {
   return { text: String(gEvalScore) };
 }
 
-function createMockLLM(gEvalScore = 4): LLMProvider {
+function createMockLLM(gEvalScore = MOCK_GEVAL_SCORE): LLMProvider {
   return {
     generate(prompt: string) {
       return Promise.resolve(mockResponse(prompt, gEvalScore));
@@ -784,7 +803,7 @@ describe('evaluateTurn', () => {
   });
 
   it('evaluates relevance and coherence for turns without tool results', async () => {
-    const llm = createMockLLM(4);
+    const llm = createMockLLM(MOCK_GEVAL_SCORE);
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
     const turn = makeTurn({ toolResults: [] });
 
@@ -817,7 +836,7 @@ describe('evaluateTurn', () => {
     const llm = createMockLLM();
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
     const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     const existingKeys = new Set([
       judgedByKey(turn.sessionId, 'relevance', turnKey, HAIKU_MODEL),
       judgedByKey(turn.sessionId, 'coherence', turnKey, HAIKU_MODEL),
@@ -828,10 +847,10 @@ describe('evaluateTurn', () => {
   });
 
   it('judges a turn again when only a different model has judged it', async () => {
-    const llm = createMockLLM(4);
+    const llm = createMockLLM(MOCK_GEVAL_SCORE);
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
     const turn = makeTurn({ toolResults: [] });
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
     const otherModel = new Set([
       judgedByKey(turn.sessionId, 'relevance', turnKey, 'claude-opus-5'),
       judgedByKey(turn.sessionId, 'coherence', turnKey, 'claude-opus-5'),
@@ -881,15 +900,20 @@ describe('evaluateTurn faithfulness and hallucination', () => {
    * bug from correct behaviour. Counts only the sweep's own calls so the
    * surrounding G-Eval criteria do not pollute the total.
    */
+  const QAG_STATEMENTS = ['A', 'B', 'C', 'D'];
+  const QAG_ANSWERS = ['yes', 'yes', 'no', 'maybe'];
+  const QAG_FAITHFULNESS = QAG_ANSWERS.filter(a => a === 'yes').length / QAG_ANSWERS.length;
+  const QAG_HALLUCINATION = QAG_ANSWERS.filter(a => a === 'no').length / QAG_ANSWERS.length;
+  const SINGLE_SWEEP_CALLS = 1 + 2 * QAG_STATEMENTS.length;
+
   function createQagLLM(): { llm: LLMProvider; sweepCalls: () => number } {
-    const answers = ['yes', 'yes', 'no', 'maybe'];
     let answerIndex = 0;
     let sweepCalls = 0;
     const llm: LLMProvider = {
       generate(prompt: string) {
         if (prompt.includes('Extract all factual claims')) {
           sweepCalls++;
-          return Promise.resolve({ text: JSON.stringify(['A', 'B', 'C', 'D']) });
+          return Promise.resolve({ text: JSON.stringify(QAG_STATEMENTS) });
         }
         if (prompt.includes('yes/no question')) {
           sweepCalls++;
@@ -897,7 +921,7 @@ describe('evaluateTurn faithfulness and hallucination', () => {
         }
         if (prompt.includes('answer the question with')) {
           sweepCalls++;
-          return Promise.resolve({ text: answers[answerIndex++] ?? 'maybe' });
+          return Promise.resolve({ text: QAG_ANSWERS[answerIndex++] ?? 'maybe' });
         }
         return Promise.resolve(mockResponse(prompt));
       },
@@ -914,17 +938,17 @@ describe('evaluateTurn faithfulness and hallucination', () => {
     const byName = new Map(evals.map(e => [e.evaluationName, e.scoreValue]));
     // 2 of 4 supported, 1 of 4 contradicted, 1 inconclusive and counted by neither.
     // The two differ, so writing one mode's score under both names fails here.
-    expect(byName.get('faithfulness')).toBeCloseTo(0.5);
-    expect(byName.get('hallucination')).toBeCloseTo(0.25);
+    expect(byName.get('faithfulness')).toBeCloseTo(QAG_FAITHFULNESS);
+    expect(byName.get('hallucination')).toBeCloseTo(QAG_HALLUCINATION);
     // 1 extraction + 4 questions + 4 answers. A second sweep would make it 18.
-    expect(sweepCalls()).toBe(9);
+    expect(sweepCalls()).toBe(SINGLE_SWEEP_CALLS);
   });
 
   it('runs the sweep only for the metric that is missing', async () => {
     const { llm, sweepCalls } = createQagLLM();
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
     const turn = makeTurn({ toolResults: ['tool output'] });
-    const turnKey = turn.timestamp.slice(0, 19);
+    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
 
     const evals = await evaluateTurn(judge, turn, new Set([judgedByKey(turn.sessionId, 'faithfulness', turnKey, HAIKU_MODEL)]));
 
@@ -932,8 +956,8 @@ describe('evaluateTurn faithfulness and hallucination', () => {
     expect(names).toContain('hallucination');
     expect(names).not.toContain('faithfulness');
     // The score is the fabrication tally, not the faithfulness one it sits beside.
-    expect(evals.find(e => e.evaluationName === 'hallucination')?.scoreValue).toBeCloseTo(0.25);
-    expect(sweepCalls()).toBe(9);
+    expect(evals.find(e => e.evaluationName === 'hallucination')?.scoreValue).toBeCloseTo(QAG_HALLUCINATION);
+    expect(sweepCalls()).toBe(SINGLE_SWEEP_CALLS);
   });
 
   it('counts a failed sweep against every metric that asked for it', async () => {
@@ -965,7 +989,8 @@ describe('fitContextForJudge', () => {
   });
 
   it('keeps at most the tool-context item limit', () => {
-    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + 5 }, (_, i) => `result ${i}`);
+    const OVERFLOW_ITEMS = 5;
+    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + OVERFLOW_ITEMS }, (_, i) => `result ${i}`);
 
     expect(fitContextForJudge(many)).toHaveLength(MAX_TOOL_CONTEXT_ITEMS);
   });
@@ -976,7 +1001,8 @@ describe('evaluateTurn with an oversized tool result', () => {
     resetFailureTracking();
     const llm = createMockLLM();
     const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH + 500)] });
+    const OVERFLOW_CHARS = 500;
+    const turn = makeTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH + OVERFLOW_CHARS)] });
 
     const evals = await evaluateTurn(judge, turn, new Set());
 
@@ -1024,7 +1050,8 @@ describe('summarizeJudgeRun', () => {
   // main and exited 1, which cost the 09-29 and 09-30 06:00 runs their sync.
   it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, a soft code, when the batch wall clock abandoned evaluations', () => {
     // 60% abandoned would otherwise read as a high failure rate.
-    const summary = summarizeJudgeRun(40, { byMetric: { relevance: 30, coherence: 30 }, byClass: { ...noFailures, 'wall-clock': 60 } }, noSpend);
+    const succeeded = 40;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { relevance: 30, coherence: 30 }, byClass: { ...noFailures, 'wall-clock': 60 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
     expect(JUDGE_SOFT_FAILURE_EXITS.has(summary.exitCode)).toBe(true);
@@ -1040,17 +1067,20 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('JUDGE_EXIT_BILLING still wins over the wall clock', () => {
-    const summary = summarizeJudgeRun(3, { byMetric: { coherence: 20 }, byClass: { ...noFailures, billing: 10, 'wall-clock': 10 } }, noSpend);
+    const succeeded = 3;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 20 }, byClass: { ...noFailures, billing: 10, 'wall-clock': 10 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
   });
 
   it('exits 0 with a one-line summary when scores were produced', () => {
     // 200 successes, 40 failures = 17% failure rate — well below the 50% threshold
-    const summary = summarizeJudgeRun(200, { byMetric: { coherence: 40 }, byClass: { ...noFailures, parse: 40 } }, noSpend);
+    const succeeded = 200;
+    const failed = 40;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: failed }, byClass: { ...noFailures, parse: failed } }, noSpend);
 
     expect(summary.exitCode).toBe(0);
-    expect(summary.attempted).toBe(240);
+    expect(summary.attempted).toBe(succeeded + failed);
     expect(summary.line).toContain('attempted=240 succeeded=200 failed=40');
     expect(summary.line).toContain('parse=40');
   });
@@ -1063,7 +1093,8 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('exits JUDGE_EXIT_BILLING when any call was refused for billing, even if others scored', () => {
-    const summary = summarizeJudgeRun(3, { byMetric: { coherence: 10 }, byClass: { ...noFailures, billing: 10 } }, noSpend);
+    const succeeded = 3;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 10 }, byClass: { ...noFailures, billing: 10 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
     expect(summary.line).toMatch(/BILLING REFUSED/);
@@ -1071,7 +1102,8 @@ describe('summarizeJudgeRun', () => {
 
   it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when more than half the attempts fail', () => {
     // 46 succeeded, 490 failed = 91.4% failure — the 09-22 collapse
-    const summary = summarizeJudgeRun(46, { byMetric: { coherence: 490 }, byClass: { ...noFailures, 'schema-rejection': 490 } }, noSpend);
+    const succeeded = 46;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 490 }, byClass: { ...noFailures, 'schema-rejection': 490 } }, noSpend);
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/HIGH FAILURE RATE/);
@@ -1079,10 +1111,11 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('exits JUDGE_EXIT_HIGH_FAILURE_RATE exactly at the 50% threshold', () => {
+    const succeeded = 100;
     // 99 fail, 100 succeed → 49.7% failure rate → no alarm
-    expect(summarizeJudgeRun(100, { byMetric: { coherence: 99 }, byClass: noFailures }, noSpend).exitCode).toBe(0);
+    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 99 }, byClass: noFailures }, noSpend).exitCode).toBe(0);
     // 101 fail, 100 succeed → 50.25% failure rate → alarm
-    expect(summarizeJudgeRun(100, { byMetric: { coherence: 101 }, byClass: noFailures }, noSpend).exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
+    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 101 }, byClass: noFailures }, noSpend).exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
   });
 
   it('JUDGE_EXIT_NO_SCORES wins over JUDGE_EXIT_HIGH_FAILURE_RATE at 100% failure', () => {
@@ -1093,7 +1126,8 @@ describe('summarizeJudgeRun', () => {
 
   it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when the success rate falls more than 25 points versus the previous run', () => {
     // previous run: 100% of 536; this run: 60% of 500 — a 40-point fall, but only 40% failed
-    const summary = summarizeJudgeRun(300, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 });
+    const succeeded = 300;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 });
 
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/SUCCESS RATE DROP/);
@@ -1103,27 +1137,33 @@ describe('summarizeJudgeRun', () => {
 
   it('exits 0 when a smaller run has no failures, however far its count falls', () => {
     // The count-based check flagged this: fewer new turns, nothing failed
-    expect(summarizeJudgeRun(60, { byMetric: {}, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    const succeeded = 60;
+    expect(summarizeJudgeRun(succeeded, { byMetric: {}, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
   });
 
   it('exits 0 when a clean run is followed by the old 18-22% failure baseline', () => {
     // 100% → 78.2% is a 21.8-point fall: under the threshold
-    expect(summarizeJudgeRun(419, { byMetric: { coherence: 117 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    const succeeded = 419;
+    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 117 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
   });
 
   it('skips the rate comparison when either run attempted too few evaluations', () => {
     // 60% success would be a drop from 100%, but 10 attempts is too few to compare
-    expect(summarizeJudgeRun(6, { byMetric: { coherence: 4 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
-    expect(summarizeJudgeRun(300, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 10, attempted: 10 }).exitCode).toBe(0);
+    const succeededInTinyRun = 6;
+    const succeeded = 300;
+    expect(summarizeJudgeRun(succeededInTinyRun, { byMetric: { coherence: 4 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
+    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 10, attempted: 10 }).exitCode).toBe(0);
   });
 
   it('skips the rate comparison when there is no previous run', () => {
-    expect(summarizeJudgeRun(300, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, undefined).exitCode).toBe(0);
+    const succeeded = 300;
+    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, undefined).exitCode).toBe(0);
   });
 
   it('high failure rate check takes precedence over drop check', () => {
     // Both conditions would fire; rate check is tested first in code
-    const summary = summarizeJudgeRun(10, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 500, attempted: 500 });
+    const succeeded = 10;
+    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 500, attempted: 500 });
     expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
     expect(summary.line).toMatch(/HIGH FAILURE RATE/);
   });
@@ -1137,8 +1177,9 @@ describe('summarizeJudgeRun', () => {
       inputTokens: 1_000_000, outputTokens: 100_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0,
     };
     const estimatedUsd = 1.8;
+    const succeeded = 5;
 
-    const summary = summarizeJudgeRun(5, { byMetric: {}, byClass: noFailures }, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
+    const summary = summarizeJudgeRun(succeeded, { byMetric: {}, byClass: noFailures }, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
 
     const pricing = judgePricing();
     const actualUsd = (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input
@@ -1182,10 +1223,12 @@ describe('readRunState / writeRunState', () => {
   });
 
   it('round-trips the succeeded and attempted counts through writeRunState / readRunState', () => {
-    writeRunState(420, 536, stateFile);
+    const succeeded = 420;
+    const attempted = 536;
+    writeRunState(succeeded, attempted, stateFile);
     const state = readRunState(stateFile);
-    expect(state?.succeeded).toBe(420);
-    expect(state?.attempted).toBe(536);
+    expect(state?.succeeded).toBe(succeeded);
+    expect(state?.attempted).toBe(attempted);
     expect(state?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
@@ -1205,9 +1248,11 @@ describe('estimateJudgeRun', () => {
   it('counts two evals for a turn without tools and four for one with', () => {
     // Four, not five: faithfulness and hallucination come from one QAG sweep, so
     // the second score costs nothing to price.
+    const EVALS_PER_PLAIN_TURN = 2;
+    const EVALS_PER_TOOL_TURN = 4;
     const est = estimateJudgeRun([makeTurn({ toolResults: [] }), makeTurn({ toolResults: ['file contents'] })]);
 
-    expect(est.evals).toBe(6);
+    expect(est.evals).toBe(EVALS_PER_PLAIN_TURN + EVALS_PER_TOOL_TURN);
     expect(est.outputTokens).toBe(est.evals * EST_OUTPUT_TOKENS_PER_EVAL);
     expect(est.inputTokens).toBeGreaterThan(0);
   });

@@ -1,9 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { prioritizeTraces, computeBudgetAllocation, type KVEntry } from '../sync-to-kv.js';
+import { prioritizeTraces, computeBudgetAllocation, MIN_TRACE_BUDGET, type KVEntry } from '../sync-to-kv.js';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 import { evaluation } from './support/evaluations.js';
 import { defined } from '../../src/__tests__/support/defined.js';
+
+const WORST_SCORE = 0.1;
+const MID_SCORE = 0.5;
+const UNREFERENCED_SCORE = 0.55;
+const REFERENCED_SCORE = 0.6;
+const BEST_SCORE = 0.9;
+const OLD_TRACE_DAYS_AGO = 25;
+/** Pool scores cycle through this many evenly spaced values. */
+const SCORE_STEPS = 10;
+const WRITE_BUDGET = 450;
 
 /**
  * Thin wrapper around the exported computeBudgetAllocation + prioritizeTraces
@@ -51,8 +61,8 @@ describe('prioritizeTraces', () => {
 
     const entries = [...makeTraceEntries(traceA), ...makeTraceEntries(traceB)];
     const evalsByTrace = new Map([
-      [traceA, [makeEval(traceA, 0.1)]],
-      [traceB, [makeEval(traceB, 0.9)]],
+      [traceA, [makeEval(traceA, WORST_SCORE)]],
+      [traceB, [makeEval(traceB, BEST_SCORE)]],
     ]);
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
@@ -66,8 +76,8 @@ describe('prioritizeTraces', () => {
 
     const entries = [...makeTraceEntries(traceA), ...makeTraceEntries(traceB)];
     const evalsByTrace = new Map([
-      [traceA, [makeEval(traceA, 0.5, 1)]],
-      [traceB, [makeEval(traceB, 0.5, 25)]],
+      [traceA, [makeEval(traceA, MID_SCORE, 1)]],
+      [traceB, [makeEval(traceB, MID_SCORE, OLD_TRACE_DAYS_AGO)]],
     ]);
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
@@ -81,8 +91,8 @@ describe('prioritizeTraces', () => {
 
     const entries = [...makeTraceEntries(traceA), ...makeTraceEntries(traceB)];
     const evalsByTrace = new Map([
-      [traceA, [makeEval(traceA, 0.5)]],
-      [traceB, [makeEval(traceB, 0.6)]],
+      [traceA, [makeEval(traceA, MID_SCORE)]],
+      [traceB, [makeEval(traceB, REFERENCED_SCORE)]],
     ]);
     // referencedByWorst weight (0.2) pushes traceB above traceA despite lower score priority
     const result = prioritizeTraces(entries, evalsByTrace, new Set([traceB]));
@@ -101,8 +111,8 @@ describe('prioritizeTraces', () => {
       { key: `evaluations:trace:${traceB}`, value: '{}' },
     ];
     const evalsByTrace = new Map([
-      [traceA, [makeEval(traceA, 0.1)]],
-      [traceB, [makeEval(traceB, 0.9)]],
+      [traceA, [makeEval(traceA, WORST_SCORE)]],
+      [traceB, [makeEval(traceB, BEST_SCORE)]],
     ]);
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
@@ -117,7 +127,7 @@ describe('prioritizeTraces', () => {
     const traceB = 'trace-noeval';  // no evals → defaults to 1.0
 
     const entries = [...makeTraceEntries(traceA), ...makeTraceEntries(traceB)];
-    const evalsByTrace = new Map([[traceA, [makeEval(traceA, 0.5)]]]);
+    const evalsByTrace = new Map([[traceA, [makeEval(traceA, MID_SCORE)]]]);
     // traceB not in evalsByTrace
 
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
@@ -134,7 +144,7 @@ describe('prioritizeTraces', () => {
       { key: 'unknown:whatever', value: '{}' },
       ...makeTraceEntries('trace-ok'),
     ];
-    const evalsByTrace = new Map([['trace-ok', [makeEval('trace-ok', 0.5)]]]);
+    const evalsByTrace = new Map([['trace-ok', [makeEval('trace-ok', MID_SCORE)]]]);
     const result = prioritizeTraces(entries, evalsByTrace, new Set());
     // Only the 2 valid trace entries should appear
     expect(result).toHaveLength(2);
@@ -159,57 +169,63 @@ describe('budget allocation', () => {
     for (let i = 0; i < count; i++) {
       const id = `t-${i}`;
       entries.push(...makeTraceEntries(id));
-      evalsByTrace.set(id, [makeEval(id, (i % 10) / 10)]);
+      evalsByTrace.set(id, [makeEval(id, (i % SCORE_STEPS) / SCORE_STEPS)]);
     }
     return { entries, evalsByTrace };
   }
 
   it('reserves MIN_TRACE_BUDGET even when high-priority entries exceed budget', () => {
-    const highPriority = makeHighPriorityEntries(400);
-    const { entries: traceEntries, evalsByTrace } = makeTracePool(200);
+    const EXPECTED_MIN_TRACE_BUDGET = 100;
+    const fixture = { highPriorityCount: 400, tracePoolSize: 200, highWritten: 349, deferred: 351 };
+    const highPriority = makeHighPriorityEntries(fixture.highPriorityCount);
+    const { entries: traceEntries, evalsByTrace } = makeTracePool(fixture.tracePoolSize);
 
-    const { toWrite, deferred } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, WRITE_BUDGET);
 
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
 
     // budget=449, highPriorityBudget = min(400, 449-100) = 349, traceBudget = 100
-    expect(highCount).toBe(349);
-    expect(traceCount).toBe(100);
+    expect(highCount).toBe(fixture.highWritten);
+    expect(MIN_TRACE_BUDGET).toBe(EXPECTED_MIN_TRACE_BUDGET);
+    expect(traceCount).toBe(MIN_TRACE_BUDGET);
     // changed=400+400=800, toWrite=449, deferred=351
-    expect(deferred).toBe(351);
+    expect(deferred).toBe(fixture.deferred);
   });
 
   it('gives full remaining budget to traces when high-priority is small', () => {
-    const highPriority = makeHighPriorityEntries(10);
-    const { entries: traceEntries, evalsByTrace } = makeTracePool(500);
+    const fixture = { highPriorityCount: 10, tracePoolSize: 500, tracesWritten: 438, deferred: 562 };
+    const highPriority = makeHighPriorityEntries(fixture.highPriorityCount);
+    const { entries: traceEntries, evalsByTrace } = makeTracePool(fixture.tracePoolSize);
 
-    const { toWrite, deferred } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, WRITE_BUDGET);
 
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
 
     // budget=449, highPriorityBudget = min(10, 349) = 10, rawTraceBudget = 439, traceBudget = 438 (rounded to even)
-    expect(highCount).toBe(10);
-    expect(traceCount).toBe(438);
+    expect(highCount).toBe(highPriority.length);
+    expect(traceCount).toBe(fixture.tracesWritten);
     // changed=10+1000=1010, toWrite=448, deferred=562
-    expect(deferred).toBe(562);
+    expect(deferred).toBe(fixture.deferred);
   });
 
   it('handles zero changed traces gracefully', () => {
-    const highPriority = makeHighPriorityEntries(20);
+    const HIGH_PRIORITY_COUNT = 20;
+    const highPriority = makeHighPriorityEntries(HIGH_PRIORITY_COUNT);
 
-    const { toWrite, deferred } = allocateBudget(highPriority, { changed: [], evalsByTrace: new Map(), referencedTraceIds: new Set() }, 450);
+    const { toWrite, deferred } = allocateBudget(highPriority, { changed: [], evalsByTrace: new Map(), referencedTraceIds: new Set() }, WRITE_BUDGET);
 
-    expect(toWrite).toHaveLength(20);
+    expect(toWrite).toHaveLength(highPriority.length);
     expect(deferred).toBe(0);
   });
 
   it('handles budget smaller than MIN_TRACE_BUDGET', () => {
-    const highPriority = makeHighPriorityEntries(10);
-    const { entries: traceEntries, evalsByTrace } = makeTracePool(50);
+    const fixture = { highPriorityCount: 10, tracePoolSize: 50, writeBudget: 50, tracesWritten: 48 };
+    const highPriority = makeHighPriorityEntries(fixture.highPriorityCount);
+    const { entries: traceEntries, evalsByTrace } = makeTracePool(fixture.tracePoolSize);
 
-    const { toWrite } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, 50);
+    const { toWrite } = allocateBudget(highPriority, { changed: traceEntries, evalsByTrace, referencedTraceIds: new Set() }, fixture.writeBudget);
 
     // budget=49, highPriorityBudget = max(0, min(10, 49-100)) = 0, rawTraceBudget = 49, traceBudget = 48 (rounded to even)
     // NOTE: when budget < MIN_TRACE_BUDGET, all slots go to traces; high-priority items receive nothing.
@@ -217,7 +233,7 @@ describe('budget allocation', () => {
     const highCount = toWrite.filter(e => e.key.startsWith('dashboard:')).length;
     const traceCount = toWrite.filter(e => e.key.startsWith('trace:') || e.key.startsWith('evaluations:trace:')).length;
     expect(highCount).toBe(0);
-    expect(traceCount).toBe(48);
+    expect(traceCount).toBe(fixture.tracesWritten);
   });
 });
 
@@ -231,12 +247,12 @@ describe('prioritizeTraces: referenced trace prioritization', () => {
 
     // Referenced trace has mediocre score (0.6)
     allEntries.push(...makeTraceEntries(referencedId));
-    evalsByTrace.set(referencedId, [makeEval(referencedId, 0.6)]);
+    evalsByTrace.set(referencedId, [makeEval(referencedId, REFERENCED_SCORE)]);
 
     // Random traces all have slightly worse score (0.55) but are not referenced
     for (const id of randomIds) {
       allEntries.push(...makeTraceEntries(id));
-      evalsByTrace.set(id, [makeEval(id, 0.55)]);
+      evalsByTrace.set(id, [makeEval(id, UNREFERENCED_SCORE)]);
     }
 
     const referencedTraceIds = new Set([referencedId]);
@@ -268,7 +284,7 @@ describe('prioritizeTraces with org-prefixed keys (P4)', () => {
     ];
     const result = prioritizeTraces(entries, new Map(), new Set());
     // All four entries survive, contiguously — one trace, one priority group.
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(entries.length);
     expect(new Set(result.map(e => e.key))).toEqual(new Set(entries.map(e => e.key)));
   });
 });

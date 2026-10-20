@@ -96,6 +96,8 @@ describe('ChainOfThoughtPanel', () => {
 
 
 describe('AlertList compound alerts', () => {
+  const RELATED_METRICS = ['relevance', 'hallucination', 'coherence'];
+
   function makeAlerts(): Array<TriggeredAlert & { metricName: string }> {
     return [
       {
@@ -121,7 +123,7 @@ describe('AlertList compound alerts', () => {
           'Check model configuration',
           'Audit training data',
         ],
-        relatedMetrics: ['relevance', 'hallucination', 'coherence'],
+        relatedMetrics: RELATED_METRICS,
         metricName: 'content_quality_crisis',
       },
     ];
@@ -140,7 +142,7 @@ describe('AlertList compound alerts', () => {
   it('renders related metric links for compound alerts', () => {
     const { container } = render(<AlertList alerts={makeAlerts()} />);
     const links = container.querySelectorAll('.alert-metric-link');
-    expect(links.length).toBe(3);
+    expect(links.length).toBe(RELATED_METRICS.length);
     expect(defined(links[0]).getAttribute('href')).toBe('/metrics/relevance');
     expect(defined(links[1]).getAttribute('href')).toBe('/metrics/hallucination');
     expect(defined(links[2]).getAttribute('href')).toBe('/metrics/coherence');

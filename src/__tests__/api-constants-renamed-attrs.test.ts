@@ -16,6 +16,8 @@ import { gitRepositoryLabel, renamedAttr } from '../api/api-constants.js';
 import { MCP_ATTRIBUTES, TOKEN_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 const span = (attributes: Record<string, unknown>) => ({ attributes });
+const CANONICAL_INPUT_TOKENS = 120;
+const LEGACY_INPUT_TOKENS = 80;
 
 describe('renamedAttr', () => {
   it('reads the canonical key', () => {
@@ -39,9 +41,9 @@ describe('renamedAttr', () => {
 
   // The 2026-09-29 `integritystudio.*` move renamed numeric and boolean keys too.
   it.each([
-    ['only the canonical key', { [TOKEN_ATTRIBUTES.INPUT]: 120 }, 120],
-    ['only the legacy key', { 'tokens.input': 80 }, 80],
-    ['both keys', { [TOKEN_ATTRIBUTES.INPUT]: 120, 'tokens.input': 80 }, 120],
+    ['only the canonical key', { [TOKEN_ATTRIBUTES.INPUT]: CANONICAL_INPUT_TOKENS }, CANONICAL_INPUT_TOKENS],
+    ['only the legacy key', { 'tokens.input': LEGACY_INPUT_TOKENS }, LEGACY_INPUT_TOKENS],
+    ['both keys', { [TOKEN_ATTRIBUTES.INPUT]: CANONICAL_INPUT_TOKENS, 'tokens.input': LEGACY_INPUT_TOKENS }, CANONICAL_INPUT_TOKENS],
   ])('reads a number from a span with %s', (_shape, attributes, expected) => {
     expect(renamedAttr(span(attributes), TOKEN_ATTRIBUTES.INPUT, 'tokens.input', 'number')).toBe(expected);
   });
@@ -57,13 +59,13 @@ describe('renamedAttr', () => {
   it('coerces a canonical string-encoded number (D1 stores all OTel int attrs as strings)', () => {
     // Production D1 serialises integer OTel attributes as JSON strings.
     // renamedAttr must coerce them rather than falling through to the legacy key.
-    const stringEncoded = span({ [TOKEN_ATTRIBUTES.INPUT]: '120', 'tokens.input': 80 });
-    expect(renamedAttr(stringEncoded, TOKEN_ATTRIBUTES.INPUT, 'tokens.input', 'number')).toBe(120);
+    const stringEncoded = span({ [TOKEN_ATTRIBUTES.INPUT]: String(CANONICAL_INPUT_TOKENS), 'tokens.input': LEGACY_INPUT_TOKENS });
+    expect(renamedAttr(stringEncoded, TOKEN_ATTRIBUTES.INPUT, 'tokens.input', 'number')).toBe(CANONICAL_INPUT_TOKENS);
   });
 
   it('coerces a legacy string-encoded number when the canonical key is absent', () => {
-    expect(renamedAttr(span({ 'tokens.input': '80' }), TOKEN_ATTRIBUTES.INPUT, 'tokens.input', 'number'))
-      .toBe(80);
+    expect(renamedAttr(span({ 'tokens.input': String(LEGACY_INPUT_TOKENS) }), TOKEN_ATTRIBUTES.INPUT, 'tokens.input', 'number'))
+      .toBe(LEGACY_INPUT_TOKENS);
   });
 
   it('is undefined when neither key holds a parseable number', () => {

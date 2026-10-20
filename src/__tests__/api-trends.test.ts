@@ -11,7 +11,8 @@ import { createFixtureServer, evalToWire, type FixtureServer } from './support/f
 import { trendRoutes } from '../api/routes/trends.js';
 import type { TrendDetailResponse } from './support/api-responses.js';
 import { recentEvalNanos } from './support/fixtures.js';
-import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
+import { DEFAULT_TREND_BUCKETS, MAX_TREND_BUCKETS, MIN_TREND_BUCKETS } from '../lib/constants.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -37,6 +38,9 @@ const SCORES_BY_DAYS_AGO = [
   { daysAgo: 3.5, score: 0.7 },
   { daysAgo: 1.5, score: 0.9 },
 ] as const;
+const MEDIAN_SCORE = SCORES_BY_DAYS_AGO[1].score;
+const CLOSE_TO_DIGITS = 3;
+const ACCEPTED_BUCKET_COUNTS = [MIN_TREND_BUCKETS, 7, 15, MAX_TREND_BUCKETS];
 
 /** One score mid-day on each of the last 7 days, so every bucket is scored and follows a scored one. */
 const DAILY_DAYS_AGO = [6.5, 5.5, 4.5, 3.5, 2.5, 1.5, 0.5];
@@ -60,27 +64,27 @@ beforeEach(() => {
 describe('GET /trends/:name', () => {
   it('returns 404 for unknown metric', async () => {
     const res = await trendRoutes.request('/trends/nonexistent?period=7d');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(HttpStatus.NotFound);
   });
 
   it('returns 400 for invalid period', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=99d`);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 400 for invalid buckets', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=2`);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 400 for buckets > 30', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=31`);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with expected response shape', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as TrendDetailResponse;
     expect(body).toMatchObject({ metric: METRIC, period: '7d', bucketCount: DEFAULT_TREND_BUCKETS });
     expect(body.trendData).toHaveLength(body.bucketCount);
@@ -90,7 +94,7 @@ describe('GET /trends/:name', () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
     const body = await res.json() as TrendDetailResponse;
     expect(body.totalEvaluations).toBe(SCORES_BY_DAYS_AGO.length);
-    expect(body.overallPercentiles?.p50).toBeCloseTo(0.7, 3);
+    expect(body.overallPercentiles?.p50).toBeCloseTo(MEDIAN_SCORE, CLOSE_TO_DIGITS);
     expect(body.trendData.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(SCORES_BY_DAYS_AGO.length);
   });
 
@@ -120,9 +124,9 @@ describe('GET /trends/:name', () => {
     }
   });
 
-  it.each([3, 7, 15, 30])('accepts %i buckets', async (buckets) => {
+  it.each(ACCEPTED_BUCKET_COUNTS)('accepts %i buckets', async (buckets) => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=${buckets}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as TrendDetailResponse;
     expect(body.trendData).toHaveLength(buckets);
   });
@@ -139,6 +143,6 @@ describe('GET /trends/:name', () => {
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

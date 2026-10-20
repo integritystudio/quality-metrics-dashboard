@@ -25,38 +25,48 @@ function makeDist(overrides: Partial<PercentileDistribution> = {}): PercentileDi
   };
 }
 
+const CLOSE_TO_DIGITS = 5;
+/** The CDF value each percentile of the distribution maps to. */
+const CDF = { p10: 0.1, p25: 0.25, median: 0.5, p90: 0.9 };
+const OUTSIDE_DIST = { belowP10: 0.1, aboveP90: 0.98 };
+const QUANTILE_SCORES = { aboveMedian: 0.75, high: 0.9 };
+const BINARY_SCORES = { threshold: 0.7, above: 0.85, below: 0.69 };
+const LOG_SCORES = { nearZero: 0.001, nearOne: 0.99 };
+const STEP_SCORES = { excellent: 0.8, justBelowExcellent: 0.79, adequate: 0.5, justBelowAdequate: 0.49 };
+const UNIFORM_SCORES = { excellent: 0.95, good: 0.85, adequate: 0.7, poor: 0.5, failing: 0.3 };
+
 // empiricalCDF
 
 describe('empiricalCDF', () => {
   it('returns 0.5 for value at exact p50', () => {
     const dist = makeDist({ p50: 0.65 });
-    expect(empiricalCDF(0.65, dist)).toBeCloseTo(0.5, 5);
+    expect(empiricalCDF(dist.p50, dist)).toBeCloseTo(CDF.median, CLOSE_TO_DIGITS);
   });
 
   it('returns a value near 0 for value below p10', () => {
     const dist = makeDist({ p10: 0.4 });
-    const result = empiricalCDF(0.1, dist);
+    const result = empiricalCDF(OUTSIDE_DIST.belowP10, dist);
     expect(result).toBeGreaterThanOrEqual(0);
-    expect(result).toBeLessThanOrEqual(0.1);
+    expect(result).toBeLessThanOrEqual(CDF.p10);
   });
 
   it('returns a value near 1 for value above p90', () => {
     const dist = makeDist({ p90: 0.88 });
-    const result = empiricalCDF(0.98, dist);
-    expect(result).toBeGreaterThanOrEqual(0.9);
+    const result = empiricalCDF(OUTSIDE_DIST.aboveP90, dist);
+    expect(result).toBeGreaterThanOrEqual(CDF.p90);
     expect(result).toBeLessThanOrEqual(1);
   });
 
   it('returns interpolated value between 0.25 and 0.5 for value between p25 and p50', () => {
     const dist = makeDist({ p25: 0.55, p50: 0.65 });
-    const midpoint = (0.55 + 0.65) / 2; // 0.60
+    const midpoint = (dist.p25 + dist.p50) / 2;
     const result = empiricalCDF(midpoint, dist);
-    expect(result).toBeGreaterThan(0.25);
-    expect(result).toBeLessThan(0.5);
+    expect(result).toBeGreaterThan(CDF.p25);
+    expect(result).toBeLessThan(CDF.median);
   });
 
   it('returns 0.5 for non-finite value (NaN)', () => {
-    expect(empiricalCDF(NaN, makeDist())).toBeCloseTo(0.5, 5);
+    expect(empiricalCDF(NaN, makeDist())).toBeCloseTo(CDF.median, CLOSE_TO_DIGITS);
   });
 
   it('returns 0.5 for non-finite value (Infinity)', () => {
@@ -72,7 +82,8 @@ describe('empiricalCDF', () => {
 
 describe('MIN_QUANTILE_SAMPLE_SIZE', () => {
   it('equals 100', () => {
-    expect(MIN_QUANTILE_SAMPLE_SIZE).toBe(100);
+    const EXPECTED_MIN_QUANTILE_SAMPLE_SIZE = 100;
+    expect(MIN_QUANTILE_SAMPLE_SIZE).toBe(EXPECTED_MIN_QUANTILE_SAMPLE_SIZE);
   });
 });
 
@@ -114,13 +125,13 @@ describe('adaptiveScoreColorBand — quantile strategy', () => {
   it('uses empiricalCDF when distribution and sufficient sampleSize are provided', () => {
     // dist where p50=0.6 means 0.75 is well above median — should be good/excellent
     const dist = makeDist({ p10: 0.3, p25: 0.5, p50: 0.6, p75: 0.72, p90: 0.82 });
-    const result = adaptiveScoreColorBand(0.75, 'relevance', 'maximize', { distribution: dist, sampleSize: 200 });
+    const result = adaptiveScoreColorBand(QUANTILE_SCORES.aboveMedian, 'relevance', 'maximize', { distribution: dist, sampleSize: 200 });
     expect(['excellent', 'good']).toContain(result);
   });
 
   it('falls back to uniform scoreColorBand when no distribution provided', () => {
     // 0.95 is excellent on uniform scale
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', undefined);
+    const result = adaptiveScoreColorBand(UNIFORM_SCORES.excellent, 'relevance', 'maximize', undefined);
     expect(result).toBe('excellent');
   });
 
@@ -128,20 +139,20 @@ describe('adaptiveScoreColorBand — quantile strategy', () => {
     const dist = makeDist();
     // With sampleSize=50 (< 100), should fall back to uniform
     // 0.95 → excellent on uniform scale
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', { distribution: dist, sampleSize: 50 });
+    const result = adaptiveScoreColorBand(UNIFORM_SCORES.excellent, 'relevance', 'maximize', { distribution: dist, sampleSize: 50 });
     expect(result).toBe('excellent');
   });
 
   it('falls back to uniform when sampleSize is exactly MIN_QUANTILE_SAMPLE_SIZE - 1', () => {
     const dist = makeDist();
-    const result = adaptiveScoreColorBand(0.95, 'relevance', 'maximize', { distribution: dist, sampleSize: 99 });
+    const result = adaptiveScoreColorBand(UNIFORM_SCORES.excellent, 'relevance', 'maximize', { distribution: dist, sampleSize: MIN_QUANTILE_SAMPLE_SIZE - 1 });
     expect(result).toBe('excellent');
   });
 
   it('uses quantile when sampleSize equals MIN_QUANTILE_SAMPLE_SIZE', () => {
     // High value with generous dist should produce a high band
     const dist = makeDist({ p10: 0.3, p25: 0.45, p50: 0.55, p75: 0.65, p90: 0.75 });
-    const result = adaptiveScoreColorBand(0.9, 'relevance', 'maximize', { distribution: dist, sampleSize: 100 });
+    const result = adaptiveScoreColorBand(QUANTILE_SCORES.high, 'relevance', 'maximize', { distribution: dist, sampleSize: MIN_QUANTILE_SAMPLE_SIZE });
     expect(['excellent', 'good']).toContain(result);
   });
 });
@@ -150,15 +161,15 @@ describe('adaptiveScoreColorBand — quantile strategy', () => {
 
 describe('adaptiveScoreColorBand — binary strategy', () => {
   it('returns excellent for score >= 0.7', () => {
-    expect(adaptiveScoreColorBand(0.7, 'faithfulness')).toBe('excellent');
+    expect(adaptiveScoreColorBand(BINARY_SCORES.threshold, 'faithfulness')).toBe('excellent');
   });
 
   it('returns excellent for score > 0.7', () => {
-    expect(adaptiveScoreColorBand(0.85, 'faithfulness')).toBe('excellent');
+    expect(adaptiveScoreColorBand(BINARY_SCORES.above, 'faithfulness')).toBe('excellent');
   });
 
   it('returns failing for score < 0.7', () => {
-    expect(adaptiveScoreColorBand(0.69, 'faithfulness')).toBe('failing');
+    expect(adaptiveScoreColorBand(BINARY_SCORES.below, 'faithfulness')).toBe('failing');
   });
 
   it('returns failing for score = 0', () => {
@@ -171,12 +182,12 @@ describe('adaptiveScoreColorBand — binary strategy', () => {
 describe('adaptiveScoreColorBand — log strategy', () => {
   it('returns excellent for a low hallucination score (near 0)', () => {
     // Very low hallucination = good. log scale inverted for minimize metrics.
-    const result = adaptiveScoreColorBand(0.001, 'hallucination', 'minimize');
+    const result = adaptiveScoreColorBand(LOG_SCORES.nearZero, 'hallucination', 'minimize');
     expect(['excellent', 'good']).toContain(result);
   });
 
   it('returns failing or poor for a high hallucination score (near 1)', () => {
-    const result = adaptiveScoreColorBand(0.99, 'hallucination', 'minimize');
+    const result = adaptiveScoreColorBand(LOG_SCORES.nearOne, 'hallucination', 'minimize');
     expect(['poor', 'failing']).toContain(result);
   });
 });
@@ -185,7 +196,7 @@ describe('adaptiveScoreColorBand — log strategy', () => {
 
 describe('adaptiveScoreColorBand — step strategy', () => {
   it('returns excellent for score >= 0.8', () => {
-    expect(adaptiveScoreColorBand(0.8, 'task_completion')).toBe('excellent');
+    expect(adaptiveScoreColorBand(STEP_SCORES.excellent, 'task_completion')).toBe('excellent');
   });
 
   it('returns excellent for score = 1', () => {
@@ -193,15 +204,15 @@ describe('adaptiveScoreColorBand — step strategy', () => {
   });
 
   it('returns adequate for score >= 0.5 and < 0.8', () => {
-    expect(adaptiveScoreColorBand(0.5, 'task_completion')).toBe('adequate');
+    expect(adaptiveScoreColorBand(STEP_SCORES.adequate, 'task_completion')).toBe('adequate');
   });
 
   it('returns adequate for score = 0.79', () => {
-    expect(adaptiveScoreColorBand(0.79, 'task_completion')).toBe('adequate');
+    expect(adaptiveScoreColorBand(STEP_SCORES.justBelowExcellent, 'task_completion')).toBe('adequate');
   });
 
   it('returns failing for score < 0.5', () => {
-    expect(adaptiveScoreColorBand(0.49, 'task_completion')).toBe('failing');
+    expect(adaptiveScoreColorBand(STEP_SCORES.justBelowAdequate, 'task_completion')).toBe('failing');
   });
 
   it('returns failing for score = 0', () => {
@@ -213,23 +224,23 @@ describe('adaptiveScoreColorBand — step strategy', () => {
 
 describe('adaptiveScoreColorBand — uniform strategy', () => {
   it('returns excellent for score >= 0.9', () => {
-    expect(adaptiveScoreColorBand(0.95, 'coherence')).toBe('excellent');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.excellent, 'coherence')).toBe('excellent');
   });
 
   it('returns good for score >= 0.8 and < 0.9', () => {
-    expect(adaptiveScoreColorBand(0.85, 'coherence')).toBe('good');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.good, 'coherence')).toBe('good');
   });
 
   it('returns adequate for score >= 0.6 and < 0.8', () => {
-    expect(adaptiveScoreColorBand(0.7, 'coherence')).toBe('adequate');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.adequate, 'coherence')).toBe('adequate');
   });
 
   it('returns poor for score >= 0.4 and < 0.6', () => {
-    expect(adaptiveScoreColorBand(0.5, 'coherence')).toBe('poor');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.poor, 'coherence')).toBe('poor');
   });
 
   it('returns failing for score < 0.4', () => {
-    expect(adaptiveScoreColorBand(0.3, 'coherence')).toBe('failing');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.failing, 'coherence')).toBe('failing');
   });
 });
 
@@ -238,8 +249,8 @@ describe('adaptiveScoreColorBand — uniform strategy', () => {
 describe('adaptiveScoreColorBand — unknown metric', () => {
   it('falls back to uniform scoreColorBand for unrecognized metric name', () => {
     // 0.95 on uniform is excellent
-    expect(adaptiveScoreColorBand(0.95, 'unknown_metric_xyz')).toBe('excellent');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.excellent, 'unknown_metric_xyz')).toBe('excellent');
     // 0.3 on uniform is failing
-    expect(adaptiveScoreColorBand(0.3, 'unknown_metric_xyz')).toBe('failing');
+    expect(adaptiveScoreColorBand(UNIFORM_SCORES.failing, 'unknown_metric_xyz')).toBe('failing');
   });
 });

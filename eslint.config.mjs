@@ -12,7 +12,7 @@ import vitest from '@vitest/eslint-plugin';
 import importX from 'eslint-plugin-import-x';
 import sonarjs from 'eslint-plugin-sonarjs';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
-import { MAGIC_NUMBERS_OPTIONS, MAGIC_NUMBERS_RULE, noMagicNumbersIgnoreBitwise } from './eslint-rules/no-magic-numbers-ignore-bitwise.mjs';
+import { FIXTURE_MAGIC_NUMBERS_RULE, MAGIC_NUMBERS_OPTIONS, MAGIC_NUMBERS_RULE, localPlugin } from './eslint-rules/no-magic-numbers-ignore-bitwise.mjs';
 
 const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts', 'scripts/__tests__/**/*.ts'];
 
@@ -378,14 +378,22 @@ export default tseslint.config(
       'no-await-in-loop': 'warn',
     },
   },
-  // Magic numbers, at the parent's level and options. Test files are left out:
-  // the parent gives them a fixture-exempting variant this package does not copy.
+  // Magic numbers, at the parent's level and options. Test files get the
+  // parent's fixture-exempting variant instead: numbers inside a `const`
+  // object or array literal are fixture data, everything else is still named.
   {
     files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
     ignores: TEST_FILES,
-    plugins: { local: { rules: { [MAGIC_NUMBERS_RULE]: noMagicNumbersIgnoreBitwise } } },
+    plugins: { local: localPlugin },
     rules: {
       [`local/${MAGIC_NUMBERS_RULE}`]: ['warn', MAGIC_NUMBERS_OPTIONS],
+    },
+  },
+  {
+    files: TEST_FILES,
+    plugins: { local: localPlugin },
+    rules: {
+      [`local/${FIXTURE_MAGIC_NUMBERS_RULE}`]: ['warn', MAGIC_NUMBERS_OPTIONS],
     },
   },
   // A literal spelled three times is a name waiting to be given; the third copy

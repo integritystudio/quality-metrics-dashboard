@@ -19,18 +19,28 @@ import {
   type EvaluationPayload,
   main,
 } from '../upload-evaluations.js';
-import { buildAccountIndex } from '../account-stamps.js';
+import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex } from '../account-stamps.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, LEGACY_SCORE_UNIT_ATTR, toOTelRecord } from '../eval-record.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
+import { WEBHOOK_MAX_EXPLANATION_LENGTH } from '../../../src/lib/core/obtool-contract.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 import { TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 import { CONTENT_TYPE_HEADER, ContentType } from '../../src/lib/http-constants.js';
 
 const NOW = Date.parse('2026-09-15T12:00:00.000Z');
-const MAX_AGE_MS = 36 * 3_600_000;
+const MAX_AGE_HOURS = 36;
+const MAX_AGE_MS = MAX_AGE_HOURS * TIME_MS.HOUR;
+const OVER_LONG_EXPLANATION_LENGTH = 5000;
+/** Together past MAX_EVALUATION_BYTES before the explanation is truncated. */
+const OVERSIZED_FIELD_LENGTHS = { name: 500, explanation: 9000 };
+const MAX_EVALUATION_BYTES = 10_000;
+const EVALUATION_ID_LENGTH = 32;
+const STAMPED_EVALUATION_ID = 'f'.repeat(EVALUATION_ID_LENGTH);
+const DERIVE_EVALUATED_AT_MS = 1_790_553_614_235;
 
 function record(attrs: Record<string, unknown>, extra: Record<string, unknown> = {}): unknown {
   return {
@@ -190,24 +200,24 @@ describe('mapRecord', () => {
 
   it('truncates an over-long explanation to the webhook cap', () => {
     const { payload } = mapRecord(
-      record({ [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'x'.repeat(5000) }),
+      record({ [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'x'.repeat(OVER_LONG_EXPLANATION_LENGTH) }),
       NOW,
       MAX_AGE_MS,
     );
-    expect(payload?.explanation).toHaveLength(2000);
+    expect(payload?.explanation).toHaveLength(WEBHOOK_MAX_EXPLANATION_LENGTH);
   });
 
   it('keeps every payload under the per-evaluation byte cap', () => {
     const { payload, skip } = mapRecord(
       record({
-        [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'n'.repeat(500),
-        [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'e'.repeat(9000),
+        [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'n'.repeat(OVERSIZED_FIELD_LENGTHS.name),
+        [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'e'.repeat(OVERSIZED_FIELD_LENGTHS.explanation),
       }),
       NOW,
       MAX_AGE_MS,
     );
     expect(skip).toBeUndefined();
-    expect(Buffer.byteLength(JSON.stringify(payload))).toBeLessThanOrEqual(10_000);
+    expect(Buffer.byteLength(JSON.stringify(payload))).toBeLessThanOrEqual(MAX_EVALUATION_BYTES);
   });
 });
 
@@ -227,7 +237,8 @@ describe('shipped index', () => {
   });
 
   it('discards non-array and non-string entries', () => {
-    writeFileSync(join(dir, '.eval-upload-state.json'), JSON.stringify({ a: 'x', b: ['ok', 7] }));
+    const MALFORMED_STATE = { a: 'x', b: ['ok', 7] };
+    writeFileSync(join(dir, '.eval-upload-state.json'), JSON.stringify(MALFORMED_STATE));
     expect(loadShipped(dir)).toEqual({ b: ['ok'] });
   });
 
@@ -297,9 +308,9 @@ describe('evaluationId', () => {
   });
 
   it('keeps the id the hooks stamped on the record, whatever else changes (HDF12)', () => {
-    const stamped = { ...base, attributes: { ...base.attributes, [INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]: 'f'.repeat(32) } };
-    expect(evaluationId(stamped)).toBe('f'.repeat(32));
-    expect(evaluationId({ ...stamped, spanId: 'span-b', identityKeyRef: 'OBTOOL_API_KEY' })).toBe('f'.repeat(32));
+    const stamped = { ...base, attributes: { ...base.attributes, [INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]: STAMPED_EVALUATION_ID } };
+    expect(evaluationId(stamped)).toBe(STAMPED_EVALUATION_ID);
+    expect(evaluationId({ ...stamped, spanId: 'span-b', identityKeyRef: 'OBTOOL_API_KEY' })).toBe(STAMPED_EVALUATION_ID);
   });
 
   it('ignores a stamp that is not 32 hex characters, so a bad producer cannot collapse rows', () => {
@@ -332,11 +343,12 @@ describe('windowFiles', () => {
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'eval-upload-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
+  const PLACEHOLDER_BYTES = 10;
   const write = (name: string, bytes: number): void => writeFileSync(join(dir, name), 'x'.repeat(bytes));
 
   it('selects evaluation files inside the day window, oldest first', () => {
-    write('evaluations-2026-09-15.jsonl', 10);
-    write('evaluations-2026-09-14.jsonl', 10);
+    write('evaluations-2026-09-15.jsonl', PLACEHOLDER_BYTES);
+    write('evaluations-2026-09-14.jsonl', PLACEHOLDER_BYTES);
     expect(windowFiles(dir, 2, NOW)).toEqual([
       'evaluations-2026-09-14.jsonl',
       'evaluations-2026-09-15.jsonl',
@@ -344,21 +356,21 @@ describe('windowFiles', () => {
   });
 
   it('excludes files outside the window', () => {
-    write('evaluations-2026-09-15.jsonl', 10);
-    write('evaluations-2026-08-01.jsonl', 10);
+    write('evaluations-2026-09-15.jsonl', PLACEHOLDER_BYTES);
+    write('evaluations-2026-08-01.jsonl', PLACEHOLDER_BYTES);
     expect(windowFiles(dir, 2, NOW)).toEqual(['evaluations-2026-09-15.jsonl']);
   });
 
   it('ignores traces/logs/metrics files — those belong to the span shipper', () => {
-    write('traces-2026-09-15.jsonl', 10);
-    write('logs-2026-09-15.jsonl', 10);
-    write('metrics-2026-09-15.jsonl', 10);
+    write('traces-2026-09-15.jsonl', PLACEHOLDER_BYTES);
+    write('logs-2026-09-15.jsonl', PLACEHOLDER_BYTES);
+    write('metrics-2026-09-15.jsonl', PLACEHOLDER_BYTES);
     expect(windowFiles(dir, 2, NOW)).toEqual([]);
   });
 
   it("ignores derive's retired files: derive posts its own records (Phase 6)", () => {
-    write('evaluations-2026-09-15.jsonl', 10);
-    write('derived-evaluations-2026-09-15.jsonl', 10);
+    write('evaluations-2026-09-15.jsonl', PLACEHOLDER_BYTES);
+    write('derived-evaluations-2026-09-15.jsonl', PLACEHOLDER_BYTES);
     expect(windowFiles(dir, 2, NOW)).toEqual(['evaluations-2026-09-15.jsonl']);
   });
 
@@ -384,7 +396,7 @@ describe('account index (TKR7/TKR9)', () => {
 
   it('indexes stamped spans by span id', () => {
     writeTraces('traces-2026-09-15.jsonl', [span('sp1', 's1', GMAIL_REF)]);
-    const index = buildAccountIndex(dir, 7, NOW);
+    const index = buildAccountIndex(dir, ACCOUNT_INDEX_WINDOW_DAYS, NOW);
     expect(index.bySpan.get('sp1')).toBe(GMAIL_REF);
   });
 
@@ -395,14 +407,14 @@ describe('account index (TKR7/TKR9)', () => {
       JSON.stringify('identityKeyRef'),
       span('sp1', 's1', GMAIL_REF),
     ]);
-    const index = buildAccountIndex(dir, 7, NOW);
+    const index = buildAccountIndex(dir, ACCOUNT_INDEX_WINDOW_DAYS, NOW);
     expect(index.bySpan.get('sp1')).toBe(GMAIL_REF);
   });
 
   it('ignores trace files outside the index window and evaluation files', () => {
     writeTraces('traces-2026-08-01.jsonl', [span('sp-old', 's-old', GMAIL_REF)]);
     writeTraces('evaluations-2026-09-15.jsonl', [span('sp-eval', 's-eval', GMAIL_REF)]);
-    const index = buildAccountIndex(dir, 7, NOW);
+    const index = buildAccountIndex(dir, ACCOUNT_INDEX_WINDOW_DAYS, NOW);
     expect(index.bySpan.size).toBe(0);
   });
 
@@ -481,14 +493,14 @@ describe('network failure handling', () => {
 // key cleanup (docs/roadmap/builtin-key-eval-cleanup.md).
 describe('parseKeyManifest', () => {
   const line = (e: Record<string, unknown>): string => JSON.stringify(e);
-  const entry = { ref: 'OBTOOL_API_KEY', evaluationName: 'tool_correctness', traceId: 't1', evaluatedAtMs: 1_790_553_614_235 };
+  const entry = { ref: 'OBTOOL_API_KEY', evaluationName: 'tool_correctness', traceId: 't1', evaluatedAtMs: DERIVE_EVALUATED_AT_MS };
 
   it('maps each entry to its account ref, skipping blank lines', () => {
     const manifest = parseKeyManifest(`${line(entry)}\n\n${line({ ...entry, ref: 'OBTOOL_API_KEY_B', traceId: 't2' })}\n`);
 
     expect([...manifest]).toEqual([
-      [manifestKey('tool_correctness', 't1', 1_790_553_614_235), 'OBTOOL_API_KEY'],
-      [manifestKey('tool_correctness', 't2', 1_790_553_614_235), 'OBTOOL_API_KEY_B'],
+      [manifestKey('tool_correctness', 't1', entry.evaluatedAtMs), 'OBTOOL_API_KEY'],
+      [manifestKey('tool_correctness', 't2', entry.evaluatedAtMs), 'OBTOOL_API_KEY_B'],
     ]);
   });
 
@@ -526,7 +538,7 @@ describe('payloadManifestKey', () => {
     const { payload } = mapRecord(JSON.parse(line), NOW, Number.POSITIVE_INFINITY);
 
     // A D1 row stores timestamp_ns = evaluatedAtMs * 1e6; the manifest carries that in ms.
-    expect(payloadManifestKey(defined(payload))).toBe(manifestKey('tool_correctness', '0123456789abcdef0123456789abcdef', 1_790_553_614_235));
+    expect(payloadManifestKey(defined(payload))).toBe(manifestKey('tool_correctness', '0123456789abcdef0123456789abcdef', DERIVE_EVALUATED_AT_MS));
   });
 
   it('is undefined for a payload with no event time', () => {

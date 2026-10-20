@@ -9,10 +9,12 @@ import {
   resolveWorkingJudgeApiKey,
   resetWorkingJudgeApiKeyForTests,
 } from '../judge-credentials.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 
 // Placeholders, not credentials: the resolver never inspects the value.
 const JUDGE_KEY = 'judge-key-value';
 const DEFAULT_KEY = 'default-key-value';
+const CREDENTIAL_REJECTION_STATUSES = [HttpStatus.Unauthorized, HttpStatus.Forbidden];
 
 describe('resolveJudgeApiKey', () => {
   afterEach(() => {
@@ -68,7 +70,7 @@ describe('pickWorkingJudgeApiKey', () => {
     expect(probe).toHaveBeenCalledTimes(1);
   });
 
-  it.each([401, 403])('falls back to the shared key when the judge key gets %i', async status => {
+  it.each(CREDENTIAL_REJECTION_STATUSES)('falls back to the shared key when the judge key gets %i', async status => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const probe = vi.fn((key: string) =>
       key === JUDGE_KEY ? Promise.reject(rejection(status)) : Promise.resolve());
@@ -77,7 +79,7 @@ describe('pickWorkingJudgeApiKey', () => {
   });
 
   it('keeps the judge key on a failure that is not a credential rejection', async () => {
-    const probe = vi.fn().mockRejectedValue(rejection(503));
+    const probe = vi.fn().mockRejectedValue(rejection(HttpStatus.ServiceUnavailable));
 
     expect(await pickWorkingJudgeApiKey(BOTH, probe)).toEqual({ apiKey: JUDGE_KEY, source: JUDGE_API_KEY_ENV });
     expect(probe).toHaveBeenCalledTimes(1);
@@ -91,7 +93,7 @@ describe('pickWorkingJudgeApiKey', () => {
 
   it('returns undefined when every set key is rejected', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const probe = vi.fn().mockRejectedValue(rejection(401));
+    const probe = vi.fn().mockRejectedValue(rejection(HttpStatus.Unauthorized));
 
     expect(await pickWorkingJudgeApiKey(BOTH, probe)).toBeUndefined();
   });

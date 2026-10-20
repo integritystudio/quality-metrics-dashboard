@@ -12,8 +12,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { AccountBadge } from '../components/AccountBadge.js';
 import { SUPABASE_API_KEY_HEADER } from '../lib/postgrest-client.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 const URL = 'https://project.supabase.co';
+const QUERY_SETTLE_MS = 20;
 const ANON_KEY = 'sb_publishable_test';
 const ID_TOKEN = 'id-token-with-role';
 const ACCESS_TOKEN = 'access-token-without-role';
@@ -58,7 +60,7 @@ afterEach(() => {
 
 describe('AccountBadge', () => {
   it('shows the email PostgREST returned, requested with the ID token and the publishable key', async () => {
-    const fetchSpy = stubFetch(200, [ROW]);
+    const fetchSpy = stubFetch(HttpStatus.Ok, [ROW]);
 
     render(<AccountBadge />, { wrapper: Wrapper });
 
@@ -74,7 +76,7 @@ describe('AccountBadge', () => {
 
   it('renders nothing and makes no request in a build without Supabase configured', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', '');
-    const fetchSpy = stubFetch(200, [ROW]);
+    const fetchSpy = stubFetch(HttpStatus.Ok, [ROW]);
 
     render(<AccountBadge />, { wrapper: Wrapper });
 
@@ -85,7 +87,7 @@ describe('AccountBadge', () => {
 
   it('renders nothing and makes no request while signed out', async () => {
     mockIsAuthenticated = false;
-    const fetchSpy = stubFetch(200, [ROW]);
+    const fetchSpy = stubFetch(HttpStatus.Ok, [ROW]);
 
     render(<AccountBadge />, { wrapper: Wrapper });
 
@@ -95,22 +97,22 @@ describe('AccountBadge', () => {
   });
 
   it('renders nothing on a 401 and does not retry: an unlisted client never gains the role claim', async () => {
-    const fetchSpy = stubFetch(401, { code: 'PGRST301', message: 'No suitable key or wrong key type' });
+    const fetchSpy = stubFetch(HttpStatus.Unauthorized, { code: 'PGRST301', message: 'No suitable key or wrong key type' });
 
     render(<AccountBadge />, { wrapper: Wrapper });
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, QUERY_SETTLE_MS));
     expect(screen.queryByTestId('account-badge')).toBeNull();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it('renders nothing when the read succeeds with no row', async () => {
-    stubFetch(200, []);
+    stubFetch(HttpStatus.Ok, []);
 
     render(<AccountBadge />, { wrapper: Wrapper });
 
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, QUERY_SETTLE_MS));
     expect(screen.queryByTestId('account-badge')).toBeNull();
   });
 });

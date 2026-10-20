@@ -168,9 +168,10 @@ describe('kvBulkPut: successful write', () => {
 
 describe('kvBulkPut: partial failure via unsuccessful_keys', () => {
   it('excludes failed keys from the returned Set', async () => {
-    cloudflare.respondWith(() => bulkResult(3, ['metric:b']));
+    const entries = [entry('metric:a'), entry('metric:b'), entry('metric:c')];
+    cloudflare.respondWith(() => bulkResult(entries.length, ['metric:b']));
 
-    const written = await kvBulkPut([entry('metric:a'), entry('metric:b'), entry('metric:c')]);
+    const written = await kvBulkPut(entries);
 
     expect([...written].toSorted()).toEqual(['metric:a', 'metric:c']);
   });
@@ -260,7 +261,8 @@ describe('kvBulkPut: batching', () => {
   });
 
   it('accumulates written keys across multiple batches', async () => {
-    const entries = Array.from({ length: KV_BATCH_SIZE + 3 }, (_, i) => entry(`metric:${i}`));
+    const remainder = 3;
+    const entries = Array.from({ length: KV_BATCH_SIZE + remainder }, (_, i) => entry(`metric:${i}`));
 
     const written = await kvBulkPut(entries);
 
@@ -281,12 +283,16 @@ describe('kvBulkPut: batching', () => {
 });
 
 describe('chunkKvPairs', () => {
+  const PAIR_CAP = 10;
+  const BYTE_CAP = 100;
+  /** Never reached by the pairs it is used with, so only the pair cap splits. */
+  const LOOSE_BYTE_CAP = 1_000;
   const pair = (key: string, bytes: number) => ({ key, value: 'x'.repeat(bytes) });
 
   it('starts a new chunk when the next pair would exceed the byte cap', () => {
     const pairs = [pair('a', 40), pair('b', 40), pair('c', 40)];
 
-    const chunks = chunkKvPairs(pairs, 10, 100);
+    const chunks = chunkKvPairs(pairs, PAIR_CAP, BYTE_CAP);
 
     expect(chunks.map(c => c.map(p => p.key))).toEqual([['a', 'b'], ['c']]);
   });
@@ -294,7 +300,7 @@ describe('chunkKvPairs', () => {
   it('puts a pair larger than the byte cap in a chunk of its own', () => {
     const pairs = [pair('small', 10), pair('huge', 500), pair('tail', 10)];
 
-    const chunks = chunkKvPairs(pairs, 10, 100);
+    const chunks = chunkKvPairs(pairs, PAIR_CAP, BYTE_CAP);
 
     expect(chunks.map(c => c.map(p => p.key))).toEqual([['small'], ['huge'], ['tail']]);
   });
@@ -302,7 +308,7 @@ describe('chunkKvPairs', () => {
   it('still caps chunks by pair count', () => {
     const pairs = Array.from({ length: 5 }, (_, i) => pair(`k${i}`, 1));
 
-    const chunks = chunkKvPairs(pairs, 2, 1_000);
+    const chunks = chunkKvPairs(pairs, 2, LOOSE_BYTE_CAP);
 
     expect(chunks.map(c => c.length)).toEqual([2, 2, 1]);
   });
@@ -310,7 +316,7 @@ describe('chunkKvPairs', () => {
   it('counts key bytes toward the cap', () => {
     const pairs = [pair('k'.repeat(60), 0), pair('j'.repeat(60), 0)];
 
-    const chunks = chunkKvPairs(pairs, 10, 100);
+    const chunks = chunkKvPairs(pairs, PAIR_CAP, BYTE_CAP);
 
     expect(chunks).toHaveLength(2);
   });

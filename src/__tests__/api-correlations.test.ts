@@ -12,6 +12,7 @@ import { createFixtureServer, evalToWire, type FixtureServer } from './support/f
 import { correlationRoutes } from '../api/routes/correlations.js';
 import { makeEvaluation } from './support/fixtures.js';
 import type { CorrelationsResponse } from './support/api-responses.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -39,12 +40,12 @@ describe('GET /correlations', () => {
 
   it('rejects invalid period with 400', async () => {
     const res = await correlationRoutes.request('/correlations?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with correlations and metrics', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as CorrelationsResponse;
     expect(body).toHaveProperty('correlations');
     expect(body).toHaveProperty('metrics');
@@ -73,12 +74,12 @@ describe('GET /correlations', () => {
   it.each(['24h', '7d', '30d', '90d'])('accepts period %s', async (period) => {
     fixture.reset();
     const res = await correlationRoutes.request(`/correlations?period=${period}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await correlationRoutes.request('/correlations?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

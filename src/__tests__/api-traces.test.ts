@@ -15,6 +15,7 @@ import { traceRoutes } from '../api/routes/traces.js';
 import type { loadTracesByTraceId, loadEvaluationsByTraceId } from '../api/data-loader.js';
 import type { TraceDetailResponse } from './support/api-responses.js';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -51,7 +52,7 @@ beforeEach(() => {
 describe('GET /traces/:traceId', () => {
   it('returns 200 with traceId, spans, evaluations', async () => {
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as TraceDetailResponse;
     expect(body).toHaveProperty('traceId', VALID_TRACE_ID);
     expect(body).toHaveProperty('spans');
@@ -90,7 +91,7 @@ describe('GET /traces/:traceId', () => {
 
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as { evaluations: Array<{ timestamp: string }> };
     expect(defined(body.evaluations[0]).timestamp).toBe(String(EVAL_NANOS));
   });
@@ -106,7 +107,7 @@ describe('GET /traces/:traceId', () => {
 
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as { spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }> };
     expect(defined(body.spans[0]).startTimeUnixNano).toBe(String(START_NANOS));
     expect(defined(body.spans[0]).endTimeUnixNano).toBe(String(END_NANOS));
@@ -115,19 +116,19 @@ describe('GET /traces/:traceId', () => {
   it('loads spans and evaluations in parallel (both called)', async () => {
     // Both fixture endpoints respond — if either were missing the route would 500.
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns 500 when loadTracesByTraceId throws', async () => {
     fixture.failPath('/v1/traces');
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 
   it('returns 500 when loadEvaluationsByTraceId throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 

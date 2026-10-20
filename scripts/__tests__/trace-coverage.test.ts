@@ -8,11 +8,13 @@ import {
   type LocalSpan,
 } from '../trace-coverage.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
 
 const DAY_1_NOON_MS = Date.parse('2026-09-26T12:00:00.000Z');
 const DAY_2_NOON_MS = Date.parse('2026-09-27T12:00:00.000Z');
 const WIDE_WINDOW = { fromMs: 0, toMs: Number.MAX_SAFE_INTEGER };
 const REF = 'OBTOOL_API_KEY';
+const SETTLE_MINUTES = 60;
 
 function localSpan(id: string, startMs: number, sessionId = 's1'): LocalSpan {
   return { key: spanKey('t1', id), ref: REF, startMs, sessionId };
@@ -22,7 +24,7 @@ function jsonLine(fields: Record<string, unknown>): string {
   return JSON.stringify({
     traceId: 't1',
     spanId: 'a1',
-    startTime: [DAY_1_NOON_MS / 1000, 0],
+    startTime: [DAY_1_NOON_MS / TIME_MS.SECOND, 0],
     attributes: { [SESSION_ATTRIBUTES.ID]: 's1' },
     identityKeyRef: REF,
     ...fields,
@@ -31,7 +33,7 @@ function jsonLine(fields: Record<string, unknown>): string {
 
 describe('coverageWindow', () => {
   it('starts at UTC midnight days-1 back and ends settleMinutes before now', () => {
-    const window = coverageWindow(DAY_2_NOON_MS, 2, 60);
+    const window = coverageWindow(DAY_2_NOON_MS, 2, SETTLE_MINUTES);
 
     expect(new Date(window.fromMs).toISOString()).toBe('2026-09-26T00:00:00.000Z');
     expect(new Date(window.toMs).toISOString()).toBe('2026-09-27T11:00:00.000Z');
@@ -74,7 +76,7 @@ describe('compareAccount', () => {
       { day: '2026-09-26', local: 2, matched: 1, missing: 1, cloudOnly: 0 },
       { day: '2026-09-27', local: 1, matched: 0, missing: 1, cloudOnly: 1 },
     ]);
-    expect(result.coverage).toBeCloseTo(1 / 3);
+    expect(result.coverage).toBeCloseTo(1 / local.length);
     expect(result.missingBySession).toEqual([{ sessionId: 's1', missing: 1 }, { sessionId: 's2', missing: 1 }]);
   });
 

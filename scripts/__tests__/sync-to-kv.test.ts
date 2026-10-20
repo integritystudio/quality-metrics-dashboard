@@ -105,8 +105,8 @@ describe('buildCalibrationEntry', () => {
     const response = parseCalibrationPayload(state);
 
     expect(response.sampleCounts).toBeDefined();
-    expect(response.sampleCounts.relevance).toBe(120);
-    expect(response.sampleCounts.faithfulness).toBe(85);
+    expect(response.sampleCounts.relevance).toBe(defined(state.distributions.relevance).sampleSize);
+    expect(response.sampleCounts.faithfulness).toBe(defined(state.distributions.faithfulness).sampleSize);
   });
 
   it('preserves lastCalibrated timestamp verbatim', () => {
@@ -120,9 +120,8 @@ describe('buildCalibrationEntry', () => {
   });
 
   it('drops rawScores from the response payload', () => {
-    const state = makeCalibrationState({
-      rawScores: { relevance: [0.5, 0.7, 0.8] },
-    });
+    const RAW_SCORES = { relevance: [0.5, 0.7, 0.8] };
+    const state = makeCalibrationState({ rawScores: RAW_SCORES });
 
     const response = parseCalibrationPayload(state);
 
@@ -155,7 +154,7 @@ describe('buildCalibrationEntry', () => {
     const response = parseCalibrationPayload(state);
 
     expect(Object.keys(response.distributions)).toHaveLength(1);
-    expect(response.sampleCounts.coherence).toBe(50);
+    expect(response.sampleCounts.coherence).toBe(defined(state.distributions.coherence).sampleSize);
   });
 });
 
@@ -184,6 +183,7 @@ describe('buildCalibrationEntry: graceful skip on missing or invalid state', () 
 describe('KV trace/session TTL constant', () => {
   // Default --days=30 window; a TTL longer than it keeps entries alive until the next sync rewrites them.
   const DEFAULT_QUERY_WINDOW_DAYS = 30;
+  const EXPECTED_TTL_DAYS = 90;
 
   it('is a positive integer (required by Cloudflare KV)', () => {
     expect(Number.isInteger(KV_ENTRY_TTL_SECONDS)).toBe(true);
@@ -196,7 +196,7 @@ describe('KV trace/session TTL constant', () => {
 
   it('is exactly 90 days in seconds', () => {
     expect(KV_ENTRY_TTL_SECONDS).toBe(KV_ENTRY_TTL_DAYS * SECONDS.DAY);
-    expect(KV_ENTRY_TTL_DAYS).toBe(90);
+    expect(KV_ENTRY_TTL_DAYS).toBe(EXPECTED_TTL_DAYS);
   });
 });
 

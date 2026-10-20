@@ -18,6 +18,7 @@ import type {
   RoleViewResponse,
 } from './support/api-responses.js';
 import { EVAL_NANOS, makeEvaluation, recentEvalNanos } from './support/fixtures.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -33,8 +34,11 @@ afterAll(async () => {
 
 /** An `llm` evaluation: the dashboard summary drops the `seed` cohort makeEvaluation defaults to. */
 const EVIDENCE_EVALUATOR_TYPE = 'llm';
+const RELEVANCE_SCORE = 0.85;
+const COHERENCE_SCORE = 0.9;
+const AVG_CLOSE_TO_DIGITS = 3;
 
-function makeMockEval(name = 'relevance', score = 0.85, timestamp = EVAL_NANOS) {
+function makeMockEval(name = 'relevance', score = RELEVANCE_SCORE, timestamp = EVAL_NANOS) {
   return makeEvaluation({ evaluationName: name, scoreValue: score, timestamp, evaluatorType: EVIDENCE_EVALUATOR_TYPE });
 }
 
@@ -46,49 +50,49 @@ beforeEach(() => {
 
 describe('GET /dashboard', () => {
   beforeEach(() => {
-    fixture.setEvals([evalToWire(makeMockEval('relevance', 0.85, recentEvalNanos()))]);
+    fixture.setEvals([evalToWire(makeMockEval('relevance', RELEVANCE_SCORE, recentEvalNanos()))]);
   });
 
   it('rejects invalid period with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('rejects invalid role with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=superadmin');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with metrics, cqi, sparklines for valid period', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as DashboardResponse;
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('cqi');
     expect(body).toHaveProperty('sparklines');
     const relevance = body.metrics.find((m) => m.name === 'relevance');
-    expect(relevance?.values.avg).toBeCloseTo(0.85, 3);
+    expect(relevance?.values.avg).toBeCloseTo(RELEVANCE_SCORE, AVG_CLOSE_TO_DIGITS);
     expect(relevance?.sampleCount).toBe(1);
     expect(body.cqi?.contributions.map((entry) => entry.metric)).toEqual(['relevance']);
   });
 
   it('accepts 24h period', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=24h');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('accepts 30d period', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=30d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns the executive view with cqi for executive role', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=executive');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as RoleViewResponse;
     expect(body.role).toBe('executive');
     expect(body).toHaveProperty('cqi');
@@ -96,7 +100,7 @@ describe('GET /dashboard', () => {
 
   it('returns the operator view without cqi for operator role', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=operator');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as RoleViewResponse;
     expect(body.role).toBe('operator');
     expect(body).not.toHaveProperty('cqi');
@@ -119,7 +123,7 @@ describe('GET /dashboard', () => {
   it('returns 500 when data-loader throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await dashboardRoutes.request('/dashboard?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 
@@ -129,7 +133,7 @@ describe('GET /health', () => {
   it('returns 200 with status and hasData', async () => {
     // fixture /health returns { status: 'ok' }, /v1/evaluations returns []
     const res = await dashboardRoutes.request('/health');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as HealthResponse;
     expect(body).toHaveProperty('status');
     expect(body).toHaveProperty('hasData');
@@ -141,7 +145,7 @@ describe('GET /health', () => {
     // by healthCheck(), so failing /v1/evaluations propagates to the route.
     fixture.failPath('/v1/evaluations');
     const res = await dashboardRoutes.request('/health');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 
@@ -152,14 +156,14 @@ describe('GET /quality/live', () => {
 
   beforeEach(() => {
     fixture.setEvals([
-      evalToWire(makeMockEval('relevance', 0.85, EVAL_NANOS + ONE_HOUR_NANOS), 1),
-      evalToWire(makeMockEval('coherence', 0.9, EVAL_NANOS), 2),
+      evalToWire(makeMockEval('relevance', RELEVANCE_SCORE, EVAL_NANOS + ONE_HOUR_NANOS), 1),
+      evalToWire(makeMockEval('coherence', COHERENCE_SCORE, EVAL_NANOS), 2),
     ]);
   });
 
   it('returns 200 with metrics, sessionCount, lastUpdated', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as QualityLiveResponse;
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('sessionCount');
@@ -187,7 +191,7 @@ describe('GET /quality/live', () => {
   it('handles empty evaluation map gracefully', async () => {
     fixture.reset(); // empty evals
     const res = await qualityRoutes.request('/quality/live');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as QualityLiveResponse;
     expect(body.metrics).toHaveLength(0);
   });
@@ -195,6 +199,6 @@ describe('GET /quality/live', () => {
   it('returns 500 when data-loader throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await qualityRoutes.request('/quality/live');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });

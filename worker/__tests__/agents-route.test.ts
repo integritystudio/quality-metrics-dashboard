@@ -26,10 +26,12 @@ function agentsPayload(period: string, invocations: number) {
   };
 }
 
-const WEEK_PAYLOAD = agentsPayload('7d', 2);
-const MONTH_PAYLOAD = agentsPayload('30d', 9);
-const OTHER_ORG_WEEK_PAYLOAD = agentsPayload('7d', 5);
-const BARE_WEEK_PAYLOAD = agentsPayload('7d', 7);
+const INVOCATIONS = { week: 2, month: 9, otherOrgWeek: 5, bareKeyWeek: 7 };
+
+const WEEK_PAYLOAD = agentsPayload('7d', INVOCATIONS.week);
+const MONTH_PAYLOAD = agentsPayload('30d', INVOCATIONS.month);
+const OTHER_ORG_WEEK_PAYLOAD = agentsPayload('7d', INVOCATIONS.otherOrgWeek);
+const BARE_WEEK_PAYLOAD = agentsPayload('7d', INVOCATIONS.bareKeyWeek);
 
 /** The session's org, another org, and the pre-tenancy bare key each hold a different week. */
 function syncedKv(): MemoryKv {

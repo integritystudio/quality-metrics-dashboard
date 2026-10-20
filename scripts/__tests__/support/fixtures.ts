@@ -17,7 +17,10 @@ export function makeTurn(overrides: Partial<Turn> = {}): Turn {
   };
 }
 
-/** A turn with 400- and 800-character texts, long enough that token estimates are not rounding noise. */
+/** Text lengths long enough that token estimates are not rounding noise. */
+export const SIZED_TURN_CHARS = { user: 400, assistant: 800 } as const;
+
+/** A turn with SIZED_TURN_CHARS-long texts. */
 export function makeSizedTurn(overrides: Partial<Turn> = {}): Turn {
-  return makeTurn({ userText: 'u'.repeat(400), assistantText: 'a'.repeat(800), ...overrides });
+  return makeTurn({ userText: 'u'.repeat(SIZED_TURN_CHARS.user), assistantText: 'a'.repeat(SIZED_TURN_CHARS.assistant), ...overrides });
 }

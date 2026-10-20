@@ -14,13 +14,18 @@ import { createFixtureServer, spanToWire, type FixtureServer } from './support/f
 import { codeQualityRoutes, type CodeQualityResponse } from '../api/routes/code-quality.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { CODE_ATTRIBUTES } from '../lib/hook-attributes.js';
+import { TIME_MS } from '../lib/constants.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 const NS_PER_MS = 1_000_000n;
 const RECENT_NS = BigInt(Date.now()) * NS_PER_MS;
-const SPAN_DURATION_NS = 1_000n * NS_PER_MS;
+const SPAN_DURATION_NS = BigInt(TIME_MS.SECOND) * NS_PER_MS;
 const AGENT = 'agent-auditor';
 const BASELINE_AGENT = 'general-purpose';
 const VERSION = '2026-09-24';
+const SURVIVAL_RATE = 0.9;
+const BASELINE_SURVIVAL_RATE = 0.5;
+const SEED_CHANGE_ID_LENGTH = 40;
 
 let fixture: FixtureServer;
 
@@ -53,7 +58,7 @@ function checkpoint(attrs: Record<string, unknown>, startNs = RECENT_NS) {
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: AGENT,
       [GENAI_AGENT_ATTRIBUTES.AGENT_VERSION]: VERSION,
       [CODE_ATTRIBUTES.CHECKPOINT_WINDOW]: '21d',
-      [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.9,
+      [CODE_ATTRIBUTES.SURVIVAL_RATE]: SURVIVAL_RATE,
       [CODE_ATTRIBUTES.CHURN_RATE]: 0.1,
       [CODE_ATTRIBUTES.DELETION_RATE]: 0,
       ...attrs,
@@ -80,36 +85,37 @@ function invocation(attrs: Record<string, unknown>, agentName = AGENT) {
 
 async function get(): Promise<CodeQualityResponse> {
   const res = await codeQualityRoutes.request('/code-quality');
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(HttpStatus.Ok);
   return (await res.json()) as CodeQualityResponse;
 }
 
 describe('GET /code-quality', () => {
   it('keeps scored code, baseline code and doc checkpoints in separate rows', async () => {
-    fixture.setTraces([
+    const checkpoints = [
       checkpoint({ [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'scored', [CODE_ATTRIBUTES.CONTENT_KIND]: 'code' }),
       checkpoint({
         [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: BASELINE_AGENT,
         [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'baseline',
         [CODE_ATTRIBUTES.CONTENT_KIND]: 'code',
-        [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.5,
+        [CODE_ATTRIBUTES.SURVIVAL_RATE]: BASELINE_SURVIVAL_RATE,
       }),
       checkpoint({
         [CODE_ATTRIBUTES.SURVIVAL_COHORT]: 'scored',
         [CODE_ATTRIBUTES.CONTENT_KIND]: 'doc',
         [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0,
       }),
-    ]);
+    ];
+    fixture.setTraces(checkpoints);
 
     const body = await get();
 
     const rows = body.survivalByAgentWindow.map(r => [r.agentName, r.cohort, r.contentKind, r.avgSurvivalRate]);
     expect(rows).toEqual(expect.arrayContaining([
-      [AGENT, 'scored', 'code', 0.9],
-      [BASELINE_AGENT, 'baseline', 'code', 0.5],
+      [AGENT, 'scored', 'code', SURVIVAL_RATE],
+      [BASELINE_AGENT, 'baseline', 'code', BASELINE_SURVIVAL_RATE],
       [AGENT, 'scored', 'doc', 0],
     ]));
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(checkpoints.length);
   });
 
   it('reads a checkpoint with neither attribute as scored code', async () => {
@@ -132,20 +138,23 @@ describe('GET /code-quality', () => {
   });
 
   it('counts a re-measured checkpoint once, at its latest span, whatever order the spans arrive in', async () => {
-    const SEED = 'a'.repeat(40);
-    const OTHER_SEED = 'b'.repeat(40);
+    const SEED = 'a'.repeat(SEED_CHANGE_ID_LENGTH);
+    const OTHER_SEED = 'b'.repeat(SEED_CHANGE_ID_LENGTH);
     const EARLIER_NS = RECENT_NS - SPAN_DURATION_NS;
+    const LATEST_RATE = 0.8;
+    const SUPERSEDED_RATE = 0.2;
+    const OTHER_SEED_RATE = 0.4;
     fixture.setTraces([
-      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.8 }),
+      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: LATEST_RATE }),
       // The superseded span arrives after the one that replaced it.
-      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.2 }, EARLIER_NS),
-      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: OTHER_SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: 0.4 }),
+      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: SUPERSEDED_RATE }, EARLIER_NS),
+      checkpoint({ [CODE_ATTRIBUTES.SEED_CHANGE_ID]: OTHER_SEED, [CODE_ATTRIBUTES.SURVIVAL_RATE]: OTHER_SEED_RATE }),
     ]);
 
     const [row] = (await get()).survivalByAgentWindow;
 
     expect(row?.checkpointCount).toBe(2);
-    expect(row?.avgSurvivalRate).toBeCloseTo(0.6);
+    expect(row?.avgSurvivalRate).toBeCloseTo((LATEST_RATE + OTHER_SEED_RATE) / 2);
   });
 
   it('labels baseline invocations in the version rollout', async () => {

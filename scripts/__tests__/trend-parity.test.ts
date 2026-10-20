@@ -10,6 +10,7 @@ import type { EvaluationResult } from '../../../src/backends/index.js';
 import { trendKey } from '../../src/api/aggregates/trend.js';
 import { trendRoutes } from '../../src/api/routes/trends.js';
 import { DEFAULT_TREND_BUCKETS } from '../../src/lib/constants.js';
+import { HttpStatus } from '../../src/lib/http-constants.js';
 import { evaluation, FIXTURE_METRIC } from './support/evaluations.js';
 import { kvValue, serveParityFixture, syncEachTest } from './support/parity-fixture.js';
 
@@ -22,6 +23,7 @@ const evaluations: EvaluationResult[] = [
   evaluation('three days ago', '2026-10-06T10:00:00.000Z', { scoreValue: 0.7 }),
   evaluation('unscored', '2026-10-07T10:00:00.000Z', { scoreValue: undefined }),
 ];
+const SCORED_EVALUATIONS = 3;
 
 const fixture = serveParityFixture({ evaluations });
 
@@ -34,7 +36,7 @@ describe('trend parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     const fromKv = kvValue(synced(), trendKey(FIXTURE_METRIC, period));
 
     const res = await trendRoutes.request(`/trends/${FIXTURE_METRIC}?period=${period}&buckets=${DEFAULT_TREND_BUCKETS}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const fromRoute: unknown = await res.json();
 
     expect(fromKv).toEqual(fromRoute);
@@ -47,7 +49,7 @@ describe('trend parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     expect(month?.narrowed).toBe(true);
     expect(week?.narrowed).toBe(false);
     expect(month?.bucketCount).toBe(DEFAULT_TREND_BUCKETS);
-    expect(month?.totalEvaluations).toBe(3);
-    expect(month?.trendData.reduce((sum, b) => sum + b.count, 0)).toBe(3);
+    expect(month?.totalEvaluations).toBe(SCORED_EVALUATIONS);
+    expect(month?.trendData.reduce((sum, b) => sum + b.count, 0)).toBe(SCORED_EVALUATIONS);
   });
 });

@@ -122,9 +122,10 @@ describe('useQualityLive', () => {
     const { result } = renderHook(() => useQualityLive(), harness);
     await waitFor(() => { expect(result.current.data?.sessionCount).toBe(1); });
 
-    stubFetch(makeQualityResponse({ sessionCount: 5 }));
+    const REFRESHED_SESSION_COUNT = 5;
+    stubFetch(makeQualityResponse({ sessionCount: REFRESHED_SESSION_COUNT }));
     await harness.queryClient.invalidateQueries();
 
-    await waitFor(() => { expect(result.current.data?.sessionCount).toBe(5); });
+    await waitFor(() => { expect(result.current.data?.sessionCount).toBe(REFRESHED_SESSION_COUNT); });
   });
 });

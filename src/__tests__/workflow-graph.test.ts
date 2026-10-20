@@ -6,6 +6,8 @@ import type { TraceSpan } from '../types.js';
 import { makeHandoff, makeTurn, makeEvaluation, makeSpan, makeNode, makeEdge, makeGraph, makeChainGraph } from './workflow-fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES } from '../lib/otel-attributes.js';
 
+const CLOSE_TO_DIGITS = 5;
+
 // 1. 3-agent linear workflow
 
 describe('buildWorkflowGraph — 3-agent linear workflow', () => {
@@ -26,7 +28,7 @@ describe('buildWorkflowGraph — 3-agent linear workflow', () => {
 
   it('produces 3 nodes', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
+    expect(graph.nodes).toHaveLength(evaluation.turns.length);
   });
 
   it('produces 2 edges', () => {
@@ -134,7 +136,7 @@ describe('buildWorkflowGraph — 3-node cyclic workflow A→B→C→A', () => {
 
   it('produces 3 nodes', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
-    expect(graph.nodes).toHaveLength(3);
+    expect(graph.nodes).toHaveLength(evaluation.turns.length);
   });
 });
 
@@ -165,10 +167,11 @@ describe('buildWorkflowGraph — branching workflow', () => {
 // 5. Node data binding from turns
 
 describe('buildWorkflowGraph — node data binding', () => {
+  const WORKER_RELEVANCE = 0.65;
   const evaluation = makeEvaluation({
     handoffs: [],
     turns: [
-      makeTurn({ turnIndex: 0, agentName: 'worker', relevance: 0.65, taskProgress: 0.7, hasError: true }),
+      makeTurn({ turnIndex: 0, agentName: 'worker', relevance: WORKER_RELEVANCE, taskProgress: 0.7, hasError: true }),
     ],
     totalTurns: 1,
   });
@@ -181,7 +184,7 @@ describe('buildWorkflowGraph — node data binding', () => {
   it('node evaluationScore reflects turn relevance', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
     const node = graph.nodes.find(n => n.id === 'worker');
-    expect(node?.evaluationScore).toBeCloseTo(0.65, 5);
+    expect(node?.evaluationScore).toBeCloseTo(WORKER_RELEVANCE, CLOSE_TO_DIGITS);
   });
 
   it('node hasError is true when any turn has an error', () => {
@@ -206,9 +209,11 @@ describe('buildWorkflowGraph — node data binding', () => {
 // 6. Edge data binding from handoffs
 
 describe('buildWorkflowGraph — edge data binding', () => {
+  const HANDOFF_SCORE = 0.72;
+  const HANDOFF_GAP_MS = 5;
   const evaluation = makeEvaluation({
     handoffs: [
-      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: 0.72, contextPreserved: false }),
+      makeHandoff({ sourceAgent: 'agentA', targetAgent: 'agentB', score: HANDOFF_SCORE, contextPreserved: false }),
     ],
     turns: [
       makeTurn({ turnIndex: 0, agentName: 'agentA' }),
@@ -222,7 +227,7 @@ describe('buildWorkflowGraph — edge data binding', () => {
   it('edge handoffScore matches handoff score', () => {
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spans);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.handoffScore).toBeCloseTo(0.72, 5);
+    expect(edge?.handoffScore).toBeCloseTo(HANDOFF_SCORE, CLOSE_TO_DIGITS);
   });
 
   it('edge contextPreserved is false when handoff contextPreserved is false', () => {
@@ -252,7 +257,7 @@ describe('buildWorkflowGraph — edge data binding', () => {
     ];
     const graph: WorkflowGraph = buildWorkflowGraph(evaluation, spansWithTiming);
     const edge = graph.edges.find(e => e.source === 'agentA' && e.target === 'agentB');
-    expect(edge?.latencyMs).toBe(5);
+    expect(edge?.latencyMs).toBe(HANDOFF_GAP_MS);
     expect(edge?.label).toBe('0.72 · 5ms');
   });
 
@@ -460,12 +465,14 @@ describe('criticalPath', () => {
   });
 
   it('follows a linear chain from the root to its leaf', () => {
-    expect(criticalPath(makeChainGraph(3, 'n', 'linear'))).toEqual(['n-0', 'n-1', 'n-2']);
+    const CHAIN_LENGTH = 3;
+    expect(criticalPath(makeChainGraph(CHAIN_LENGTH, 'n', 'linear'))).toEqual(['n-0', 'n-1', 'n-2']);
   });
 
   it('chooses the branch with the larger total duration, not the larger first step', () => {
+    const nodes = [node('root', 1), node('short-then-long', 10), node('long', 100), node('one-step', 50)];
     const graph = makeGraph({
-      nodes: [node('root', 1), node('short-then-long', 10), node('long', 100), node('one-step', 50)],
+      nodes,
       edges: [edge('root', 'short-then-long'), edge('short-then-long', 'long'), edge('root', 'one-step')],
       rootNodeId: 'root',
     });
@@ -483,8 +490,9 @@ describe('criticalPath', () => {
   });
 
   it('finds the longest chain through a cycle shared by two branches', () => {
+    const nodes = [node('root', 0), node('x', 0), node('y', 50), node('tail', 100)];
     const graph = makeGraph({
-      nodes: [node('root', 0), node('x', 0), node('y', 50), node('tail', 100)],
+      nodes,
       edges: [edge('root', 'x'), edge('root', 'y'), edge('x', 'y'), edge('y', 'x'), edge('x', 'tail')],
       rootNodeId: 'root',
       workflowShape: 'cyclic',

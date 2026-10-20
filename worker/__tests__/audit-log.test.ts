@@ -22,6 +22,7 @@ const ADMIN_PERMISSIONS = [
 ];
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
+const ASYNC_LOG_FLUSH_MS = 10;
 
 function withAdminAuth(
   routeHandler: (url: string, init?: RequestInit) => Promise<Response>,
@@ -96,7 +97,7 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
     const res = await requestMutation(mutation);
     expect(res.status).toBe(HttpStatus.NoContent);
 
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
     const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
     expect(auditCall).toBeDefined();
@@ -124,7 +125,7 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
     const res = await requestMutation(mutation);
     expect(res.status).toBe(HttpStatus.InternalServerError);
 
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
     const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
     expect(auditCall).toBeUndefined();

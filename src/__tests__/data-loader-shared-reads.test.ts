@@ -77,11 +77,12 @@ describe('shared cloud reads', () => {
   it('keeps reads with different requests apart', async () => {
     vi.stubEnv(CLOUD_READ_CACHE_TTL_ENV, CACHE_TTL_MS);
 
+    const DISTINCT_READS = 3;
     await loadEvaluationsByMetric(START, END);
     await loadEvaluationsByMetric(START, OTHER_END);
     await loadEvaluationsForMetric(METRIC, START, END);
 
-    expect(requestsTo(EVALUATIONS_PATH)).toBe(3);
+    expect(requestsTo(EVALUATIONS_PATH)).toBe(DISTINCT_READS);
   });
 
   it('does not hold a failed read, in flight or cached', async () => {

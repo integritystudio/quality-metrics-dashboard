@@ -50,6 +50,21 @@ const STAFF_SESSION: AppSession = {
 /** An org owner: `dashboard.admin` without `isStaff`, the case the gate exists for. */
 const OWNER_SESSION: AppSession = { ...STAFF_SESSION, isStaff: false };
 
+const USAGE_BUCKET_TOTAL = USAGE_SUMMARY.buckets.reduce((sum, bucket) => sum + bucket.total_quantity, 0);
+
+const MONTHLY_ALERT_CASES: Array<[number, string, string]> = [
+  [375000, 'warning', CUSTOMER_VIEW.usage.approachingAlertTitle],
+  [450000, 'warning', CUSTOMER_VIEW.usage.approachingAlertTitle],
+  [500000, 'critical', CUSTOMER_VIEW.usage.reachedAlertTitle],
+];
+
+const MINUTE_BAR_TONE_CASES: Array<[number, string]> = [
+  [74, 'normal'],
+  [75, 'warning'],
+  [89, 'warning'],
+  [90, 'danger'],
+];
+
 const ALL_FIXTURES = {
   directory: () => ({ organizations: [ORG_A, ORG_B] }),
   billing: () => BILLING_ACTIVE,
@@ -310,7 +325,7 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
 
     expect(await screen.findByText(CUSTOMER_VIEW.usage.since('2026-10-01'))).toBeInTheDocument();
     // The bar reads the enforced quota, not the bucket total, once the quota has a plan.
-    expect(await screen.findByText(CUSTOMER_VIEW.usage.unitsOfLimit(12345, 500000))).toBeInTheDocument();
+    expect(await screen.findByText(CUSTOMER_VIEW.usage.unitsOfLimit(QUOTA_GROWTH.monthlyUsed, QUOTA_GROWTH.monthlyLimit))).toBeInTheDocument();
     expect(screen.getByText(CUSTOMER_VIEW.usage.percentUsed(2))).toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: /Monthly usage/ })).toHaveAttribute('aria-valuenow', '2');
     expect(screen.getByText(/^Resets /)).toBeInTheDocument();
@@ -324,16 +339,12 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
   it('shows the bucket total alone when the quota is uninitialized, with no chart line or bar', async () => {
     openScreen('usage', { quota: () => QUOTA_UNINITIALIZED });
 
-    expect(await screen.findByText(CUSTOMER_VIEW.usage.units(450))).toBeInTheDocument();
+    expect(await screen.findByText(CUSTOMER_VIEW.usage.units(USAGE_BUCKET_TOTAL))).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     expect(screen.queryByText(/^Resets /)).not.toBeInTheDocument();
   });
 
-  it.each([
-    [375000, 'warning', CUSTOMER_VIEW.usage.approachingAlertTitle],
-    [450000, 'warning', CUSTOMER_VIEW.usage.approachingAlertTitle],
-    [500000, 'critical', CUSTOMER_VIEW.usage.reachedAlertTitle],
-  ])('at %i of 500000 raises a %s alert: %s', async (monthlyUsed, status, title) => {
+  it.each(MONTHLY_ALERT_CASES)('at %i of 500000 raises a %s alert: %s', async (monthlyUsed, status, title) => {
     openScreen('usage', { quota: () => ({ ...QUOTA_GROWTH, monthlyUsed }) });
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveAttribute('data-status', status);
@@ -343,7 +354,7 @@ describe('AdminCustomerUsagePage (ADMIN-CV-USAGE)', () => {
   it('says "Unlimited plan" for a null monthly limit', async () => {
     openScreen('usage', { quota: () => ({ ...QUOTA_GROWTH, monthlyLimit: null }) });
     expect(await screen.findByText(CUSTOMER_VIEW.usage.unlimitedPlan)).toBeInTheDocument();
-    expect(screen.getByText(CUSTOMER_VIEW.usage.units(12345))).toBeInTheDocument();
+    expect(screen.getByText(CUSTOMER_VIEW.usage.units(QUOTA_GROWTH.monthlyUsed))).toBeInTheDocument();
   });
 
   it('shows "0 units" and neither chart nor table for a month with no buckets', async () => {
@@ -378,8 +389,8 @@ describe('AdminCustomerQuotaPage (ADMIN-CV-QUOTA)', () => {
     openScreen('quota');
 
     expect(await screen.findByText('Growth')).toHaveAttribute('data-tone', 'info');
-    expect(screen.getByText(`${CUSTOMER_VIEW.quota.minute}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.usedOfLimit(5, 60));
-    expect(screen.getByText(`${CUSTOMER_VIEW.quota.monthly}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.usedOfLimit(12345, 500000));
+    expect(screen.getByText(`${CUSTOMER_VIEW.quota.minute}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.usedOfLimit(QUOTA_GROWTH.minuteUsed, QUOTA_GROWTH.minuteLimit));
+    expect(screen.getByText(`${CUSTOMER_VIEW.quota.monthly}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.usedOfLimit(QUOTA_GROWTH.monthlyUsed, QUOTA_GROWTH.monthlyLimit));
     expect(screen.getAllByRole('progressbar')).toHaveLength(2);
     expect(screen.queryByText(ADMIN_VIEW.quotaUninitialized)).not.toBeInTheDocument();
   });
@@ -387,16 +398,11 @@ describe('AdminCustomerQuotaPage (ADMIN-CV-QUOTA)', () => {
   it('says "(Unlimited)" with no monthly bar for a null monthly limit', async () => {
     openScreen('quota', { quota: () => ({ ...QUOTA_GROWTH, monthlyLimit: null }) });
     expect(await screen.findByText(`${CUSTOMER_VIEW.quota.monthly}:`)).toBeInTheDocument();
-    expect(screen.getByText(`${CUSTOMER_VIEW.quota.monthly}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.unlimited(12345));
+    expect(screen.getByText(`${CUSTOMER_VIEW.quota.monthly}:`).parentElement).toHaveTextContent(CUSTOMER_VIEW.quota.unlimited(QUOTA_GROWTH.monthlyUsed));
     expect(screen.getAllByRole('progressbar')).toHaveLength(1);
   });
 
-  it.each([
-    [74, 'normal'],
-    [75, 'warning'],
-    [89, 'warning'],
-    [90, 'danger'],
-  ])('colours the minute bar at %i of 100 as %s', async (minuteUsed, tone) => {
+  it.each(MINUTE_BAR_TONE_CASES)('colours the minute bar at %i of 100 as %s', async (minuteUsed, tone) => {
     openScreen('quota', { quota: () => ({ ...QUOTA_GROWTH, minuteLimit: 100, minuteUsed }) });
     const bar = await screen.findByRole('progressbar', { name: /Minute/ });
     expect(bar).toHaveAttribute('data-tone', tone);

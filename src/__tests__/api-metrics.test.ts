@@ -16,6 +16,7 @@ import { metricsRoutes } from '../api/routes/metrics.js';
 import type { ErrorResponse, MetricDetailResponse, MetricEvaluationsResponse } from './support/api-responses.js';
 import type { EvaluationResult } from '../types.js';
 import { defined } from './support/defined.js';
+import { HttpStatus } from '../lib/http-constants.js';
 
 let fixture: FixtureServer;
 
@@ -34,11 +35,15 @@ afterAll(async () => {
  */
 const EVAL_NANOS = 1737000000000000000n;
 const ONE_HOUR_NANOS = 3_600_000_000_000n;
+const DEFAULT_SCORE = 0.85;
+const CLOSE_TO_DIGITS = 3;
+const SCORES_ASCENDING = [0.3, 0.6, 0.9];
+const SCORES_DESCENDING = SCORES_ASCENDING.toReversed();
 
 function makeMockEval(overrides: Partial<EvaluationResult> = {}): EvaluationResult {
   return {
     evaluationName: 'relevance',
-    scoreValue: 0.85,
+    scoreValue: DEFAULT_SCORE,
     timestamp: EVAL_NANOS,
     traceId: 'trace-001',
     evaluatorType: 'seed',
@@ -63,36 +68,36 @@ describe('GET /metrics/:name', () => {
 
   it('returns 404 for unknown metric', async () => {
     const res = await metricsRoutes.request('/metrics/nonexistent?period=7d');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(HttpStatus.NotFound);
     const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 400 for invalid period', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=99d');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
     const body = await res.json() as ErrorResponse;
     expect(body).toHaveProperty('error');
   });
 
   it('returns 400 for topN out of range', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d&topN=0');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 400 for bucketCount out of range', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d&bucketCount=1');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with metric detail for valid request', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as MetricDetailResponse;
     expect(body).toHaveProperty('name', 'relevance');
     expect(body).toHaveProperty('values');
     expect(body).toHaveProperty('sampleCount');
-    expect(body.values.avg).toBeCloseTo(0.85, 3);
+    expect(body.values.avg).toBeCloseTo(DEFAULT_SCORE, CLOSE_TO_DIGITS);
     expect(body.sampleCount).toBe(1);
   });
 
@@ -100,7 +105,7 @@ describe('GET /metrics/:name', () => {
     // A velocity of null is what the route returned in production while it
     // passed the previous trend where computeMetricDynamics takes the period length.
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as MetricDetailResponse;
     expect(body.trend?.direction).toBe('stable');
     expect(typeof body.dynamics?.velocity).toBe('number');
@@ -109,7 +114,7 @@ describe('GET /metrics/:name', () => {
   it('omits trend and dynamics when there is no data', async () => {
     fixture.reset();
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as MetricDetailResponse;
     expect(body.sampleCount).toBe(0);
     expect(body.trend).toBeUndefined();
@@ -119,7 +124,7 @@ describe('GET /metrics/:name', () => {
   it('returns 500 when backend throws', async () => {
     fixture.failPath('/v1/evaluations');
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(HttpStatus.InternalServerError);
   });
 });
 
@@ -140,17 +145,17 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('returns 404 for unknown metric', async () => {
     const res = await metricsRoutes.request('/metrics/nonexistent/evaluations?period=7d');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(HttpStatus.NotFound);
   });
 
   it('returns 400 for invalid period', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=bad');
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(HttpStatus.BadRequest);
   });
 
   it('returns 200 with rows, total, hasMore', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(HttpStatus.Ok);
     const body = await res.json() as MetricEvaluationsResponse;
     expect(body).toHaveProperty('rows');
     expect(body).toHaveProperty('total');
@@ -162,7 +167,7 @@ describe('GET /metrics/:name/evaluations', () => {
   it('total matches evaluation count', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
     const body = await res.json() as MetricEvaluationsResponse;
-    expect(body.total).toBe(3);
+    expect(body.total).toBe(evals.length);
   });
 
   it('filters by scoreLabel', async () => {
@@ -175,20 +180,20 @@ describe('GET /metrics/:name/evaluations', () => {
   it('sorts score_asc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_asc');
     const body = await res.json() as MetricEvaluationsResponse;
-    expect(body.rows.map((r) => r.score)).toEqual([0.3, 0.6, 0.9]);
+    expect(body.rows.map((r) => r.score)).toEqual(SCORES_ASCENDING);
   });
 
   it('sorts score_desc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_desc');
     const body = await res.json() as MetricEvaluationsResponse;
-    expect(body.rows.map((r) => r.score)).toEqual([0.9, 0.6, 0.3]);
+    expect(body.rows.map((r) => r.score)).toEqual(SCORES_DESCENDING);
   });
 
   it('pagination with limit and offset', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=2&offset=1');
     const body = await res.json() as MetricEvaluationsResponse;
     expect(body.rows).toHaveLength(2);
-    expect(body.total).toBe(3);
+    expect(body.total).toBe(evals.length);
     expect(body.hasMore).toBe(false);
   });
 
