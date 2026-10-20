@@ -30,6 +30,7 @@ No open items.
 |----|-------|----------|-------|
 | DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, all three option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. Still open: the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
+| DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | P3 | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
 
 **DASH-LINT-PARENT-PARITY.** Diffed with `eslint --print-config` on one src, worker, scripts and test file
 here against `../src/server.ts` and a parent test under the parent's `eslint.config.cjs`. The cheap subset
@@ -574,8 +575,8 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     (12, 3, 16, 8) match only unrelated constants (`MONTHS_PER_YEAR`, `BITS.BYTE`, …), so none was swapped.
     - `MIN_SESSION_COMPLETION_AGE_MS` and `BATCH_WALL_CLOCK_MS` use new `DURATION_MS.TWELVE_HOURS` /
       `THREE_HOURS`, added to the parent's `src/lib/core/units.ts` on parent branch
-      `feat/duration-ms-twelve-three-hours`, merged into the parent's local main as `ab2ecd00` (not yet
-      pushed). 🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
+      `feat/duration-ms-twelve-three-hours`, merged into the parent's `origin/main` as `ab2ecd00`.
+      🔴 `scripts/` imports `units.ts` from the parent checkout by source path and `test:scripts`
       redirects that to the parent's `dist/`, so a checkout or build without the members fails
       `typecheck:scripts` (2 × TS2339) and lint (8 `no-unsafe-*`), and leaves both values `undefined` at
       run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the batch wall clock
@@ -605,10 +606,15 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     factory and exports the single `localPlugin` object both config blocks share, since flat config refuses
     to redefine a plugin) and enabled at warn over `TEST_FILES` with the same options. It found 666 hits in
     74 files, swept to 0: HTTP statuses to `HttpStatus`, counts derived from the fixture they count, the
-    rest named `const`s or hoisted into `const` fixture objects the variant exempts.
-  - **Score bands disagree with the thresholds.** `SCORE_BAND_LOWER_BOUNDS` (`[0.4, 0.6, 0.8, 0.9]`,
-    `quality-utils.ts`) and `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5) band scores two ways and differ
-    below 0.8; which one is right is a product decision.
+    rest named `const`s or hoisted into `const` fixture objects the variant exempts. The review of that
+    sweep is DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE.
+  - ~~**Two band scales.**~~ Resolved 2026-10-19: `SCORE_THRESHOLD_GREEN`/`YELLOW` (0.8 / 0.5, a copy of
+    the parent's step-scale `STEP_SCALE_*`) are deleted; `QualityLiveIndicator` and `ConfidencePanel`
+    now band through `scoreColorBand`, the parent's continuous `SCORE_BAND_*` (`[0.4, 0.6, 0.8, 0.9]`),
+    as `data-band`. Both gain the `good` and `poor` bands, and evaluator agreement below 0.5 is no
+    longer left unbanded. Live hallucination chips band as `minimize` (`HALLUCINATION_RISK_EVALUATION_NAMES`);
+    they had been coloured as higher-is-better. Live chips still use the uniform bands, not
+    `adaptiveScoreColorBand`'s per-metric scale strategy that `ScoreBadge` applies.
   - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
     `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
 - **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,
@@ -644,6 +650,31 @@ versions); the dashboard installs standalone in CI.
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
+
+**DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE.** Files: `scripts/__tests__/judge-evaluations.test.ts`,
+`pipeline-integration.test.ts`, `derive-evaluations.test.ts`, `sync-prioritization.test.ts`,
+`judge-hallucination-eval.test.ts`, `judge-consolidated.test.ts`, `judge-selection.test.ts`. The
+magic-number sweep (666 literals named across 74 files, six agents in parallel) and its review fixes
+rewrote these seven most heavily, and the read-only review hunted only for assertions that had come to
+track their own source constant or lost a boundary; it ran no mutation and did not judge the tests on
+their own terms. Audit each file for:
+- **Contract, not internals.** Every test exercises the module's public surface and would survive a
+  refactor that keeps behaviour; drop or rewrite tests pinned to private helpers or call order.
+- **Three paths per behaviour.** Happy path, the boundary (caps, empty input, exact thresholds such as
+  `MAX_TEXT_LENGTH`, `MIN_TRACE_BUDGET`, the 19-character turn key) and the error path each have a test
+  that fails for the right reason.
+- **Real collaborators.** Doubles only at the true boundaries (the LLM provider, the network, process
+  exit, the clock); `createMockLLM`/`createFakeProvider` stay, incidental mocks of sibling modules go.
+- **Assertions that can fail.** No expected value computed by the code under test, no `toHaveLength`
+  of the result's own length, no `toBeCloseTo` where exact equality holds; one behaviour per test,
+  Arrange-Act-Assert visible, names that state the behaviour (`'returns 0.5 for in_progress tasks'`
+  must still say 0.5 somewhere a reader can check).
+- **Fixtures earn their constants.** A hoisted `const` is justified only when a reader needs the name
+  to understand the assertion; a `CLOSE_TO_DIGITS` or `OVERFLOW_CHARS` repeated across files belongs in
+  `scripts/__tests__/support/`, which the sweep was told not to touch.
+Acceptance: a written per-file verdict (keep / rewrite / delete per test), the rewrites landed,
+`npm run test:scripts` green, and a mutation spot-check — flip one threshold or comparison in each
+module under test and confirm at least one of its tests fails.
 
 **DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
 entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version
