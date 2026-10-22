@@ -3,7 +3,7 @@
  * guards every route module builds on.
  */
 
-import type { Context, HonoRequest } from 'hono';
+import type { Context, HonoRequest, MiddlewareHandler } from 'hono';
 import { createFactory } from 'hono/factory';
 import type { z } from 'zod';
 import type { AppSession, DashboardPermission } from '../src/types/auth.js';
@@ -65,7 +65,7 @@ export function hasPermission(session: AppSession, permission: DashboardPermissi
 }
 
 /** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
-export function requirePermission(permission: DashboardPermission) {
+export function requirePermission(permission: DashboardPermission): MiddlewareHandler<AppEnv> {
   return factory.createMiddleware(async (c, next) => {
     if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
     return next();

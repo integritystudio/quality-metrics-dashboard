@@ -111,6 +111,7 @@ const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
 // ---------------------------------------------------------------------------
 
 /** The caller's active keys in their active org — the only keys these routes may touch. */
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- a PostgrestFilterBuilder whose six type arguments restate postgrest-js internals; derive from the builder instead
 function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns: string) {
   return db(env).from('api_keys')
     .select(columns)

@@ -59,7 +59,7 @@ import { incrementIn } from './collections.js';
 import { discoverFromCloud } from './judge-cloud-source.js';
 import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched } from './judge-consolidated.js';
 import { readScope, resolveDateScope } from './derive-evaluations.js';
-import { selectTurns, formatTurnSelection } from './judge-selection.js';
+import { selectTurns, formatTurnSelection, type TurnSelection } from './judge-selection.js';
 import { formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import {
   LLM_EVALUATOR_KIND,
@@ -657,7 +657,7 @@ async function judgeTurns(
         apiKey: judgeKey.apiKey,
         onUsage: (u) => addUsage(usage, u),
       })
-      : async (turn: Turn) => evaluateTurn(judge, turn, existingKeys);
+      : async (turn: Turn): Promise<EvalRecord[]> => evaluateTurn(judge, turn, existingKeys);
     allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
   }
 
@@ -697,7 +697,7 @@ export function rejectRemovedFlags(args: readonly string[]): void {
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const { cli, requestedLimit } = exitOnCliArgError('Error:', () => {
     rejectRemovedFlags(args);
@@ -724,7 +724,7 @@ async function main() {
   }
   const { turns, accounts, existingKeys } = discovery;
   // --seed posts nothing, so only a real run skips turns it could not deliver.
-  const select = (keys: Set<string>) => selectTurns(turns, keys, { limit, deliverableOnly: !seed });
+  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit, deliverableOnly: !seed });
 
   if (dryRun) {
     const selection = select(existingKeys);

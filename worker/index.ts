@@ -1,4 +1,4 @@
-import type { Next } from 'hono';
+import type { MiddlewareHandler, Next } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
@@ -14,7 +14,7 @@ import { CONTENT_TYPE_HEADER, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
 import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, INVALID_PERIOD_MESSAGE, PeriodEnum, type Period } from '../src/lib/periods.js';
 import { ROLES, RoleSchema } from '../src/lib/roles.js';
-import { factory, isOrgScopingEnabled, readJsonBody, requirePermission, safeArray, type AppContext, type Bindings } from './app-context.js';
+import { factory, isOrgScopingEnabled, readJsonBody, requirePermission, safeArray, type AppContext, type AppEnv, type Bindings } from './app-context.js';
 import { BEARER_PREFIX, db, logActivity } from './supabase.js';
 import { registerAdminRoutes } from './admin-routes.js';
 import {
@@ -101,7 +101,7 @@ const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 const ERR_INVALID_INPUT_KEY = `Invalid inputKey. Must be ${orList(VALID_INPUT_KEYS)}.`;
 
 const CORRELATIONS_DEFAULT_PERIOD: Period = '30d';
-const periodField = (fallback: Period) => PeriodEnum.default(fallback);
+const periodField = (fallback: Period): z.ZodDefault<typeof PeriodEnum> => PeriodEnum.default(fallback);
 const PeriodQuery = z.object({ period: periodField(DEFAULT_PERIOD) });
 const DashboardQuery = z.object({
   period: periodField(DEFAULT_PERIOD),
@@ -358,6 +358,7 @@ async function loadAppUser(
  * Roles and (under org scoping) memberships fetch in PARALLEL — Risk 19:
  * the added membership round-trip must not serialize into the auth budget.
  */
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- a tuple of two postgrest-js responses that MembershipsResult derives from; restating it would duplicate the builder internals
 async function fetchGrants(
   supabase: PostgrestClient,
   appUserId: string,
@@ -430,7 +431,7 @@ async function orgScopedSession(c: AppContext, args: {
   user: AppUser;
   roles: string[];
   membershipsRes: MembershipsResult;
-}) {
+}): ReturnType<MiddlewareHandler<AppEnv>> {
   const { next, authUserId, user, roles, membershipsRes } = args;
   // Fail closed: a failed read must not pass for "no memberships", which answers a
   // non-retried 403 (or, for staff, the home org).
@@ -578,7 +579,7 @@ function parseMemberships(raw: unknown): OrgMembershipSummary[] {
   return memberships;
 }
 
-function validQuery<T extends z.ZodType>(schema: T) {
+function validQuery<T extends z.ZodType>(schema: T): ReturnType<typeof queryValidator<T>> {
   return queryValidator(schema, QUERY_FIELD_ERRORS, ERR_INVALID_QUERY);
 }
 

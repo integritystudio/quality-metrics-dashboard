@@ -118,7 +118,7 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
     resultsFilePath: (docsDir, date) => join(docsDir, `${resultsPrefix}${toDateOnly(date)}${RESULTS_SUFFIX}`),
     refusalReason,
     refuse,
-    resolveApiKey: () => {
+    resolveApiKey: (): JudgeApiKey | undefined => {
       const credential = resolveJudgeApiKey();
       if (!credential) {
         refuse(`no API key: set ${JUDGE_API_KEY_ENV} (or ${DEFAULT_API_KEY_ENV})`);
@@ -127,7 +127,7 @@ export function createRunGuard({ markerFilename, resultsPrefix, logPrefix, noun 
       console.log(`${logPrefix} API key from ${credential.source}`);
       return credential;
     },
-    begin: (docsDir, payload) => {
+    begin: (docsDir, payload): Date | undefined => {
       const reason = refusalReason(docsDir);
       if (reason) {
         refuse(reason);

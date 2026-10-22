@@ -280,7 +280,6 @@ export default tseslint.config(
       // value into a void slot by construction. Off in the parent's test block too.
       '@typescript-eslint/strict-void-return': 'off',
       'no-promise-executor-return': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
       // A stray `.only` silently skips the rest of the suite.
       'vitest/no-focused-tests': 'error',
       'vitest/no-identical-title': 'error',
@@ -352,12 +351,15 @@ export default tseslint.config(
       '@stylistic/indent': ['error', 2, { SwitchCase: 1 }],
     },
   },
-  // Return types where they document a contract: API payloads, route handlers and
-  // query-hook results. Deliberately NOT applied to src/components or src/pages —
-  // there it would only add `: JSX.Element` plus a `JSX` import to ~120 component
-  // files (DASH-LINT-PARENT-PARITY). The parent applies it tree-wide, at warn.
+  // Return types on every non-test `.ts` file, plus the `.tsx` under hooks and lib.
+  // Deliberately NOT applied to the other `.tsx` (components, pages, contexts, App,
+  // main) — there it would only add `: JSX.Element` plus a `JSX` import to ~120
+  // files — nor to the test trees, where the parent runs it at warn and the
+  // --max-warnings 0 gate here would make 287 helper and fixture functions errors
+  // (DASH-LINT-PARENT-PARITY). The parent applies it tree-wide, at warn.
   {
-    files: ['src/api/**/*.ts', 'src/hooks/**/*.{ts,tsx}', 'src/lib/**/*.{ts,tsx}'],
+    files: ['src/**/*.ts', 'worker/**/*.ts', 'scripts/**/*.ts', 'src/hooks/**/*.tsx', 'src/lib/**/*.tsx'],
+    ignores: TEST_FILES,
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'error',
     },
