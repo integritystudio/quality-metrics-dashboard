@@ -55,7 +55,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, all three option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. `scripts/populate-dashboard.ts`'s private `MS_PER_SECOND` copy was replaced by `TIME_MS.SECOND` on 2026-10-21 (PR #33). The 90d data gate is its own item, DASH-SYNC-90D-PERIOD; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, all three option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. `scripts/populate-dashboard.ts`'s private `MS_PER_SECOND` copy was replaced by `TIME_MS.SECOND` on 2026-10-21 (PR #33). The 90d data gate is its own item, DASH-SYNC-90D-PERIOD; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). **Acceptance met 2026-10-22**: `explicit-function-return-type` widened to every non-test `.ts` file, the `--print-config` diff re-run lists only the documented exclusions, and lint is at 0. Ready for `/backlog-migrate`. Source: session 2026-10-12 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | P3 | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
 
@@ -532,9 +532,12 @@ hand: the rule offers suggestions, never an autofix.
   `build.target`, and Vite does not polyfill a prototype method in any case, so the floor is accepted
   rather than configured.
 
-**`explicit-function-return-type` is on for `src/api`, `src/hooks` and `src/lib` only** (landed
-2026-10-16, at `error`; the parent has it tree-wide at `warn`). 46 sites annotated there. It is
-deliberately **not** applied to `src/components` or `src/pages`, which hold 156 of the 235 `src/` hits:
+**`explicit-function-return-type` is on for `src/api`, `src/hooks` and `src/lib`** (landed
+2026-10-16, at `error`; the parent has it tree-wide at `warn`), **and since 2026-10-22 for every
+non-test `.ts` file** (`src/**`, `worker/**`, `scripts/**`: 21 more sites annotated, two behind a
+one-line disable where the type is a postgrest-js builder that `MembershipsResult` and the callers
+derive from). 46 sites annotated in the first pass. It is deliberately **not** applied to the other
+`.tsx` (`src/components`, `src/pages`, `src/contexts`, `App.tsx`, `main.tsx`), which hold 156 of the 235 `src/` hits:
 only 3 of 127 `.tsx` files import React and the codebase has no `JSX.Element` annotation anywhere, so
 adopting it there means adding `import type { JSX } from 'react'` to ~120 files to satisfy the linter.
 Revisit only if those imports become wanted for another reason. What the 46 cost:
@@ -647,7 +650,7 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
   ~~`strict-void-return`~~ (source only) 2026-10-18, and ~~`prefer-readonly`~~,
   ~~`no-useless-default-assignment`~~, ~~`no-useless-constructor`~~ and
   ~~`no-non-null-asserted-nullish-coalescing`~~ 2026-10-19. `explicit-function-return-type` is on for
-  `src/api`, `src/hooks` and `src/lib` only (see above).
+  every non-test `.ts` file plus the `.tsx` under `src/hooks` and `src/lib` (see above).
 - **Option drift.** Done — ~~`no-deprecated` warn → error~~, ~~`ban-ts-comment` `minimumDescriptionLength: 10`~~
   and ~~`no-unused-vars` `destructuredArrayIgnorePattern: '^_'`~~ (dropped; the parent never set it and the
   tree had no `_`-prefixed destructured array element relying on it, so lint stayed at 0) landed 2026-10-19.
@@ -665,6 +668,17 @@ versions); the dashboard installs standalone in CI.
 
 Acceptance: re-running the `--print-config` diff lists no parent rule absent here except the documented
 exclusions, and `npm run lint` exits 0 under `--max-warnings 0`.
+
+**Met 2026-10-22.** The diff compared `../src/server.ts` and `../src/ci-deployment-secrets.test.ts` under
+the parent's `eslint.config.cjs` against a route, `worker/index.ts`, `scripts/sync-to-kv.ts`, a component and
+one test per tree here. Every rule the parent enables is enabled here except `explicit-function-return-type`
+on the `.tsx` outside hooks and lib (the `JSX` import cost above) and on the test trees, where the parent's
+`warn` is ungated and the gate here would make 287 helper and fixture functions errors (128 in `.ts`,
+159 in `.tsx`). Three option differences are deliberate, not gaps: `no-unnecessary-condition` runs without the
+parent's `allowConstantLoopConditions: 'only-allowed-literals'`, so this tree is stricter; the parent's
+`no-floating-promises` `allowForKnownSafeCalls` names `node:test` hooks, which vitest never needs; and
+`import/no-extraneous-dependencies` lists this package's own test and config globs plus the parent as an
+allowed import.
 
 **DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE.** Files: `scripts/__tests__/judge-evaluations.test.ts`,
 `pipeline-integration.test.ts`, `derive-evaluations.test.ts`, `sync-prioritization.test.ts`,
