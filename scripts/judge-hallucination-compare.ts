@@ -11,18 +11,19 @@
  * rather than shifting its level.
  *
  * Usage:
- *   npx tsx scripts/judge-hallucination-compare.ts <candidate.json> [--labels <earlier.json>]
+ *   npx tsx scripts/judge-hallucination-compare.ts --candidate <results.json> [--labels <earlier.json>]
  */
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { G_EVAL_SCORE_RANGE, G_EVAL_VALID_SCORES, G_EVAL_MAX_SCORE } from '../../src/lib/judge/llm-judge-constants.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
-import { runIfMain } from './cli-args.js';
+import { CliArgError, exitOnCliArgError, parseCli, runIfMain } from './cli-args.js';
 import { DOCS_DIR } from './one-shot-eval.js';
 import { turnKey } from './judge-turns.js';
 import { CONFIGURATIONS, type Configuration, type HallucinationTurn } from './judge-hallucination-eval.js';
 
+export const CANDIDATE_FLAG = '--candidate';
 export const LABELS_FLAG = '--labels';
 export const DEFAULT_LABELS_PATH = join(DOCS_DIR, 'archive', 'judge-hallucination-2026-09-25.json');
 const LOG_PREFIX = '[hallucination-compare]';
@@ -105,13 +106,18 @@ async function readTurns(path: string): Promise<HallucinationTurn[]> {
 const MAE_DIGITS = 3;
 const formatCount = ({ hits, of }: CountOf): string => `${hits}/${of}`;
 
-async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
-  const labelsAt = argv.indexOf(LABELS_FLAG);
-  const labelsPath = labelsAt === -1 ? DEFAULT_LABELS_PATH : argv[labelsAt + 1];
-  const candidatePath = argv.find((arg, i) => !arg.startsWith('--') && i !== labelsAt + 1);
-  if (!candidatePath || !labelsPath) throw new Error(`usage: judge-hallucination-compare.ts <candidate.json> [${LABELS_FLAG} <earlier.json>]`);
+export type CompareArgs = { candidatePath: string; labelsPath: string };
 
+/** Throws `CliArgError` on a missing `--candidate`, a flag with no value, or anything undeclared. */
+export function parseCompareArgs(argv: readonly string[]): CompareArgs {
+  const cli = parseCli(argv, { values: [CANDIDATE_FLAG, LABELS_FLAG] }, { allowUnknown: false });
+  const candidatePath = cli.value(CANDIDATE_FLAG);
+  if (candidatePath === undefined) throw new CliArgError(`${CANDIDATE_FLAG} <results.json> is required`);
+  return { candidatePath, labelsPath: cli.value(LABELS_FLAG) ?? DEFAULT_LABELS_PATH };
+}
+
+async function main(): Promise<void> {
+  const { candidatePath, labelsPath } = exitOnCliArgError(LOG_PREFIX, () => parseCompareArgs(process.argv.slice(2)));
   const result = compareToLabels(await readTurns(candidatePath), await readTurns(labelsPath));
   console.log(`${LOG_PREFIX} labels: ${labelsPath} (${result.labelled} turns)`);
   if (result.bestConstant) {

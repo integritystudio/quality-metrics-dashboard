@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { compareToLabels } from '../judge-hallucination-compare.js';
+import { compareToLabels, parseCompareArgs, CANDIDATE_FLAG, LABELS_FLAG, DEFAULT_LABELS_PATH } from '../judge-hallucination-compare.js';
+import { CliArgError } from '../cli-args.js';
 import type { HallucinationTurn } from '../judge-hallucination-eval.js';
 
 const HALLUCINATION = 'hallucination';
@@ -72,5 +73,25 @@ describe('compareToLabels', () => {
     const labels = [turn('a', GRADE_4), turn('b', GRADE_4), turn('c', CLEAN)];
 
     expect(compareToLabels([], labels).bestConstant).toEqual({ grade: GRADE_FOUR, mae: expect.closeTo(ONE_IN_THREE_GRADE_STEPS, CLOSE_TO_DIGITS) as number });
+  });
+});
+
+describe('parseCompareArgs', () => {
+  it('defaults the labels to the archived 09-25 results when only the candidate is given', () => {
+    expect(parseCompareArgs([CANDIDATE_FLAG, 'new.json'])).toEqual({ candidatePath: 'new.json', labelsPath: DEFAULT_LABELS_PATH });
+  });
+
+  it('reads both paths in either order', () => {
+    expect(parseCompareArgs([LABELS_FLAG, 'old.json', CANDIDATE_FLAG, 'new.json'])).toEqual({ candidatePath: 'new.json', labelsPath: 'old.json' });
+  });
+
+  it.each([
+    ['no candidate', [LABELS_FLAG, 'old.json'], /--candidate/],
+    ['a misspelled flag', [CANDIDATE_FLAG, 'new.json', '--label', 'old.json'], /Unknown argument: --label/],
+    ['a bare path', ['new.json'], /Unknown argument: new.json/],
+    ['a flag with no value', [CANDIDATE_FLAG, 'new.json', LABELS_FLAG], /--labels needs a value/],
+  ])('rejects %s', (_label, argv, message) => {
+    expect(() => parseCompareArgs(argv)).toThrow(CliArgError);
+    expect(() => parseCompareArgs(argv)).toThrow(message);
   });
 });
