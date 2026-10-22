@@ -11,7 +11,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QualityLiveIndicator } from '../components/QualityLiveIndicator.js';
 import { ConfidencePanel } from '../components/ConfidencePanel.js';
 import { CalibrationProvider } from '../contexts/CalibrationContext.js';
-import { CONTENT_TYPE_HEADER, ContentType } from '../lib/http-constants.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../lib/http-constants.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import type { QualityLiveData } from '../types.js';
 import { TEST_ACCESS_TOKEN, makeQueryWrapper, stubFetch } from './support/query-harness.js';
@@ -37,6 +37,8 @@ const URL_BASE = 'http://localhost';
 const CALIBRATED_DISTRIBUTION = { p10: 0.30, p25: 0.48, p50: 0.60, p75: 0.72, p90: 0.83 };
 const CALIBRATED_SAMPLE_SIZE = 250;
 const CALIBRATED_METRICS = ['relevance', 'faithfulness', 'task_completion'];
+/** `useCalibration`'s `retry: 1`: the first read and one retry. */
+const CALIBRATION_ATTEMPTS = 2;
 
 function calibration(): CalibrationResponse {
   return {
@@ -46,17 +48,42 @@ function calibration(): CalibrationResponse {
   };
 }
 
-function stubFetchByPath(bodies: Record<string, unknown>) {
-  vi.stubGlobal('fetch', vi.fn((url: string) =>
-    Promise.resolve(new Response(JSON.stringify(bodies[new URL(url, URL_BASE).pathname]), {
-      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
-    })),
-  ));
+function jsonResponse(body: unknown, status: number = HttpStatus.Ok): Response {
+  return new Response(JSON.stringify(body), { status, headers: { [CONTENT_TYPE_HEADER]: ContentType.Json } });
+}
+
+let unroutedPaths: string[] = [];
+
+function stubFetchByPath(routes: Record<string, () => Promise<Response>>) {
+  const fetchSpy = vi.fn((url: string) => {
+    const path = new URL(url, URL_BASE).pathname;
+    const respond = routes[path];
+    if (respond) return respond();
+    unroutedPaths.push(path);
+    return Promise.resolve(jsonResponse(null, HttpStatus.NotFound));
+  });
+  vi.stubGlobal('fetch', fetchSpy);
+  return fetchSpy;
+}
+
+function callsTo(fetchSpy: ReturnType<typeof stubFetchByPath>, path: string): number {
+  return fetchSpy.mock.calls.filter(([url]) => new URL(url, URL_BASE).pathname === path).length;
+}
+
+function liveChip(name: string): HTMLElement {
+  return screen.getByTitle((title) => title.startsWith(`${name}: `));
+}
+
+function renderCalibratedIndicator() {
+  render(<CalibrationProvider><QualityLiveIndicator /></CalibrationProvider>, makeQueryWrapper());
 }
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  const unrouted = unroutedPaths;
+  unroutedPaths = [];
+  expect(unrouted, 'fetch paths with no stubbed route').toEqual([]);
 });
 
 describe('QualityLiveIndicator', () => {
@@ -84,12 +111,43 @@ describe('QualityLiveIndicator with calibration', () => {
     { name: 'relevance', score: 0.75, band: 'good' },
     { name: 'coherence', score: 0.45, band: 'poor' },
   ])('bands $name at $score as $band', async ({ name, score, band }) => {
-    stubFetchByPath({ [LIVE_PATH]: liveData([{ name, score }]), [CALIBRATION_PATH]: calibration() });
+    stubFetchByPath({
+      [LIVE_PATH]: () => Promise.resolve(jsonResponse(liveData([{ name, score }]))),
+      [CALIBRATION_PATH]: () => Promise.resolve(jsonResponse(calibration())),
+    });
 
-    render(<CalibrationProvider><QualityLiveIndicator /></CalibrationProvider>, makeQueryWrapper());
+    renderCalibratedIndicator();
 
-    const chip = await screen.findByTitle((title) => title.startsWith(`${name}: `));
-    await waitFor(() => expect(chip.dataset.band).toBe(band));
+    await waitFor(() => expect(liveChip(name).dataset.band).toBe(band));
+  });
+
+  it('bands on the uniform scale until calibration arrives, then recolours', async () => {
+    let deliverCalibration: (response: Response) => void = () => undefined;
+    const calibrationArrives = new Promise<Response>((resolve) => {
+      deliverCalibration = resolve;
+    });
+    stubFetchByPath({
+      [LIVE_PATH]: () => Promise.resolve(jsonResponse(liveData([{ name: 'faithfulness', score: 0.72 }]))),
+      [CALIBRATION_PATH]: () => calibrationArrives,
+    });
+
+    renderCalibratedIndicator();
+
+    await waitFor(() => expect(liveChip('faithfulness').dataset.band).toBe('adequate'));
+    deliverCalibration(jsonResponse(calibration()));
+    await waitFor(() => expect(liveChip('faithfulness').dataset.band).toBe('excellent'));
+  });
+
+  it('stays on the uniform scale when the calibration read fails', async () => {
+    const fetchSpy = stubFetchByPath({
+      [LIVE_PATH]: () => Promise.resolve(jsonResponse(liveData([{ name: 'faithfulness', score: 0.72 }]))),
+      [CALIBRATION_PATH]: () => Promise.resolve(jsonResponse(null, HttpStatus.InternalServerError)),
+    });
+
+    renderCalibratedIndicator();
+
+    await waitFor(() => expect(callsTo(fetchSpy, CALIBRATION_PATH)).toBe(CALIBRATION_ATTEMPTS));
+    expect(liveChip('faithfulness').dataset.band).toBe('adequate');
   });
 });
 
