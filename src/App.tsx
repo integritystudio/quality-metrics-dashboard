@@ -25,6 +25,7 @@ import { ViewSection } from './components/Section.js';
 import { CorrelationsPage } from './pages/CorrelationsPage.js';
 import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
+import { QualityLivePage } from './pages/QualityLivePage.js';
 import { EvaluationDetailPage } from './pages/EvaluationDetailPage.js';
 import { CompliancePage } from './pages/CompliancePage.js';
 import { TraceDetailPage } from './pages/TraceDetailPage.js';
@@ -486,6 +487,11 @@ export function App() {
                           <Route path="/pipeline">
                             <RouteBoundary>
                               <PipelinePage period={period} />
+                            </RouteBoundary>
+                          </Route>
+                          <Route path="/quality-live">
+                            <RouteBoundary>
+                              <QualityLivePage />
                             </RouteBoundary>
                           </Route>
                           <Route path="/compliance">

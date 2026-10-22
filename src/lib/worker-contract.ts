@@ -12,6 +12,11 @@ export const DEFAULT_PAGE_LIMIT = 50;
 /** Largest evaluation-list page a client may ask for. */
 export const MAX_PAGE_LIMIT = 200;
 
+/** The period whose KV rows `GET /api/quality/live` reads: the latest score per metric over a day. */
+export const QUALITY_LIVE_PERIOD = '24h';
+/** Newest evaluations per metric whose traces count toward the live view's session count. */
+export const QUALITY_LIVE_EVAL_LIMIT = 100;
+
 /** UUID shape. The worker rejects an X-Org-Id, userId or roleId that fails it. */
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
