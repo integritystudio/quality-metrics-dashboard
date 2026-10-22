@@ -191,7 +191,7 @@ describe('GET /quality/live', () => {
   it('reports the newest evaluation time as ISO 8601', async () => {
     const NS_PER_MS = 1_000_000n;
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as QualityLiveResponse;
+    const body = await res.json<QualityLiveResponse>();
     expect(body.lastUpdated).toBe(new Date(Number((EVAL_NANOS + ONE_HOUR_NANOS) / NS_PER_MS)).toISOString());
   });
 
