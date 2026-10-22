@@ -467,6 +467,18 @@ export function adaptiveScoreColorBand(
   return BAND_BY_STRATEGY[strategy]({ value, direction, calibration });
 }
 
+/** The metric's own scale strategy once the org's calibration for it is known; the uniform bands until then. */
+export function calibratedScoreColorBand(
+  value: number,
+  metric: string,
+  direction: ScoreDirection,
+  calibration: ScoreCalibration | undefined,
+): ScoreColorBand {
+  return calibration
+    ? adaptiveScoreColorBand(value, metric, direction, calibration)
+    : scoreColorBand(value, direction);
+}
+
 
 import { format, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 
