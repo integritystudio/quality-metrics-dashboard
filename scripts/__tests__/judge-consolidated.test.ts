@@ -30,19 +30,16 @@ import {
   HAIKU_MODEL,
 } from '../judge-criteria.js';
 import { PRODUCER } from '../eval-record.js';
-import { judgedByKey } from '../judge-dedup.js';
 import { type Turn } from '../judge-turns.js';
+import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { G_EVAL_MAX_SCORE, G_EVAL_MIN_SCORE } from '../../../src/lib/judge/llm-judge-constants.js';
-import { makeTurn as makeBaseTurn } from './support/fixtures.js';
+import { judgedKeys, makeTurn as makeBaseTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-
-// Fixtures
 
 const USER_TEXT = 'Fix the login bug in auth.ts';
 const ASSISTANT_TEXT = 'I found the null check missing in auth.ts and fixed it.';
 const TOOL_RESULT = 'export function login() { /* … */ }';
-const TURN_KEY = '2026-02-09T01:11:15';
 const FAKE_STEPS = '1. Read the input\n2. Compare with the output\n3. Check every claim';
 const DEFAULT_RAW_SCORE = 4;
 const DEFAULT_SCORE_NORMALIZED = 0.75;
@@ -51,26 +48,16 @@ const LOW_SCORE_NORMALIZED = 0.25;
 const FRACTIONAL_SCORE = 3.5;
 const FIVE_POINT_SCALE = [1, 2, 3, 4, 5];
 const OUT_OF_RANGE_SCORE = G_EVAL_MAX_SCORE + 1;
+const OTHER_JUDGE_MODEL = 'claude-opus-5';
 
-const ALL_TOOL_NAMES = [
-  RELEVANCE_EVAL_NAME,
-  COHERENCE_EVAL_NAME,
-  FAITHFULNESS_EVAL_NAME,
-  'hallucination',
-  TOOL_CORRECTNESS_CRITERIA.name,
-  TOOL_SELECTION_CRITERIA.name,
-  TOOL_ARGUMENTS_CRITERIA.name,
-  TOOL_INTEGRATION_CRITERIA.name,
-];
-const ALL_TOOL_CRITERIA = ALL_TOOL_NAMES.filter(n => n !== 'hallucination');
+/** The schema criteria for a tool turn: every record but hallucination, which faithfulness's verdict supplies. */
+const TOOL_TURN_CRITERIA = TOOL_TURN_RECORDS.filter(n => n !== HALLUCINATION_EVAL_NAME);
+const PLAIN_CRITERIA = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME];
 const DIRECT = { directHallucination: true } as const;
 
-const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ timestamp: `${TURN_KEY}.525Z`, userText: USER_TEXT, assistantText: ASSISTANT_TEXT, ...overrides });
-
-/** The key a Haiku judgement of `name` leaves in the dedup set. */
-function keyFor(turn: Turn, name: string): string {
-  return judgedByKey(turn.sessionId, name, TURN_KEY, HAIKU_MODEL);
-}
+const makeTurn = (overrides: Partial<Turn> = {}): Turn =>
+  makeBaseTurn({ userText: USER_TEXT, assistantText: ASSISTANT_TEXT, ...overrides });
+const toolTurn = (): Turn => makeTurn({ toolResults: [TOOL_RESULT] });
 
 type RecordedCall = {
   prompt: string;
@@ -88,14 +75,26 @@ function createFakeProvider(
       calls.push({ prompt, options });
       if (!options?.schema) return Promise.resolve({ text: FAKE_STEPS });
       if (verdictText !== undefined) return Promise.resolve({ text: verdictText });
-      const required = (options.schema as { required: string[] }).required;
-      const body = Object.fromEntries(required.map(name => [
+      const body = Object.fromEntries(requiredOf(options).map(name => [
         name,
         { [REASONING_KEY]: `${name} reasoning`, [SCORE_KEY]: scores[name] ?? DEFAULT_RAW_SCORE },
       ]));
       return Promise.resolve({ text: JSON.stringify(body) });
     },
   };
+}
+
+function requiredOf(options: ConsolidatedGenerateOptions | undefined): string[] {
+  return (defined(options).schema as { required: string[] }).required;
+}
+
+/** The required keys of each structured (schema) call, in call order. */
+function schemaCallKeys(calls: RecordedCall[]): string[][] {
+  return calls.filter(c => c.options?.schema).map(c => requiredOf(c.options));
+}
+
+function occurrences(text: string, needle: string): number {
+  return text.split(needle).length - 1;
 }
 
 function names(selection: { criteria: Array<{ name: string }> }): string[] {
@@ -105,72 +104,78 @@ function names(selection: { criteria: Array<{ name: string }> }): string[] {
 describe('selectCriteria', () => {
   it('selects relevance and coherence for a turn without tool results', () => {
     const selection = selectCriteria(makeTurn(), new Set());
-    expect(names(selection)).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
-    expect(selection.recordNames).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
+    expect(names(selection)).toEqual(PLAIN_CRITERIA);
+    expect(selection.recordNames).toEqual(PLAIN_CRITERIA);
   });
 
   it('selects every criterion for a turn with tool results, records in the per-criterion order', () => {
-    const selection = selectCriteria(makeTurn({ toolResults: [TOOL_RESULT] }), new Set());
-    expect(names(selection)).toEqual(ALL_TOOL_CRITERIA);
-    expect(selection.recordNames).toEqual(ALL_TOOL_NAMES);
+    const selection = selectCriteria(toolTurn(), new Set());
+    expect(names(selection)).toEqual(TOOL_TURN_CRITERIA);
+    expect(selection.recordNames).toEqual(TOOL_TURN_RECORDS);
   });
 
   it('drops a criterion whose dedup key already exists', () => {
     const turn = makeTurn();
-    const selection = selectCriteria(turn, new Set([keyFor(turn, RELEVANCE_EVAL_NAME)]));
+    const selection = selectCriteria(turn, judgedKeys(turn, [RELEVANCE_EVAL_NAME]));
     expect(names(selection)).toEqual([COHERENCE_EVAL_NAME]);
     expect(selection.recordNames).toEqual([COHERENCE_EVAL_NAME]);
   });
 
+  it('does not skip a criterion another model judged, since the dedup key is per judge model', () => {
+    const turn = makeTurn();
+    const otherModel = judgedKeys(turn, [RELEVANCE_EVAL_NAME], OTHER_JUDGE_MODEL);
+
+    expect(selectCriteria(turn, otherModel).recordNames).toContain(RELEVANCE_EVAL_NAME);
+    expect(selectCriteria(turn, otherModel, { judgeModel: OTHER_JUDGE_MODEL }).recordNames).not.toContain(RELEVANCE_EVAL_NAME);
+  });
+
   it('keeps faithfulness in the schema when only hallucination is still needed', () => {
-    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
-    const selection = selectCriteria(turn, new Set([keyFor(turn, FAITHFULNESS_EVAL_NAME)]));
+    const turn = toolTurn();
+    const selection = selectCriteria(turn, judgedKeys(turn, [FAITHFULNESS_EVAL_NAME]));
     expect(names(selection)).toContain(FAITHFULNESS_EVAL_NAME);
-    expect(selection.recordNames).toContain('hallucination');
+    expect(selection.recordNames).toContain(HALLUCINATION_EVAL_NAME);
     expect(selection.recordNames).not.toContain(FAITHFULNESS_EVAL_NAME);
   });
 
   it('skips the tool sub-criteria when tool_correctness already exists, as evaluateTurn does', () => {
-    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
-    const selection = selectCriteria(turn, new Set([keyFor(turn, TOOL_CORRECTNESS_CRITERIA.name)]));
-    expect(names(selection)).not.toContain(TOOL_SELECTION_CRITERIA.name);
-    expect(names(selection)).not.toContain(TOOL_ARGUMENTS_CRITERIA.name);
-    expect(names(selection)).not.toContain(TOOL_INTEGRATION_CRITERIA.name);
+    const turn = toolTurn();
+    const subCriteria = [TOOL_SELECTION_CRITERIA.name, TOOL_ARGUMENTS_CRITERIA.name, TOOL_INTEGRATION_CRITERIA.name];
+    const selection = selectCriteria(turn, judgedKeys(turn, [TOOL_CORRECTNESS_CRITERIA.name]));
+    expect(names(selection).filter(n => subCriteria.includes(n))).toEqual([]);
   });
 
   it('selects nothing when every key exists', () => {
-    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
-    const selection = selectCriteria(turn, new Set(ALL_TOOL_NAMES.map(n => keyFor(turn, n))));
+    const turn = toolTurn();
+    const selection = selectCriteria(turn, judgedKeys(turn, TOOL_TURN_RECORDS));
     expect(selection.criteria).toEqual([]);
     expect(selection.recordNames).toEqual([]);
   });
 
   it('derives hallucination from faithfulness and every other record from itself', () => {
-    expect(sourceCriterionName('hallucination')).toBe(FAITHFULNESS_EVAL_NAME);
+    expect(sourceCriterionName(HALLUCINATION_EVAL_NAME)).toBe(FAITHFULNESS_EVAL_NAME);
     expect(sourceCriterionName(RELEVANCE_EVAL_NAME)).toBe(RELEVANCE_EVAL_NAME);
   });
 
   it('under directHallucination, puts hallucination in the schema as its own criterion', () => {
-    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
-    const selection = selectCriteria(turn, new Set(), DIRECT);
-    expect(names(selection)).toEqual(ALL_TOOL_NAMES);
-    expect(selection.recordNames).toEqual(ALL_TOOL_NAMES);
-    expect(sourceCriterionName('hallucination', DIRECT)).toBe('hallucination');
+    const selection = selectCriteria(toolTurn(), new Set(), DIRECT);
+    expect(names(selection)).toEqual(TOOL_TURN_RECORDS);
+    expect(selection.recordNames).toEqual(TOOL_TURN_RECORDS);
+    expect(sourceCriterionName(HALLUCINATION_EVAL_NAME, DIRECT)).toBe(HALLUCINATION_EVAL_NAME);
   });
 
   it('under directHallucination, drops faithfulness from the schema when only hallucination is needed', () => {
-    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
-    const selection = selectCriteria(turn, new Set([keyFor(turn, FAITHFULNESS_EVAL_NAME)]), DIRECT);
+    const turn = toolTurn();
+    const selection = selectCriteria(turn, judgedKeys(turn, [FAITHFULNESS_EVAL_NAME]), DIRECT);
     expect(names(selection)).not.toContain(FAITHFULNESS_EVAL_NAME);
-    expect(names(selection)).toContain('hallucination');
+    expect(names(selection)).toContain(HALLUCINATION_EVAL_NAME);
   });
 });
 
 describe('buildConsolidatedSchema', () => {
   it('requires exactly the selected criteria and nothing else', () => {
-    const schema = buildConsolidatedSchema([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
-    expect(schema.required).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
-    expect(Object.keys(schema.properties as object)).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
+    const schema = buildConsolidatedSchema(PLAIN_CRITERIA);
+    expect(schema.required).toEqual(PLAIN_CRITERIA);
+    expect(Object.keys(schema.properties as object)).toEqual(PLAIN_CRITERIA);
     expect(schema.additionalProperties).toBe(false);
   });
 
@@ -192,13 +197,13 @@ describe('buildConsolidatedPrompt', () => {
 
   it('includes the turn content once and every criterion with its text and steps', () => {
     const prompt = buildConsolidatedPrompt(makeTurn(), [], prepared);
-    expect(prompt.split(USER_TEXT).length - 1).toBe(1);
-    expect(prompt.split(ASSISTANT_TEXT).length - 1).toBe(1);
+    expect(occurrences(prompt, USER_TEXT)).toBe(1);
+    expect(occurrences(prompt, ASSISTANT_TEXT)).toBe(1);
     expect(prompt).toContain(`Criterion: ${RELEVANCE_EVAL_NAME}`);
     expect(prompt).toContain(`Criterion: ${COHERENCE_EVAL_NAME}`);
     expect(prompt).toContain(`Criteria: ${RELEVANCE_CRITERIA.criteria}`);
     expect(prompt).toContain(`Criteria: ${COHERENCE_CRITERIA.criteria}`);
-    expect(prompt.split(FAKE_STEPS).length - 1).toBe(prepared.length);
+    expect(occurrences(prompt, FAKE_STEPS)).toBe(prepared.length);
     expect(prompt).toContain('Score anchoring:');
     expect(prompt).toContain(`${G_EVAL_MIN_SCORE}-${G_EVAL_MAX_SCORE}`);
   });
@@ -234,7 +239,7 @@ describe('parseConsolidatedResponse', () => {
       [RELEVANCE_EVAL_NAME]: { [REASONING_KEY]: 'on topic', [SCORE_KEY]: 5 },
       [COHERENCE_EVAL_NAME]: { [REASONING_KEY]: 'flows', [SCORE_KEY]: 3 },
     });
-    const parsed = parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
     expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)).toEqual({ reasoning: 'on topic', score: 5 });
     expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)).toEqual({ reasoning: 'flows', score: 3 });
     expect(parsed.failures.size).toBe(0);
@@ -245,7 +250,7 @@ describe('parseConsolidatedResponse', () => {
       [RELEVANCE_EVAL_NAME]: { [REASONING_KEY]: 'x', [SCORE_KEY]: OUT_OF_RANGE_SCORE },
       [COHERENCE_EVAL_NAME]: { [REASONING_KEY]: 'y', [SCORE_KEY]: 2 },
     });
-    const parsed = parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME]);
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
     expect(parsed.verdicts.has(RELEVANCE_EVAL_NAME)).toBe(false);
     expect(parsed.failures.get(RELEVANCE_EVAL_NAME)?.message).toMatch(/Invalid normalized score/);
     expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)?.score).toBe(2);
@@ -278,10 +283,8 @@ describe('toNormalizedScore', () => {
     expect(toNormalizedScore(G_EVAL_MAX_SCORE)).toBe(1);
   });
 
-  it('is inverted by toFivePointScale', () => {
-    for (let score = G_EVAL_MIN_SCORE; score <= G_EVAL_MAX_SCORE; score++) {
-      expect(toFivePointScale(toNormalizedScore(score))).toBe(score);
-    }
+  it.each(FIVE_POINT_SCALE)('is inverted by toFivePointScale at %i', (score) => {
+    expect(toFivePointScale(toNormalizedScore(score))).toBe(score);
   });
 });
 
@@ -292,81 +295,59 @@ describe('evaluateTurnConsolidated', () => {
 
   it('produces the per-criterion path\'s records from one structured call', async () => {
     const calls: RecordedCall[] = [];
-    const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: 5 }, calls);
-    const turn = makeTurn({ toolResults: [TOOL_RESULT] });
+    const turn = toolTurn();
 
-    const records = await evaluateTurnConsolidated(provider, turn, new Set());
+    const records = await evaluateTurnConsolidated(createFakeProvider({}, calls), turn, new Set());
 
-    expect(records.map(r => r.evaluationName)).toEqual(ALL_TOOL_NAMES);
-    const schemaCalls = calls.filter(c => c.options?.schema);
-    expect(schemaCalls).toHaveLength(1);
-    expect((defined(defined(schemaCalls[0]).options).schema as { required: string[] }).required).toEqual(ALL_TOOL_CRITERIA);
-    expect(defined(schemaCalls[0]).prompt.split(TOOL_RESULT).length - 1).toBe(1);
-    for (const record of records) {
-      // Its own producer, distinct from the per-criterion path's: the two measure
-      // faithfulness and hallucination with different instruments, and this is the
-      // only field that says which one a stored record came from.
-      expect(record.evaluator).toBe(CONSOLIDATED_PRODUCER);
-      expect(record.evaluator).not.toBe(PRODUCER);
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- the mirrored legacy field must keep matching evaluatorKind
-      expect(record.evaluatorType).toBe('llm');
-      expect(record.evaluatorKind).toBe('llm');
-      expect(record.cohort).toBe('normal');
-      expect(record.judgeModel).toBe(HAIKU_MODEL);
-      expect(record.traceId).toBe(turn.traceId);
-      expect(record.sessionId).toBe(turn.sessionId);
-      expect(record.timestamp).toBe(turn.timestamp);
-    }
+    expect(schemaCallKeys(calls)).toEqual([TOOL_TURN_CRITERIA]);
+    expect(occurrences(defined(calls.find(c => c.options?.schema)).prompt, TOOL_RESULT)).toBe(1);
+    // Its own producer, distinct from the per-criterion path's: the two measure
+    // faithfulness and hallucination with different instruments, and this is the
+    // only field that says which one a stored record came from.
+    expect(CONSOLIDATED_PRODUCER).not.toBe(PRODUCER);
+    expect(records).toEqual(TOOL_TURN_RECORDS.map(evaluationName => expect.objectContaining({
+      evaluationName,
+      evaluator: CONSOLIDATED_PRODUCER,
+      // The mirrored legacy field must keep matching evaluatorKind.
+      evaluatorType: 'llm',
+      evaluatorKind: 'llm',
+      cohort: 'normal',
+      judgeModel: HAIKU_MODEL,
+      traceId: turn.traceId,
+      sessionId: turn.sessionId,
+      timestamp: turn.timestamp,
+    })));
   });
 
   it('normalizes scores like G-Eval and derives hallucination as 1 - faithfulness', async () => {
     const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: DEFAULT_RAW_SCORE, [FAITHFULNESS_EVAL_NAME]: LOW_SCORE });
-    const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set());
+    const records = await evaluateTurnConsolidated(provider, toolTurn(), new Set());
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
-    expect(defined(byName[RELEVANCE_EVAL_NAME]).scoreValue).toBe(DEFAULT_SCORE_NORMALIZED);
-    expect(defined(byName[RELEVANCE_EVAL_NAME]).explanation).toBe(`${RELEVANCE_EVAL_NAME} reasoning`);
-    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(LOW_SCORE_NORMALIZED);
-    expect(defined(byName.hallucination).scoreValue).toBe(1 - LOW_SCORE_NORMALIZED);
-    expect(defined(byName.hallucination).explanation).toBe(`${FAITHFULNESS_EVAL_NAME} reasoning`);
+    expect(byName[RELEVANCE_EVAL_NAME]).toMatchObject({ scoreValue: DEFAULT_SCORE_NORMALIZED, explanation: `${RELEVANCE_EVAL_NAME} reasoning` });
+    expect(byName[FAITHFULNESS_EVAL_NAME]).toMatchObject({ scoreValue: LOW_SCORE_NORMALIZED });
+    expect(byName[HALLUCINATION_EVAL_NAME]).toMatchObject({ scoreValue: 1 - LOW_SCORE_NORMALIZED, explanation: `${FAITHFULNESS_EVAL_NAME} reasoning` });
   });
 
   it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
     const calls: RecordedCall[] = [];
-    const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: LOW_SCORE, hallucination: G_EVAL_MAX_SCORE }, calls);
-    const records = await evaluateTurnConsolidated(provider, makeTurn({ toolResults: [TOOL_RESULT] }), new Set(), { criteria: DIRECT });
+    const provider = createFakeProvider({ [FAITHFULNESS_EVAL_NAME]: LOW_SCORE, [HALLUCINATION_EVAL_NAME]: G_EVAL_MAX_SCORE }, calls);
+    const records = await evaluateTurnConsolidated(provider, toolTurn(), new Set(), { criteria: DIRECT });
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
-    const schemaCalls = calls.filter(c => c.options?.schema);
-    expect(schemaCalls).toHaveLength(1);
-    expect((defined(defined(schemaCalls[0]).options).schema as { required: string[] }).required).toContain('hallucination');
-    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue).toBe(LOW_SCORE_NORMALIZED);
+    expect(schemaCallKeys(calls)).toEqual([TOOL_TURN_RECORDS]);
+    expect(byName[FAITHFULNESS_EVAL_NAME]).toMatchObject({ scoreValue: LOW_SCORE_NORMALIZED });
     // 5 = no fabrication on HALLUCINATION_CRITERIA, stored higher-is-worse.
-    expect(defined(byName.hallucination).scoreValue).toBe(0);
-    expect(defined(byName.hallucination).explanation).toBe('hallucination reasoning');
-    expect(defined(byName[FAITHFULNESS_EVAL_NAME]).scoreValue + defined(byName.hallucination).scoreValue).not.toBe(1);
-  });
-
-  it('does not skip a criterion another model judged, since the dedup key is per judge model', () => {
-    const turn = makeTurn();
-    const otherModel = new Set([judgedByKey(turn.sessionId, RELEVANCE_EVAL_NAME, TURN_KEY, 'claude-opus-5')]);
-
-    expect(selectCriteria(turn, otherModel).recordNames).toContain(RELEVANCE_EVAL_NAME);
-    expect(selectCriteria(turn, otherModel, { judgeModel: 'claude-opus-5' }).recordNames).not.toContain(RELEVANCE_EVAL_NAME);
+    expect(byName[HALLUCINATION_EVAL_NAME]).toMatchObject({ scoreValue: 0, explanation: `${HALLUCINATION_EVAL_NAME} reasoning` });
   });
 
   it('skips criteria already covered by existingKeys and emits nothing when all are', async () => {
     const turn = makeTurn();
-    const provider = createFakeProvider();
-    const partial = await evaluateTurnConsolidated(provider, turn, new Set([keyFor(turn, RELEVANCE_EVAL_NAME)]));
+    const partial = await evaluateTurnConsolidated(createFakeProvider(), turn, judgedKeys(turn, [RELEVANCE_EVAL_NAME]));
     expect(partial.map(r => r.evaluationName)).toEqual([COHERENCE_EVAL_NAME]);
 
     const calls: RecordedCall[] = [];
-    const none = await evaluateTurnConsolidated(
-      createFakeProvider({}, calls),
-      turn,
-      new Set([keyFor(turn, RELEVANCE_EVAL_NAME), keyFor(turn, COHERENCE_EVAL_NAME)]),
-    );
+    const none = await evaluateTurnConsolidated(createFakeProvider({}, calls), turn, judgedKeys(turn, PLAIN_CRITERIA));
     expect(none).toEqual([]);
     expect(calls).toHaveLength(0);
   });
@@ -376,8 +357,7 @@ describe('evaluateTurnConsolidated', () => {
     const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
 
     expect(records.map(r => r.evaluationName)).toEqual([COHERENCE_EVAL_NAME]);
-    expect(evalFailures[RELEVANCE_EVAL_NAME]).toBe(1);
-    expect(evalFailures[COHERENCE_EVAL_NAME]).toBeUndefined();
+    expect(evalFailures).toEqual({ [RELEVANCE_EVAL_NAME]: 1 });
     expect(failureClasses.parse).toBe(1);
   });
 
@@ -386,8 +366,7 @@ describe('evaluateTurnConsolidated', () => {
     const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
 
     expect(records).toEqual([]);
-    expect(evalFailures[RELEVANCE_EVAL_NAME]).toBe(1);
-    expect(evalFailures[COHERENCE_EVAL_NAME]).toBe(1);
+    expect(evalFailures).toEqual({ [RELEVANCE_EVAL_NAME]: 1, [COHERENCE_EVAL_NAME]: 1 });
   });
 
   it('generates evaluation steps once per criterion across turns', async () => {
@@ -398,15 +377,14 @@ describe('evaluateTurnConsolidated', () => {
     await evaluateTurnConsolidated(provider, makeTurn(), new Set(), { stepsCache: cache });
     await evaluateTurnConsolidated(provider, makeTurn({ timestamp: '2026-02-09T02:00:00.000Z' }), new Set(), { stepsCache: cache });
 
-    const stepsCalls = calls.filter(c => !c.options?.schema);
-    expect(stepsCalls).toHaveLength(2);
-    expect(calls.filter(c => c.options?.schema)).toHaveLength(2);
+    expect(calls.filter(c => !c.options?.schema)).toHaveLength(PLAIN_CRITERIA.length);
+    expect(schemaCallKeys(calls)).toHaveLength(2);
   });
 
   it('retries steps generation after a failure instead of caching it', async () => {
     let failOnce = true;
     const provider: ConsolidatedProvider = {
-      generate(_prompt, _options) {
+      generate() {
         if (failOnce) {
           failOnce = false;
           return Promise.reject(new Error('Connection error.'));

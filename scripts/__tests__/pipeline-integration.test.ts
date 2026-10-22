@@ -1,412 +1,74 @@
 /**
- * M34: Dashboard pipeline integration tests.
- *
- * Validates the populate → derive → judge → sync pipeline contract:
- * - derive-evaluations output format matches what judge-evaluations reads
- * - judge-evaluations (seed mode) output matches what sync-to-kv expects
- * - OTel evaluation record shape is stable across pipeline steps
- * - deduplication keys prevent re-evaluation of already-scored turns
+ * M34: the record contract between derive, the judge and sync. Both producers
+ * post OTel `gen_ai.evaluation.result` events that sync later reads back from
+ * the cloud; these tests pin, across a JSON round trip, the fields it reads.
+ * Seed metrics, canaries and dedup are judge-evaluations.test.ts's.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-
-// derive-evaluations exports
-import {
-  trackTaskActivity,
-  deriveTaskCompletionPerSession,
-  sessionTasks,
-  type TraceSpan,
-} from '../derive-evaluations.js';
-
-// judge-evaluations exports
+import { describe, it, expect, beforeEach } from 'vitest';
+import { trackTaskActivity, deriveTaskCompletionPerSession, sessionTasks } from '../derive-evaluations.js';
 import { seedEvaluations } from '../judge-evaluations.js';
 import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
-import { type Turn } from '../judge-turns.js';
 import { turnKeyOf } from '../judge-dedup.js';
+import { TOOL_CORRECTNESS_CRITERIA } from '../judge-criteria.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/core/shared-schemas.js';
-import { TIME_MS } from '../../../src/lib/core/units.js';
-import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
-import { MINUTES_PER_HOUR } from '../../src/lib/constants.js';
+import { makeToolTurn, SEED_RECORDS } from './support/fixtures.js';
+import { SPAN_SESSION, taskSpan } from './support/spans.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
-const FIXTURE_DAY = '2026-02-25';
-const FIXTURE_YEAR = new Date(FIXTURE_DAY).getUTCFullYear();
-const SPAN_START_S = Date.parse(`${FIXTURE_DAY}T00:00:00Z`) / TIME_MS.SECOND;
-const CLOSE_TO_DIGITS = 3;
+type WireRecord = { timestamp: string; attributes: Record<string, unknown> };
 
-// Helpers
-
-function makeTraceSpan(overrides: Partial<TraceSpan> & { attributes?: Record<string, unknown> }): TraceSpan {
-  const { attributes: attrOverrides, ...rest } = overrides;
-  return {
-    traceId: 'trace-pipeline-001',
-    spanId: 'span-001',
-    name: 'hook:builtin-post-tool',
-    startTime: [SPAN_START_S, 0],
-    endTime: [SPAN_START_S + 1, 0],
-    duration: [1, 0],
-    status: { code: 0 },
-    ...rest,
-    attributes: {
-      [SESSION_ATTRIBUTES.ID]: 'sess-pipeline',
-      'builtin.tool': 'TaskCreate',
-      'builtin.task_status': 'pending',
-      'builtin.task_id': 'task-001',
-      ...attrOverrides,
-    },
-  };
+/** A record as the backend reads it back: the OTel event after a JSON round trip. */
+function overTheWire(record: EvalRecord): WireRecord {
+  return JSON.parse(JSON.stringify(toOTelRecord(record))) as WireRecord;
 }
 
-const makeTurn = (overrides: Partial<Turn> = {}): Turn => makeBaseTurn({ sessionId: 'pipeline-sess-abc', traceId: 'trace-pipeline-001', timestamp: '2026-02-25T00:00:00.000Z', userText: 'Fix the authentication bug in login.ts', assistantText: 'I found the issue in the JWT validation. Here is the fix.', ...overrides });
-
-/** Parse a JSONL string into an array of objects */
-function parseJsonl(content: string): Array<Record<string, unknown>> {
-  return content
-    .split('\n')
-    .filter(Boolean)
-    .map(line => JSON.parse(line) as Record<string, unknown>);
+function derivedTaskCompletion(): EvalRecord {
+  trackTaskActivity(taskSpan('TaskCreate', { status: 'pending', id: 'task-1' }));
+  trackTaskActivity(taskSpan('TaskUpdate', { status: 'completed', id: 'task-1' }));
+  return defined(deriveTaskCompletionPerSession()[0]);
 }
 
-// Step 1 → Step 2 Contract: derive output → judge input format
+function isUnitScore(value: unknown): boolean {
+  return typeof value === 'number' && value >= 0 && value <= 1;
+}
 
-describe('pipeline contract: derive → judge', () => {
-  beforeEach(() => {
-    sessionTasks.clear();
-  });
-
-  it('derive-evaluations toOTelRecord produces valid gen_ai.evaluation.result events', () => {
-    // Simulate a full task lifecycle
-    trackTaskActivity(makeTraceSpan({
-      attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-pipeline', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-1' },
-    }));
-    trackTaskActivity(makeTraceSpan({
-      attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-pipeline', 'builtin.tool': 'TaskUpdate', 'builtin.task_status': 'completed', 'builtin.task_id': 'task-1' },
-    }));
-
-    const evals = deriveTaskCompletionPerSession();
-    expect(evals).toHaveLength(1);
-
-    const ev = defined(evals[0]);
-    // Convert to OTel format (same function used by derive-evaluations main)
-    const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
-
-    // Validate the OTel record shape that sync-to-kv expects to read back
-    expect(typeof otelRecord.timestamp).toBe('string');
-    expect(typeof otelRecord.traceId).toBe('string');
-
-    const attrs = otelRecord.attributes as Record<string, unknown>;
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('task_completion');
-    expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(1.0);
-    expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('string');
-    expect(attrs[EVALUATION_ATTRS.PRODUCER]).toBe('rule');
-    expect(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).toBe('rule');
-    expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('normal');
-    expect(attrs[SESSION_ATTRIBUTES.ID]).toBe('sess-pipeline');
-  });
-
-  it('derive evaluation record has all required fields for judge dedup keys', () => {
-    trackTaskActivity(makeTraceSpan({
-      attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-dedup', 'builtin.tool': 'TaskCreate', 'builtin.task_status': 'pending', 'builtin.task_id': 'task-2' },
-    }));
-
-    const evals = deriveTaskCompletionPerSession();
-    const ev = defined(evals[0]);
-
-    // Judge dedup key format: `${sessionId}:${evaluationName}:${turnKey}`
-    // Verify all fields needed to construct dedup keys are present
-    expect(typeof ev.sessionId).toBe('string');
-    expect(ev.sessionId.length).toBeGreaterThan(0);
-    expect(typeof ev.evaluationName).toBe('string');
-    expect(typeof ev.timestamp).toBe('string');
-    // ISO timestamp parseable to construct turnKey (first 19 chars)
-    const turnKey = turnKeyOf(ev.timestamp);
-    expect(turnKey).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
-  });
+beforeEach(() => {
+  sessionTasks.clear();
 });
 
-// Step 2 Contract: judge seed output format
+describe('pipeline contract: derive → OTel', () => {
+  it('sends a completed task as a rule-scored evaluation whose timestamp keys judge dedup', () => {
+    const derived = derivedTaskCompletion();
 
-describe('pipeline contract: judge seed output', () => {
-  it('seedEvaluations produces OTel-compatible records', () => {
-    const turns = [makeTurn(), makeTurn({ sessionId: 'sess-b', timestamp: '2026-02-25T01:00:00.000Z' })];
-    const { evals } = seedEvaluations(turns, new Set());
+    const wire = overTheWire(derived);
 
-    expect(evals.length).toBeGreaterThan(0);
-
-    for (const ev of evals) {
-      // Each eval must be convertible to OTel format
-      const otelRecord = toOTelRecord(ev) as Record<string, unknown>;
-      const attrs = otelRecord.attributes as Record<string, unknown>;
-
-      // Required fields for sync-to-kv CloudBackend to ingest
-      expect(typeof otelRecord.timestamp).toBe('string');
-      expect(new Date(otelRecord.timestamp as string).getTime()).toBeGreaterThan(0);
-      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('string');
-      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
-      const score = attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE] as number;
-      expect(score).toBeGreaterThanOrEqual(0);
-      expect(score).toBeLessThanOrEqual(1);
-    }
-  });
-
-  it('seed output covers all 5 expected metric names when tool results present', () => {
-    const turnWithTools = makeTurn({ toolResults: ['file contents here'] });
-    const { evals } = seedEvaluations([turnWithTools], new Set());
-
-    const names = new Set(evals.map(e => e.evaluationName));
-    expect(names.has('relevance')).toBe(true);
-    expect(names.has('coherence')).toBe(true);
-    expect(names.has('faithfulness')).toBe(true);
-    expect(names.has('hallucination')).toBe(true);
-    expect(names.has('tool_correctness')).toBe(true);
-  });
-
-  it('seed output covers 4 metric names without tool results', () => {
-    const turnNoTools = makeTurn({ toolResults: [] });
-    const { evals } = seedEvaluations([turnNoTools], new Set());
-
-    const names = new Set(evals.map(e => e.evaluationName));
-    expect(names.has('relevance')).toBe(true);
-    expect(names.has('coherence')).toBe(true);
-    expect(names.has('faithfulness')).toBe(true);
-    expect(names.has('hallucination')).toBe(true);
-    expect(names.has('tool_correctness')).toBe(false);
-  });
-
-  it('faithfulness + hallucination scores sum to 1.0 (complementary invariant)', () => {
-    const { evals } = seedEvaluations([makeTurn()], new Set());
-    const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
-    const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, CLOSE_TO_DIGITS);
-  });
-
-  it('canary evaluations carry cohort "canary", others "seed"', () => {
-    // Generate enough turns to hit at least one canary (~2% rate)
-    const turns = Array.from({ length: 200 }, (_, i) =>
-      makeTurn({
-        sessionId: `canary-pipeline-${i}`,
-        timestamp: `${FIXTURE_DAY}T${String(Math.floor(i / MINUTES_PER_HOUR)).padStart(2, '0')}:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:00.000Z`,
-      })
-    );
-    const { evals, canaryCount } = seedEvaluations(turns, new Set());
-
-    const canaryEvals = evals.filter(e => e.cohort === 'canary');
-    const seedEvals = evals.filter(e => e.cohort === 'seed');
-
-    expect(canaryCount).toBeGreaterThan(0);
-    expect(canaryEvals.length).toBeGreaterThan(0);
-    expect(seedEvals.length).toBeGreaterThan(0);
-
-    // OBP16: both branches hash, so neither may claim an llm produced the
-    // score. Producer is the writing component; kind is the mechanism.
-    for (const ev of canaryEvals) {
-      expect(ev.evaluator).toBe('dashboard:judge-evaluations');
-      expect(ev.evaluatorKind).toBe('rule');
-    }
-    for (const ev of seedEvals) {
-      expect(ev.evaluator).toBe('dashboard:judge-evaluations');
-      expect(ev.evaluatorKind).toBe('rule');
-    }
-
-    // Canary evals should NOT appear if filtered out (as sync-to-kv does)
-    const afterFilter = evals.filter(e => e.cohort !== 'canary');
-    expect(afterFilter.length).toBeLessThan(evals.length);
-  });
-});
-
-// Step 2 → Step 3 Contract: judge output → sync-to-kv format
-
-describe('pipeline contract: judge → sync-to-kv', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `pipeline-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('JSONL written by judge is parseable and has required backend fields', () => {
-    const turns = [
-      makeTurn({ sessionId: 'test-session-001', traceId: 'trace-001' }),
-      makeTurn({ sessionId: 'test-session-001', traceId: 'trace-002', timestamp: '2026-02-25T00:01:00.000Z' }),
-    ];
-    const { evals } = seedEvaluations(turns, new Set());
-
-    // Simulate what judge-evaluations.ts writes to JSONL
-    const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
-    const lines = evals.map(ev => JSON.stringify(toOTelRecord(ev)));
-    writeFileSync(outFile, `${lines.join('\n')}\n`);
-
-    // Read back and validate backend-readable format
-    const content = readFileSync(outFile, 'utf-8');
-    const records = parseJsonl(content);
-
-    expect(records.length).toBe(evals.length);
-
-    for (const record of records) {
-      // CloudBackend.queryEvaluations() checks these fields
-      expect(typeof record.timestamp).toBe('string');
-      const ts = new Date(record.timestamp as string);
-      expect(ts.getFullYear()).toBe(FIXTURE_YEAR);
-
-      const attrs = record.attributes as Record<string, unknown>;
-      const evalName = attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] as string;
-      expect(['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness', 'task_completion']).toContain(evalName);
-      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
-      expect(evaluatorKindSchema.safeParse(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).success).toBe(true);
-      expect(evaluationCohortSchema.safeParse(attrs[EVALUATION_ATTRS.COHORT]).success).toBe(true);
-    }
-  });
-
-  it('sync-to-kv canary filter removes canary evals before aggregation', () => {
-    // Mix of regular and canary evals
-    const turns = Array.from({ length: 100 }, (_, i) =>
-      makeTurn({
-        sessionId: `filter-test-${i}`,
-        timestamp: `${FIXTURE_DAY}T00:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:00.000Z`,
-      })
-    );
-    const { evals } = seedEvaluations(turns, new Set());
-
-    // Simulate sync-to-kv canary filter, which now keys on the cohort
-    const filtered = evals.filter(ev => ev.cohort !== 'canary');
-
-    // Canary assignment is a hash of the session id, so these 100 fixed ids
-    // always produce some — the filter is never exercised on an empty set.
-    const canaryCount = evals.filter(ev => ev.cohort === 'canary').length;
-    expect(canaryCount).toBeGreaterThan(0);
-    expect(filtered).toHaveLength(evals.length - canaryCount);
-    expect(new Set(filtered.map(ev => ev.cohort))).toEqual(new Set(['seed']));
-  });
-
-  it('deduplication prevents re-scoring already-evaluated turns', () => {
-    const turn = makeTurn({
-      sessionId: 'dedup-test',
-      timestamp: '2026-02-25T00:00:00.000Z',
+    expect(wire.timestamp).toBe(derived.timestamp);
+    expect(turnKeyOf(wire.timestamp)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+    expect(wire.attributes).toMatchObject({
+      [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'task_completion',
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1,
+      [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: expect.any(String),
+      [EVALUATION_ATTRS.PRODUCER]: 'rule',
+      [EVALUATION_ATTRS.EVALUATOR_KIND]: 'rule',
+      [EVALUATION_ATTRS.COHORT]: 'normal',
+      [SESSION_ATTRIBUTES.ID]: SPAN_SESSION,
     });
-    const turnKey = turnKeyOf(turn.timestamp);
-
-    // First pass: no existing keys
-    const { evals: firstPass } = seedEvaluations([turn], new Set());
-    expect(firstPass.length).toBeGreaterThan(0);
-
-    // Second pass: all keys already exist
-    const existingKeys = new Set(
-      firstPass.map(ev => `${ev.sessionId}:${ev.evaluationName}:${turnKey}`)
-    );
-    const { evals: secondPass } = seedEvaluations([turn], existingKeys);
-    expect(secondPass).toHaveLength(0);
-  });
-
-  it('pipeline produces stable OTel records for same input (determinism)', () => {
-    const turn = makeTurn({ sessionId: 'stable-test', timestamp: '2026-02-25T00:30:00.000Z' });
-
-    const { evals: run1 } = seedEvaluations([turn], new Set());
-    const { evals: run2 } = seedEvaluations([turn], new Set());
-
-    expect(run1.length).toBe(run2.length);
-    for (let i = 0; i < run1.length; i++) {
-      expect(defined(run1[i]).scoreValue).toBe(defined(run2[i]).scoreValue);
-      expect(defined(run1[i]).evaluationName).toBe(defined(run2[i]).evaluationName);
-    }
   });
 });
 
-// Full pipeline integration: derive → write → read → judge → write
+describe('pipeline contract: derive + judge → sync', () => {
+  it('sends every derived and seeded record with a 0-1 score and a kind and cohort the backend accepts', () => {
+    const records = [derivedTaskCompletion(), ...seedEvaluations([makeToolTurn()], new Set()).evals];
 
-describe('full pipeline: derive + judge write/read cycle', () => {
-  let tmpDir: string;
+    const attributes = records.map(r => overTheWire(r).attributes);
 
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `full-pipeline-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-    sessionTasks.clear();
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('derive output + seed output combine into valid JSONL for backend ingestion', () => {
-    // Step 1: Derive rule-based evaluations from trace spans
-    trackTaskActivity(makeTraceSpan({
-      attributes: {
-        [SESSION_ATTRIBUTES.ID]: 'full-pipeline-session',
-        'builtin.tool': 'TaskCreate',
-        'builtin.task_status': 'pending',
-        'builtin.task_id': 'task-full',
-      },
-    }));
-    trackTaskActivity(makeTraceSpan({
-      spanId: 'span-002',
-      attributes: {
-        [SESSION_ATTRIBUTES.ID]: 'full-pipeline-session',
-        'builtin.tool': 'TaskUpdate',
-        'builtin.task_status': 'completed',
-        'builtin.task_id': 'task-full',
-      },
-    }));
-    const deriveEvals = deriveTaskCompletionPerSession();
-    expect(deriveEvals).toHaveLength(1);
-
-    // Step 2: Seed judge evaluations for a turn from the same session
-    const turns = [
-      makeTurn({
-        sessionId: 'full-pipeline-session',
-        traceId: 'trace-pipeline-001',
-        timestamp: '2026-02-25T00:00:00.000Z',
-        toolResults: ['tool output here'],
-      }),
-    ];
-    const { evals: judgeEvals } = seedEvaluations(turns, new Set());
-    expect(judgeEvals.length).toBeGreaterThan(0);
-
-    // Step 3: Combine and write to JSONL (as populate-dashboard.ts would do)
-    const allEvals: EvalRecord[] = [...deriveEvals, ...judgeEvals];
-    const outFile = join(tmpDir, 'evaluations-2026-02-25.jsonl');
-    const content = `${allEvals.map(ev => JSON.stringify(toOTelRecord(ev))).join('\n')}\n`;
-    writeFileSync(outFile, content);
-
-    // Step 4: Validate the combined output is valid JSONL
-    const records = parseJsonl(readFileSync(outFile, 'utf-8'));
-    expect(records.length).toBe(allEvals.length);
-
-    // All records must have the standard OTel evaluation shape
-    for (const record of records) {
-      const attrs = record.attributes as Record<string, unknown>;
-      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('string');
-      expect(typeof attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe('number');
-      const score = attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE] as number;
-      expect(score).toBeGreaterThanOrEqual(0);
-      expect(score).toBeLessThanOrEqual(1);
-    }
-
-    // Verify rule-based eval is in the combined output
-    const taskCompletionRecords = records.filter(r => {
-      const attrs = r.attributes as Record<string, unknown>;
-      return attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] === 'task_completion';
-    });
-    expect(taskCompletionRecords).toHaveLength(1);
-    const tcAttrs = defined(taskCompletionRecords[0]).attributes as Record<string, unknown>;
-    expect(tcAttrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(1.0);
-
-    // Verify LLM judge evals are in the combined output
-    const llmEvalNames = ['relevance', 'coherence', 'faithfulness', 'hallucination', 'tool_correctness'];
-    for (const name of llmEvalNames) {
-      const found = records.some(r => {
-        const attrs = r.attributes as Record<string, unknown>;
-        return attrs[GENAI_EVALUATION_ATTRIBUTES.NAME] === name;
-      });
-      expect(found).toBe(true);
-    }
+    expect(attributes.map(a => a[GENAI_EVALUATION_ATTRIBUTES.NAME]))
+      .toEqual(['task_completion', ...SEED_RECORDS, TOOL_CORRECTNESS_CRITERIA.name]);
+    expect(attributes.filter(a => !isUnitScore(a[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]))).toEqual([]);
+    expect(attributes.filter(a => !evaluatorKindSchema.safeParse(a[EVALUATION_ATTRS.EVALUATOR_KIND]).success)).toEqual([]);
+    expect(attributes.filter(a => !evaluationCohortSchema.safeParse(a[EVALUATION_ATTRS.COHORT]).success)).toEqual([]);
   });
 });

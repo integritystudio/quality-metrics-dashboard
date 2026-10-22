@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { describe, it, expect } from 'vitest';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
   parseArgs,
   readPriorReference,
@@ -15,9 +14,9 @@ import {
 import { YES_FLAG } from '../one-shot-eval.js';
 import type { ReferenceSummary } from '../judge-quality-eval.js';
 import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
+import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { makeSizedTurn, TEST_PRICING } from './support/fixtures.js';
-
-const HALLUCINATION = 'hallucination';
+import { useTempDir } from './support/temp-dir.js';
 
 function summary(maes: Record<string, number | null>): ReferenceSummary {
   const distance = (mae: number | null) => ({
@@ -46,26 +45,20 @@ describe('parseArgs', () => {
 });
 
 describe('reference input files', () => {
-  let dir: string;
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'hal-eval-'));
-  });
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const dir = useTempDir('hal-eval-');
 
   it('rejects a file without reference scores', () => {
-    const path = join(dir, 'agreement.json');
+    const path = join(dir(), 'agreement.json');
     writeFileSync(path, JSON.stringify({ turns: [{ sessionId: 's', timestamp: 't' }] }));
     expect(() => readPriorReference(path)).toThrow('not a judge-quality results file');
   });
 });
 
 describe('mergeReference', () => {
-  const prior = { [RELEVANCE_EVAL_NAME]: 0.75, [FAITHFULNESS_EVAL_NAME]: 0.5, [HALLUCINATION]: 0.5 };
+  const prior = { [RELEVANCE_EVAL_NAME]: 0.75, [FAITHFULNESS_EVAL_NAME]: 0.5, [HALLUCINATION_EVAL_NAME]: 0.5 };
 
   it('replaces the inverted hallucination with the direct verdict and keeps the rest', () => {
-    expect(mergeReference(prior, 0)).toEqual({ [RELEVANCE_EVAL_NAME]: 0.75, [FAITHFULNESS_EVAL_NAME]: 0.5, [HALLUCINATION]: 0 });
+    expect(mergeReference(prior, 0)).toEqual({ [RELEVANCE_EVAL_NAME]: 0.75, [FAITHFULNESS_EVAL_NAME]: 0.5, [HALLUCINATION_EVAL_NAME]: 0 });
   });
 
   it('drops the inverted value when there is no direct verdict, rather than keeping it', () => {
@@ -76,8 +69,8 @@ describe('mergeReference', () => {
 describe('countComplements', () => {
   it('counts turns whose faithfulness and hallucination sum to 1, over turns that have both', () => {
     const count = countComplements([
-      { [FAITHFULNESS_EVAL_NAME]: 0.75, [HALLUCINATION]: 0.25 },
-      { [FAITHFULNESS_EVAL_NAME]: 0.25, [HALLUCINATION]: 0 },
+      { [FAITHFULNESS_EVAL_NAME]: 0.75, [HALLUCINATION_EVAL_NAME]: 0.25 },
+      { [FAITHFULNESS_EVAL_NAME]: 0.25, [HALLUCINATION_EVAL_NAME]: 0 },
       { [FAITHFULNESS_EVAL_NAME]: 1 },
       {},
     ]);
@@ -88,11 +81,11 @@ describe('countComplements', () => {
 describe('closestConfiguration', () => {
   it('picks the lowest MAE per criterion and ties when equal or only one configuration is paired', () => {
     const verdict = closestConfiguration({
-      perCriterion: summary({ [HALLUCINATION]: 1.2, [RELEVANCE_EVAL_NAME]: 0.5, only: 0.1 }),
-      consolidated: summary({ [HALLUCINATION]: 0.9, [RELEVANCE_EVAL_NAME]: 0.5, only: null }),
-      consolidatedDirect: summary({ [HALLUCINATION]: 0.4, [RELEVANCE_EVAL_NAME]: 0.5 }),
+      perCriterion: summary({ [HALLUCINATION_EVAL_NAME]: 1.2, [RELEVANCE_EVAL_NAME]: 0.5, only: 0.1 }),
+      consolidated: summary({ [HALLUCINATION_EVAL_NAME]: 0.9, [RELEVANCE_EVAL_NAME]: 0.5, only: null }),
+      consolidatedDirect: summary({ [HALLUCINATION_EVAL_NAME]: 0.4, [RELEVANCE_EVAL_NAME]: 0.5 }),
     });
-    expect(verdict).toEqual({ [HALLUCINATION]: 'consolidatedDirect', [RELEVANCE_EVAL_NAME]: 'tie', only: 'tie' });
+    expect(verdict).toEqual({ [HALLUCINATION_EVAL_NAME]: 'consolidatedDirect', [RELEVANCE_EVAL_NAME]: 'tie', only: 'tie' });
   });
 });
 

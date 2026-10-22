@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
   isSystemPrompt,
   isToolResultOnly,
@@ -14,11 +13,10 @@ import {
   MAX_TOOL_CONTEXT_ITEMS,
   MAX_TURN_TEXT_LEN,
   transcriptPathOf,
-  type TranscriptInfo,
+  type Turn,
 } from '../judge-turns.js';
 import {
   hashToScore,
-  isCanaryTurn,
   seedEvaluations,
   evaluateTurn,
   evaluateTurnsBatched,
@@ -36,10 +34,17 @@ import {
   EVAL_SCORE_PRECISION,
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
+  PRODUCER,
   type EvalRecord,
 } from '../eval-record.js';
-import { judgedByKey, TIMESTAMP_TURN_KEY_LEN } from '../judge-dedup.js';
-import { HAIKU_MODEL, JUDGE_MAX_TOKENS } from '../judge-criteria.js';
+import {
+  COHERENCE_EVAL_NAME,
+  FAITHFULNESS_EVAL_NAME,
+  HAIKU_MODEL,
+  JUDGE_MAX_TOKENS,
+  RELEVANCE_EVAL_NAME,
+  TOOL_CORRECTNESS_CRITERIA,
+} from '../judge-criteria.js';
 import {
   evalFailures,
   classifyJudgeFailure,
@@ -66,25 +71,27 @@ import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
-import { MINUTES_PER_HOUR } from '../../src/lib/constants.js';
-import { makeTurn } from './support/fixtures.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
+import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 import { TRANSCRIPT_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
+import { judgedKeys, makeToolTurn, makeTurn, scoredKeys, SEED_RECORDS, TOOL_TURN_RECORDS, turnSeries } from './support/fixtures.js';
+import { useTempDir } from './support/temp-dir.js';
+import { transcriptMessage, writeJsonl } from './support/transcripts.js';
 
-// Test Data Factories
-
-const NOT_A_STRING = 42;
 const DEFAULT_SCORE = 0.85;
+const PLAIN_CRITERIA = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME];
+const OTHER_JUDGE_MODEL = 'claude-opus-5';
 
 function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
   return {
     timestamp: '2026-02-09T01:11:15.525Z',
-    evaluationName: 'relevance',
+    evaluationName: RELEVANCE_EVAL_NAME,
     scoreValue: DEFAULT_SCORE,
     explanation: 'Test explanation',
-    evaluator: 'dashboard:judge-evaluations',
+    evaluator: PRODUCER,
     evaluatorType: 'llm',
     evaluatorKind: 'llm',
     cohort: 'normal',
@@ -95,345 +102,132 @@ function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
   };
 }
 
-describe('isSystemPrompt', () => {
-  it('detects system-reminder tags', () => {
-    expect(isSystemPrompt('<system-reminder>some content</system-reminder>')).toBe(true);
+// Transcript content
+
+const SYSTEM_PROMPTS: Array<[string, unknown, boolean]> = [
+  ['a system-reminder tag', '<system-reminder>some content</system-reminder>', true],
+  ['a system-reminder after leading whitespace', '  <system-reminder>content', true],
+  ['stop hook feedback', 'Stop hook feedback: some message', true],
+  ['regular user text', 'Fix the login bug', false],
+  ['an empty string', '', false],
+  ['a non-string', 42, false],
+];
+
+const TOOL_RESULT_ONLY: Array<[string, unknown, boolean]> = [
+  ['one tool_result block', [{ type: 'tool_result', content: 'result' }], true],
+  ['several tool_result blocks', [{ type: 'tool_result', content: 'a' }, { type: 'tool_result', content: 'b' }], true],
+  ['tool results beside text', [{ type: 'text', text: 'hello' }, { type: 'tool_result', content: 'result' }], false],
+  ['an empty array', [], false],
+  ['a string', 'string', false],
+  ['null', null, false],
+];
+
+const CONTENT_TEXT: Array<[string, unknown, string]> = [
+  ['a string', 'hello world', 'hello world'],
+  ['text blocks, one per line', [{ type: 'text', text: 'First part.' }, { type: 'text', text: 'Second part.' }], 'First part.\nSecond part.'],
+  ['only the text blocks', [{ type: 'text', text: 'Hello' }, { type: 'tool_use', id: '123', name: 'Read' }, { type: 'tool_result', content: 'file contents' }], 'Hello'],
+  ['nothing from a text block without text', [{ type: 'text' }], ''],
+  ['nothing from null', null, ''],
+  ['nothing from a number', 42, ''],
+  ['nothing from undefined', undefined, ''],
+];
+
+const CONTENT_TOOL_RESULTS: Array<[string, unknown, string[]]> = [
+  ['string content', [{ type: 'tool_result', content: 'File contents here' }], ['File contents here']],
+  ['nested text blocks, one per line', [{ type: 'tool_result', content: [{ type: 'text', text: 'Line 1' }, { type: 'text', text: 'Line 2' }] }], ['Line 1\nLine 2']],
+  ['only the tool_result blocks', [{ type: 'text', text: 'Not a tool result' }, { type: 'tool_result', content: 'Actual result' }], ['Actual result']],
+  ['only the non-empty results', [{ type: 'tool_result', content: '' }, { type: 'tool_result', content: 'valid' }], ['valid']],
+  ['nothing from null', null, []],
+  ['nothing from a string', 'string', []],
+];
+
+describe('transcript content', () => {
+  it.each(SYSTEM_PROMPTS)('isSystemPrompt: %s → %s', (_case, text, expected) => {
+    expect(isSystemPrompt(text as string)).toBe(expected);
   });
 
-  it('detects system-reminder with leading whitespace', () => {
-    expect(isSystemPrompt('  <system-reminder>content')).toBe(true);
+  it.each(TOOL_RESULT_ONLY)('isToolResultOnly: %s → %s', (_case, content, expected) => {
+    expect(isToolResultOnly(content)).toBe(expected);
   });
 
-  it('detects stop hook feedback', () => {
-    expect(isSystemPrompt('Stop hook feedback: some message')).toBe(true);
+  it.each(CONTENT_TEXT)('extractTextFromContent reads %s', (_case, content, expected) => {
+    expect(extractTextFromContent(content)).toBe(expected);
   });
 
-  it('returns false for regular user text', () => {
-    expect(isSystemPrompt('Fix the login bug')).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isSystemPrompt('')).toBe(false);
-  });
-
-  it('returns false for non-string input', () => {
-    expect(isSystemPrompt(NOT_A_STRING as unknown as string)).toBe(false);
-  });
-});
-
-describe('isToolResultOnly', () => {
-  it('returns true for array of tool_result blocks', () => {
-    expect(isToolResultOnly([
-      { type: 'tool_result', content: 'result' },
-    ])).toBe(true);
-  });
-
-  it('returns true for multiple tool_result blocks', () => {
-    expect(isToolResultOnly([
-      { type: 'tool_result', content: 'a' },
-      { type: 'tool_result', content: 'b' },
-    ])).toBe(true);
-  });
-
-  it('returns false when mixed with text blocks', () => {
-    expect(isToolResultOnly([
-      { type: 'text', text: 'hello' },
-      { type: 'tool_result', content: 'result' },
-    ])).toBe(false);
-  });
-
-  it('returns false for empty array', () => {
-    expect(isToolResultOnly([])).toBe(false);
-  });
-
-  it('returns false for non-array input', () => {
-    expect(isToolResultOnly('string')).toBe(false);
-    expect(isToolResultOnly(null)).toBe(false);
-  });
-});
-
-describe('extractTextFromContent', () => {
-  it('extracts text from string content', () => {
-    expect(extractTextFromContent('hello world')).toBe('hello world');
-  });
-
-  it('extracts text from content block array', () => {
-    const content = [
-      { type: 'text', text: 'First part.' },
-      { type: 'text', text: 'Second part.' },
-    ];
-    expect(extractTextFromContent(content)).toBe('First part.\nSecond part.');
-  });
-
-  it('filters out non-text blocks', () => {
-    const content = [
-      { type: 'text', text: 'Hello' },
-      { type: 'tool_use', id: '123', name: 'Read' },
-      { type: 'tool_result', content: 'file contents' },
-    ];
-    expect(extractTextFromContent(content)).toBe('Hello');
-  });
-
-  it('returns empty string for non-string non-array', () => {
-    expect(extractTextFromContent(null)).toBe('');
-    expect(extractTextFromContent(NOT_A_STRING)).toBe('');
-    expect(extractTextFromContent(undefined)).toBe('');
-  });
-
-  it('handles blocks with missing text field', () => {
-    const content = [{ type: 'text' }];
-    expect(extractTextFromContent(content)).toBe('');
-  });
-});
-
-describe('extractToolResults', () => {
-  it('extracts string content from tool_result blocks', () => {
-    const content = [
-      { type: 'tool_result', content: 'File contents here' },
-    ];
-    expect(extractToolResults(content)).toEqual(['File contents here']);
-  });
-
-  it('extracts nested text blocks from tool_result', () => {
-    const content = [
-      {
-        type: 'tool_result',
-        content: [
-          { type: 'text', text: 'Line 1' },
-          { type: 'text', text: 'Line 2' },
-        ],
-      },
-    ];
-    expect(extractToolResults(content)).toEqual(['Line 1\nLine 2']);
-  });
-
-  it('filters out non-tool_result blocks', () => {
-    const content = [
-      { type: 'text', text: 'Not a tool result' },
-      { type: 'tool_result', content: 'Actual result' },
-    ];
-    expect(extractToolResults(content)).toEqual(['Actual result']);
-  });
-
-  it('returns empty array for non-array input', () => {
-    expect(extractToolResults(null)).toEqual([]);
-    expect(extractToolResults('string')).toEqual([]);
-  });
-
-  it('filters out empty tool results', () => {
-    const content = [
-      { type: 'tool_result', content: '' },
-      { type: 'tool_result', content: 'valid' },
-    ];
-    expect(extractToolResults(content)).toEqual(['valid']);
+  it.each(CONTENT_TOOL_RESULTS)('extractToolResults reads %s', (_case, content, expected) => {
+    expect(extractToolResults(content)).toEqual(expected);
   });
 });
 
 describe('extractTurns', () => {
-  let tmpDir: string;
+  const dir = useTempDir('judge-turns-');
+  const SESSION = 'sess-1';
+  const TRACE = 'trace-1';
+  const START_MS = Date.parse('2026-02-09T01:00:00Z');
 
-  function writeTranscript(lines: object[]): string {
-    const dir = join(tmpDir, 'transcripts');
-    mkdirSync(dir, { recursive: true });
-    const filepath = join(dir, 'test-session.jsonl');
-    const content = lines.map(l => JSON.stringify(l)).join('\n');
-    writeFileSync(filepath, content);
-    return filepath;
+  const user = (content: string | object[]): object =>
+    transcriptMessage('user', typeof content === 'string' ? [{ type: 'text', text: content }] : content);
+  const assistant = (text: string): object => transcriptMessage('assistant', [{ type: 'text', text }]);
+  const toolResult = (content: string): object => user([{ type: 'tool_result', content }]);
+
+  /** The turns of a transcript holding `entries`, a second apart, in one session. */
+  async function extract(...entries: object[]): Promise<Turn[]> {
+    const stamped = entries.map((entry, i) => ({ sessionId: SESSION, timestamp: new Date(START_MS + i * TIME_MS.SECOND).toISOString(), ...entry }));
+    return extractTurns({ path: writeJsonl(join(dir(), 'session.jsonl'), stamped), sessionId: SESSION, traceId: TRACE });
   }
 
-  beforeEach(() => {
-    tmpDir = join(tmpdir(), `judge-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
+  it('pairs a user prompt with the assistant reply', async () => {
+    expect(await extract(user('Fix the bug'), assistant('I fixed it in auth.ts'))).toEqual([expect.objectContaining({
+      sessionId: SESSION,
+      // Anchoring assigns each turn its own trace later; extraction leaves it empty.
+      traceId: '',
+      userText: 'Fix the bug',
+      assistantText: 'I fixed it in auth.ts',
+      toolResults: [],
+    })]);
   });
 
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+  it('skips a system prompt', async () => {
+    expect(await extract(user('<system-reminder>hook info</system-reminder>'), assistant('Response'))).toEqual([]);
   });
 
-  it('extracts user/assistant turn pairs', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Fix the bug' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'I fixed it in auth.ts' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-
-    const info: TranscriptInfo = { path: filepath, sessionId: 'sess-1', traceId: 'trace-1' };
-    const turns = await extractTurns(info);
-
-    expect(turns).toHaveLength(1);
-    expect(defined(turns[0]).userText).toBe('Fix the bug');
-    expect(defined(turns[0]).assistantText).toBe('I fixed it in auth.ts');
-    expect(defined(turns[0]).sessionId).toBe('sess-1');
+  it('skips a user message holding only tool results', async () => {
+    expect(await extract(toolResult('result data'), assistant('Response'))).toEqual([]);
   });
 
-  it('skips system prompts', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: '<system-reminder>hook info</system-reminder>' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Response' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
+  it('gives a turn the tool results that preceded it, and none to the next turn', async () => {
+    const turns = await extract(
+      toolResult('tool output from turn 1'),
+      user('First question'),
+      assistant('First answer'),
+      user('Second question'),
+      assistant('Second answer'),
+    );
 
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(0);
-  });
-
-  it('skips tool-result-only user messages', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', content: 'result data' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Response' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
-
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(0);
-  });
-
-  it('accumulates tool results from preceding messages', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output 1' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Now fix the tests' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:10Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Tests fixed' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:15Z',
-      },
-    ]);
-
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(1);
-    expect(defined(turns[0]).toolResults).toContain('tool output 1');
-  });
-
-  it('clears tool results between turns (M4)', async () => {
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', content: 'tool output from turn 1' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'First question' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:10Z',
-      },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Second question' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:15Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:20Z',
-      },
-    ]);
-
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(2);
-    expect(defined(turns[0]).toolResults).toContain('tool output from turn 1');
-    expect(defined(turns[1]).toolResults).toHaveLength(0); // Should not leak from turn 1
+    expect(turns.map(t => t.toolResults)).toEqual([['tool output from turn 1'], []]);
   });
 
   it('skips progress and file-history-snapshot entries', async () => {
-    const filepath = writeTranscript([
-      { type: 'progress', message: null },
-      { type: 'file-history-snapshot', files: {} },
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
+    const turns = await extract({ type: 'progress', message: null }, { type: 'file-history-snapshot', files: {} }, user('Hello'), assistant('Hi'));
 
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(turns).toHaveLength(1);
+    expect(turns.map(t => t.userText)).toEqual(['Hello']);
   });
 
-  it('truncates long text to MAX_TURN_TEXT_LEN', async () => {
-    const longText = 'x'.repeat(MAX_TURN_TEXT_LEN * 2);
-    const filepath = writeTranscript([
-      {
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: longText }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:00Z',
-      },
-      {
-        type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'text', text: longText }] },
-        sessionId: 'sess-1',
-        timestamp: '2026-02-09T01:00:05Z',
-      },
-    ]);
+  it('truncates each side of a turn to MAX_TURN_TEXT_LEN', async () => {
+    const longText = 'x'.repeat(MAX_TURN_TEXT_LEN + 1);
 
-    const turns = await extractTurns({ path: filepath, sessionId: 'sess-1', traceId: 'trace-1' });
-    expect(defined(turns[0]).userText.length).toBe(MAX_TURN_TEXT_LEN);
-    expect(defined(turns[0]).assistantText.length).toBe(MAX_TURN_TEXT_LEN);
+    const [turn] = await extract(user(longText), assistant(longText));
+
+    expect(defined(turn).userText).toHaveLength(MAX_TURN_TEXT_LEN);
+    expect(defined(turn).assistantText).toHaveLength(MAX_TURN_TEXT_LEN);
   });
 
-  it('handles malformed JSON lines gracefully', async () => {
-    const dir = join(tmpDir, 'transcripts');
-    mkdirSync(dir, { recursive: true });
-    const filepath = join(dir, 'bad.jsonl');
-    writeFileSync(filepath, 'not json\n{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Hello"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:00Z"}\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}]},"sessionId":"s","timestamp":"2026-02-09T01:00:05Z"}\n');
+  it('skips a malformed line and reads the rest', async () => {
+    const path = join(dir(), 'bad.jsonl');
+    const lines = [user('Hello'), assistant('Hi')].map(entry => JSON.stringify({ sessionId: SESSION, timestamp: new Date(START_MS).toISOString(), ...entry }));
+    writeFileSync(path, ['not json', ...lines].join('\n'));
 
-    const turns = await extractTurns({ path: filepath, sessionId: 's', traceId: 't' });
-    expect(turns).toHaveLength(1);
+    expect((await extractTurns({ path, sessionId: SESSION, traceId: TRACE })).map(t => t.userText)).toEqual(['Hello']);
   });
 });
 
@@ -464,20 +258,18 @@ describe('transcriptPathOf', () => {
   });
 });
 
+// Scores
+
+const NORMALIZED_SCORES = [
+  ['rounds to 4 decimal places', 0.123456789, 0.1235],
+  ['keeps a value already at that precision', 0.85, 0.85],
+  ['keeps 0', 0, 0],
+  ['keeps 1', 1, 1],
+] as const;
+
 describe('normalizeScore', () => {
-  it('rounds to 4 decimal places', () => {
-    const UNROUNDED_SCORE = 0.123456789;
-    const ROUNDED_SCORE = 0.1235;
-    expect(normalizeScore(UNROUNDED_SCORE)).toBe(ROUNDED_SCORE);
-  });
-
-  it('preserves exact values', () => {
-    expect(normalizeScore(DEFAULT_SCORE)).toBe(DEFAULT_SCORE);
-  });
-
-  it('handles 0 and 1', () => {
-    expect(normalizeScore(0)).toBe(0);
-    expect(normalizeScore(1)).toBe(1);
+  it.each(NORMALIZED_SCORES)('%s', (_case, raw, normalized) => {
+    expect(normalizeScore(raw)).toBe(normalized);
   });
 });
 
@@ -486,171 +278,94 @@ describe('hashToScore', () => {
   const NARROW_RANGE = { min: 0.3, max: 0.9 };
   const SAMPLE_COUNT = 100;
 
-  it('returns deterministic scores for same input', () => {
-    const score1 = hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max);
-    const score2 = hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max);
-    expect(score1).toBe(score2);
+  it('returns the same score for the same input', () => {
+    expect(hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max)).toBe(hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max));
   });
 
   it('returns different scores for different inputs', () => {
-    const score1 = hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max);
-    const score2 = hashToScore('test:def', UPPER_HALF.min, UPPER_HALF.max);
-    expect(score1).not.toBe(score2);
+    expect(hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max)).not.toBe(hashToScore('test:def', UPPER_HALF.min, UPPER_HALF.max));
   });
 
-  it('returns scores within specified range', () => {
-    for (let i = 0; i < SAMPLE_COUNT; i++) {
-      const score = hashToScore(`input-${i}`, NARROW_RANGE.min, NARROW_RANGE.max);
-      expect(score).toBeGreaterThanOrEqual(NARROW_RANGE.min);
-      expect(score).toBeLessThanOrEqual(NARROW_RANGE.max);
-    }
+  it('stays within the range it is given', () => {
+    const scores = Array.from({ length: SAMPLE_COUNT }, (_, i) => hashToScore(`input-${i}`, NARROW_RANGE.min, NARROW_RANGE.max));
+
+    expect(scores.filter(score => !(score >= NARROW_RANGE.min && score <= NARROW_RANGE.max))).toEqual([]);
   });
 
-  it('returns 4 decimal precision', () => {
-    const score = hashToScore('test', 0.0, 1.0);
-    const decimals = score.toString().split('.')[1]?.length ?? 0;
+  it('returns at most 4 decimal places', () => {
+    const decimals = hashToScore('test', 0, 1).toString().split('.')[1]?.length ?? 0;
+
     expect(decimals).toBeLessThanOrEqual(EVAL_SCORE_PRECISION);
   });
 });
 
 describe('seedEvaluations', () => {
-  it('generates relevance and coherence for all turns', () => {
-    const turns = [makeTurn()];
-    const { evals } = seedEvaluations(turns, new Set());
+  /** Enough turns to hit the ~2% canary rate several times. */
+  const SAMPLE_TURNS = 200;
+  const sample = seedEvaluations(turnSeries(SAMPLE_TURNS, { toolResults: ['ctx'] }), new Set()).evals;
+  const scoresOf = (cohort: string, name: string): number[] =>
+    sample.filter(ev => ev.cohort === cohort && ev.evaluationName === name).map(ev => ev.scoreValue);
+  const namesOf = (turn: Turn, existingKeys = new Set<string>()): string[] =>
+    seedEvaluations([turn], existingKeys).evals.map(e => e.evaluationName);
 
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
+  it('seeds relevance, coherence, faithfulness and hallucination for a turn without tool results', () => {
+    expect(namesOf(makeTurn())).toEqual(SEED_RECORDS);
   });
 
-  it('generates faithfulness, hallucination, and tool_correctness in seed mode', () => {
-    const turnNoTools = makeTurn({ toolResults: [] });
-    const turnWithTools = makeTurn({ toolResults: ['some tool output'] });
-
-    const { evals: evalsNoTools } = seedEvaluations([turnNoTools], new Set());
-    const { evals: evalsWithTools } = seedEvaluations([turnWithTools], new Set());
-
-    expect(evalsNoTools.map(e => e.evaluationName)).toContain('faithfulness');
-    expect(evalsNoTools.map(e => e.evaluationName)).toContain('hallucination');
-    // tool_correctness only generated when tool results exist
-    expect(evalsNoTools.map(e => e.evaluationName)).not.toContain('tool_correctness');
-    expect(evalsWithTools.map(e => e.evaluationName)).toContain('faithfulness');
-    expect(evalsWithTools.map(e => e.evaluationName)).toContain('hallucination');
-    expect(evalsWithTools.map(e => e.evaluationName)).toContain('tool_correctness');
+  it('adds tool_correctness for a turn with tool results', () => {
+    expect(namesOf(makeToolTurn())).toEqual([...SEED_RECORDS, TOOL_CORRECTNESS_CRITERIA.name]);
   });
 
-  it('skips evaluations that exist in the dedup set', () => {
+  it('seeds only the metrics no stored score already covers', () => {
     const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-    const existingKeys = new Set([
-      `${turn.sessionId}:relevance:${turnKey}`,
-      `${turn.sessionId}:coherence:${turnKey}`,
-      `${turn.sessionId}:faithfulness:${turnKey}`,
-      `${turn.sessionId}:hallucination:${turnKey}`,
-    ]);
 
-    const { evals } = seedEvaluations([turn], existingKeys);
-    expect(evals).toHaveLength(0);
+    expect(namesOf(turn, scoredKeys(turn, [HALLUCINATION_EVAL_NAME]))).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME]);
+    expect(namesOf(turn, scoredKeys(turn, SEED_RECORDS))).toEqual([]);
   });
 
-  it('hallucination + faithfulness scores are complementary', () => {
-    const turn = makeTurn();
-    const { evals } = seedEvaluations([turn], new Set());
+  it('scores faithfulness and hallucination as complements', () => {
+    const { evals } = seedEvaluations([makeTurn()], new Set());
+    const score = (name: string): number => defined(evals.find(e => e.evaluationName === name)).scoreValue;
 
-    const faith = defined(evals.find(e => e.evaluationName === 'faithfulness'));
-    const hal = defined(evals.find(e => e.evaluationName === 'hallucination'));
-    const CLOSE_TO_DIGITS = 3;
-    expect(faith.scoreValue + hal.scoreValue).toBeCloseTo(1.0, CLOSE_TO_DIGITS);
+    expect(score(FAITHFULNESS_EVAL_NAME) + score(HALLUCINATION_EVAL_NAME)).toBeCloseTo(1, EVAL_SCORE_PRECISION);
   });
 
-  // OBP16: this used to assert the inverse of the correct behaviour — that a
-  // canary record carries evaluator 'llm'. Both branches hash, so neither may
-  // claim an LLM produced the score; the cohort is what tells them apart.
-  it('marks seed evals by cohort, and never claims an llm produced them', () => {
-    const { evals } = seedEvaluations([makeTurn({ toolResults: ['ctx'] })], new Set());
-    expect(evals.length).toBeGreaterThan(0);
-    for (const ev of evals) {
-      expect(['seed', 'canary']).toContain(ev.cohort);
-      expect(ev.evaluatorKind).toBe('rule');
-      expect(ev.evaluator).toBe('dashboard:judge-evaluations');
-      expect(ev.judgeModel).toBeUndefined();
-    }
+  it('gives the same records for the same turn on every run', () => {
+    const turn = makeToolTurn();
+
+    expect(seedEvaluations([turn], new Set())).toEqual(seedEvaluations([turn], new Set()));
   });
 
-  it('non-canary scores are within expected ranges', () => {
-    const turns = Array.from({ length: 20 }, (_, i) =>
-      makeTurn({
-        sessionId: `session-${i}`,
-        timestamp: `2026-02-09T01:${String(i).padStart(2, '0')}:00.000Z`,
-        toolResults: ['ctx'],
-      })
-    );
-    const { evals } = seedEvaluations(turns, new Set());
+  // OBP16: both cohorts hash, so neither may claim an LLM produced the score;
+  // the cohort is what tells them apart.
+  it('marks every record seed or canary, rule-scored, with no judge model', () => {
+    expect(new Set(sample.map(ev => ev.cohort))).toEqual(new Set(['seed', 'canary']));
+    expect(sample).toEqual(sample.map(() => expect.objectContaining({ evaluator: PRODUCER, evaluatorKind: 'rule' })));
+    expect(sample.filter(ev => ev.judgeModel !== undefined)).toEqual([]);
+  });
 
-    const nonCanary = evals.filter(ev => !isCanaryTurn(ev.sessionId, ev.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN)));
-
-    // faithfulness and tool_correctness are seeded too; their bands are not pinned here.
+  it('keeps seed-cohort scores inside their bands', () => {
+    // Faithfulness and tool_correctness are seeded too; their bands are not pinned here.
     const bands: Array<[name: string, low: number, high: number]> = [
-      ['relevance', 0.70, 1.0],
-      ['coherence', 0.75, 1.0],
-      ['hallucination', 0.0, 0.09],
+      [RELEVANCE_EVAL_NAME, 0.70, 1.0],
+      [COHERENCE_EVAL_NAME, 0.75, 1.0],
+      [HALLUCINATION_EVAL_NAME, 0.0, 0.09],
     ];
-
-    const scored = new Set(nonCanary.map(ev => ev.evaluationName));
-    expect(bands.filter(([name]) => !scored.has(name)).map(([name]) => name)).toEqual([]);
 
     // Negated rather than `< low || > high`: NaN fails every comparison, so the
     // positive form would let a NaN score through both arms.
     const outOfBand = bands.flatMap(([name, low, high]) =>
-      nonCanary
-        .filter(ev => ev.evaluationName === name && !(ev.scoreValue >= low && ev.scoreValue <= high))
-        .map(ev => `${name}=${ev.scoreValue}`)
-    );
+      scoresOf('seed', name).filter(score => !(score >= low && score <= high)).map(score => `${name}=${score}`));
+
+    expect(bands.filter(([name]) => scoresOf('seed', name).length === 0)).toEqual([]);
     expect(outOfBand).toEqual([]);
   });
 
-  it('backfill: partial existingKeys (only hallucination) still seeds missing metrics (H1)', () => {
-    const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-    // Only hallucination is already covered — relevance/coherence/faithfulness are missing
-    const existingKeys = new Set([`${turn.sessionId}:hallucination:${turnKey}`]);
-
-    const { evals } = seedEvaluations([turn], existingKeys);
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-    expect(names).toContain('faithfulness');
-    expect(names).not.toContain('hallucination');
-  });
-
-  it('backfill idempotency: second run with all keys emits nothing (H1)', () => {
-    const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-    const SEED_METRICS = ['relevance', 'coherence', 'faithfulness', 'hallucination'] as const;
-    const existingKeys = new Set(SEED_METRICS.map(m => `${turn.sessionId}:${m}:${turnKey}`));
-
-    const { evals } = seedEvaluations([turn], existingKeys);
-    expect(evals).toHaveLength(0);
-  });
-
-  it('canary turns get intentionally low scores (B6)', () => {
+  it('gives canary turns intentionally low scores', () => {
     const CANARY_RELEVANCE_MAX = 0.35;
     const CANARY_HALLUCINATION_MIN = 0.50;
-    // Generate enough turns to likely hit a canary (~2% rate)
-    const turns = Array.from({ length: 200 }, (_, i) =>
-      makeTurn({
-        sessionId: `canary-test-${i}`,
-        timestamp: `2026-02-09T01:${String(i % MINUTES_PER_HOUR).padStart(2, '0')}:${String(Math.floor(i / MINUTES_PER_HOUR)).padStart(2, '0')}.000Z`,
-        toolResults: ['ctx'],
-      })
-    );
-    const { evals } = seedEvaluations(turns, new Set());
-    const canaryEvals = evals.filter(e => e.explanation.includes('(canary)'));
-
-    const canaryScoresFor = (name: string): number[] =>
-      canaryEvals.filter(ev => ev.evaluationName === name).map(ev => ev.scoreValue);
-    const relevance = canaryScoresFor('relevance');
-    const hallucination = canaryScoresFor('hallucination');
+    const relevance = scoresOf('canary', RELEVANCE_EVAL_NAME);
+    const hallucination = scoresOf('canary', HALLUCINATION_EVAL_NAME);
 
     expect(relevance.length).toBeGreaterThan(0);
     expect(hallucination.length).toBeGreaterThan(0);
@@ -660,92 +375,87 @@ describe('seedEvaluations', () => {
 });
 
 describe('toOTelRecord', () => {
-  it('produces correct OTel flat evaluation format', () => {
-    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
+  const attributesOf = (record: EvalRecord): Record<string, unknown> =>
+    (toOTelRecord(record) as { attributes: Record<string, unknown> }).attributes;
 
-    expect(record.timestamp).toBe('2026-02-09T01:11:15.525Z');
-    expect(record.traceId).toBe('trace-001');
+  it('produces the flat OTel evaluation format', () => {
+    const record = toOTelRecord(makeEvalRecord());
 
-    const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.NAME]).toBe('relevance');
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]).toBe(DEFAULT_SCORE);
-    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('Test explanation');
-    expect(attrs[EVALUATION_ATTRS.PRODUCER]).toBe('dashboard:judge-evaluations');
-    expect(attrs[EVALUATION_ATTRS.EVALUATOR_KIND]).toBe('llm');
-    expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('normal');
-    expect(attrs[EVALUATION_ATTRS.JUDGE_MODEL]).toBe('claude-haiku-4-5-20251001');
-    expect(attrs[SESSION_ATTRIBUTES.ID]).toBe('abc12345-session');
+    expect(record).toMatchObject({ timestamp: '2026-02-09T01:11:15.525Z', traceId: 'trace-001' });
+    expect(attributesOf(makeEvalRecord())).toMatchObject({
+      [GENAI_EVALUATION_ATTRIBUTES.NAME]: RELEVANCE_EVAL_NAME,
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: DEFAULT_SCORE,
+      [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'Test explanation',
+      [EVALUATION_ATTRS.PRODUCER]: PRODUCER,
+      [EVALUATION_ATTRS.EVALUATOR_KIND]: 'llm',
+      [EVALUATION_ATTRS.COHORT]: 'normal',
+      [EVALUATION_ATTRS.JUDGE_MODEL]: 'claude-haiku-4-5-20251001',
+      [SESSION_ATTRIBUTES.ID]: 'abc12345-session',
+    });
   });
 
   it('stamps the evaluation schema URL as a record field, not an attribute', () => {
-    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
-    expect(record.schemaUrl).toBe('https://integritystudio.ai/schemas/evaluation/1.0.0');
-    const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs.schemaUrl).toBeUndefined();
+    expect(toOTelRecord(makeEvalRecord())).toMatchObject({ schemaUrl: 'https://integritystudio.ai/schemas/evaluation/1.0.0' });
+    expect(attributesOf(makeEvalRecord()).schemaUrl).toBeUndefined();
   });
 
   it('omits session.id when empty', () => {
-    const record = toOTelRecord(makeEvalRecord({ sessionId: '' })) as Record<string, unknown>;
-    const attrs = record.attributes as Record<string, unknown>;
-    expect(attrs[SESSION_ATTRIBUTES.ID]).toBeUndefined();
+    expect(attributesOf(makeEvalRecord({ sessionId: '' }))[SESSION_ATTRIBUTES.ID]).toBeUndefined();
   });
 
   // OBP16: neither key is in the semconv registry, so both were local fields
   // squatting under an OpenTelemetry-owned namespace (AA3 Gate 1c).
   it('no longer writes the two overloaded gen_ai evaluator keys', () => {
-    const record = toOTelRecord(makeEvalRecord()) as Record<string, unknown>;
-    const attrs = record.attributes as Record<string, unknown>;
+    const attrs = attributesOf(makeEvalRecord());
+
     expect(attrs[LEGACY_EVALUATOR_TYPE_ATTR]).toBeUndefined();
     expect(attrs[GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]).toBeUndefined();
   });
 
   it('writes the score unit under integritystudio.*, not gen_ai.*', () => {
-    const record = toOTelRecord(makeEvalRecord({ scoreUnit: 'seconds' })) as Record<string, unknown>;
-    const attrs = record.attributes as Record<string, unknown>;
+    const attrs = attributesOf(makeEvalRecord({ scoreUnit: 'seconds' }));
+
     expect(attrs[EVALUATION_ATTRS.SCORE_UNIT]).toBe('seconds');
     expect(attrs[LEGACY_SCORE_UNIT_ATTR]).toBeUndefined();
   });
 
   it('omits the judge model for a score no model produced', () => {
     const { judgeModel: _noModel, ...canary } = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule' });
-    const record = toOTelRecord(canary) as Record<string, unknown>;
-    const attrs = record.attributes as Record<string, unknown>;
+    const attrs = attributesOf(canary);
+
     expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('canary');
     expect(attrs[EVALUATION_ATTRS.JUDGE_MODEL]).toBeUndefined();
   });
 });
 
 describe('processBatch', () => {
-  const CONCURRENCY = 3;
+  const CONCURRENCY = 2;
+  const items = [1, 2, 3, 4, 5, 6];
 
-  it('processes all items', async () => {
-    const items = [1, 2, 3, 4, 5];
-    const results = await processBatch(items, 2, 0, (n) => Promise.resolve(n * 2));
-    expect(results).toEqual(items.map(n => n * 2));
+  it('returns every result in input order', async () => {
+    expect(await processBatch(items, CONCURRENCY, 0, n => Promise.resolve(n * 2))).toEqual(items.map(n => n * 2));
   });
 
-  it('handles empty array', async () => {
-    const results = await processBatch([], CONCURRENCY, 0, (n: number) => Promise.resolve(n));
-    expect(results).toEqual([]);
+  it('returns nothing for no items', async () => {
+    expect(await processBatch([], CONCURRENCY, 0, (n: number) => Promise.resolve(n))).toEqual([]);
   });
 
-  it('continues on individual failures', async () => {
-    const items = [1, 2, 3];
+  it('drops a failed item and keeps the rest', async () => {
     const failing = 2;
     const results = await processBatch(items, CONCURRENCY, 0, (n) => {
       if (n === failing) throw new Error('fail');
       return Promise.resolve(n);
     });
+
     expect(results).toEqual(items.filter(n => n !== failing));
   });
 
-  it('respects concurrency limit', async () => {
+  it('runs exactly the concurrency limit at once', async () => {
     const WORK_MS = 10;
     let maxConcurrent = 0;
     let current = 0;
 
-    const items = [1, 2, 3, 4, 5, 6];
-    await processBatch(items, 2, 0, async (n) => {
+    await processBatch(items, CONCURRENCY, 0, async (n) => {
       current++;
       maxConcurrent = Math.max(maxConcurrent, current);
       await new Promise(r => setTimeout(r, WORK_MS));
@@ -753,138 +463,85 @@ describe('processBatch', () => {
       return n;
     });
 
-    expect(maxConcurrent).toBeLessThanOrEqual(2);
+    expect(maxConcurrent).toBe(CONCURRENCY);
   });
 });
 
 // evaluateTurn (B14)
-
+//
 // G-Eval makes 2 calls: (1) step generation, (2) evaluation scoring (1-5 scale).
 // QAG makes 2 calls: (1) statement extraction (JSON array), (2) verdict per statement.
+
 const MOCK_GEVAL_STEPS = '1. Check quality\n2. Assess completeness\n3. Verify accuracy';
 const MOCK_GEVAL_SCORE = 4;
+const JUDGE_TIMEOUT_MS = 5000;
 
-function mockResponse(prompt: string, gEvalScore = MOCK_GEVAL_SCORE): { text: string } {
-  if (prompt.includes('Generate detailed')) {
-    return { text: MOCK_GEVAL_STEPS };
-  }
-  if (prompt.includes('statements') || prompt.includes('claims')) {
-    return { text: JSON.stringify(['The response is correct.']) };
-  }
-  if (prompt.includes('verdict') || prompt.includes('supported')) {
-    return { text: 'yes' };
-  }
-  return { text: String(gEvalScore) };
+function mockResponse(prompt: string): { text: string } {
+  if (prompt.includes('Generate detailed')) return { text: MOCK_GEVAL_STEPS };
+  if (prompt.includes('statements') || prompt.includes('claims')) return { text: JSON.stringify(['The response is correct.']) };
+  if (prompt.includes('verdict') || prompt.includes('supported')) return { text: 'yes' };
+  return { text: String(MOCK_GEVAL_SCORE) };
 }
 
-function createMockLLM(gEvalScore = MOCK_GEVAL_SCORE): LLMProvider {
-  return {
-    generate(prompt: string) {
-      return Promise.resolve(mockResponse(prompt, gEvalScore));
-    },
-  };
+function createMockLLM(): LLMProvider {
+  return { generate: (prompt: string) => Promise.resolve(mockResponse(prompt)) };
 }
 
 function createFailingLLM(failKeyword: string): LLMProvider {
   return {
     generate(prompt: string) {
-      if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) {
-        return Promise.reject(new Error(`Mock ${failKeyword} failure`));
-      }
+      if (prompt.toLowerCase().includes(failKeyword.toLowerCase())) return Promise.reject(new Error(`Mock ${failKeyword} failure`));
       return Promise.resolve(mockResponse(prompt));
     },
   };
 }
 
+const judgeOver = (llm: LLMProvider): LLMJudge => new LLMJudge(llm, { timeoutMs: JUDGE_TIMEOUT_MS, maxRetries: 0 });
+
+async function judgedNames(llm: LLMProvider, turn: Turn, existingKeys = new Set<string>()): Promise<string[]> {
+  return (await evaluateTurn(judgeOver(llm), turn, existingKeys)).map(e => e.evaluationName);
+}
+
 describe('evaluateTurn', () => {
   beforeEach(() => {
-    // Reset failure tracking
     resetFailureTracking();
   });
 
-  it('evaluates relevance and coherence for turns without tool results', async () => {
-    const llm = createMockLLM(MOCK_GEVAL_SCORE);
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: [] });
-
-    const evals = await evaluateTurn(judge, turn, new Set());
-
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-    expect(names).not.toContain('faithfulness');
-    expect(names).not.toContain('hallucination');
-    expect(names).not.toContain('tool_correctness');
+  it('judges relevance and coherence for a turn without tool results', async () => {
+    expect(await judgedNames(createMockLLM(), makeTurn())).toEqual(PLAIN_CRITERIA);
   });
 
-  it('evaluates all 5 metrics for turns with tool results', async () => {
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['file contents here'] });
+  it('judges every criterion for a turn with tool results, as llm-scored normal-cohort records', async () => {
+    const evals = await evaluateTurn(judgeOver(createMockLLM()), makeToolTurn(), new Set());
 
-    const evals = await evaluateTurn(judge, turn, new Set());
-
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('relevance');
-    expect(names).toContain('coherence');
-    expect(names).toContain('faithfulness');
-    expect(names).toContain('hallucination');
-    expect(names).toContain('tool_correctness');
+    expect(evals).toEqual(TOOL_TURN_RECORDS.map(evaluationName =>
+      expect.objectContaining({ evaluationName, evaluatorKind: 'llm', cohort: 'normal', judgeModel: HAIKU_MODEL })));
   });
 
-  it('skips already-evaluated metrics via existingKeys', async () => {
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
+  it('skips criteria this model already judged', async () => {
     const turn = makeTurn();
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-    const existingKeys = new Set([
-      judgedByKey(turn.sessionId, 'relevance', turnKey, HAIKU_MODEL),
-      judgedByKey(turn.sessionId, 'coherence', turnKey, HAIKU_MODEL),
-    ]);
 
-    const evals = await evaluateTurn(judge, turn, existingKeys);
-    expect(evals).toHaveLength(0);
+    expect(await judgedNames(createMockLLM(), turn, judgedKeys(turn, PLAIN_CRITERIA))).toEqual([]);
   });
 
   it('judges a turn again when only a different model has judged it', async () => {
-    const llm = createMockLLM(MOCK_GEVAL_SCORE);
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: [] });
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
-    const otherModel = new Set([
-      judgedByKey(turn.sessionId, 'relevance', turnKey, 'claude-opus-5'),
-      judgedByKey(turn.sessionId, 'coherence', turnKey, 'claude-opus-5'),
-    ]);
+    const turn = makeTurn();
 
-    const evals = await evaluateTurn(judge, turn, otherModel);
-    expect(evals.map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
+    expect(await judgedNames(createMockLLM(), turn, judgedKeys(turn, PLAIN_CRITERIA, OTHER_JUDGE_MODEL))).toEqual(PLAIN_CRITERIA);
   });
 
-  it('tracks failures in evalFailures on metric error', async () => {
-    // Use "evaluating: relevance" to only match relevance prompts —
-    // "relevant" also appears in the shared score anchoring text
-    // ("irrelevant") which would cause coherence to also fail.
-    const llm = createFailingLLM('evaluating: relevance');
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: [] });
-
-    const evals = await evaluateTurn(judge, turn, new Set());
-
-    // Relevance should fail, coherence should succeed
-    expect(evalFailures.relevance).toBe(1);
-    expect(evals.some(e => e.evaluationName === 'coherence')).toBe(true);
+  it('counts a failed criterion and still records the others', async () => {
+    // "evaluating: relevance" matches only relevance prompts — "relevant" also
+    // appears in the shared score anchoring text ("irrelevant").
+    expect(await judgedNames(createFailingLLM('evaluating: relevance'), makeTurn())).toEqual([COHERENCE_EVAL_NAME]);
+    expect(evalFailures).toEqual({ [RELEVANCE_EVAL_NAME]: 1 });
   });
 
-  it('sets evaluatorKind to llm for all judged results', async () => {
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['ctx'] });
+  it('judges every criterion of a turn whose tool result is over the judge\'s length cap', async () => {
+    const turn = makeToolTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH + 1)] });
 
-    const evals = await evaluateTurn(judge, turn, new Set());
-    for (const ev of evals) {
-      expect(ev.evaluatorKind).toBe('llm');
-      expect(ev.cohort).toBe('normal');
-    }
+    expect(await judgedNames(createMockLLM(), turn)).toEqual(TOOL_TURN_RECORDS);
+    expect(evalFailures).toEqual({});
   });
 });
 
@@ -904,6 +561,7 @@ describe('evaluateTurn faithfulness and hallucination', () => {
   const QAG_ANSWERS = ['yes', 'yes', 'no', 'maybe'];
   const QAG_FAITHFULNESS = QAG_ANSWERS.filter(a => a === 'yes').length / QAG_ANSWERS.length;
   const QAG_HALLUCINATION = QAG_ANSWERS.filter(a => a === 'no').length / QAG_ANSWERS.length;
+  /** 1 extraction + a question and an answer per statement; a second sweep doubles it. */
   const SINGLE_SWEEP_CALLS = 1 + 2 * QAG_STATEMENTS.length;
 
   function createQagLLM(): { llm: LLMProvider; sweepCalls: () => number } {
@@ -929,48 +587,38 @@ describe('evaluateTurn faithfulness and hallucination', () => {
     return { llm, sweepCalls: () => sweepCalls };
   }
 
+  const scoreOf = (evals: EvalRecord[], name: string): number | undefined => evals.find(e => e.evaluationName === name)?.scoreValue;
+
   it('scores both from a single sweep, and hallucination is not 1 - faithfulness', async () => {
     const { llm, sweepCalls } = createQagLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
 
-    const evals = await evaluateTurn(judge, makeTurn({ toolResults: ['tool output'] }), new Set());
+    const evals = await evaluateTurn(judgeOver(llm), makeToolTurn(), new Set());
 
-    const byName = new Map(evals.map(e => [e.evaluationName, e.scoreValue]));
     // 2 of 4 supported, 1 of 4 contradicted, 1 inconclusive and counted by neither.
-    // The two differ, so writing one mode's score under both names fails here.
-    expect(byName.get('faithfulness')).toBeCloseTo(QAG_FAITHFULNESS);
-    expect(byName.get('hallucination')).toBeCloseTo(QAG_HALLUCINATION);
-    // 1 extraction + 4 questions + 4 answers. A second sweep would make it 18.
+    expect(scoreOf(evals, FAITHFULNESS_EVAL_NAME)).toBe(QAG_FAITHFULNESS);
+    expect(scoreOf(evals, HALLUCINATION_EVAL_NAME)).toBe(QAG_HALLUCINATION);
     expect(sweepCalls()).toBe(SINGLE_SWEEP_CALLS);
   });
 
   it('runs the sweep only for the metric that is missing', async () => {
     const { llm, sweepCalls } = createQagLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const turn = makeTurn({ toolResults: ['tool output'] });
-    const turnKey = turn.timestamp.slice(0, TIMESTAMP_TURN_KEY_LEN);
+    const turn = makeToolTurn();
 
-    const evals = await evaluateTurn(judge, turn, new Set([judgedByKey(turn.sessionId, 'faithfulness', turnKey, HAIKU_MODEL)]));
+    const evals = await evaluateTurn(judgeOver(llm), turn, judgedKeys(turn, [FAITHFULNESS_EVAL_NAME]));
 
-    const names = evals.map(e => e.evaluationName);
-    expect(names).toContain('hallucination');
-    expect(names).not.toContain('faithfulness');
+    expect(evals.map(e => e.evaluationName)).not.toContain(FAITHFULNESS_EVAL_NAME);
     // The score is the fabrication tally, not the faithfulness one it sits beside.
-    expect(evals.find(e => e.evaluationName === 'hallucination')?.scoreValue).toBeCloseTo(QAG_HALLUCINATION);
+    expect(scoreOf(evals, HALLUCINATION_EVAL_NAME)).toBe(QAG_HALLUCINATION);
     expect(sweepCalls()).toBe(SINGLE_SWEEP_CALLS);
   });
 
   it('counts a failed sweep against every metric that asked for it', async () => {
-    const llm = createFailingLLM('Convert this statement');
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-
-    const evals = await evaluateTurn(judge, makeTurn({ toolResults: ['tool output'] }), new Set());
+    const names = await judgedNames(createFailingLLM('Convert this statement'), makeToolTurn());
 
     // One shared failure, two metrics missing — recording it once would leave the
     // hallucination series looking merely absent rather than failed.
-    expect(evalFailures.faithfulness).toBe(1);
-    expect(evalFailures.hallucination).toBe(1);
-    expect(evals.map(e => e.evaluationName)).not.toContain('hallucination');
+    expect(evalFailures).toEqual({ [FAITHFULNESS_EVAL_NAME]: 1, [HALLUCINATION_EVAL_NAME]: 1 });
+    expect(names).not.toContain(HALLUCINATION_EVAL_NAME);
   });
 });
 
@@ -989,25 +637,9 @@ describe('fitContextForJudge', () => {
   });
 
   it('keeps at most the tool-context item limit', () => {
-    const OVERFLOW_ITEMS = 5;
-    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + OVERFLOW_ITEMS }, (_, i) => `result ${i}`);
+    const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + 1 }, (_, i) => `result ${i}`);
 
     expect(fitContextForJudge(many)).toHaveLength(MAX_TOOL_CONTEXT_ITEMS);
-  });
-});
-
-describe('evaluateTurn with an oversized tool result', () => {
-  it('evaluates every metric instead of failing schema validation (60 of 480 failures per run before)', async () => {
-    resetFailureTracking();
-    const llm = createMockLLM();
-    const judge = new LLMJudge(llm, { timeoutMs: 5000, maxRetries: 0 });
-    const OVERFLOW_CHARS = 500;
-    const turn = makeTurn({ toolResults: ['x'.repeat(MAX_TEXT_LENGTH + OVERFLOW_CHARS)] });
-
-    const evals = await evaluateTurn(judge, turn, new Set());
-
-    expect(evals.map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'tool_correctness']));
-    expect(evalFailures).toEqual({});
   });
 });
 
@@ -1033,7 +665,6 @@ describe('classifyJudgeFailure', () => {
   });
 
   it('does not classify billing errors as schema-rejection even if they share keywords', () => {
-    // billing wins because BILLING_FAILURE_PATTERN is checked first
     expect(classifyJudgeFailure('credit balance is too low; output_config ignored')).toBe('billing');
   });
 
@@ -1046,148 +677,72 @@ describe('summarizeJudgeRun', () => {
   const noFailures: Record<JudgeFailureClass, number> = { billing: 0, network: 0, 'schema-rejection': 0, parse: 0, 'invalid-input': 0, 'wall-clock': 0, other: 0 };
   const noSpend: JudgeSpend = { usage: createUsageTotals(), estimatedUsd: 0, keySource: DEFAULT_API_KEY_ENV };
 
-  // JUDGE-BATCH-WALLCLOCK-ABORTS-RUN: until 2026-10-05 an overrun threw out of
-  // main and exited 1, which cost the 09-29 and 09-30 06:00 runs their sync.
-  it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, a soft code, when the batch wall clock abandoned evaluations', () => {
-    // 60% abandoned would otherwise read as a high failure rate.
-    const succeeded = 40;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { relevance: 30, coherence: 30 }, byClass: { ...noFailures, 'wall-clock': 60 } }, noSpend);
+  type Run = {
+    succeeded: number;
+    failed?: number;
+    byClass?: Partial<Record<JudgeFailureClass, number>>;
+    previous?: { succeeded: number; attempted: number };
+  };
 
-    expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(summary.exitCode)).toBe(true);
-    expect(summary.line).toMatch(/BATCH WALL CLOCK EXCEEDED — 60 evaluations were abandoned/);
-    expect(summary.line).toContain('the 40 scored before it are kept');
-    expect(summary.line).toContain('wall-clock=60');
+  function summarize({ succeeded, failed = 0, byClass = {}, previous }: Run, spend: JudgeSpend = noSpend): ReturnType<typeof summarizeJudgeRun> {
+    const byMetric = failed > 0 ? { [COHERENCE_EVAL_NAME]: failed } : {};
+    return summarizeJudgeRun(succeeded, { byMetric, byClass: { ...noFailures, ...byClass } }, spend, previous);
+  }
+
+  const PREVIOUS_FULL_RUN = { succeeded: 536, attempted: 536 };
+
+  /**
+   * [case, run, exit code, fragments the summary line must contain]. The failure-rate
+   * alarm fires above 50% failed; the drop alarm above a 25-point fall in success
+   * rate, compared only when both runs attempted enough. Precedence: billing, then
+   * wall clock, then no scores, then rate, then drop.
+   */
+  const RUN_OUTCOMES: Array<[string, Run, number, string[]]> = [
+    ['a run whose failures stay under half', { succeeded: 200, failed: 40, byClass: { parse: 40 } }, 0, ['attempted=240 succeeded=200 failed=40', 'parse=40']],
+    ['a run that attempted nothing', { succeeded: 0 }, 0, []],
+    ['a run where every attempt failed', { succeeded: 0, failed: 200, byClass: { parse: 200 } }, JUDGE_EXIT_NO_SCORES, ['NO SCORES PRODUCED']],
+    ['a run at 100% failure, before the rate check', { succeeded: 0, failed: 100 }, JUDGE_EXIT_NO_SCORES, []],
+    ['a billing refusal, even beside scores', { succeeded: 3, failed: 10, byClass: { billing: 10 } }, JUDGE_EXIT_BILLING, ['BILLING REFUSED']],
+    ['a billing refusal beside a wall-clock overrun', { succeeded: 3, failed: 20, byClass: { billing: 10, 'wall-clock': 10 } }, JUDGE_EXIT_BILLING, []],
+    // JUDGE-BATCH-WALLCLOCK-ABORTS-RUN: an overrun once threw out of main and cost the 09-29 and 09-30 runs their sync.
+    ['a wall-clock overrun that abandoned most evaluations', { succeeded: 40, failed: 60, byClass: { 'wall-clock': 60 } }, JUDGE_EXIT_BATCH_WALL_CLOCK,
+      ['BATCH WALL CLOCK EXCEEDED — 60 evaluations were abandoned', 'the 40 scored before it are kept', 'wall-clock=60']],
+    ['a wall-clock overrun that abandoned every evaluation', { succeeded: 0, failed: 100, byClass: { 'wall-clock': 100 } }, JUDGE_EXIT_BATCH_WALL_CLOCK, []],
+    ['91% failing (the 09-22 collapse)', { succeeded: 46, failed: 490, byClass: { 'schema-rejection': 490 } }, JUDGE_EXIT_HIGH_FAILURE_RATE, ['HIGH FAILURE RATE', '490 of 536']],
+    ['49.7% failing', { succeeded: 100, failed: 99 }, 0, []],
+    ['50.25% failing', { succeeded: 100, failed: 101 }, JUDGE_EXIT_HIGH_FAILURE_RATE, []],
+    ['a 40-point fall in success rate with only 40% failing', { succeeded: 300, failed: 200, previous: PREVIOUS_FULL_RUN }, JUDGE_EXIT_HIGH_FAILURE_RATE,
+      ['SUCCESS RATE DROP', '60.0% of 500', '100.0% of 536']],
+    ['a 21.8-point fall', { succeeded: 419, failed: 117, previous: PREVIOUS_FULL_RUN }, 0, []],
+    ['a smaller run with no failures, however far its count falls', { succeeded: 60, previous: PREVIOUS_FULL_RUN }, 0, []],
+    ['a fall measured over too few attempts this run', { succeeded: 6, failed: 4, previous: PREVIOUS_FULL_RUN }, 0, []],
+    ['a fall against too small a previous run', { succeeded: 300, failed: 200, previous: { succeeded: 10, attempted: 10 } }, 0, []],
+    ['no previous run to compare', { succeeded: 300, failed: 200 }, 0, []],
+    ['a run that trips both alarms, as the rate alarm', { succeeded: 10, failed: 200, previous: { succeeded: 500, attempted: 500 } }, JUDGE_EXIT_HIGH_FAILURE_RATE, ['HIGH FAILURE RATE']],
+  ];
+
+  it.each(RUN_OUTCOMES)('exits for %s with %i', (_case, run, exitCode, fragments) => {
+    const summary = summarize(run);
+
+    expect(summary.exitCode).toBe(exitCode);
+    expect(fragments.filter(fragment => !summary.line.includes(fragment))).toEqual([]);
   });
 
-  it('exits JUDGE_EXIT_BATCH_WALL_CLOCK, not JUDGE_EXIT_NO_SCORES, when the wall clock abandoned every evaluation', () => {
-    const summary = summarizeJudgeRun(0, { byMetric: { relevance: 100 }, byClass: { ...noFailures, 'wall-clock': 100 } }, noSpend);
-
-    expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
-  });
-
-  it('JUDGE_EXIT_BILLING still wins over the wall clock', () => {
-    const succeeded = 3;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 20 }, byClass: { ...noFailures, billing: 10, 'wall-clock': 10 } }, noSpend);
-
-    expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
-  });
-
-  it('exits 0 with a one-line summary when scores were produced', () => {
-    // 200 successes, 40 failures = 17% failure rate — well below the 50% threshold
-    const succeeded = 200;
-    const failed = 40;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: failed }, byClass: { ...noFailures, parse: failed } }, noSpend);
-
-    expect(summary.exitCode).toBe(0);
-    expect(summary.attempted).toBe(succeeded + failed);
-    expect(summary.line).toContain('attempted=240 succeeded=200 failed=40');
-    expect(summary.line).toContain('parse=40');
-  });
-
-  it('exits JUDGE_EXIT_NO_SCORES when evaluations were attempted and none succeeded', () => {
-    const summary = summarizeJudgeRun(0, { byMetric: { coherence: 100, relevance: 100 }, byClass: { ...noFailures, parse: 200 } }, noSpend);
-
-    expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
-    expect(summary.line).toMatch(/NO SCORES PRODUCED/);
-  });
-
-  it('exits JUDGE_EXIT_BILLING when any call was refused for billing, even if others scored', () => {
-    const succeeded = 3;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 10 }, byClass: { ...noFailures, billing: 10 } }, noSpend);
-
-    expect(summary.exitCode).toBe(JUDGE_EXIT_BILLING);
-    expect(summary.line).toMatch(/BILLING REFUSED/);
-  });
-
-  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when more than half the attempts fail', () => {
-    // 46 succeeded, 490 failed = 91.4% failure — the 09-22 collapse
-    const succeeded = 46;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 490 }, byClass: { ...noFailures, 'schema-rejection': 490 } }, noSpend);
-
-    expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
-    expect(summary.line).toMatch(/HIGH FAILURE RATE/);
-    expect(summary.line).toContain('490 of 536');
-  });
-
-  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE exactly at the 50% threshold', () => {
-    const succeeded = 100;
-    // 99 fail, 100 succeed → 49.7% failure rate → no alarm
-    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 99 }, byClass: noFailures }, noSpend).exitCode).toBe(0);
-    // 101 fail, 100 succeed → 50.25% failure rate → alarm
-    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 101 }, byClass: noFailures }, noSpend).exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
-  });
-
-  it('JUDGE_EXIT_NO_SCORES wins over JUDGE_EXIT_HIGH_FAILURE_RATE at 100% failure', () => {
-    // 100% failure is the no-scores condition, checked before the rate check
-    const summary = summarizeJudgeRun(0, { byMetric: { coherence: 100 }, byClass: noFailures }, noSpend);
-    expect(summary.exitCode).toBe(JUDGE_EXIT_NO_SCORES);
-  });
-
-  it('exits JUDGE_EXIT_HIGH_FAILURE_RATE when the success rate falls more than 25 points versus the previous run', () => {
-    // previous run: 100% of 536; this run: 60% of 500 — a 40-point fall, but only 40% failed
-    const succeeded = 300;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 });
-
-    expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
-    expect(summary.line).toMatch(/SUCCESS RATE DROP/);
-    expect(summary.line).toContain('60.0% of 500');
-    expect(summary.line).toContain('100.0% of 536');
-  });
-
-  it('exits 0 when a smaller run has no failures, however far its count falls', () => {
-    // The count-based check flagged this: fewer new turns, nothing failed
-    const succeeded = 60;
-    expect(summarizeJudgeRun(succeeded, { byMetric: {}, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
-  });
-
-  it('exits 0 when a clean run is followed by the old 18-22% failure baseline', () => {
-    // 100% → 78.2% is a 21.8-point fall: under the threshold
-    const succeeded = 419;
-    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 117 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
-  });
-
-  it('skips the rate comparison when either run attempted too few evaluations', () => {
-    // 60% success would be a drop from 100%, but 10 attempts is too few to compare
-    const succeededInTinyRun = 6;
-    const succeeded = 300;
-    expect(summarizeJudgeRun(succeededInTinyRun, { byMetric: { coherence: 4 }, byClass: noFailures }, noSpend, { succeeded: 536, attempted: 536 }).exitCode).toBe(0);
-    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 10, attempted: 10 }).exitCode).toBe(0);
-  });
-
-  it('skips the rate comparison when there is no previous run', () => {
-    const succeeded = 300;
-    expect(summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, undefined).exitCode).toBe(0);
-  });
-
-  it('high failure rate check takes precedence over drop check', () => {
-    // Both conditions would fire; rate check is tested first in code
-    const succeeded = 10;
-    const summary = summarizeJudgeRun(succeeded, { byMetric: { coherence: 200 }, byClass: noFailures }, noSpend, { succeeded: 500, attempted: 500 });
-    expect(summary.exitCode).toBe(JUDGE_EXIT_HIGH_FAILURE_RATE);
-    expect(summary.line).toMatch(/HIGH FAILURE RATE/);
-  });
-
-  it('exits 0 when nothing was attempted', () => {
-    expect(summarizeJudgeRun(0, { byMetric: {}, byClass: noFailures }, noSpend).exitCode).toBe(0);
+  it('treats a wall-clock overrun as soft, so populate carries on to sync', () => {
+    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
   });
 
   it('carries the usage totals, both cost figures and the key source name on the line', () => {
-    const usage: JudgeTokenUsage = {
-      inputTokens: 1_000_000, outputTokens: 100_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0,
-    };
+    const usage: JudgeTokenUsage = { inputTokens: 1_000_000, outputTokens: 100_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
     const estimatedUsd = 1.8;
     const succeeded = 5;
 
-    const summary = summarizeJudgeRun(succeeded, { byMetric: {}, byClass: noFailures }, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
+    const summary = summarize({ succeeded }, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
 
     const pricing = judgePricing();
-    const actualUsd = (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input
-      + (usage.outputTokens / TOKENS_PER_MILLION) * pricing.output;
-    expect(summary.usage).toEqual(usage);
-    expect(summary.estimatedUsd).toBe(estimatedUsd);
+    const actualUsd = (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input + (usage.outputTokens / TOKENS_PER_MILLION) * pricing.output;
+    expect(summary).toMatchObject({ usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
     expect(summary.actualUsd).toBeCloseTo(actualUsd);
-    expect(summary.keySource).toBe(JUDGE_API_KEY_ENV);
     expect(summary.line).toContain(
       `usage: in=1000000 out=100000 cache_read=0 cache_creation=0 est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=LLM_JUDGE_ANTHROPIC_KEY`,
     );
@@ -1195,7 +750,7 @@ describe('summarizeJudgeRun', () => {
 
   it('copies the totals rather than sharing the accumulator', () => {
     const usage = createUsageTotals();
-    const summary = summarizeJudgeRun(0, { byMetric: {}, byClass: noFailures }, { ...noSpend, usage });
+    const summary = summarize({ succeeded: 0 }, { ...noSpend, usage });
 
     addUsage(usage, { inputTokens: 1, outputTokens: 1, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 });
 
@@ -1206,41 +761,31 @@ describe('summarizeJudgeRun', () => {
 describe('readRunState / writeRunState', () => {
   // A temp path, never the default: that is the live file the
   // scheduled pipeline's drop check reads.
-  let stateDir: string;
-  let stateFile: string;
-
-  beforeEach(() => {
-    stateDir = mkdtempSync(join(tmpdir(), 'judge-run-state-'));
-    stateFile = join(stateDir, 'state.json');
-  });
-
-  afterEach(() => {
-    rmSync(stateDir, { recursive: true, force: true });
-  });
+  const dir = useTempDir('judge-run-state-');
+  const stateFile = (): string => join(dir(), 'state.json');
 
   it('returns undefined when no state file exists', () => {
-    expect(readRunState(stateFile)).toBeUndefined();
+    expect(readRunState(stateFile())).toBeUndefined();
   });
 
-  it('round-trips the succeeded and attempted counts through writeRunState / readRunState', () => {
+  it('round-trips the succeeded and attempted counts', () => {
     const succeeded = 420;
     const attempted = 536;
-    writeRunState(succeeded, attempted, stateFile);
-    const state = readRunState(stateFile);
-    expect(state?.succeeded).toBe(succeeded);
-    expect(state?.attempted).toBe(attempted);
-    expect(state?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    writeRunState(succeeded, attempted, stateFile());
+
+    expect(readRunState(stateFile())).toEqual({ succeeded, attempted, timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
   });
 
   it('returns undefined for a state file written before attempted was recorded', () => {
     // The shape the live file had on 2026-09-22: a count alone gives no rate
-    writeFileSync(stateFile, JSON.stringify({ succeeded: 536, timestamp: '2026-09-23T01:23:37.000Z' }), 'utf-8');
-    expect(readRunState(stateFile)).toBeUndefined();
+    writeFileSync(stateFile(), JSON.stringify({ succeeded: 536, timestamp: '2026-09-23T01:23:37.000Z' }), 'utf-8');
+    expect(readRunState(stateFile())).toBeUndefined();
   });
 
   it('returns undefined for a corrupt state file without throwing', () => {
-    writeFileSync(stateFile, 'not-json', 'utf-8');
-    expect(readRunState(stateFile)).toBeUndefined();
+    writeFileSync(stateFile(), 'not-json', 'utf-8');
+    expect(readRunState(stateFile())).toBeUndefined();
   });
 });
 
@@ -1250,42 +795,29 @@ describe('estimateJudgeRun', () => {
     // the second score costs nothing to price.
     const EVALS_PER_PLAIN_TURN = 2;
     const EVALS_PER_TOOL_TURN = 4;
-    const est = estimateJudgeRun([makeTurn({ toolResults: [] }), makeTurn({ toolResults: ['file contents'] })]);
+    const est = estimateJudgeRun([makeTurn(), makeToolTurn()]);
 
     expect(est.evals).toBe(EVALS_PER_PLAIN_TURN + EVALS_PER_TOOL_TURN);
     expect(est.outputTokens).toBe(est.evals * EST_OUTPUT_TOKENS_PER_EVAL);
     expect(est.inputTokens).toBeGreaterThan(0);
   });
 
-  it('prices the estimate at the judge model list rates', () => {
+  it('prices the estimate at the judge model list rates, with no discount by default', () => {
     const est = estimateJudgeRun([makeTurn()]);
     const pricing = judgePricing();
 
-    expect(est.costUsd).toBeCloseTo(
-      (est.inputTokens / TOKENS_PER_MILLION) * pricing.input + (est.outputTokens / TOKENS_PER_MILLION) * pricing.output,
-    );
+    expect(est.costUsd).toBeCloseTo((est.inputTokens / TOKENS_PER_MILLION) * pricing.input + (est.outputTokens / TOKENS_PER_MILLION) * pricing.output);
+    expect(estimateJudgeRun([makeTurn()], false)).toEqual(est);
   });
 
   it('is free for no turns', () => {
     expect(estimateJudgeRun([])).toEqual({ evals: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
   });
 
-  it('halves the cost estimate when batch=true', () => {
-    const turn = makeTurn();
-    const list = estimateJudgeRun([turn], false);
-    const batch = estimateJudgeRun([turn], true);
+  it('applies the batch discount to the cost and nothing else', () => {
+    const list = estimateJudgeRun([makeTurn()], false);
 
-    expect(batch.evals).toBe(list.evals);
-    expect(batch.inputTokens).toBe(list.inputTokens);
-    expect(batch.outputTokens).toBe(list.outputTokens);
-    expect(batch.costUsd).toBeCloseTo(list.costUsd * BATCH_PRICE_RATIO);
-  });
-
-  it('applies no discount by default (backward compat)', () => {
-    const explicit = estimateJudgeRun([makeTurn()], false);
-    const implicit = estimateJudgeRun([makeTurn()]);
-
-    expect(implicit.costUsd).toBeCloseTo(explicit.costUsd);
+    expect(estimateJudgeRun([makeTurn()], true)).toEqual({ ...list, costUsd: expect.closeTo(list.costUsd * BATCH_PRICE_RATIO) });
   });
 });
 
@@ -1295,13 +827,12 @@ describe('estimateJudgeRun', () => {
 const STRUCTURED_OUTPUT_MAX_TOKENS_FLOOR = 512;
 const SCORE_SCHEMA = {
   type: 'object',
-  properties: { reasoning: { type: 'string' }, score: { type: 'integer', minimum: 1, maximum: 5 } },
+  properties: { reasoning: { type: 'string' }, score: { type: 'integer', enum: [1, 2, 3, 4, 5] } },
   required: ['reasoning', 'score'],
   additionalProperties: false,
 };
 
 type JudgeCreateParams = Parameters<JudgeMessagesClient['messages']['create']>[0];
-type JudgeCreateResponse = Awaited<ReturnType<JudgeMessagesClient['messages']['create']>>;
 
 function makeFakeAnthropicClient(text: string): { client: JudgeMessagesClient; calls: JudgeCreateParams[] } {
   const calls: JudgeCreateParams[] = [];
@@ -1309,8 +840,7 @@ function makeFakeAnthropicClient(text: string): { client: JudgeMessagesClient; c
     messages: {
       create(params) {
         calls.push(params);
-        const response: JudgeCreateResponse = { content: [{ type: 'text', text, citations: null }] };
-        return Promise.resolve(response);
+        return Promise.resolve({ content: [{ type: 'text', text, citations: null }] });
       },
     },
   };
@@ -1319,14 +849,16 @@ function makeFakeAnthropicClient(text: string): { client: JudgeMessagesClient; c
 
 describe('anthropicProviderFor', () => {
   it('sends output_config with the json_schema format when a schema is given', async () => {
-    const { client, calls } = makeFakeAnthropicClient('{"reasoning": "Clear.", "score": 4}');
+    const verdict = '{"reasoning": "Clear.", "score": 4}';
+    const { client, calls } = makeFakeAnthropicClient(verdict);
 
     const result = await anthropicProviderFor(client).generate('rate it', { jsonSchema: SCORE_SCHEMA });
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.output_config).toEqual({ format: { type: 'json_schema', schema: SCORE_SCHEMA } });
-    expect(calls[0]?.max_tokens).toBe(JUDGE_MAX_TOKENS);
-    expect(result).toEqual({ text: '{"reasoning": "Clear.", "score": 4}' });
+    expect(calls).toEqual([expect.objectContaining({
+      output_config: { format: { type: 'json_schema', schema: SCORE_SCHEMA } },
+      max_tokens: JUDGE_MAX_TOKENS,
+    })]);
+    expect(result).toEqual({ text: verdict });
   });
 
   it('omits output_config when no schema is given', async () => {
@@ -1340,16 +872,15 @@ describe('anthropicProviderFor', () => {
 
   it('folds usage into the totals and hands each response to onUsage', async () => {
     const usage = { input_tokens: 120, output_tokens: 30, cache_read_input_tokens: null, cache_creation_input_tokens: 5 };
-    const client: JudgeMessagesClient = {
-      messages: { create: () => Promise.resolve({ content: [], usage }) },
-    };
+    const client: JudgeMessagesClient = { messages: { create: () => Promise.resolve({ content: [], usage }) } };
     const totals = createUsageTotals();
     const seen: unknown[] = [];
 
     await anthropicProviderFor(client, totals, u => seen.push(u)).generate('rate it', { jsonSchema: SCORE_SCHEMA });
 
-    expect(totals).toEqual({ inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 5, cacheReadInputTokens: 0 });
-    expect(seen).toEqual([{ inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 5, cacheReadInputTokens: 0 }]);
+    const folded = { inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 5, cacheReadInputTokens: 0 };
+    expect(totals).toEqual(folded);
+    expect(seen).toEqual([folded]);
   });
 
   it('keeps max_tokens high enough for the reasoning and the score', () => {
@@ -1380,14 +911,14 @@ function createDeferredLLM() {
 describe('evaluateTurn in concurrent mode', () => {
   it('issues every criterion before any result comes back, unlike the sequential default', async () => {
     const sequential = createDeferredLLM();
-    const sequentialRun = evaluateTurn(new LLMJudge(sequential.llm, { timeoutMs: 5000, maxRetries: 0 }), makeTurn({ toolResults: [] }), new Set());
+    const sequentialRun = evaluateTurn(judgeOver(sequential.llm), makeTurn(), new Set());
     await settle();
     expect(sequential.waiting).toHaveLength(1);
 
     const concurrent = createDeferredLLM();
-    const concurrentRun = evaluateTurn(new LLMJudge(concurrent.llm, { timeoutMs: 5000, maxRetries: 0 }), makeTurn({ toolResults: [] }), new Set(), { concurrent: true });
+    const concurrentRun = evaluateTurn(judgeOver(concurrent.llm), makeTurn(), new Set(), { concurrent: true });
     await settle();
-    expect(concurrent.waiting).toHaveLength(2); // relevance and coherence, both at their first call
+    expect(concurrent.waiting).toHaveLength(PLAIN_CRITERIA.length); // both at their first call
 
     // Each answered round lets the next call out; both runs are done once a round leaves nothing waiting.
     do {
@@ -1396,8 +927,8 @@ describe('evaluateTurn in concurrent mode', () => {
       // eslint-disable-next-line no-await-in-loop -- one round at a time, see above
       await settle();
     } while (sequential.waiting.length + concurrent.waiting.length > 0);
-    expect((await concurrentRun).map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
-    expect((await sequentialRun).map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
+    expect((await concurrentRun).map(e => e.evaluationName).toSorted()).toEqual(PLAIN_CRITERIA.toSorted());
+    expect((await sequentialRun).map(e => e.evaluationName)).toEqual(PLAIN_CRITERIA);
   });
 });
 
@@ -1411,15 +942,12 @@ describe('evaluateTurnsBatched', () => {
     resetFailureTracking();
     const flush = vi.fn(() => Promise.resolve({ settled: 0, abandoned: 0 }));
     const provider = batchProvider({ flush });
-    const judge = new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
-    const turns = [makeTurn({ sessionId: 'batch-1' }), makeTurn({ sessionId: 'batch-2', toolResults: ['ctx'] })];
+    const turns = [makeTurn({ sessionId: 'batch-1' }), makeToolTurn({ sessionId: 'batch-2' })];
 
-    const perTurn = await evaluateTurnsBatched(provider, judge, turns, new Set());
+    const perTurn = await evaluateTurnsBatched(provider, judgeOver(provider), turns, new Set());
 
     expect(flush).toHaveBeenCalledTimes(1);
-    expect(perTurn).toHaveLength(2);
-    expect(defined(perTurn[0]).map(e => e.evaluationName).toSorted()).toEqual(['coherence', 'relevance']);
-    expect(defined(perTurn[1]).map(e => e.evaluationName)).toEqual(expect.arrayContaining(['faithfulness', 'hallucination', 'tool_correctness']));
+    expect(perTurn.map(evals => evals.map(e => e.evaluationName).toSorted())).toEqual([PLAIN_CRITERIA.toSorted(), TOOL_TURN_RECORDS.toSorted()]);
     expect(evalFailures).toEqual({});
   });
 
@@ -1428,13 +956,12 @@ describe('evaluateTurnsBatched', () => {
   // escapes a batch rejects it and is recorded as the provider's failure.
   it('throws when flush() fails, and when the provider records a failure, instead of returning partial records', async () => {
     const runFailure = new Error('a batch response the provider could not read');
-    const judge = (provider: BatchLLMProvider) => new LLMJudge(provider, { timeoutMs: 5000, maxRetries: 0 });
 
     const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(runFailure)) });
-    await expect(evaluateTurnsBatched(failingFlush, judge(failingFlush), [makeTurn()], new Set())).rejects.toBe(runFailure);
+    await expect(evaluateTurnsBatched(failingFlush, judgeOver(failingFlush), [makeTurn()], new Set())).rejects.toBe(runFailure);
 
     const recorded = batchProvider({ failure: runFailure });
-    await expect(evaluateTurnsBatched(recorded, judge(recorded), [makeTurn()], new Set())).rejects.toBe(runFailure);
+    await expect(evaluateTurnsBatched(recorded, judgeOver(recorded), [makeTurn()], new Set())).rejects.toBe(runFailure);
   });
 });
 
@@ -1449,52 +976,47 @@ describe('rejectRemovedFlags', () => {
 });
 
 describe('acquireLock', () => {
-  let dir: string;
-  let lockFile: string;
+  const dir = useTempDir('judge-lock-');
+  const LOCK_NAME = '.judge-evaluations.lock';
+  const lockFile = (): string => join(dir(), LOCK_NAME);
+  const owner = (): string => readFileSync(lockFile(), 'utf-8');
+  const exitedPid = (): number => spawnSync(process.execPath, ['-e', '']).pid;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'judge-lock-'));
-    lockFile = join(dir, '.judge-evaluations.lock');
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
 
-  const exitedPid = (): number => spawnSync(process.execPath, ['-e', '']).pid;
-
   it('takes a free lock and records this pid', () => {
-    expect(acquireLock(lockFile)).toBe(true);
-    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
+    expect(acquireLock(lockFile())).toBe(true);
+    expect(owner()).toBe(String(process.pid));
   });
 
   it('refuses a lock held by a live process', () => {
-    writeFileSync(lockFile, String(process.ppid));
-    expect(acquireLock(lockFile)).toBe(false);
-    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.ppid));
+    writeFileSync(lockFile(), String(process.ppid));
+
+    expect(acquireLock(lockFile())).toBe(false);
+    expect(owner()).toBe(String(process.ppid));
   });
 
   it.each([
     ['an exited process', () => String(exitedPid())],
     ['a malformed pid', () => 'not-a-pid'],
-  ])('reclaims a fresh lock left by %s', (_label, owner) => {
-    writeFileSync(lockFile, owner());
-    expect(acquireLock(lockFile)).toBe(true);
-    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
-    expect(readdirSync(dir)).toEqual(['.judge-evaluations.lock']);
-  });
+    ['an empty file, which no current writer leaves behind', () => ''],
+  ])('reclaims a lock left by %s', (_label, previousOwner) => {
+    writeFileSync(lockFile(), previousOwner());
 
-  it('reclaims an empty lock file, which no current writer leaves behind', () => {
-    writeFileSync(lockFile, '');
-    expect(acquireLock(lockFile)).toBe(true);
-    expect(readFileSync(lockFile, 'utf-8')).toBe(String(process.pid));
+    expect(acquireLock(lockFile())).toBe(true);
+    expect(owner()).toBe(String(process.pid));
+    expect(readdirSync(dir())).toEqual([LOCK_NAME]);
   });
 
   it('refuses a second acquire once this process holds the lock', () => {
-    expect(acquireLock(lockFile)).toBe(true);
-    expect(acquireLock(lockFile)).toBe(false);
-    expect(readdirSync(dir)).toEqual(['.judge-evaluations.lock']);
+    expect(acquireLock(lockFile())).toBe(true);
+    expect(acquireLock(lockFile())).toBe(false);
+    expect(readdirSync(dir())).toEqual([LOCK_NAME]);
   });
 });
