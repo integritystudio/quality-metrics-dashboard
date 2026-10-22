@@ -8,7 +8,6 @@ const CLEAN = 0;
 const GRADE_4 = 0.25;
 const GRADE_2 = 0.75;
 const CLEAN_TO_GRADE_2_STEPS = 3;
-const ONE_IN_THREE_GRADE_STEPS = 1 / 3;
 const CLOSE_TO_DIGITS = 6;
 const GRADE_FOUR = 4;
 
@@ -71,8 +70,9 @@ describe('compareToLabels', () => {
 
   it('names the constant grade closest to the labels', () => {
     const labels = [turn('a', GRADE_4), turn('b', GRADE_4), turn('c', CLEAN)];
+    const oneGradeStepSpreadOverLabels = 1 / labels.length;
 
-    expect(compareToLabels([], labels).bestConstant).toEqual({ grade: GRADE_FOUR, mae: expect.closeTo(ONE_IN_THREE_GRADE_STEPS, CLOSE_TO_DIGITS) as number });
+    expect(compareToLabels([], labels).bestConstant).toEqual({ grade: GRADE_FOUR, mae: expect.closeTo(oneGradeStepSpreadOverLabels, CLOSE_TO_DIGITS) as number });
   });
 });
 
