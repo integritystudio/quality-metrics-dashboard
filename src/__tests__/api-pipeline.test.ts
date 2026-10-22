@@ -52,14 +52,14 @@ describe('GET /pipeline', () => {
   it('returns 200 with period and pipeline data', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as PipelineResponse;
+    const body = await res.json<PipelineResponse>();
     expect(body.period).toBe('7d');
     expect(body.stages.map((stage) => stage.name)).toEqual(['ingested', 'scored', 'evaluated', 'alerted']);
   });
 
   it('carries every served evaluation through to evaluated, none alerted', async () => {
     const res = await pipelineRoutes.request('/pipeline?period=7d');
-    const body = await res.json() as PipelineResponse;
+    const body = await res.json<PipelineResponse>();
     const entryCounts = Object.fromEntries(body.stages.map((stage) => [stage.name, stage.entryCount]));
     expect(entryCounts).toEqual({ ingested: 3, scored: 3, evaluated: 3, alerted: 0 });
   });
@@ -67,7 +67,7 @@ describe('GET /pipeline', () => {
   it('reports empty stages when there is no data', async () => {
     fixture.reset();
     const res = await pipelineRoutes.request('/pipeline?period=7d');
-    const body = await res.json() as PipelineResponse;
+    const body = await res.json<PipelineResponse>();
     expect(body.stages.every((stage) => stage.entryCount === 0)).toBe(true);
   });
 

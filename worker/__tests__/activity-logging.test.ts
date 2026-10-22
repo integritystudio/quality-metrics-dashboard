@@ -73,7 +73,7 @@ describe('logActivity: view routes', () => {
     // Wait for microtasks to allow async activity logging to be queued
     await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
-    const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
+    const activityCall = findActivityCall(fetchMock.mock.calls);
     expect(activityCall).toBeDefined();
     const init = defined(activityCall)[1] as RequestInit;
     expect(init.method).toBe('POST');
@@ -90,7 +90,7 @@ describe('logActivity: view routes', () => {
 
     await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
-    const activityCall = findActivityCall(fetchMock.mock.calls as unknown[][]);
+    const activityCall = findActivityCall(fetchMock.mock.calls);
     expect(activityCall).toBeUndefined();
   });
 });

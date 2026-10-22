@@ -99,7 +99,7 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
 
     await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
-    const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
+    const auditCall = findAuditLogCall(fetchMock.mock.calls);
     expect(auditCall).toBeDefined();
     const init = defined(auditCall)[1] as RequestInit;
     expect(init.method).toBe('POST');
@@ -127,7 +127,7 @@ describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {
 
     await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
 
-    const auditCall = findAuditLogCall(fetchMock.mock.calls as unknown[][]);
+    const auditCall = findAuditLogCall(fetchMock.mock.calls);
     expect(auditCall).toBeUndefined();
   });
 });

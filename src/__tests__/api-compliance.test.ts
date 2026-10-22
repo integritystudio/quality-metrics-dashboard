@@ -89,7 +89,7 @@ describe('GET /compliance/sla', () => {
   it('returns 200 with period, results, noSLAsConfigured', async () => {
     const res = await complianceRoutes.request('/compliance/sla?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as SlaComplianceResponse;
+    const body = await res.json<SlaComplianceResponse>();
     expect(body).toEqual({ period: '7d', results: [], noSLAsConfigured: true });
   });
 
@@ -111,14 +111,14 @@ describe('GET /compliance/verifications', () => {
   it('returns 200 with period, count, verifications', async () => {
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as VerificationsResponse;
+    const body = await res.json<VerificationsResponse>();
     expect(body).toEqual({ period: '7d', count: 0, verifications: [] });
   });
 
   it('returns the verifications recorded in the period', async () => {
     writeVerifications([makeVerification('sess-1'), makeVerification('sess-2')]);
     const res = await complianceRoutes.request('/compliance/verifications?period=7d');
-    const body = await res.json() as VerificationsResponse;
+    const body = await res.json<VerificationsResponse>();
     expect(body.count).toBe(2);
     expect(body.verifications.map((v) => v.sessionId).toSorted()).toEqual(['sess-1', 'sess-2']);
   });

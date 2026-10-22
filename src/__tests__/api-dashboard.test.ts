@@ -56,21 +56,21 @@ describe('GET /dashboard', () => {
   it('rejects invalid period with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=99d');
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body).toHaveProperty('error');
   });
 
   it('rejects invalid role with 400', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=superadmin');
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with metrics, cqi, sparklines for valid period', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as DashboardResponse;
+    const body = await res.json<DashboardResponse>();
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('cqi');
     expect(body).toHaveProperty('sparklines');
@@ -93,7 +93,7 @@ describe('GET /dashboard', () => {
   it('returns the executive view with cqi for executive role', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=executive');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as RoleViewResponse;
+    const body = await res.json<RoleViewResponse>();
     expect(body.role).toBe('executive');
     expect(body).toHaveProperty('cqi');
   });
@@ -101,14 +101,14 @@ describe('GET /dashboard', () => {
   it('returns the operator view without cqi for operator role', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d&role=operator');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as RoleViewResponse;
+    const body = await res.json<RoleViewResponse>();
     expect(body.role).toBe('operator');
     expect(body).not.toHaveProperty('cqi');
   });
 
   it('returns sparklines as object keyed by metric name', async () => {
     const res = await dashboardRoutes.request('/dashboard?period=7d');
-    const body = await res.json() as DashboardResponse;
+    const body = await res.json<DashboardResponse>();
     const sparklines = body.sparklines;
     expect(typeof sparklines).toBe('object');
     // sparklines keys come from the evaluation Map returned by loadEvaluationsByMetric;
@@ -134,7 +134,7 @@ describe('GET /health', () => {
     // fixture /health returns { status: 'ok' }, /v1/evaluations returns []
     const res = await dashboardRoutes.request('/health');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as HealthResponse;
+    const body = await res.json<HealthResponse>();
     expect(body).toHaveProperty('status');
     expect(body).toHaveProperty('hasData');
   });
@@ -164,7 +164,7 @@ describe('GET /quality/live', () => {
   it('returns 200 with metrics, sessionCount, lastUpdated', async () => {
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as QualityLiveResponse;
+    const body = await res.json<QualityLiveResponse>();
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('sessionCount');
     expect(body).toHaveProperty('lastUpdated');
@@ -172,14 +172,14 @@ describe('GET /quality/live', () => {
 
   it('returns metrics sorted by name', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as QualityLiveResponse;
+    const body = await res.json<QualityLiveResponse>();
     const names = body.metrics.map((m) => m.name);
     expect(names).toEqual(names.toSorted());
   });
 
   it('each metric has name, score, evaluatorType, timestamp', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as QualityLiveResponse;
+    const body = await res.json<QualityLiveResponse>();
     for (const m of body.metrics) {
       expect(m).toHaveProperty('name');
       expect(m).toHaveProperty('score');
@@ -191,7 +191,7 @@ describe('GET /quality/live', () => {
   it('reports the newest evaluation time as ISO 8601', async () => {
     const NS_PER_MS = 1_000_000n;
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json() as QualityLiveResponse;
+    const body = await res.json<QualityLiveResponse>();
     expect(body.lastUpdated).toBe(new Date(Number((EVAL_NANOS + ONE_HOUR_NANOS) / NS_PER_MS)).toISOString());
   });
 
@@ -199,7 +199,7 @@ describe('GET /quality/live', () => {
     fixture.reset(); // empty evals
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as QualityLiveResponse;
+    const body = await res.json<QualityLiveResponse>();
     expect(body.metrics).toHaveLength(0);
   });
 

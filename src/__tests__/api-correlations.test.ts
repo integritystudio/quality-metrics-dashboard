@@ -46,20 +46,20 @@ describe('GET /correlations', () => {
   it('returns 200 with correlations and metrics', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as CorrelationsResponse;
+    const body = await res.json<CorrelationsResponse>();
     expect(body).toHaveProperty('correlations');
     expect(body).toHaveProperty('metrics');
   });
 
   it('metrics array contains metric names from data', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
-    const body = await res.json() as CorrelationsResponse;
+    const body = await res.json<CorrelationsResponse>();
     expect(body.metrics.toSorted()).toEqual(['coherence', 'relevance']);
   });
 
   it('correlates each metric pair once, in name order', async () => {
     const res = await correlationRoutes.request('/correlations?period=7d');
-    const body = await res.json() as CorrelationsResponse;
+    const body = await res.json<CorrelationsResponse>();
     expect(body.correlations).toHaveLength(1);
     expect(body.correlations[0]).toMatchObject({ metricA: 'coherence', metricB: 'relevance' });
   });
@@ -67,7 +67,7 @@ describe('GET /correlations', () => {
   it('returns no correlations when there is no data', async () => {
     fixture.reset();
     const res = await correlationRoutes.request('/correlations?period=7d');
-    const body = await res.json() as CorrelationsResponse;
+    const body = await res.json<CorrelationsResponse>();
     expect(body).toEqual({ correlations: [], metrics: [] });
   });
 

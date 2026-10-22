@@ -78,14 +78,14 @@ describe('GET /agents', () => {
   it('returns 400 for invalid period', async () => {
     const res = await agentRoutes.request('/agents?period=99d');
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = (await res.json()) as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body).toHaveProperty('error');
   });
 
   it('returns 200 with empty agents array when no spans', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = (await res.json()) as AgentListResponse;
+    const body = await res.json<AgentListResponse>();
     expect(Array.isArray(body.agents)).toBe(true);
     expect(body.agents).toHaveLength(0);
     expect(body.period).toBe('7d');
@@ -93,7 +93,7 @@ describe('GET /agents', () => {
 
   it('returns period, startDate, endDate in response', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = (await res.json()) as AgentListResponse;
+    const body = await res.json<AgentListResponse>();
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('startDate');
     expect(body).toHaveProperty('endDate');
@@ -115,7 +115,7 @@ describe('GET /agents', () => {
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = (await res.json()) as AgentListResponse;
+    const body = await res.json<AgentListResponse>();
     expect(body.agents).toHaveLength(1);
     expect(defined(body.agents[0]).agentName).toBe('general-purpose');
     expect(defined(body.agents[0]).invocations).toBe(2);
@@ -128,7 +128,7 @@ describe('GET /agents', () => {
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = (await res.json()) as AgentListResponse;
+    const body = await res.json<AgentListResponse>();
     const oneOfTwoErrored = 1 / 2;
     expect(defined(body.agents[0]).errorRate).toBeCloseTo(oneOfTwoErrored, CLOSE_TO_DIGITS);
   });
@@ -137,7 +137,7 @@ describe('GET /agents', () => {
     fixture.setTraces([makeAgentSpanWire()]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = (await res.json()) as AgentListResponse;
+    const body = await res.json<AgentListResponse>();
     const agent = body.agents[0];
     expect(agent).toHaveProperty('agentName');
     expect(agent).toHaveProperty('invocations');
@@ -157,7 +157,7 @@ describe('GET /agents', () => {
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = (await res.json()) as AgentListResponse;
+    const body = await res.json<AgentListResponse>();
     expect(defined(body.agents[0]).agentName).toBe('busy-agent');
     expect(defined(body.agents[0]).invocations).toBe(2);
     expect(defined(body.agents[1]).invocations).toBe(1);
@@ -177,7 +177,7 @@ describe('GET /agents/:sessionId', () => {
 
     const res = await agentRoutes.request('/agents/sess-001');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = (await res.json()) as AgentDetailResponse;
+    const body = await res.json<AgentDetailResponse>();
     expect(body).toHaveProperty('sessionId', 'sess-001');
   });
 
@@ -208,7 +208,7 @@ describe('GET /agents/:sessionId/graph', () => {
     const res = await agentRoutes.request('/agents/sess-001/graph');
 
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = (await res.json()) as AgentGraphResponse;
+    const body = await res.json<AgentGraphResponse>();
     expect(Object.keys(body).toSorted()).toEqual(['evaluation', 'graph', 'sessionId']);
     expect(body.sessionId).toBe('sess-001');
     expect(body.evaluation?.turns.map(t => t.agentName)).toEqual(['general-purpose', 'Explore']);
@@ -229,7 +229,7 @@ describe('GET /agents/:sessionId/graph', () => {
 
     const res = await agentRoutes.request('/agents/sess-001/graph');
 
-    const body = (await res.json()) as AgentGraphResponse;
+    const body = await res.json<AgentGraphResponse>();
     expect(body.evaluation?.turns.map(t => t.relevance)).toEqual([1, 0]);
   });
 

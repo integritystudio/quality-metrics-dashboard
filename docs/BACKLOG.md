@@ -654,8 +654,10 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
   Keep `scripts/`' `prefer-nullish-coalescing` `ignorePrimitives: { boolean: true }`: it guards the
   `isDirectRun` checks.
 - **Tests only.** Done — ~~`no-conditional-expect`~~ landed 2026-10-17, ~~`vitest/no-disabled-tests`~~,
-  ~~`expect-expect`~~ and ~~`valid-expect` (`maxArgs: 2`)~~ 2026-10-19;
-  `no-unnecessary-type-assertion` stays off here on purpose (see the comment in `eslint.config.mjs`).
+  ~~`expect-expect`~~ and ~~`valid-expect` (`maxArgs: 2`)~~ 2026-10-19, and the test-tree `off` for
+  ~~`no-unnecessary-type-assertion`~~ removed 2026-10-21. Its stated reason was wrong: `app.request()`
+  returns the workers-types `Response`, whose `json<T>()` is generic, so the 98 `(await res.json()) as T`
+  casts became `res.json<T>()` and the 4 `mock.calls as unknown[][]` casts were dropped (102 hits, 0 left).
 
 New devDependencies: `@stylistic/eslint-plugin`, `eslint-plugin-import-x`,
 `eslint-import-resolver-typescript` and `eslint-plugin-sonarjs` (all four installed, at the parent's

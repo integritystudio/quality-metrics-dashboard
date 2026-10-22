@@ -86,7 +86,7 @@ function invocation(attrs: Record<string, unknown>, agentName = AGENT) {
 async function get(): Promise<CodeQualityResponse> {
   const res = await codeQualityRoutes.request('/code-quality');
   expect(res.status).toBe(HttpStatus.Ok);
-  return (await res.json()) as CodeQualityResponse;
+  return res.json<CodeQualityResponse>();
 }
 
 describe('GET /code-quality', () => {
