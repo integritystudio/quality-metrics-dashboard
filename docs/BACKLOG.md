@@ -6,7 +6,34 @@ Open items from code reviews and deferred work.
 
 ### Behaviour
 
-No open items.
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| DASH-SYNC-90D-PERIOD | Write the `90d` KV entries and lift the header's 90d data gate | P3 | `'90d'` is a full period in code, but `sync-to-kv` still defaults to `--days=30`, so no `:90d` entry exists and `DATA_GATED_PERIOD` hides the button. Split out of DASH-LINT-PARENT-PARITY on 2026-10-21. Source: session 2026-10-18 |
+
+**DASH-SYNC-90D-PERIOD.** `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is a full period
+(`PERIOD_KEYS`, `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`,
+which iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **sync-to-kv still defaults to
+`--days=30`**, and `computeOrgKvEntries` skips any period longer than that, so no `:90d` KV entry is
+written until a run passes `--days=90`. The default was left alone deliberately: an org already holds
+~1.65 GB in memory at 30 days, and the evaluation read spans `METRIC_DETAIL_WINDOWS` × the window. The
+parity tests' `it.each` period lists do not cover `90d`.
+- **So the header hides 90d until it has data.** `DATA_GATED_PERIOD` (`constants.ts`) names it;
+  `Layout` asks `useOfferPeriod` — `useDashboard` for that period, which maps the worker's
+  `ERR_NO_DATA` 404 to a `no_data` summary — and shows the button, and registers shortcut `4`, once a
+  real summary comes back, when the check **fails** (so an outage never hides a period that has data),
+  or while 90d is the selected period; it stays hidden only while the first check loads and on a
+  no-data answer. `Layout.test.tsx` covers those five states against the real query stack. The gate
+  re-checks every `DATA_GATE_POLL_INTERVAL_MS` (an hour, the KV refresh cadence) rather than the
+  page's 30 s; react-query polls at the shortest interval among a key's observers, so it drops to
+  30 s only while the 90d page itself is open.
+- **Memory is the blocker, not the flag.** The CLI holds a whole org in memory per period read, so a
+  `--days=90` default needs either the partitioned design in the parent's
+  `docs/roadmap/kv-sync-in-worker.md` or a measured run showing 90 days fits; measure before flipping
+  the launchd wrapper's arguments.
+
+Acceptance: a scheduled sync writes the `:90d` entries, the `it.each` period lists in the parity tests
+cover `90d`, `DATA_GATED_PERIOD` and `useOfferPeriod` are deleted, and e2e asserts all four periods
+(today it asserts only the three always-offered ones, since the fourth depends on the environment's data).
 
 ### API client
 
@@ -28,7 +55,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, all three option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. Still open: the magic-number follow-ups; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
+| DASH-LINT-PARENT-PARITY | Parent ESLint rules the dashboard does not enforce | P3 | Hit counts measured 2026-10-16; the 605 autofixable hits are swept and their 6 rules landed, plus `no-duplicate-imports`, `import/no-extraneous-dependencies`, `import/no-cycle`, `unified-signatures`, `no-unmodified-loop-condition`, `max-params`, `max-depth`, `vitest/no-conditional-expect`, `no-promise-executor-return` and `regexp/no-super-linear-move` by hand on 2026-10-17 and `strict-void-return`, `unicorn/no-array-callback-reference`, `no-await-in-loop`, `unicorn/no-array-sort`, `complexity` 12 and `sonarjs/no-duplicate-string` on 2026-10-18, with `local/no-magic-numbers-ignore-bitwise` enabled at warn for non-test files the same day and swept from 155 hits to 0. The 12 zero-hit rules, all three option-drift changes and `reportUnusedInlineConfigs: 'error'` landed 2026-10-19. `scripts/populate-dashboard.ts`'s private `MS_PER_SECOND` copy was replaced by `TIME_MS.SECOND` on 2026-10-21 (PR #33). The 90d data gate is its own item, DASH-SYNC-90D-PERIOD; 207 `explicit-function-return-type` hits over `src/components`/`src/pages` stay excluded on purpose (see below). Source: session 2026-10-12 |
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | P3 | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
 
@@ -581,24 +608,8 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
       `typecheck:scripts` (2 × TS2339) and lint (8 `no-unsafe-*`), and leaves both values `undefined` at
       run time — 4 `test:scripts` tests fail, and derive's completion-age guard and the batch wall clock
       are silently disabled. Rebuild the parent after pulling.
-    - `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is now a full period (`PERIOD_KEYS`,
-      `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`, which now
-      iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **sync-to-kv still defaults to
-      `--days=30`**, and `computeOrgKvEntries` skips any period longer than that, so no `:90d` KV entry is
-      written until a run passes `--days=90`. The default was left alone deliberately: an org already
-      holds ~1.65 GB in memory at 30 days, and the evaluation read spans `METRIC_DETAIL_WINDOWS` × the
-      window. The parity tests' `it.each` period lists do not cover `90d`.
-    - **So the header hides 90d until it has data.** `DATA_GATED_PERIOD` (`constants.ts`) names it;
-      `Layout` asks `useOfferPeriod` — `useDashboard` for that period, which maps the worker's
-      `ERR_NO_DATA` 404 to a `no_data` summary — and shows the button, and registers shortcut `4`, once a
-      real summary comes back, when the check **fails** (so an outage never hides a period that has data),
-      or while 90d is the selected period; it stays hidden only while the first check loads and on a
-      no-data answer. `Layout.test.tsx` covers those five states against the real query stack. The gate
-      re-checks every `DATA_GATE_POLL_INTERVAL_MS` (an hour, the KV refresh cadence) rather than the
-      page's 30 s; react-query polls at the shortest interval among a key's observers, so it drops to
-      30 s only while the 90d page itself is open. Lifting the gate means
-      deleting `DATA_GATED_PERIOD` once a scheduled sync writes 90d; e2e asserts only the three
-      always-offered periods, since the fourth depends on the environment's data.
+    - `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`, which made `'90d'` a full period. Writing its KV
+      entries and lifting the header's data gate is DASH-SYNC-90D-PERIOD (Behaviour).
     - The four byte and second multipliers (`BATCH_POLL_INTERVAL_MS`, `STDERR_CAPTURE_MAX_BYTES`,
       `KV_BATCH_MAX_BYTES`, `KV_VALUE_LIMIT_BYTES`) carry a one-line disable.
   - ~~**Tests are not covered.**~~ The parent's `local/no-magic-numbers-ignore-fixtures` variant was copied
@@ -616,8 +627,9 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     they had been coloured as higher-is-better. Since 2026-10-21 live chips band through
     `calibratedScoreColorBand`, which `ScoreBadge` now shares: the metric's own scale strategy once the
     org's calibration for it loads, the uniform bands until then.
-  - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
-    `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
+  - ~~**`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**~~, a copy of
+    `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer). Resolved 2026-10-21: the
+    script imports `TIME_MS` from the parent's `units.ts` like its siblings.
 - **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,
   ~~`no-await-in-loop`~~, ~~`complexity` 12~~ and ~~`sonarjs/no-duplicate-string`~~ 2026-10-18.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
