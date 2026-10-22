@@ -66,14 +66,13 @@ import {
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
-import { BYTES } from '../../src/lib/core/units.js';
+import { BYTES, TIME_MS } from '../../src/lib/core/units.js';
 
 const SCRIPTS_DIR = import.meta.dirname;
 const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
 /** Captured stderr ceiling per stage; a stack trace plus warnings is kilobytes, not megabytes. */
 // eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
 const STDERR_CAPTURE_MAX_BYTES = 16 * BYTES.MB;
-const MS_PER_SECOND = 1000;
 
 const SKIP_DERIVE_FLAG = '--skip-derive';
 const SKIP_JUDGE_FLAG = '--skip-judge';
@@ -183,7 +182,7 @@ async function runWithNetworkRetry(name: string, script: string, extraArgs: stri
     shouldRetry: outcome => !outcome.ok && isTransientNetworkFailure(outcome.stderr),
     delaysMs: SYNC_RETRY_DELAYS_MS,
     onRetry: (waitMs, failedAttempt, totalAttempts) => {
-      console.error(`[populate] ${name} attempt ${failedAttempt}/${totalAttempts} failed on a transient network error; retrying in ${Math.round(waitMs / MS_PER_SECOND)} s`);
+      console.error(`[populate] ${name} attempt ${failedAttempt}/${totalAttempts} failed on a transient network error; retrying in ${Math.round(waitMs / TIME_MS.SECOND)} s`);
     },
   });
 }
