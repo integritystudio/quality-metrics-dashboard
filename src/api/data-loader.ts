@@ -184,6 +184,15 @@ export async function loadTracesByFilter(
  * Calls `CloudBackend.queryTraces` directly so `fetchAllPages` follows cursors
  * and returns all matching spans up to `limit`.
  *
+ * Returns `TraceSpan[]` (the full backend shape), not the 9-field `LoadedSpan`
+ * projection that `loadTracesByFilter` emits. Callers that only read `attributes`
+ * and `startTimeUnixNano` (e.g. `summarizeCodeQuality`) accept both shapes, so
+ * the two are interchangeable in practice.
+ *
+ * Uses a distinct cache key kind (`'traces-unbounded'`) to avoid sharing entries
+ * with `readTraces` — the 10 000 limit means identical filter/window pairs would
+ * hit `queryTracesTool`'s 1000-row cap on the `readTraces` path.
+ *
  * Use when the expected count can exceed 1000, e.g. code-quality checkpoints.
  */
 export async function loadSpansByFilterUnbounded(
@@ -192,7 +201,7 @@ export async function loadSpansByFilterUnbounded(
   endDate: string,
   limit: number,
 ): Promise<TraceSpan[]> {
-  const key = cloudReadKey('traces', {
+  const key = cloudReadKey('traces-unbounded', {
     start: startDate,
     end: endDate,
     limit: String(limit),

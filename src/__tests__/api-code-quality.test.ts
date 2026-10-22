@@ -4,8 +4,8 @@
  * Fixture HTTP server, real queryTraces and data-loader (see api-agents.test.ts).
  * Pins the cohort (CSV2) and content-kind (CSV3a) split: baseline and doc rows
  * are reported apart from scored code, and spans written before either
- * attribute existed read as scored code. It is also the route's first test:
- * a checkpoint limit above queryTraces' 1000 maximum 500'd every request.
+ * attribute existed read as scored code. Also covers the CSV7 paging fix: the
+ * route reads past the MCP tool's 1000-row cap by calling CloudBackend directly.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -166,5 +166,19 @@ describe('GET /code-quality', () => {
     const byAgent = Object.fromEntries((await get()).versionRollout.map(r => [r.agentName, r.cohort]));
 
     expect(byAgent).toEqual({ [AGENT]: 'scored', [BASELINE_AGENT]: 'baseline' });
+  });
+
+  it('reads all checkpoints when the backend pages past 1000 rows (CSV7)', async () => {
+    // The fixture's pagedBody returns limit rows per page with a cursor, so
+    // 1001 spans triggers two pages. Without the CSV7 fix (loadSpansByFilterUnbounded),
+    // queryTracesTool caps at 1000 and checkpointCount would be 1000.
+    const OVER_LIMIT = 1001;
+    fixture.setTraces(Array.from({ length: OVER_LIMIT }, () => checkpoint({})));
+
+    const body = await get();
+
+    // All 1001 spans share agent/version/window/cohort/contentKind, so they land
+    // in one AgentWindowStats row with checkpointCount === OVER_LIMIT.
+    expect(body.survivalByAgentWindow[0]?.checkpointCount).toBe(OVER_LIMIT);
   });
 });

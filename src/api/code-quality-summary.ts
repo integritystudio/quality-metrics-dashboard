@@ -13,15 +13,10 @@ import { CODE_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 export const CODE_QUALITY_LOOKBACK_DAYS = 90;
 /**
- * Checkpoint limit for callers that go through `queryTraces` (the MCP tool),
- * which validates `limit <= 1000`. The dev-server route uses this path.
- */
-export const CODE_QUALITY_CHECKPOINT_LIMIT = 1000;
-/**
  * Checkpoint limit for callers that call `CloudBackend.queryTraces` directly,
  * which has no MCP tool cap. `fetchAllPages` pages transparently behind this.
- * Sized well above the 90-day count (1855 on 2026-10-19); growth alone passes
- * 1000 again in the future, but 10 000 covers decades of three-per-seed growth.
+ * Sized well above the 90-day window; three checkpoints per seed, growth alone
+ * keeps the count well under this for decades.
  */
 export const CODE_QUALITY_CHECKPOINT_FULL_LIMIT = 10_000;
 export const CODE_QUALITY_INVOCATION_LIMIT = 1000;
