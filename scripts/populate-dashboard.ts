@@ -93,7 +93,22 @@ const POPULATE_CLI: CliSpec = {
  * the last week unless --derive-days= / --judge-days= say otherwise. Read before any stage runs, so a bad flag stops
  * the run before derive.
  */
-function readArgs(argv: readonly string[]) {
+type PopulateArgs = {
+  skipDerive: boolean;
+  skipJudge: boolean;
+  skipUpload: boolean;
+  skipSync: boolean;
+  dryRun: boolean;
+  seed: boolean;
+  batch: boolean;
+  perCriterion: boolean;
+  limit: string | undefined;
+  syncBudget: number | undefined;
+  deriveScope: string[];
+  judgeScope: string[];
+};
+
+function readArgs(argv: readonly string[]): PopulateArgs {
   const cli = parseCli(argv, POPULATE_CLI);
   const limit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
   return {

@@ -857,7 +857,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const isTraceKey = (e: KVEntry) => extractTraceId(e.key) !== null;
+  const isTraceKey = (e: KVEntry): boolean => extractTraceId(e.key) !== null;
   const highPriority = changed.filter(e => !isTraceKey(e));
   const traceChanged = changed.filter(e => isTraceKey(e));
   const { highPriorityBudget, traceBudget } = computeBudgetAllocation(highPriority.length, WRITE_BUDGET);

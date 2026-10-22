@@ -53,8 +53,16 @@ function optionName(flag: string): string {
   return name.endsWith(INLINE_VALUE_SEPARATOR) ? name.slice(0, -INLINE_VALUE_SEPARATOR.length) : name;
 }
 
+type ParseTokensConfig = {
+  args: string[];
+  options: ParseArgsOptionsConfig;
+  strict: false;
+  allowPositionals: true;
+  tokens: true;
+};
+
 /** `parseArgs` with the settings every script shares; `tokens` carries how each flag was written. */
-function parseTokens(argv: readonly string[], options: ParseArgsOptionsConfig) {
+function parseTokens(argv: readonly string[], options: ParseArgsOptionsConfig): ReturnType<typeof parseArgs<ParseTokensConfig>> {
   return parseArgs({
     args: [...argv],
     options,
@@ -117,7 +125,7 @@ export function parseCli(argv: readonly string[], spec: CliSpec, { allowUnknown 
   return {
     positionals,
     has: flag => values[declared(flag, switchNames)] === true,
-    value: (flag) => {
+    value: (flag): string | undefined => {
       const value = values[declared(flag, valueNames)];
       return typeof value === 'string' ? value : undefined;
     },
