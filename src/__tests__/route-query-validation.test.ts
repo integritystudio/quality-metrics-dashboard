@@ -14,7 +14,7 @@ const app = new Hono()
 
 async function get(path: string) {
   const res = await app.request(path);
-  return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  return { status: res.status, body: await res.json<Record<string, unknown>>() };
 }
 
 describe('route validQuery', () => {

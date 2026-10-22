@@ -54,7 +54,7 @@ describe('GET /coverage', () => {
   it('rejects invalid inputKey with 400', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=invalid');
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body.error).toContain('inputKey');
   });
 
@@ -62,7 +62,7 @@ describe('GET /coverage', () => {
     const res = await coverageRoutes.request('/coverage?period=7d');
 
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as CoverageResponse;
+    const body = await res.json<CoverageResponse>();
     expect(body.period).toBe('7d');
     expect(body.metrics.toSorted()).toEqual(['coherence', 'relevance']);
     expect(body.inputs.toSorted()).toEqual(['trace-1', 'trace-2']);
@@ -76,21 +76,21 @@ describe('GET /coverage', () => {
 
   it('drops rule-based evaluations from the coverage universe', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d');
-    const body = await res.json() as CoverageResponse;
+    const body = await res.json<CoverageResponse>();
     expect(body.metrics).not.toContain('tool_correctness');
     expect(body.inputs).not.toContain('trace-3');
   });
 
   it('keys inputs by session with inputKey=sessionId', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d&inputKey=sessionId');
-    const body = await res.json() as CoverageResponse;
+    const body = await res.json<CoverageResponse>();
     expect(body.inputs).toEqual(['sess-1']);
   });
 
   it('does not ship the dense cell list that breached the KV value limit', async () => {
     const res = await coverageRoutes.request('/coverage?period=7d');
 
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json<Record<string, unknown>>();
     expect(body).not.toHaveProperty('cells');
     expect(body).not.toHaveProperty('gaps');
   });

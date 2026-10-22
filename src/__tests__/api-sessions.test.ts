@@ -61,13 +61,13 @@ describe('GET /sessions/:sessionId', () => {
   it('returns 200 with sessionId in response', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body).toHaveProperty('sessionId', 'sess-abc');
   });
 
   it('returns dataSources summary', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body).toHaveProperty('dataSources');
     expect(body.dataSources).toHaveProperty('traces');
     expect(body.dataSources).toHaveProperty('logs');
@@ -77,21 +77,21 @@ describe('GET /sessions/:sessionId', () => {
 
   it('returns token totals and tool usage', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body).toHaveProperty('tokenTotals');
     expect(body).toHaveProperty('toolUsage');
   });
 
   it('returns error and agent sections', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body).toHaveProperty('errors');
     expect(body).toHaveProperty('agentActivity');
   });
 
   it('returns evaluation and log summaries', async () => {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body).toHaveProperty('evaluationBreakdown');
     expect(body).toHaveProperty('logSummary');
     expect(body).toHaveProperty('evaluations');
@@ -108,7 +108,7 @@ describe('GET /sessions/:sessionId', () => {
     })]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(res.status).toBe(HttpStatus.Ok);
     expect(body).toHaveProperty('logSummary');
     const log = body.logSummary.logs[0];
@@ -129,7 +129,7 @@ describe('GET /sessions/:sessionId', () => {
     ]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body.toolUsage.Read).toBe(2);
     expect(body.toolUsage.Write).toBe(1);
   });
@@ -146,7 +146,7 @@ describe('GET /sessions/:sessionId', () => {
     ]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.toolUsage).toEqual({ Bash: 3 });
   });
@@ -163,7 +163,7 @@ describe('GET /sessions/:sessionId', () => {
     ]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.errors.byCategory).toEqual({ 'Edit -> file_not_read': 1 });
     expect(body.errors.details).toEqual([
@@ -182,7 +182,7 @@ describe('GET /sessions/:sessionId', () => {
     fixture.setTraces([{ ...span, status_code: 2 }]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.errors.byCategory).toEqual({ 'Bash -> unknown': 1 });
   });
@@ -203,7 +203,7 @@ describe('GET /sessions/:sessionId', () => {
     ]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.agentActivity).toEqual([
       {
@@ -232,7 +232,7 @@ describe('GET /sessions/:sessionId', () => {
     })));
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.hookLatency['hook:builtin-post-tool']).toEqual({ count: 3, avg: 2000, p50: 2000, p95: 2900, max: 3000 });
   });
@@ -242,7 +242,7 @@ describe('GET /sessions/:sessionId', () => {
       logToWire({ timestamp, attributes: { [SESSION_ATTRIBUTES.ID]: 'sess-abc' } })));
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.timespan).toEqual({ start: '2026-01-01T00:00:00.000Z', end: '2026-01-01T02:00:00.000Z', durationHours: 2 });
   });
@@ -257,7 +257,7 @@ describe('GET /sessions/:sessionId', () => {
     fixture.setEvals(evals);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
     expect(body.dataSources.total).toBe(spans.length + logs.length + evals.length);
   });
 
@@ -299,7 +299,7 @@ describe('GET /sessions/:sessionId when the evaluation read hits its cap', () =>
     serveSessionEvaluations(1);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     // `truncated` is written only when set; the page reads its absence as a complete read.
     expect(body.dataSources.evaluations).toEqual({ count: 1 });
@@ -310,7 +310,7 @@ describe('GET /sessions/:sessionId when the evaluation read hits its cap', () =>
     serveSessionEvaluations(LIMIT_EVALS_SESSION + 1);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.dataSources.evaluations).toEqual({ count: LIMIT_EVALS_SESSION, truncated: true });
     expect(body.evaluations).toHaveLength(LIMIT_EVALS_SESSION);
@@ -331,7 +331,7 @@ describe('GET /sessions/:sessionId when the span read hits its cap', () => {
     serveSessionSpans(1);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(body.dataSources.traces).toEqual({ count: 1, traceIds: 1 });
   });
@@ -340,7 +340,7 @@ describe('GET /sessions/:sessionId when the span read hits its cap', () => {
     serveSessionSpans(LIMIT_SESSION_SPANS + 1);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(res.status).toBe(HttpStatus.Ok);
     expect(body.dataSources.traces).toMatchObject({ count: LIMIT_SESSION_SPANS, truncated: true });
@@ -372,7 +372,7 @@ describe('GET /sessions/:sessionId across the integritystudio.* key rename', () 
 
   async function expectSessionRead() {
     const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json() as SessionDetailBody;
+    const body = await res.json<SessionDetailBody>();
 
     expect(res.status).toBe(HttpStatus.Ok);
     expect(body.sessionInfo).toMatchObject({

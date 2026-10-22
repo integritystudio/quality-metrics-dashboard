@@ -85,14 +85,14 @@ describe('GET /trends/:name', () => {
   it('returns 200 with expected response shape', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     expect(body).toMatchObject({ metric: METRIC, period: '7d', bucketCount: DEFAULT_TREND_BUCKETS });
     expect(body.trendData).toHaveLength(body.bucketCount);
   });
 
   it('counts every served score and computes overall percentiles from them', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     expect(body.totalEvaluations).toBe(SCORES_BY_DAYS_AGO.length);
     expect(body.overallPercentiles?.p50).toBeCloseTo(MEDIAN_SCORE, CLOSE_TO_DIGITS);
     expect(body.trendData.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(SCORES_BY_DAYS_AGO.length);
@@ -100,7 +100,7 @@ describe('GET /trends/:name', () => {
 
   it('averages each scored bucket and leaves empty buckets without a trend', async () => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     const scored = body.trendData.filter((bucket) => bucket.count > 0);
     expect(scored).toHaveLength(SCORES_BY_DAYS_AGO.length);
     expect(scored.map((bucket) => bucket.avg)).toEqual(SCORES_BY_DAYS_AGO.map(({ score }) => score));
@@ -114,7 +114,7 @@ describe('GET /trends/:name', () => {
       timestamp: recentEvalNanos(daysAgo * ONE_DAY_MS),
     }, i + 1)));
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=${DAILY_DAYS_AGO.length}`);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     const [first, ...rest] = body.trendData;
     expect(first?.trend).toBeNull();
     expect(first?.dynamics).toBeNull();
@@ -127,14 +127,14 @@ describe('GET /trends/:name', () => {
   it.each(ACCEPTED_BUCKET_COUNTS)('accepts %i buckets', async (buckets) => {
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d&buckets=${buckets}`);
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     expect(body.trendData).toHaveLength(buckets);
   });
 
   it('returns empty buckets and no percentiles when there is no data', async () => {
     fixture.reset();
     const res = await trendRoutes.request(`/trends/${METRIC}?period=7d`);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     expect(body.totalEvaluations).toBe(0);
     expect(body.overallPercentiles).toBeUndefined();
     expect(body.trendData.every((bucket) => bucket.count === 0)).toBe(true);

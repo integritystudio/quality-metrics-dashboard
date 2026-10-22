@@ -34,7 +34,7 @@ describe('GET /evaluations/trace/:traceId', () => {
   it('returns 200 with evaluations array for valid traceId', async () => {
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as TraceEvaluationsResponse;
+    const body = await res.json<TraceEvaluationsResponse>();
     expect(body).toHaveProperty('evaluations');
     expect(Array.isArray(body.evaluations)).toBe(true);
   });
@@ -43,7 +43,7 @@ describe('GET /evaluations/trace/:traceId', () => {
     fixture.setEvals([evalToWire(makeEvaluation({ traceId: 'abc-123' }))]);
 
     const res = await evaluationRoutes.request('/evaluations/trace/abc-123');
-    const body = await res.json() as TraceEvaluationsResponse;
+    const body = await res.json<TraceEvaluationsResponse>();
     expect(body.evaluations).toHaveLength(1);
   });
 

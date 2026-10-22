@@ -102,13 +102,13 @@ describe('/api/agents/:sessionId payload', () => {
     const res = await get(`/api/agents/${SESSION_ID}`, new MemoryKv({ [`session:${SESSION_ID}`]: { workflowGraph: graph, evaluations: [] } }));
 
     expect(res.status).toBe(HttpStatus.Ok);
-    expect((await res.json() as { graph: unknown }).graph).toEqual(graph);
+    expect((await res.json<{ graph: unknown }>()).graph).toEqual(graph);
   });
 
   it('serves graph: null for a session key synced before graphs were precomputed', async () => {
     const res = await get(`/api/agents/${SESSION_ID}`, new MemoryKv({ [`session:${SESSION_ID}`]: { evaluations: [] } }));
 
-    expect((await res.json() as { graph: unknown }).graph).toBeNull();
+    expect((await res.json<{ graph: unknown }>()).graph).toBeNull();
   });
 });
 

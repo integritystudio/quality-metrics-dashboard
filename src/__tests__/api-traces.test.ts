@@ -53,7 +53,7 @@ describe('GET /traces/:traceId', () => {
   it('returns 200 with traceId, spans, evaluations', async () => {
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as TraceDetailResponse;
+    const body = await res.json<TraceDetailResponse>();
     expect(body).toHaveProperty('traceId', VALID_TRACE_ID);
     expect(body).toHaveProperty('spans');
     expect(body).toHaveProperty('evaluations');
@@ -76,7 +76,7 @@ describe('GET /traces/:traceId', () => {
     })]);
 
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
-    const body = await res.json() as TraceDetailResponse;
+    const body = await res.json<TraceDetailResponse>();
     expect(body.spans).toHaveLength(1);
     expect(body.evaluations).toHaveLength(1);
   });
@@ -92,7 +92,7 @@ describe('GET /traces/:traceId', () => {
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
 
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as { evaluations: Array<{ timestamp: string }> };
+    const body = await res.json<{ evaluations: Array<{ timestamp: string }> }>();
     expect(defined(body.evaluations[0]).timestamp).toBe(String(EVAL_NANOS));
   });
 
@@ -108,7 +108,7 @@ describe('GET /traces/:traceId', () => {
     const res = await traceRoutes.request(`/traces/${VALID_TRACE_ID}`);
 
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as { spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }> };
+    const body = await res.json<{ spans: Array<{ startTimeUnixNano: string; endTimeUnixNano: string }> }>();
     expect(defined(body.spans[0]).startTimeUnixNano).toBe(String(START_NANOS));
     expect(defined(body.spans[0]).endTimeUnixNano).toBe(String(END_NANOS));
   });

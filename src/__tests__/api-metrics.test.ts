@@ -69,14 +69,14 @@ describe('GET /metrics/:name', () => {
   it('returns 404 for unknown metric', async () => {
     const res = await metricsRoutes.request('/metrics/nonexistent?period=7d');
     expect(res.status).toBe(HttpStatus.NotFound);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body).toHaveProperty('error');
   });
 
   it('returns 400 for invalid period', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=99d');
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body).toHaveProperty('error');
   });
 
@@ -93,7 +93,7 @@ describe('GET /metrics/:name', () => {
   it('returns 200 with metric detail for valid request', async () => {
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as MetricDetailResponse;
+    const body = await res.json<MetricDetailResponse>();
     expect(body).toHaveProperty('name', 'relevance');
     expect(body).toHaveProperty('values');
     expect(body).toHaveProperty('sampleCount');
@@ -106,7 +106,7 @@ describe('GET /metrics/:name', () => {
     // passed the previous trend where computeMetricDynamics takes the period length.
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as MetricDetailResponse;
+    const body = await res.json<MetricDetailResponse>();
     expect(body.trend?.direction).toBe('stable');
     expect(typeof body.dynamics?.velocity).toBe('number');
   });
@@ -115,7 +115,7 @@ describe('GET /metrics/:name', () => {
     fixture.reset();
     const res = await metricsRoutes.request('/metrics/relevance?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as MetricDetailResponse;
+    const body = await res.json<MetricDetailResponse>();
     expect(body.sampleCount).toBe(0);
     expect(body.trend).toBeUndefined();
     expect(body.dynamics).toBeUndefined();
@@ -156,7 +156,7 @@ describe('GET /metrics/:name/evaluations', () => {
   it('returns 200 with rows, total, hasMore', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body).toHaveProperty('rows');
     expect(body).toHaveProperty('total');
     expect(body).toHaveProperty('hasMore');
@@ -166,32 +166,32 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('total matches evaluation count', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body.total).toBe(evals.length);
   });
 
   it('filters by scoreLabel', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&scoreLabel=relevant');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body.total).toBe(1);
     expect(defined(body.rows[0]).label).toBe('relevant');
   });
 
   it('sorts score_asc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_asc');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body.rows.map((r) => r.score)).toEqual(SCORES_ASCENDING);
   });
 
   it('sorts score_desc correctly', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&sortBy=score_desc');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body.rows.map((r) => r.score)).toEqual(SCORES_DESCENDING);
   });
 
   it('pagination with limit and offset', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=2&offset=1');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body.rows).toHaveLength(2);
     expect(body.total).toBe(evals.length);
     expect(body.hasMore).toBe(false);
@@ -199,13 +199,13 @@ describe('GET /metrics/:name/evaluations', () => {
 
   it('hasMore is true when offset+limit < total', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=1&offset=0');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     expect(body.hasMore).toBe(true);
   });
 
   it('row shape has required fields', async () => {
     const res = await metricsRoutes.request('/metrics/relevance/evaluations?period=7d&limit=1');
-    const body = await res.json() as MetricEvaluationsResponse;
+    const body = await res.json<MetricEvaluationsResponse>();
     const row = body.rows[0];
     expect(row).toHaveProperty('score');
     expect(row).toHaveProperty('timestamp');

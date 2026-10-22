@@ -519,7 +519,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/nonexistent-metric');
     expect(res.status).toBe(HttpStatus.NotFound);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body.error).toContain('nonexistent-metric');
   });
 
@@ -527,7 +527,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance?period=invalid');
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body.error).toContain('Invalid period');
   });
 
@@ -539,7 +539,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request(`/trends/relevance?period=7d&buckets=${buckets}`);
     expect(res.status).toBe(HttpStatus.BadRequest);
-    const body = await res.json() as ErrorResponse;
+    const body = await res.json<ErrorResponse>();
     expect(body.error).toContain('Invalid buckets');
   });
 
@@ -547,7 +547,7 @@ describe('trends API route validation', () => {
     const app = await loadTrendRoutes();
     const res = await app.request('/trends/relevance');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as TrendDetailResponse;
+    const body = await res.json<TrendDetailResponse>();
     expect(body.metric).toBe('relevance');
   });
 

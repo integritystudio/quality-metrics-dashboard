@@ -63,7 +63,7 @@ describe('GET /dashboard — startDate window parity', () => {
 
     const res = await dashboardRoutes.request('/dashboard?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as DashboardResponse;
+    const body = await res.json<DashboardResponse>();
 
     const relevance = body.metrics.find((m) => m.name === 'relevance');
     // Only the recent eval falls inside the 7-day window; the stale one is

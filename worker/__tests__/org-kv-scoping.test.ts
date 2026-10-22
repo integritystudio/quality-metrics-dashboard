@@ -82,7 +82,7 @@ describe('ALLOW_TEST_BYPASS production-marker assertion (Q7)', () => {
   it('allows the bypass in a marker-free (dev) environment and carries org context', async () => {
     const res = await app.request('/api/me', { headers: BYPASS_HEADERS }, makeEnv());
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json() as Record<string, unknown>;
+    const body = await res.json<Record<string, unknown>>();
     expect(body.activeOrg).toBe(BYPASS_ORG_ID);
     expect(body.role).toBe('owner');
     expect(body.isStaff).toBe(false);
@@ -101,7 +101,7 @@ describe('/api/org/switch', () => {
         body: JSON.stringify({ orgId: BYPASS_ORG_ID }),
       }, makeEnv({ ORG_SCOPING_ENABLED: 'true' }), makeCtx());
       expect(res.status).toBe(HttpStatus.Ok);
-      const body = await res.json() as Record<string, unknown>;
+      const body = await res.json<Record<string, unknown>>();
       expect(body.activeOrg).toBe(BYPASS_ORG_ID);
     } finally {
       fetchSpy.mockRestore();
