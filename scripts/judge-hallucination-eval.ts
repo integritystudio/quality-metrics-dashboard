@@ -115,7 +115,7 @@ const LOG_PREFIX = '[hallucination]';
 const COMPLEMENT_EPSILON = 1e-9;
 const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination: true };
 
-const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as const;
+export const CONFIGURATIONS = ['perCriterion', 'consolidated', 'consolidatedDirect'] as const;
 export type Configuration = typeof CONFIGURATIONS[number];
 
 const TABLE_CELL_WIDTH = 12;
