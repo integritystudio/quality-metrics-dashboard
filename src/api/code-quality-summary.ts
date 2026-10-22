@@ -13,11 +13,17 @@ import { CODE_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 export const CODE_QUALITY_LOOKBACK_DAYS = 90;
 /**
- * queryTraces validates `limit <= 1000` (a 5000 here made the route 500 on
- * every request). At three checkpoints per seed, 1000 covers ~330 seeds in
- * the lookback — past that the oldest are dropped.
+ * Checkpoint limit for callers that go through `queryTraces` (the MCP tool),
+ * which validates `limit <= 1000`. The dev-server route uses this path.
  */
 export const CODE_QUALITY_CHECKPOINT_LIMIT = 1000;
+/**
+ * Checkpoint limit for callers that call `CloudBackend.queryTraces` directly,
+ * which has no MCP tool cap. `fetchAllPages` pages transparently behind this.
+ * Sized well above the 90-day count (1855 on 2026-10-19); growth alone passes
+ * 1000 again in the future, but 10 000 covers decades of three-per-seed growth.
+ */
+export const CODE_QUALITY_CHECKPOINT_FULL_LIMIT = 10_000;
 export const CODE_QUALITY_INVOCATION_LIMIT = 1000;
 /** KV key the sync writes and the Worker's `/api/code-quality` reads (org-prefixed by both). */
 export const CODE_QUALITY_KV_KEY = 'code-quality';

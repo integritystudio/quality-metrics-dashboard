@@ -1,7 +1,7 @@
 import pLimit from 'p-limit';
 import { group } from 'd3-array';
 import { CloudBackend } from './parent/backends.js';
-import type { EvaluationResult, HumanVerificationEvent } from '../types.js';
+import type { EvaluationResult, HumanVerificationEvent, TraceSpan } from '../types.js';
 import { queryVerifications as queryVerificationsLib } from './parent/verification-events.js';
 import { queryTraces as queryTracesTool } from './parent/query-traces.js';
 import { queryLogs } from './parent/query-logs.js';
@@ -177,6 +177,32 @@ export async function loadTracesByFilter(
   limit: number,
 ): Promise<LoadedSpan[]> {
   return readTraces({ attributeFilter, startDate, endDate, limit });
+}
+
+/**
+ * Query traces by attribute filter, bypassing the MCP tool's 1000-row cap.
+ * Calls `CloudBackend.queryTraces` directly so `fetchAllPages` follows cursors
+ * and returns all matching spans up to `limit`.
+ *
+ * Use when the expected count can exceed 1000, e.g. code-quality checkpoints.
+ */
+export async function loadSpansByFilterUnbounded(
+  attributeFilter: Record<string, string | boolean | number>,
+  startDate: string,
+  endDate: string,
+  limit: number,
+): Promise<TraceSpan[]> {
+  const key = cloudReadKey('traces', {
+    start: startDate,
+    end: endDate,
+    limit: String(limit),
+    attributeFilter: JSON.stringify(attributeFilter),
+  });
+  const startNs = isoToNs(startDate);
+  const endNs = isoToNs(endDate);
+  return sharedCloudRead(key, async () =>
+    getBackend().queryTraces({ attributeFilter, startDate: startNs, endDate: endNs, limit })
+  );
 }
 
 async function queryLogsWithDefaultRange(

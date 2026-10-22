@@ -32,7 +32,7 @@ import {
 } from '../api-constants.js';
 import {
   CODE_EVENT,
-  CODE_QUALITY_CHECKPOINT_LIMIT,
+  CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
   CODE_QUALITY_INVOCATION_LIMIT,
   CODE_QUALITY_KV_KEY,
   CODE_QUALITY_LOOKBACK_DAYS,
@@ -289,7 +289,7 @@ async function computeCodeQuality(backend: OrgReadBackend, now: Date): Promise<C
   const endDate = msToNs(now.getTime());
   const [checkpointSpans, invocationSpans] = await Promise.all([
     backend.queryTraces({
-      startDate, endDate, limit: CODE_QUALITY_CHECKPOINT_LIMIT,
+      startDate, endDate, limit: CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
       attributeFilter: { [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.CHECKPOINT },
     }),
     backend.queryTraces({
@@ -297,8 +297,8 @@ async function computeCodeQuality(backend: OrgReadBackend, now: Date): Promise<C
       attributeFilter: { [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.GENERATED },
     }),
   ]);
-  if (checkpointSpans.length === CODE_QUALITY_CHECKPOINT_LIMIT) {
-    console.warn(`${LOG_PREFIX} Code-quality checkpoint query hit ${CODE_QUALITY_CHECKPOINT_LIMIT} — oldest checkpoints dropped`);
+  if (checkpointSpans.length === CODE_QUALITY_CHECKPOINT_FULL_LIMIT) {
+    console.warn(`${LOG_PREFIX} Code-quality checkpoint query hit ${CODE_QUALITY_CHECKPOINT_FULL_LIMIT} — oldest checkpoints dropped`);
   }
   return summarizeCodeQuality(checkpointSpans, invocationSpans);
 }

@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { loadTracesByFilter } from '../data-loader.js';
+import { loadTracesByFilter, loadSpansByFilterUnbounded } from '../data-loader.js';
 import { TIME_MS } from '../../lib/constants.js';
 import {
   CODE_EVENT,
-  CODE_QUALITY_CHECKPOINT_LIMIT,
+  CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
   CODE_QUALITY_INVOCATION_LIMIT,
   CODE_QUALITY_LOOKBACK_DAYS,
   summarizeCodeQuality,
@@ -32,7 +32,7 @@ codeQualityRoutes.get('/code-quality', async (c) => {
   const endIso = now.toISOString();
 
   const [checkpointSpans, invocationSpans] = await Promise.all([
-    loadTracesByFilter({ [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.CHECKPOINT }, startIso, endIso, CODE_QUALITY_CHECKPOINT_LIMIT),
+    loadSpansByFilterUnbounded({ [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.CHECKPOINT }, startIso, endIso, CODE_QUALITY_CHECKPOINT_FULL_LIMIT),
     loadTracesByFilter({ [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.GENERATED }, startIso, endIso, CODE_QUALITY_INVOCATION_LIMIT),
   ]);
   return c.json(summarizeCodeQuality(checkpointSpans, invocationSpans));
