@@ -615,8 +615,9 @@ with `eslint --print-config`, and `npm run lint` exits 0 under `--max-warnings 0
     longer left unbanded. Live hallucination chips band as `minimize` (`HALLUCINATION_RISK_EVALUATION_NAMES`);
     they had been coloured as higher-is-better. Live chips still use the uniform bands, not
     `adaptiveScoreColorBand`'s per-metric scale strategy that `ScoreBadge` applies.
-  - **`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**, a copy of
-    `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer).
+  - ~~**`scripts/populate-dashboard.ts` defines its own `MS_PER_SECOND = 1000`**~~, a copy of
+    `TIME_MS.SECOND` the rule cannot see (a literal `const` initializer). Resolved 2026-10-21: the
+    script imports `TIME_MS` from the parent's `units.ts` like its siblings.
 - **Complexity.** Done — ~~`max-depth` 4~~ and ~~`max-params` 4~~ landed 2026-10-17,
   ~~`no-await-in-loop`~~, ~~`complexity` 12~~ and ~~`sonarjs/no-duplicate-string`~~ 2026-10-18.
 - **Imports.** Done — `import/no-cycle` and `import/no-extraneous-dependencies` both landed
