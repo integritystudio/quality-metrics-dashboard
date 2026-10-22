@@ -2,7 +2,8 @@
  * /api/quality/live in the Worker (production). It has no evaluation store of its
  * own: it lists the metrics in the org's `dashboard:24h` summary and takes each
  * one's newest row from the `metric:evaluations:<name>:24h` key sync-to-kv writes
- * newest first, with timestamps as the nanosecond strings toKVValue produces.
+ * newest first, with timestamps as the nanosecond strings toKVValue produces and
+ * an unscored evaluation as `score: 0, unscored: true` (projectEvaluationRow).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -69,11 +70,11 @@ describe('GET /api/quality/live', () => {
     expect(await res.json()).toMatchObject({ metrics: [], sessionCount: 0 });
   });
 
-  it("skips a metric whose newest row has no score, but counts that row's trace", async () => {
+  it("skips a metric whose newest row the sync flagged unscored, but counts that row's trace", async () => {
     const kv = new MemoryKv({
       [orgKey('dashboard:24h')]: { metrics: [{ name: 'relevance' }] },
       [orgKey('metric:evaluations:relevance:24h')]: {
-        rows: [{ score: null, timestamp: nanos(NEWEST), traceId: 'trace-a' }],
+        rows: [{ score: 0, unscored: true, timestamp: nanos(NEWEST), traceId: 'trace-a' }],
       },
     });
 

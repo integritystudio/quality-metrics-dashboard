@@ -12,7 +12,9 @@ import { resolveScoreLabelWithSource } from '../parent/qfe-label-ordinals.js';
 import type { EvaluationResult } from '../../types.js';
 
 export type EvaluationRow = {
+  /** 0 when the evaluation carries no score; `unscored` then says so. */
   score: number;
+  unscored?: true;
   explanation: string | undefined;
   traceId: string | undefined;
   timestamp: bigint | string | number;
@@ -35,6 +37,7 @@ export function projectEvaluationRow(e: EvaluationResult): EvaluationRow {
   const { label, derived } = resolveScoreLabelWithSource(e);
   return {
     score: e.scoreValue ?? 0,
+    ...(e.scoreValue == null && { unscored: true as const }),
     explanation: e.explanation,
     traceId: e.traceId,
     timestamp: e.timestamp,

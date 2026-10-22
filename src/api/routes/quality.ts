@@ -33,14 +33,14 @@ qualityRoutes.get('/quality/live', async (c) => {
     now.toISOString(),
   );
 
-  const newestFirst = [...evaluationsByMetric].map(([name, evals]) => [
+  const sortedByMetric = [...evaluationsByMetric].map(([name, evals]) => [
     name,
     evals
       .toSorted((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
       .map((ev) => ({ score: ev.scoreValue, evaluatorType: ev.evaluatorType, timestamp: ev.timestamp, traceId: ev.traceId })),
   ] as const);
 
-  return c.json(summarizeQualityLive(newestFirst, now));
+  return c.json(summarizeQualityLive(sortedByMetric, now));
 });
 
 /**

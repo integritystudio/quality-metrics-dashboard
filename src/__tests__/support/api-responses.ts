@@ -66,7 +66,7 @@ export type HealthResponse = {
   hasData: boolean;
 }
 
-/** `GET /quality/live` — `lastUpdated` is a decimal-nanos string or an ISO date. */
+/** `GET /quality/live` — `lastUpdated` and each metric's `timestamp` are ISO 8601. */
 export type QualityLiveResponse = {
   metrics: Array<{ name: string; score: number; evaluatorType: string; timestamp: string }>;
   sessionCount: number;

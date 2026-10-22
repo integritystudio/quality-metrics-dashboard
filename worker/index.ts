@@ -878,7 +878,8 @@ const liveSummaryMetricsSchema = z.object({ metrics: z.array(z.object({ name: z.
 /** The fields of a synced `metric:evaluations:*` row the live view reads; rows are stored newest first. */
 const liveEvaluationRowsSchema = z.object({
   rows: z.array(z.object({
-    score: z.number().nullish(),
+    score: z.number(),
+    unscored: z.literal(true).optional(),
     evaluatorType: z.string().nullish(),
     timestamp: z.union([z.string(), z.number()]),
     traceId: z.string().nullish(),
@@ -886,8 +887,14 @@ const liveEvaluationRowsSchema = z.object({
 });
 
 async function liveEvaluationsFor(c: AppContext, name: string): Promise<LiveEvaluation[]> {
-  const parsed = liveEvaluationRowsSchema.safeParse(await getSessionKv<unknown>(c, `metric:evaluations:${name}:${QUALITY_LIVE_PERIOD}`));
-  return parsed.success ? parsed.data.rows : [];
+  const raw = await getSessionKv<unknown>(c, `metric:evaluations:${name}:${QUALITY_LIVE_PERIOD}`);
+  if (raw == null) return [];
+  const parsed = liveEvaluationRowsSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.error(`[/api/quality/live] ${name} rows failed schema validation:`, parsed.error.issues);
+    return [];
+  }
+  return parsed.data.rows.map(({ unscored, score, ...row }) => ({ ...row, score: unscored ? null : score }));
 }
 
 app.get('/api/quality/live', requirePermission(PERMISSION.read), async (c) => {
