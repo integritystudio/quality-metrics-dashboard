@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { scoreColorBand, adaptiveScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
+import { calibratedScoreColorBand, truncateText, formatScore, type ScoreDirection, type PercentileDistribution } from '../lib/quality-utils.js';
 import { EXPLANATION_TOOLTIP_CHARS, SCORE_CHIP_PRECISION } from '../lib/constants.js';
 import { routes } from '../lib/routes.js';
 import { SCORE_SHAPES } from '../lib/symbols.js';
@@ -75,9 +75,7 @@ export function ScoreBadge({ score, metricName, direction = 'maximize', label, e
     );
   }
 
-  const band = calibration
-    ? adaptiveScoreColorBand(score, metricName, direction, calibration)
-    : scoreColorBand(score, direction);
+  const band = calibratedScoreColorBand(score, metricName, direction, calibration);
   const shape = SCORE_SHAPES[band];
   const directionHint = direction === 'minimize' ? 'lower is better' : 'higher is better';
 

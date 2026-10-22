@@ -11,9 +11,9 @@ import {
   getEvenBucketIndex,
 } from '../parent/bucket-utils.js';
 import { loadEvaluationsByMetric } from '../data-loader.js';
-import { LIVE_WINDOW_MS, EVAL_LIMIT, computePeriodDates } from '../../lib/constants.js';
+import { LIVE_WINDOW_MS, computePeriodDates } from '../../lib/constants.js';
 import { timestampToMs } from '../../lib/timestamps.js';
-import type { LiveMetric, QualityLiveData } from '../../types.js';
+import { summarizeQualityLive } from '../../lib/quality-live.js';
 import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
 
 export const qualityRoutes = new Hono();
@@ -33,42 +33,14 @@ qualityRoutes.get('/quality/live', async (c) => {
     now.toISOString(),
   );
 
-  const metrics: LiveMetric[] = [];
-  const sessionIds = new Set<string>();
-  let latestTimestamp = 0n;
-
-  for (const [name, evals] of evaluationsByMetric) {
-    const sorted = evals
+  const sortedByMetric = [...evaluationsByMetric].map(([name, evals]) => [
+    name,
+    evals
       .toSorted((a, b) => (a.timestamp < b.timestamp ? 1 : a.timestamp > b.timestamp ? -1 : 0))
-      .slice(0, EVAL_LIMIT);
+      .map((ev) => ({ score: ev.scoreValue, evaluatorType: ev.evaluatorType, timestamp: ev.timestamp, traceId: ev.traceId })),
+  ] as const);
 
-    for (const ev of sorted) {
-      if (ev.traceId) sessionIds.add(ev.traceId);
-    }
-
-    const latest = sorted[0];
-    if (latest?.scoreValue != null) {
-      metrics.push({
-        name,
-        score: latest.scoreValue,
-        evaluatorType: latest.evaluatorType ?? 'unknown',
-        timestamp: String(latest.timestamp),
-      });
-      if (latest.timestamp > latestTimestamp) {
-        latestTimestamp = latest.timestamp;
-      }
-    }
-  }
-
-  metrics.sort((a, b) => a.name.localeCompare(b.name));
-
-  const response: QualityLiveData = {
-    metrics,
-    sessionCount: sessionIds.size,
-    lastUpdated: latestTimestamp !== 0n ? String(latestTimestamp) : now.toISOString(),
-  };
-
-  return c.json(response);
+  return c.json(summarizeQualityLive(sortedByMetric, now));
 });
 
 /**

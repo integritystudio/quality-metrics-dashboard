@@ -108,7 +108,6 @@ export const LIVE_WINDOW_MS = TIME_MS.DAY;
 export const QUERY_RETRY_COUNT = 2;
 export const POLL_INTERVAL_MS = 30_000;
 export const MAX_IDS = 50;
-export const EVAL_LIMIT = 100;
 /** Decimal places for displayed score values in API responses. */
 export const SCORE_DISPLAY_PRECISION = 3;
 /** Decimal places for compact score display in chips and table cells. */

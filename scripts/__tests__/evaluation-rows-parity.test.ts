@@ -36,7 +36,14 @@ const coherenceEval: EvaluationResult = evaluation('e-coherence', '2026-10-07T08
   traceId: 'trace-b',
 });
 
-const fixture = serveParityFixture({ evaluations: [relevanceEval, coherenceEval] });
+const unscoredEval: EvaluationResult = evaluation('e-faithfulness', '2026-10-08T09:00:00.000Z', {
+  evaluationName: 'faithfulness',
+  scoreValue: undefined,
+  scoreLabel: 'pass',
+  traceId: 'trace-c',
+});
+
+const fixture = serveParityFixture({ evaluations: [relevanceEval, coherenceEval, unscoredEval] });
 
 describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   const synced = syncEachTest(fixture, NOW);
@@ -45,6 +52,7 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
     ['relevance', '7d'],
     ['coherence', '7d'],
     ['relevance', '30d'],
+    ['faithfulness', '7d'],
   ] as const)('writes for %s/%s the same row the dev route returns', async (metric, period) => {
     const fromKv = kvValue<{ rows: unknown[] }>(synced(), `metric:evaluations:${metric}:${period}`);
 
@@ -59,6 +67,13 @@ describe('evaluation rows parity (DASHBOARD-AGGREGATE-DUAL-IMPL)', () => {
   it('includes evaluatorKind and cohort in the KV row', () => {
     const fromKv = kvValue<{ rows: Array<Record<string, unknown>> }>(synced(), 'metric:evaluations:relevance:7d');
     expect(fromKv?.rows[0]).toMatchObject({ evaluatorKind: 'llm', cohort: 'normal' });
+  });
+
+  it('flags a row whose evaluation has no score, and only that row', () => {
+    const unscored = kvValue<{ rows: Array<Record<string, unknown>> }>(synced(), 'metric:evaluations:faithfulness:7d');
+    const scored = kvValue<{ rows: Array<Record<string, unknown>> }>(synced(), 'metric:evaluations:relevance:7d');
+    expect(unscored?.rows[0]).toMatchObject({ score: 0, unscored: true });
+    expect(scored?.rows[0]).not.toHaveProperty('unscored');
   });
 
   it('includes evaluatorKind and cohort in the route row', async () => {

@@ -14,6 +14,7 @@ const TRAILING_STATIC_TABS: Array<{ path: string; label: string }> = [
   { path: '/correlations', label: 'Correlations' },
   { path: '/coverage', label: 'Coverage' },
   { path: '/pipeline', label: 'Pipeline' },
+  { path: '/quality-live', label: 'Live Quality' },
 ];
 
 export function RoleSelector() {
