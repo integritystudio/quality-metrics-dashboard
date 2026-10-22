@@ -7,7 +7,8 @@ import type { PostgrestClient } from '@supabase/postgrest-js';
 import type { DashboardPermission, AppSession, DashboardView, OrgMembershipSummary } from '../src/types/auth.js';
 import { PublicUserSchema, UserRoleRowSchema, MeResponseSchema, ActivityRequestSchema, OrgMembershipRowSchema, OrgSwitchRequestSchema, DashboardPermissionSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSION, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, ORG_ID_HEADER, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, ORG_ID_HEADER, QUALITY_LIVE_PERIOD, UUID_PATTERN, WORKER_ERR_NO_DATA, WORKER_ERR_NO_CALIBRATION_DATA } from '../src/lib/worker-contract.js';
+import { summarizeQualityLive, type LiveEvaluation } from '../src/lib/quality-live.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { CONTENT_TYPE_HEADER, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
@@ -869,6 +870,40 @@ app.get('/api/compliance/verifications', requirePermission(PERMISSION.compliance
   const { period } = c.req.valid('query');
   logActivity(c, 'compliance_view');
   return c.json({ period, count: 0, verifications: [] });
+});
+
+/** The metric names a synced dashboard summary lists; the rest of the summary is not read here. */
+const liveSummaryMetricsSchema = z.object({ metrics: z.array(z.object({ name: z.string().min(1) })) });
+
+/** The fields of a synced `metric:evaluations:*` row the live view reads; rows are stored newest first. */
+const liveEvaluationRowsSchema = z.object({
+  rows: z.array(z.object({
+    score: z.number(),
+    unscored: z.literal(true).optional(),
+    evaluatorType: z.string().nullish(),
+    timestamp: z.union([z.string(), z.number()]),
+    traceId: z.string().nullish(),
+  })),
+});
+
+async function liveEvaluationsFor(c: AppContext, name: string): Promise<LiveEvaluation[]> {
+  const raw = await getSessionKv<unknown>(c, `metric:evaluations:${name}:${QUALITY_LIVE_PERIOD}`);
+  if (raw == null) return [];
+  const parsed = liveEvaluationRowsSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.error(`[/api/quality/live] ${name} rows failed schema validation:`, parsed.error.issues);
+    return [];
+  }
+  return parsed.data.rows.map(({ unscored, score, ...row }) => ({ ...row, score: unscored ? null : score }));
+}
+
+app.get('/api/quality/live', requirePermission(PERMISSION.read), async (c) => {
+  const summary = liveSummaryMetricsSchema.safeParse(await getSessionKv<unknown>(c, `dashboard:${QUALITY_LIVE_PERIOD}`));
+  const names = summary.success ? summary.data.metrics.map((m) => m.name) : [];
+  const evaluationsByMetric = await Promise.all(
+    names.map(async (name) => [name, await liveEvaluationsFor(c, name)] as const),
+  );
+  return c.json(summarizeQualityLive(evaluationsByMetric, new Date()));
 });
 
 app.get('/api/calibration', requirePermission(PERMISSION.read), async (c) => {
