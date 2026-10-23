@@ -34,7 +34,6 @@ const FAST_MS = 5;
 const BASE = { model: MODEL, maxTokens: PROVIDER_MAX_TOKENS, temperature: TEMPERATURE, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
 const VERDICT_SCORE = 4;
 const VERDICT_FAITHFULNESS = (VERDICT_SCORE - G_EVAL_MIN_SCORE) / G_EVAL_SCORE_RANGE;
-const VERDICT_HALLUCINATION = 1 - VERDICT_FAITHFULNESS;
 const COST_CLOSE_TO_DIGITS = 10;
 const STEPS_TEXT = '1. Read the input.\n2. Read the output.\n3. Compare them.';
 const STEPS_PROMPT_MARKER = 'Generate detailed evaluation steps';
@@ -137,7 +136,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
     ]);
   });
 
-  it('derives hallucination from the faithfulness verdict on a turn with tool results', async () => {
+  it('records faithfulness and no hallucination on a turn with tool results', async () => {
     const { client } = fakeClient();
     const batch = await createBatchProvider({ ...BASE, client });
 
@@ -145,7 +144,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
 
     const byName = Object.fromEntries(defined(records).map(r => [r.evaluationName, r.scoreValue]));
     expect(byName[FAITHFULNESS_EVAL_NAME]).toBe(VERDICT_FAITHFULNESS);
-    expect(byName[HALLUCINATION_EVAL_NAME]).toBe(VERDICT_HALLUCINATION);
+    expect(byName).not.toHaveProperty(HALLUCINATION_EVAL_NAME);
   });
 
   it('skips criteria that already have a record', async () => {

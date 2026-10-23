@@ -12,10 +12,10 @@
  * producer, see CONSOLIDATED_PRODUCER.
  *
  * Where it differs from the per-criterion path:
- * - `faithfulness` is G-Eval on FAITHFULNESS_CRITERIA and `hallucination` is
- *   `1 - faithfulness`, so the two sum to 1 here and not on the per-criterion
- *   path's QAG sweep. `directHallucination` (opt-in, unset in production)
- *   judges it on its own criterion instead.
+ * - `faithfulness` is G-Eval on FAITHFULNESS_CRITERIA. By default it writes no
+ *   `hallucination` record; the per-criterion path's QAG sweep does.
+ *   `directHallucination` (opt-in, unset in production) judges it as a criterion
+ *   of its own in the same call.
  * - Evaluation steps are generated once per criterion per run
  *   (`EvaluationStepsCache`), since they depend only on the criteria text.
  * - The mode is recorded in `evaluator` (CONSOLIDATED_PRODUCER); `EvalRecord`
@@ -179,8 +179,7 @@ export type ConsolidatedCriteriaOptions = {
   judgeModel?: string;
   /**
    * Judge `hallucination` with HALLUCINATION_CRITERIA as a criterion of its own
-   * in the same call, instead of inverting the faithfulness verdict. Off until
-   * the eval JUDGE-HALLUCINATION-INVERTED-ON-DEFAULT gates on has run.
+   * in the same call. Without it the consolidated path records no hallucination.
    */
   directHallucination?: boolean;
 }
@@ -195,18 +194,12 @@ export type ParsedConsolidatedResponse = {
 // ---------------------------------------------------------------------------
 
 /**
- * The criterion a record's score comes from: hallucination is derived from
- * faithfulness unless it is judged directly.
- */
-export function sourceCriterionName(recordName: string, options: ConsolidatedCriteriaOptions = {}): string {
-  if (options.directHallucination) return recordName;
-  return recordName === HALLUCINATION_EVAL_NAME ? FAITHFULNESS_EVAL_NAME : recordName;
-}
-
-/**
- * The criteria a turn with tool results adds: faithfulness and hallucination
- * (one judged criterion unless `directHallucination`), plus the
- * tool-correctness family.
+ * The criteria a turn with tool results adds: faithfulness, the tool-correctness
+ * family, and hallucination only under `directHallucination`. The default path
+ * records no hallucination: deriving it as 1 - faithfulness caught 2 of 13
+ * fabricating turns (HALLUCINATION-CONSOLIDATED-UNPUBLISHED,
+ * docs/quality/hallucination-scoring-2026-10.md §7). Not counting it as missing
+ * also keeps turnSkip from re-selecting every tool turn for it.
  */
 function toolGroundedCriteria(
   missing: (name: string) => boolean,
@@ -214,16 +207,14 @@ function toolGroundedCriteria(
 ): ConsolidatedSelection {
   const criteria: GEvalConfig[] = [];
   const recordNames: string[] = [];
-  const needsFaith = missing(FAITHFULNESS_EVAL_NAME);
-  const needsHal = missing(HALLUCINATION_EVAL_NAME);
-  if (options.directHallucination) {
-    if (needsFaith) criteria.push(FAITHFULNESS_CRITERIA);
-    if (needsHal) criteria.push(HALLUCINATION_CRITERIA);
-  } else if (needsFaith || needsHal) {
+  if (missing(FAITHFULNESS_EVAL_NAME)) {
     criteria.push(FAITHFULNESS_CRITERIA);
+    recordNames.push(FAITHFULNESS_EVAL_NAME);
   }
-  if (needsFaith) recordNames.push(FAITHFULNESS_EVAL_NAME);
-  if (needsHal) recordNames.push(HALLUCINATION_EVAL_NAME);
+  if (options.directHallucination && missing(HALLUCINATION_EVAL_NAME)) {
+    criteria.push(HALLUCINATION_CRITERIA);
+    recordNames.push(HALLUCINATION_EVAL_NAME);
+  }
 
   if (missing(TOOL_CORRECTNESS_CRITERIA.name)) {
     criteria.push(TOOL_CORRECTNESS_CRITERIA);
@@ -488,20 +479,17 @@ function recordsFromVerdicts(
   turn: Turn,
   wanted: readonly string[],
   parsed: ParsedConsolidatedResponse,
-  ctx: { options: ConsolidatedCriteriaOptions; sessionPreview: string },
+  ctx: { sessionPreview: string },
 ): EvalRecord[] {
   const records: EvalRecord[] = [];
   for (const name of wanted) {
-    const source = sourceCriterionName(name, ctx.options);
-    const verdict = parsed.verdicts.get(source);
+    const verdict = parsed.verdicts.get(name);
     if (!verdict) {
-      trackFailure(name, parsed.failures.get(source) ?? new Error(`Could not parse verdict for ${source}`), ctx.sessionPreview);
+      trackFailure(name, parsed.failures.get(name) ?? new Error(`Could not parse verdict for ${name}`), ctx.sessionPreview);
       continue;
     }
     const normalized = toNormalizedScore(verdict.score);
-    // Hallucination is stored higher-is-worse and both of its sources grade 5 = best:
-    // by default the faithfulness verdict (this path's own convention, see the
-    // header), under directHallucination HALLUCINATION_CRITERIA's 5 = no fabrication.
+    // Hallucination is stored higher-is-worse; HALLUCINATION_CRITERIA grades 5 = no fabrication.
     const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
     const explanation = verdict.reasoning.trim()
       || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${ctx.sessionPreview}`;
@@ -521,16 +509,13 @@ export async function evaluateTurnConsolidated(
 
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = fitContextForJudge(turn.toolResults);
-  const recordNamesFor = (criterionName: string): string[] =>
-    selection.recordNames.filter(name => sourceCriterionName(name, options) === criterionName);
-
   const prepared = await prepareCriteria(provider, selection.criteria, stepsCache, (config, reason) => {
-    for (const name of recordNamesFor(config.name)) trackFailure(name, reason, sessionPreview);
+    trackFailure(config.name, reason, sessionPreview);
   });
   if (prepared.length === 0) return [];
 
   const names = prepared.map(p => p.config.name);
-  const wanted = selection.recordNames.filter(name => names.includes(sourceCriterionName(name, options)));
+  const wanted = selection.recordNames.filter(name => names.includes(name));
 
   let parsed: ParsedConsolidatedResponse;
   try {
@@ -545,7 +530,7 @@ export async function evaluateTurnConsolidated(
     return [];
   }
 
-  return recordsFromVerdicts(turn, wanted, parsed, { options, sessionPreview });
+  return recordsFromVerdicts(turn, wanted, parsed, { sessionPreview });
 }
 
 /** One criterion's normalized (0–1) score; throws the parse failure when the verdict is missing. */

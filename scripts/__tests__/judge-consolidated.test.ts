@@ -10,7 +10,6 @@ import {
   toNormalizedScore,
   evaluateTurnConsolidated,
   cachedEvaluationSteps,
-  sourceCriterionName,
   CONSOLIDATED_PRODUCER,
   REASONING_KEY,
   SCORE_KEY,
@@ -50,7 +49,7 @@ const FIVE_POINT_SCALE = [1, 2, 3, 4, 5];
 const OUT_OF_RANGE_SCORE = G_EVAL_MAX_SCORE + 1;
 const OTHER_JUDGE_MODEL = 'claude-opus-5';
 
-/** The schema criteria for a tool turn: every record but hallucination, which faithfulness's verdict supplies. */
+/** A tool turn's criteria and records on the default consolidated path: every per-criterion record but hallucination. */
 const TOOL_TURN_CRITERIA = TOOL_TURN_RECORDS.filter(n => n !== HALLUCINATION_EVAL_NAME);
 const PLAIN_CRITERIA = [RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME];
 const DIRECT = { directHallucination: true } as const;
@@ -108,10 +107,10 @@ describe('selectCriteria', () => {
     expect(selection.recordNames).toEqual(PLAIN_CRITERIA);
   });
 
-  it('selects every criterion for a turn with tool results, records in the per-criterion order', () => {
+  it('selects every criterion but hallucination for a turn with tool results', () => {
     const selection = selectCriteria(toolTurn(), new Set());
     expect(names(selection)).toEqual(TOOL_TURN_CRITERIA);
-    expect(selection.recordNames).toEqual(TOOL_TURN_RECORDS);
+    expect(selection.recordNames).toEqual(TOOL_TURN_CRITERIA);
   });
 
   it('drops a criterion whose dedup key already exists', () => {
@@ -129,12 +128,11 @@ describe('selectCriteria', () => {
     expect(selectCriteria(turn, otherModel, { judgeModel: OTHER_JUDGE_MODEL }).recordNames).not.toContain(RELEVANCE_EVAL_NAME);
   });
 
-  it('keeps faithfulness in the schema when only hallucination is still needed', () => {
+  it('treats a tool turn as judged when only hallucination is missing, so it is not re-selected every run', () => {
     const turn = toolTurn();
-    const selection = selectCriteria(turn, judgedKeys(turn, [FAITHFULNESS_EVAL_NAME]));
-    expect(names(selection)).toContain(FAITHFULNESS_EVAL_NAME);
-    expect(selection.recordNames).toContain(HALLUCINATION_EVAL_NAME);
-    expect(selection.recordNames).not.toContain(FAITHFULNESS_EVAL_NAME);
+    const selection = selectCriteria(turn, judgedKeys(turn, TOOL_TURN_CRITERIA));
+    expect(selection.criteria).toEqual([]);
+    expect(selection.recordNames).toEqual([]);
   });
 
   it('skips the tool sub-criteria when tool_correctness already exists, as evaluateTurn does', () => {
@@ -151,16 +149,10 @@ describe('selectCriteria', () => {
     expect(selection.recordNames).toEqual([]);
   });
 
-  it('derives hallucination from faithfulness and every other record from itself', () => {
-    expect(sourceCriterionName(HALLUCINATION_EVAL_NAME)).toBe(FAITHFULNESS_EVAL_NAME);
-    expect(sourceCriterionName(RELEVANCE_EVAL_NAME)).toBe(RELEVANCE_EVAL_NAME);
-  });
-
   it('under directHallucination, puts hallucination in the schema as its own criterion', () => {
     const selection = selectCriteria(toolTurn(), new Set(), DIRECT);
     expect(names(selection)).toEqual(TOOL_TURN_RECORDS);
     expect(selection.recordNames).toEqual(TOOL_TURN_RECORDS);
-    expect(sourceCriterionName(HALLUCINATION_EVAL_NAME, DIRECT)).toBe(HALLUCINATION_EVAL_NAME);
   });
 
   it('under directHallucination, drops faithfulness from the schema when only hallucination is needed', () => {
@@ -305,7 +297,7 @@ describe('evaluateTurnConsolidated', () => {
     // faithfulness and hallucination with different instruments, and this is the
     // only field that says which one a stored record came from.
     expect(CONSOLIDATED_PRODUCER).not.toBe(PRODUCER);
-    expect(records).toMatchObject(TOOL_TURN_RECORDS.map(evaluationName => ({
+    expect(records).toMatchObject(TOOL_TURN_CRITERIA.map(evaluationName => ({
       evaluationName,
       evaluator: CONSOLIDATED_PRODUCER,
       // The mirrored legacy field must keep matching evaluatorKind.
@@ -319,14 +311,14 @@ describe('evaluateTurnConsolidated', () => {
     })));
   });
 
-  it('normalizes scores like G-Eval and derives hallucination as 1 - faithfulness', async () => {
+  it('normalizes scores like G-Eval and writes no hallucination record', async () => {
     const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: DEFAULT_RAW_SCORE, [FAITHFULNESS_EVAL_NAME]: LOW_SCORE });
     const records = await evaluateTurnConsolidated(provider, toolTurn(), new Set());
     const byName = Object.fromEntries(records.map(r => [r.evaluationName, r]));
 
     expect(byName[RELEVANCE_EVAL_NAME]).toMatchObject({ scoreValue: DEFAULT_SCORE_NORMALIZED, explanation: `${RELEVANCE_EVAL_NAME} reasoning` });
     expect(byName[FAITHFULNESS_EVAL_NAME]).toMatchObject({ scoreValue: LOW_SCORE_NORMALIZED });
-    expect(byName[HALLUCINATION_EVAL_NAME]).toMatchObject({ scoreValue: 1 - LOW_SCORE_NORMALIZED, explanation: `${FAITHFULNESS_EVAL_NAME} reasoning` });
+    expect(byName[HALLUCINATION_EVAL_NAME]).toBeUndefined();
   });
 
   it('under directHallucination, scores hallucination from its own verdict, so the two no longer sum to 1', async () => {
