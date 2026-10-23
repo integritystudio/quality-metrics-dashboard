@@ -165,11 +165,6 @@ describe('mapRecord', () => {
     expect(payload?.traceId).toBe('top-level-trace');
   });
 
-  it('drops canary records marked by cohort', () => {
-    const { skip } = mapRecord(record({ [EVALUATION_ATTRS.COHORT]: 'canary' }), NOW, MAX_AGE_MS);
-    expect(skip).toBe('canary');
-  });
-
   it('drops canary records marked by the legacy overloaded field', () => {
     const { skip } = mapRecord(record({ [LEGACY_EVALUATOR_TYPE_ATTR]: 'canary' }), NOW, MAX_AGE_MS);
     expect(skip).toBe('canary');

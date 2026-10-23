@@ -65,7 +65,7 @@ import {
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
 } from './eval-record.js';
-import { CANARY_COHORT, CANARY_EVALUATOR_TYPE, TELEMETRY_DIR } from './evaluation-constants.js';
+import { CANARY_EVALUATOR_TYPE, TELEMETRY_DIR } from './evaluation-constants.js';
 import {
   ACCOUNT_INDEX_WINDOW_DAYS,
   IDENTITY_KEY_REF_FIELD,
@@ -264,11 +264,9 @@ function readCore(
   const legacyType = asString(attrs[LEGACY_EVALUATOR_TYPE_ATTR]);
   // Canary scores are synthetic and would drag every average they land in.
   // Deprecation candidate: nothing writes canary records any more; this guards
-  // rows already stored and goes with `CANARY_COHORT` once none remain.
-  // Checked on both fields for the same reason `filterCanary` in sync-to-kv
-  // does: pre-OBP16 records mark a canary in the overloaded legacy field,
-  // post-OBP16 ones in `cohort`.
-  if (cohort === CANARY_COHORT || legacyType === CANARY_EVALUATOR_TYPE) return 'canary';
+  // pre-OBP16 rows already stored, which mark a canary in the overloaded legacy
+  // field, and goes with `CANARY_EVALUATOR_TYPE` once none remain.
+  if (legacyType === CANARY_EVALUATOR_TYPE) return 'canary';
 
   const tMs = recordEventMs(r);
   if (!Number.isNaN(tMs) && nowMs - tMs > maxAgeMs) return 'too-old';

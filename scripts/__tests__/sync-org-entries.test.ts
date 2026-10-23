@@ -15,7 +15,7 @@ import {
   type OrgComputation,
   type OrgReadBackend,
 } from '../sync-to-kv.js';
-import { CANARY_COHORT } from '../evaluation-constants.js';
+import { CANARY_EVALUATOR_TYPE } from '../evaluation-constants.js';
 import { BACKFILL_COHORT, RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
@@ -270,7 +270,7 @@ describe('computeOrgEntries evaluation truncation', () => {
   const newest = evaluation('newest', '2026-10-07T12:00:00.000Z', { traceId: TRACE_ID });
   const oldest = evaluation('oldest', '2026-09-20T12:00:00.000Z');
   const filler = (count: number): EvaluationResult[] => Array.from({ length: count }, (_, i) =>
-    evaluation(`canary-${i}`, '2026-10-06T12:00:00.000Z', { cohort: CANARY_COHORT }));
+    evaluation(`canary-${i}`, '2026-10-06T12:00:00.000Z', { evaluatorType: CANARY_EVALUATOR_TYPE }));
 
   describe('one row past QUERY_LIMIT', () => {
     let result: OrgComputation;

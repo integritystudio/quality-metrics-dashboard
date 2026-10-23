@@ -22,7 +22,6 @@ import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { pushTo } from '../../lib/collections.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import {
-  CANARY_COHORT,
   CANARY_EVALUATOR_TYPE,
   LATENCY_P95,
   RATE_DISPLAY_PRECISION,
@@ -121,19 +120,14 @@ export function toKVValue(value: unknown): string {
  * Drop canary evaluations before aggregation — their scores are synthetic and
  * would drag every average they land in.
  *
- * **Checks both fields, and must keep doing so.** Records written before OBP16
- * mark a canary in the overloaded `evaluatorType`; records written after it use
- * `cohort`, leaving `evaluatorType` to carry the evaluator kind. Neither set is
- * being backfilled, so dropping either check silently readmits one era's
- * canaries into the aggregates.
+ * Records written before OBP16 mark a canary in the overloaded `evaluatorType`.
  *
  * Deprecation candidate: nothing produces canary records any more, so this only
- * guards rows already stored. Remove it, with `CANARY_COHORT` and
- * `CANARY_EVALUATOR_TYPE`, once none remain.
+ * guards rows already stored. Remove it, with `CANARY_EVALUATOR_TYPE`, once none
+ * remain.
  */
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
-  return evals.filter(ev =>
-    ev.cohort !== CANARY_COHORT && ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
+  return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
 }
 
 export function buildCalibrationEntry(

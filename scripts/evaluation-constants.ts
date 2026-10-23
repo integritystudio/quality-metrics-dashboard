@@ -21,4 +21,4 @@ export const TELEMETRY_DIR = process.env.TELEMETRY_DIR || join(HOME, '.claude-hi
  */
 export const CALIBRATION_STATE_DIR = TELEMETRY_DIR;
 
-export { CANARY_COHORT, CANARY_EVALUATOR_TYPE } from '../src/api/api-constants.js';
+export { CANARY_EVALUATOR_TYPE } from '../src/api/api-constants.js';
