@@ -1,8 +1,6 @@
 /** Keys for the already-judged set, and the records that count as this script's. */
 
 import { LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
-import type { EvaluationCohort } from '../../src/lib/core/shared-schemas.js';
-import { CANARY_COHORT } from './evaluation-constants.js';
 import { EVALUATION_ATTRS, LEGACY_EVALUATOR_TYPE_ATTR, NORMAL_COHORT, SEED_COHORT, BACKFILL_COHORT, SEED_EVALUATOR_TYPE, TRACE_BACKFILL_EVALUATOR_TYPE } from './eval-record.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
 
@@ -21,8 +19,8 @@ export function turnKeyOf(at: string | number): string {
  * 2026-10-01). The LLM paths check the suffixed key, so a turn Haiku judged is
  * still judged by a different model; the seed path checks the plain key, so it
  * never seeds a turn any judge scored. Rows written before the model was
- * recorded are all Haiku 4.5, so a judge row with no model and no synthetic
- * cohort counts as one.
+ * recorded are all Haiku 4.5, so a row with no model and no cohort, or a
+ * `normal` or `backfill` one, counts as one.
  */
 export function turnScoreKey(sessionId: string, evaluationName: string, turnKey: string): string {
   return `${sessionId}:${evaluationName}:${turnKey}`;
@@ -32,16 +30,14 @@ export function judgedByKey(sessionId: string, evaluationName: string, turnKey: 
   return `${turnScoreKey(sessionId, evaluationName, turnKey)}@${judgeModel}`;
 }
 
-export const SYNTHETIC_COHORTS: ReadonlySet<string> = new Set<EvaluationCohort>([SEED_COHORT, CANARY_COHORT]);
-
-/** Add both keys for one stored judge row. No model on a non-synthetic row means a pre-2026-09-30 Haiku row. */
+/** Add both keys for one stored judge row. No model on a normal, backfill or cohort-less row means a pre-2026-09-30 Haiku row. */
 export function addJudgedKeys(
   keys: Set<string>,
   row: { sessionId: string; evaluationName: string; turnKey: string; judgeModel?: string | undefined; cohort?: string | undefined },
 ): void {
   keys.add(turnScoreKey(row.sessionId, row.evaluationName, row.turnKey));
-  const synthetic = row.cohort !== undefined && SYNTHETIC_COHORTS.has(row.cohort);
-  const judgeModel = row.judgeModel ?? (synthetic ? undefined : HAIKU_MODEL);
+  const mayBeLegacyHaiku = row.cohort === undefined || row.cohort === NORMAL_COHORT || row.cohort === BACKFILL_COHORT;
+  const judgeModel = row.judgeModel ?? (mayBeLegacyHaiku ? HAIKU_MODEL : undefined);
   if (judgeModel) keys.add(judgedByKey(row.sessionId, row.evaluationName, row.turnKey, judgeModel));
 }
 
