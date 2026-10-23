@@ -47,8 +47,6 @@ export const NORMAL_COHORT: EvaluationCohort = 'normal';
 
 export const SEED_COHORT: EvaluationCohort = 'seed';
 
-export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
-
 /**
  * On-disk attribute keys. **Every key the hooks also write must stay identical
  * to their `EVALUATION_ATTRS` (`hooks/lib/evaluation-attrs.ts`, re-exported by

@@ -16,7 +16,8 @@ import {
   type OrgReadBackend,
 } from '../sync-to-kv.js';
 import { CANARY_COHORT } from '../evaluation-constants.js';
-import { BACKFILL_COHORT, RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
+import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
+import { evaluationCohortSchema } from '../../../src/lib/core/shared-schemas.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -220,7 +221,7 @@ describe('computeOrgEntries synthetic cohorts (BACKFILL-COHORT-COUNTS-AS-EVIDENC
   const dashboardHashes = (result: OrgComputation) =>
     new Map(result.allEntries.filter(e => e.key.startsWith('dashboard:')).map(e => [e.key, e.hashBasis]));
 
-  it.each([BACKFILL_COHORT, SEED_COHORT])('leaves every dashboard key unchanged when a %s row is added', async (cohort) => {
+  it.each([evaluationCohortSchema.enum.backfill, SEED_COHORT])('leaves every dashboard key unchanged when a %s row is added', async (cohort) => {
     const synthetic = evaluation(cohort, '2026-10-07T13:00:00.000Z', { scoreValue: 0, cohort });
     const baseline = await compute(rows);
     const withSynthetic = await compute([synthetic, ...rows]);
