@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
 import {
+  createConsolidatedProvider,
   selectCriteria,
   buildConsolidatedSchema,
   buildConsolidatedPrompt,
@@ -23,14 +24,14 @@ import {
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
   TOOL_CORRECTNESS_CRITERIA,
-  TOOL_SELECTION_CRITERIA,
-  TOOL_ARGUMENTS_CRITERIA,
-  TOOL_INTEGRATION_CRITERIA,
   HAIKU_MODEL,
 } from '../judge-criteria.js';
 import { PRODUCER } from '../eval-record.js';
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
+import { MAX_TOKENS_STOP_REASON } from '../judge-anthropic-client.js';
+import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
+import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 import { RELEVANCE_CRITERIA, COHERENCE_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { G_EVAL_MAX_SCORE, G_EVAL_MIN_SCORE } from '../../../src/lib/judge/llm-judge-constants.js';
 import { judgedKeys, makeTurn as makeBaseTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
@@ -137,9 +138,8 @@ describe('selectCriteria', () => {
 
   it('skips the tool sub-criteria when tool_correctness already exists, as evaluateTurn does', () => {
     const turn = toolTurn();
-    const subCriteria = [TOOL_SELECTION_CRITERIA.name, TOOL_ARGUMENTS_CRITERIA.name, TOOL_INTEGRATION_CRITERIA.name];
     const selection = selectCriteria(turn, judgedKeys(turn, [TOOL_CORRECTNESS_CRITERIA.name]));
-    expect(names(selection).filter(n => subCriteria.includes(n))).toEqual([]);
+    expect(names(selection)).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME]);
   });
 
   it('selects nothing when every key exists', () => {
@@ -155,11 +155,10 @@ describe('selectCriteria', () => {
     expect(selection.recordNames).toEqual(TOOL_TURN_RECORDS);
   });
 
-  it('under directHallucination, drops faithfulness from the schema when only hallucination is needed', () => {
+  it('under directHallucination, leaves an already-judged faithfulness out of the schema and keeps hallucination', () => {
     const turn = toolTurn();
     const selection = selectCriteria(turn, judgedKeys(turn, [FAITHFULNESS_EVAL_NAME]), DIRECT);
-    expect(names(selection)).not.toContain(FAITHFULNESS_EVAL_NAME);
-    expect(names(selection)).toContain(HALLUCINATION_EVAL_NAME);
+    expect(names(selection)).toEqual(TOOL_TURN_RECORDS.filter(n => n !== FAITHFULNESS_EVAL_NAME));
   });
 });
 
@@ -388,5 +387,54 @@ describe('evaluateTurnConsolidated', () => {
     await expect(cachedEvaluationSteps(provider, RELEVANCE_CRITERIA, cache)).rejects.toThrow('Connection error.');
     expect(cache.has(RELEVANCE_CRITERIA.name)).toBe(false);
     await expect(cachedEvaluationSteps(provider, RELEVANCE_CRITERIA, cache)).resolves.toContain('1. ');
+  });
+});
+
+describe('createConsolidatedProvider', () => {
+  // Placeholder, not a credential: the local server only records it.
+  const API_KEY = 'test-key-value';
+  const END_TURN_STOP_REASON = 'end_turn';
+  const REPLY_TEXT = '{"relevance":{}}';
+  let server: RecordingServer;
+
+  beforeAll(async () => {
+    server = await startRecordingServer({ tls: true });
+    vi.stubEnv('ANTHROPIC_BASE_URL', server.url);
+  });
+
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    await server.close();
+  });
+
+  function answerWith(stopReason: string): void {
+    server.respondWith(() => ({
+      status: HttpStatus.Ok,
+      headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
+      body: JSON.stringify({
+        id: 'msg_test',
+        type: 'message',
+        role: 'assistant',
+        model: HAIKU_MODEL,
+        content: [{ type: 'text', text: REPLY_TEXT }],
+        stop_reason: stopReason,
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    }));
+  }
+
+  it('returns the reply text when the response ends normally', async () => {
+    answerWith(END_TURN_STOP_REASON);
+    const provider = await createConsolidatedProvider({ apiKey: API_KEY });
+
+    await expect(provider.generate('prompt')).resolves.toMatchObject({ text: REPLY_TEXT });
+  });
+
+  it('rejects a response cut off at max_tokens rather than parsing a partial verdict', async () => {
+    answerWith(MAX_TOKENS_STOP_REASON);
+    const provider = await createConsolidatedProvider({ apiKey: API_KEY });
+
+    await expect(provider.generate('prompt')).rejects.toThrow(`truncated at ${MAX_TOKENS_STOP_REASON}`);
   });
 });

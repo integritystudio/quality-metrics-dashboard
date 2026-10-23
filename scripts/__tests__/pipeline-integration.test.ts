@@ -45,8 +45,9 @@ describe('pipeline contract: derive → OTel', () => {
 
     const wire = overTheWire(derived);
 
-    expect(wire.timestamp).toBe(derived.timestamp);
-    expect(turnKeyOf(wire.timestamp)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+    // The scored span's start, SPAN_START_SEC.
+    expect(wire.timestamp).toBe('2024-02-08T13:46:40.000Z');
+    expect(turnKeyOf(wire.timestamp)).toBe('2024-02-08T13:46:40');
     expect(wire.attributes).toMatchObject({
       [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'task_completion',
       [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1,

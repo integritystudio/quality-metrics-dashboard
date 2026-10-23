@@ -75,6 +75,16 @@ const TASK_SESSIONS = [
     taskSpan('TaskUpdate'),
     taskSpan('TaskUpdate'),
   ], 1, '1 tasks, 2 updates (ratio fallback)'],
+  ['spans written before task statuses, with half the expected updates', [
+    taskSpan('TaskCreate'),
+    taskSpan('TaskUpdate'),
+  ], 0.5, '1 tasks, 1 updates (ratio fallback)'],
+  ['spans written before task statuses, capped at 1 past the expected updates', [
+    taskSpan('TaskCreate'),
+    taskSpan('TaskUpdate'),
+    taskSpan('TaskUpdate'),
+    taskSpan('TaskUpdate'),
+  ], 1, '1 tasks, 3 updates (ratio fallback)'],
 ] as const;
 
 /** [case, spans] that leave no session to score. */
@@ -264,7 +274,8 @@ describe('deriveAll', () => {
   });
 
   it('gives the same records when run twice in one process', () => {
-    const loaded = { spans: [completedTask], accounts: new Map() };
+    // Agent counts would double ("2/2" → "4/4") if one run's state leaked into the next.
+    const loaded = { spans: handoffSpans(), accounts: new Map() };
 
     expect(deriveAll(loaded)).toEqual(deriveAll(loaded));
   });
@@ -491,7 +502,10 @@ describe('deriveAll over the renamed agent hook spans', () => {
     const fromWriteOrder = sessionRecords([p1, p2, f2, f1]);
 
     expect(fromWriteOrder).toEqual(sessionRecords([p1, f1, p2, f2]));
-    expect(fromWriteOrder.filter(r => r.spanId !== 'span-f2')).toEqual([]);
+    expect(fromWriteOrder.map(r => [r.evaluationName, r.spanId])).toEqual([
+      ['task_completion', 'span-f2'],
+      ['handoff_correctness', 'span-f2'],
+    ]);
   });
 
   it('measures the finalize hook latency under the agent type', () => {
@@ -534,7 +548,7 @@ describe('detectInputDrift', () => {
   const DAY_START_SEC = 1_790_553_600; // 2026-09-28T00:00:00Z
   const DAY = '2026-09-28';
   const TOOL_SPANS_PER_DAY = 25;
-  const TOO_FEW_TOOL_SPANS = 5;
+  const MIN_TOOL_SPANS_TO_JUDGE = 20;
   const AGENT_FINALIZE_OFFSET_SEC = 10;
   const SYNTHETIC_INVOKE_OFFSET_SEC = 5;
 
@@ -613,14 +627,20 @@ describe('detectInputDrift', () => {
   });
 
   it('tolerates hooks that failed before recording, up to half the day', () => {
-    const half = TOOL_SPANS_PER_DAY - 1;
-    const spans = [...toolSpans(half, { [TOOL_ATTRIBUTES.SUCCESS]: true }), ...toolSpans(half, {}, half)];
+    const eachSide = TOOL_SPANS_PER_DAY - 1;
+    const spans = [...toolSpans(eachSide, { [TOOL_ATTRIBUTES.SUCCESS]: true }), ...toolSpans(eachSide, {}, eachSide)];
 
     expect(detectInputDrift(spans, null)).toEqual([]);
   });
 
-  it('ignores a day with too few tool spans to judge', () => {
-    expect(detectInputDrift(toolSpans(TOO_FEW_TOOL_SPANS, {}), null)).toEqual([]);
+  it('ignores a day with one tool span fewer than it needs to judge', () => {
+    expect(detectInputDrift(toolSpans(MIN_TOOL_SPANS_TO_JUDGE - 1, {}), null)).toEqual([]);
+  });
+
+  it('judges a day that has exactly the tool spans it needs', () => {
+    expect(detectInputDrift(toolSpans(MIN_TOOL_SPANS_TO_JUDGE, {}), null)).toEqual([
+      expect.stringMatching(new RegExp(`^${DAY}: ${MIN_TOOL_SPANS_TO_JUDGE} of ${MIN_TOOL_SPANS_TO_JUDGE} tool spans carry no success flag`)),
+    ]);
   });
 
   it('checks only the days in scope', () => {

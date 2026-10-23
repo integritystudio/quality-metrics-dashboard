@@ -70,11 +70,12 @@ describe('countComplements', () => {
   it('counts turns whose faithfulness and hallucination sum to 1, over turns that have both', () => {
     const count = countComplements([
       { [FAITHFULNESS_EVAL_NAME]: 0.75, [HALLUCINATION_EVAL_NAME]: 0.25 },
+      { [FAITHFULNESS_EVAL_NAME]: 0.5, [HALLUCINATION_EVAL_NAME]: 0.5 },
       { [FAITHFULNESS_EVAL_NAME]: 0.25, [HALLUCINATION_EVAL_NAME]: 0 },
       { [FAITHFULNESS_EVAL_NAME]: 1 },
       {},
     ]);
-    expect(count).toEqual({ paired: 2, sumToOne: 1 });
+    expect(count).toEqual({ paired: 3, sumToOne: 2 });
   });
 });
 

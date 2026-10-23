@@ -11,6 +11,7 @@ import {
   fitContextForJudge,
   CONTEXT_TRUNCATION_MARKER,
   MAX_TOOL_CONTEXT_ITEMS,
+  MAX_TOOL_RESULTS_PER_TURN,
   MAX_TURN_TEXT_LEN,
   transcriptPathOf,
   type Turn,
@@ -68,7 +69,7 @@ import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
 import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
@@ -207,6 +208,14 @@ describe('extractTurns', () => {
     expect(turns.map(t => t.toolResults)).toEqual([['tool output from turn 1'], []]);
   });
 
+  it('keeps only the latest MAX_TOOL_RESULTS_PER_TURN tool results, dropping the oldest', async () => {
+    const outputs = Array.from({ length: MAX_TOOL_RESULTS_PER_TURN + 1 }, (_, i) => `tool output ${i}`);
+
+    const [turn] = await extract(...outputs.map(output => toolResult(output)), user('Question'), assistant('Answer'));
+
+    expect(defined(turn).toolResults).toEqual(outputs.slice(1));
+  });
+
   it('skips progress and file-history-snapshot entries', async () => {
     const turns = await extract({ type: 'progress', message: null }, { type: 'file-history-snapshot', files: {} }, user('Hello'), assistant('Hi'));
 
@@ -342,6 +351,12 @@ describe('seedEvaluations', () => {
     expect(new Set(sample.map(ev => ev.cohort))).toEqual(new Set(['seed', 'canary']));
     expect(sample.filter(ev => ev.evaluator !== PRODUCER || ev.evaluatorKind !== 'rule')).toEqual([]);
     expect(sample.filter(ev => ev.judgeModel !== undefined)).toEqual([]);
+  });
+
+  it('keeps canaries a small minority of seeded records', () => {
+    const MAX_CANARY_SHARE = 0.1;
+
+    expect(sample.filter(ev => ev.cohort === 'canary').length / sample.length).toBeLessThan(MAX_CANARY_SHARE);
   });
 
   it('keeps seed-cohort scores inside their bands', () => {
@@ -710,10 +725,14 @@ describe('summarizeJudgeRun', () => {
     ['a wall-clock overrun that abandoned every evaluation', { succeeded: 0, failed: 100, byClass: { 'wall-clock': 100 } }, JUDGE_EXIT_BATCH_WALL_CLOCK, []],
     ['91% failing (the 09-22 collapse)', { succeeded: 46, failed: 490, byClass: { 'schema-rejection': 490 } }, JUDGE_EXIT_HIGH_FAILURE_RATE, ['HIGH FAILURE RATE', '490 of 536']],
     ['49.7% failing', { succeeded: 100, failed: 99 }, 0, []],
+    ['exactly 50% failing, which is not above half', { succeeded: 100, failed: 100 }, 0, []],
     ['50.25% failing', { succeeded: 100, failed: 101 }, JUDGE_EXIT_HIGH_FAILURE_RATE, []],
     ['a 40-point fall in success rate with only 40% failing', { succeeded: 300, failed: 200, previous: PREVIOUS_FULL_RUN }, JUDGE_EXIT_HIGH_FAILURE_RATE,
       ['SUCCESS RATE DROP', '60.0% of 500', '100.0% of 536']],
     ['a 21.8-point fall', { succeeded: 419, failed: 117, previous: PREVIOUS_FULL_RUN }, 0, []],
+    ['exactly a 25-point fall, which is not above the threshold', { succeeded: 75, failed: 25, previous: { succeeded: 100, attempted: 100 } }, 0, []],
+    ['a fall measured over exactly the minimum attempts on both runs', { succeeded: 30, failed: 20, previous: { succeeded: 50, attempted: 50 } }, JUDGE_EXIT_HIGH_FAILURE_RATE,
+      ['SUCCESS RATE DROP']],
     ['a smaller run with no failures, however far its count falls', { succeeded: 60, previous: PREVIOUS_FULL_RUN }, 0, []],
     ['a fall measured over too few attempts this run', { succeeded: 6, failed: 4, previous: PREVIOUS_FULL_RUN }, 0, []],
     ['a fall against too small a previous run', { succeeded: 300, failed: 200, previous: { succeeded: 10, attempted: 10 } }, 0, []],
@@ -726,10 +745,6 @@ describe('summarizeJudgeRun', () => {
 
     expect(summary.exitCode).toBe(exitCode);
     expect(fragments.filter(fragment => !summary.line.includes(fragment))).toEqual([]);
-  });
-
-  it('treats a wall-clock overrun as soft, so populate carries on to sync', () => {
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
   });
 
   it('carries the usage totals, both cost figures and the key source name on the line', () => {
@@ -1009,6 +1024,7 @@ describe('acquireLock', () => {
   it.each([
     ['an exited process', () => String(exitedPid())],
     ['a malformed pid', () => 'not-a-pid'],
+    ['pid 0, which would signal this process group', () => '0'],
     ['an empty file, which no current writer leaves behind', () => ''],
   ])('reclaims a lock left by %s', (_label, previousOwner) => {
     writeFileSync(lockFile(), previousOwner());
