@@ -246,6 +246,10 @@ export const RULE_EVALUATOR_TYPE = 'rule';
 /**
  * Canary evaluations carry synthetic scores. Records written before OBP16 mark
  * one in the overloaded `evaluatorType`; records after it use `cohort`.
+ *
+ * Deprecation candidate: nothing produces canary records any more. These stay
+ * only so the read-side filters keep excluding rows already stored in D1, KV
+ * and local JSONL. Remove them, and those filters, once none remain.
  */
 export const CANARY_EVALUATOR_TYPE = 'canary';
 export const CANARY_COHORT = 'canary';

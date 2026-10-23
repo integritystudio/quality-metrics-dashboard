@@ -40,7 +40,7 @@ import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/valid
 import type { EvaluatorKind, EvaluationCohort } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
-import { TELEMETRY_DIR, CANARY_COHORT } from './evaluation-constants.js';
+import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, rejectRemovedSourceFlags } from './pipeline-stages.js';
 import { CliArgError, exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import {
@@ -128,7 +128,7 @@ const DRY_RUN_TOP_SESSIONS = 10;
 const MAX_TURN_LIMIT = 10_000;
 
 /**
- * `kind` and `cohort` are separate fields on purpose (OBP16), so a hashed canary
+ * `kind` and `cohort` are separate fields on purpose (OBP16), so a hashed seed
  * score can never be written as a judged one. `judgeModel` is omitted for any
  * score no model produced.
  */
@@ -241,8 +241,6 @@ export function createLLMJudge(llm: LLMProvider, batch = false): LLMJudge {
 
 /** Largest value of the two hash bytes a seeded score is read from. */
 const UINT16_MAX = 0xFFFF;
-/** Share of turns `isCanaryTurn` marks for intentionally low scores. */
-const CANARY_TURN_RATE = 0.02;
 
 export function hashToScore(input: string, min: number, max: number): number {
   const hash = createHash('sha256').update(input).digest();
@@ -250,14 +248,8 @@ export function hashToScore(input: string, min: number, max: number): number {
   return normalizeScore(min + value * (max - min));
 }
 
-/** Deterministic canary check — ~2% of turns get intentionally low scores */
-export function isCanaryTurn(sessionId: string, turnKey: string): boolean {
-  return hashToScore(`canary:${sessionId}:${turnKey}`, 0, 1) < CANARY_TURN_RATE;
-}
-
 export type SeedResult = {
   evals: EvalRecord[];
-  canaryCount: number;
 }
 
 type ScoreRange = { readonly min: number; readonly max: number };
@@ -267,8 +259,7 @@ type SeedMetric = {
   label: string;
   /** Prefix of the hashed input, so each metric draws its own score. */
   hashKey: string;
-  normal: ScoreRange;
-  canary: ScoreRange;
+  range: ScoreRange;
   /** Seeded only for turns with tool results. */
   needsTools?: boolean;
 }
@@ -276,54 +267,51 @@ type SeedMetric = {
 /** Hallucination's draw; faithfulness is seeded as its complement. */
 const SEED_HALLUCINATION: SeedMetric = {
   evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination', hashKey: 'hal',
-  normal: { min: 0.0, max: 0.09 }, canary: { min: 0.50, max: 0.80 },
+  range: { min: 0.0, max: 0.09 },
 };
 
 /** In record order. */
 const SEED_METRICS: readonly SeedMetric[] = [
   {
     evalName: RELEVANCE_EVAL_NAME, label: 'Relevance', hashKey: 'rel',
-    normal: { min: 0.70, max: 1.0 }, canary: { min: 0.10, max: 0.35 },
+    range: { min: 0.70, max: 1.0 },
   },
   {
     evalName: COHERENCE_EVAL_NAME, label: 'Coherence', hashKey: 'coh',
-    normal: { min: 0.75, max: 1.0 }, canary: { min: 0.15, max: 0.40 },
+    range: { min: 0.75, max: 1.0 },
   },
   { ...SEED_HALLUCINATION, evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
   SEED_HALLUCINATION,
   {
     evalName: TOOL_CORRECTNESS_CRITERIA.name, label: 'Tool correctness', hashKey: 'tc',
-    normal: { min: 0.75, max: 1.0 }, canary: { min: 0.10, max: 0.30 }, needsTools: true,
+    range: { min: 0.75, max: 1.0 }, needsTools: true,
   },
 ];
 
 export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
   const evals: EvalRecord[] = [];
-  let canaryCount = 0;
 
   for (const turn of turns) {
     const turnKey = turnKeyOf(turn.timestamp);
     const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
-    const canary = isCanaryTurn(turn.sessionId, turnKey);
-    if (canary) canaryCount++;
 
     for (const metric of SEED_METRICS) {
       if (metric.needsTools && turn.toolResults.length === 0) continue;
       if (existingKeys.has(turnScoreKey(turn.sessionId, metric.evalName, turnKey))) continue;
-      const { min, max } = canary ? metric.canary : metric.normal;
+      const { min, max } = metric.range;
       const drawn = hashToScore(`${metric.hashKey}:${turn.sessionId}:${turnKey}`, min, max);
       const score = metric.evalName === FAITHFULNESS_EVAL_NAME ? normalizeScore(1 - drawn) : drawn;
       evals.push(createEvalRecord(turn, {
         evaluationName: metric.evalName,
         scoreValue: score,
-        explanation: `${metric.label} (${canary ? 'canary' : 'seeded'}) for session ${sessionPreview}`,
+        explanation: `${metric.label} (seeded) for session ${sessionPreview}`,
         kind: SYNTHETIC_EVALUATOR_KIND,
-        cohort: canary ? CANARY_COHORT : SEED_COHORT,
+        cohort: SEED_COHORT,
       }));
     }
   }
 
-  return { evals, canaryCount };
+  return { evals };
 }
 
 export type EvaluateTurnOptions = {

@@ -126,6 +126,10 @@ export function toKVValue(value: unknown): string {
  * `cohort`, leaving `evaluatorType` to carry the evaluator kind. Neither set is
  * being backfilled, so dropping either check silently readmits one era's
  * canaries into the aggregates.
+ *
+ * Deprecation candidate: nothing produces canary records any more, so this only
+ * guards rows already stored. Remove it, with `CANARY_COHORT` and
+ * `CANARY_EVALUATOR_TYPE`, once none remain.
  */
 function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
   return evals.filter(ev =>

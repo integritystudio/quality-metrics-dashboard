@@ -300,7 +300,6 @@ describe('hashToScore', () => {
 });
 
 describe('seedEvaluations', () => {
-  /** Enough turns to hit the ~2% canary rate several times. */
   const SAMPLE_TURNS = 200;
   const sample = seedEvaluations(turnSeries(SAMPLE_TURNS, { toolResults: ['ctx'] }), new Set()).evals;
   const scoresOf = (cohort: string, name: string): number[] =>
@@ -336,10 +335,9 @@ describe('seedEvaluations', () => {
     expect(seedEvaluations([turn], new Set())).toEqual(seedEvaluations([turn], new Set()));
   });
 
-  // OBP16: both cohorts hash, so neither may claim an LLM produced the score;
-  // the cohort is what tells them apart.
-  it('marks every record seed or canary, rule-scored, with no judge model', () => {
-    expect(new Set(sample.map(ev => ev.cohort))).toEqual(new Set(['seed', 'canary']));
+  // OBP16: a seed score is hashed, so it may not claim an LLM produced it.
+  it('marks every record seed, rule-scored, with no judge model', () => {
+    expect(new Set(sample.map(ev => ev.cohort))).toEqual(new Set(['seed']));
     expect(sample.filter(ev => ev.evaluator !== PRODUCER || ev.evaluatorKind !== 'rule')).toEqual([]);
     expect(sample.filter(ev => ev.judgeModel !== undefined)).toEqual([]);
   });
@@ -359,18 +357,6 @@ describe('seedEvaluations', () => {
 
     expect(bands.filter(([name]) => scoresOf('seed', name).length === 0)).toEqual([]);
     expect(outOfBand).toEqual([]);
-  });
-
-  it('gives canary turns intentionally low scores', () => {
-    const CANARY_RELEVANCE_MAX = 0.35;
-    const CANARY_HALLUCINATION_MIN = 0.50;
-    const relevance = scoresOf('canary', RELEVANCE_EVAL_NAME);
-    const hallucination = scoresOf('canary', HALLUCINATION_EVAL_NAME);
-
-    expect(relevance.length).toBeGreaterThan(0);
-    expect(hallucination.length).toBeGreaterThan(0);
-    expect(relevance.filter(score => !(score <= CANARY_RELEVANCE_MAX))).toEqual([]);
-    expect(hallucination.filter(score => !(score >= CANARY_HALLUCINATION_MIN))).toEqual([]);
   });
 });
 

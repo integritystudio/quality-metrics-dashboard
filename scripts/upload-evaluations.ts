@@ -263,6 +263,8 @@ function readCore(
   const cohort = asString(attrs[EVALUATION_ATTRS.COHORT]);
   const legacyType = asString(attrs[LEGACY_EVALUATOR_TYPE_ATTR]);
   // Canary scores are synthetic and would drag every average they land in.
+  // Deprecation candidate: nothing writes canary records any more; this guards
+  // rows already stored and goes with `CANARY_COHORT` once none remain.
   // Checked on both fields for the same reason `filterCanary` in sync-to-kv
   // does: pre-OBP16 records mark a canary in the overloaded legacy field,
   // post-OBP16 ones in `cohort`.
