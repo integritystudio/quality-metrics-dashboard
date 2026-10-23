@@ -22,11 +22,7 @@ export const SCORE_PREVIEW_DECIMALS = 2;
 /** Producer recorded on every record this script writes. */
 export const PRODUCER = 'dashboard:judge-evaluations';
 
-export const SEED_EVALUATOR_TYPE = 'seed';
-
 export const RULE_EVALUATOR_TYPE = _RULE_EVALUATOR_TYPE;
-
-export const TRACE_BACKFILL_EVALUATOR_TYPE = 'trace-backfill';
 
 /**
  * A seeded or canary score is a SHA-256 of the session and turn key mapped into
