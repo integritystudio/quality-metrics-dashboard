@@ -57,12 +57,35 @@ function gradeAsHallucination(grade: number): number {
   return (G_EVAL_MAX_SCORE - grade) / G_EVAL_SCORE_RANGE;
 }
 
-export function compareToLabels(candidate: readonly HallucinationTurn[], labels: readonly HallucinationTurn[]): LabelComparison {
+/** Each labelled turn's reference hallucination score, by `turnKey`. */
+export function hallucinationLabels(labels: readonly HallucinationTurn[]): Map<string, number> {
   const labelByKey = new Map<string, number>();
   for (const turn of labels) {
     const label = turn.reference[HALLUCINATION_EVAL_NAME];
     if (label !== undefined) labelByKey.set(turnKey(turn), label);
   }
+  return labelByKey;
+}
+
+/** Scores by `turnKey` against the labels, over the turns both sides have. */
+export function compareScores(scores: ReadonlyMap<string, number>, labelByKey: ReadonlyMap<string, number>): ConfigurationComparison {
+  const pairs: Array<readonly [number, number]> = [];
+  for (const [key, score] of scores) {
+    const label = labelByKey.get(key);
+    if (label !== undefined) pairs.push([label, score]);
+  }
+  const flagged = pairs.filter(([label]) => isFlagged(label));
+  const clean = pairs.filter(([label]) => !isFlagged(label));
+  return {
+    paired: pairs.length,
+    mae: meanAbsGradeSteps(pairs),
+    recall: { hits: flagged.filter(([, score]) => isFlagged(score)).length, of: flagged.length },
+    specificity: { hits: clean.filter(([, score]) => !isFlagged(score)).length, of: clean.length },
+  };
+}
+
+export function compareToLabels(candidate: readonly HallucinationTurn[], labels: readonly HallucinationTurn[]): LabelComparison {
+  const labelByKey = hallucinationLabels(labels);
   const labelValues = [...labelByKey.values()];
   const constantMaes = G_EVAL_VALID_SCORES.map(grade => ({
     grade,
@@ -74,20 +97,12 @@ export function compareToLabels(candidate: readonly HallucinationTurn[], labels:
   );
 
   const compare = (configuration: Configuration): ConfigurationComparison => {
-    const pairs: Array<readonly [number, number]> = [];
+    const scores = new Map<string, number>();
     for (const turn of candidate) {
-      const label = labelByKey.get(turnKey(turn));
       const score = turn[configuration][HALLUCINATION_EVAL_NAME];
-      if (label !== undefined && score !== undefined) pairs.push([label, score]);
+      if (score !== undefined) scores.set(turnKey(turn), score);
     }
-    const flagged = pairs.filter(([label]) => isFlagged(label));
-    const clean = pairs.filter(([label]) => !isFlagged(label));
-    return {
-      paired: pairs.length,
-      mae: meanAbsGradeSteps(pairs),
-      recall: { hits: flagged.filter(([, score]) => isFlagged(score)).length, of: flagged.length },
-      specificity: { hits: clean.filter(([, score]) => !isFlagged(score)).length, of: clean.length },
-    };
+    return compareScores(scores, labelByKey);
   };
 
   return {
