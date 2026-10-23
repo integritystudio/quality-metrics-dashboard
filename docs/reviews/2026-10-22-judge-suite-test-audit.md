@@ -52,7 +52,7 @@ One mutant at a time, run against the seven files only; the source restored afte
 `judge-dedup`, whose live code is covered by `judge-cloud-source.test.ts`.
 
 1. Survives the seven; a test outside them kills it (`judge-consolidated-batch.test.ts`, `judge-cloud-source.test.ts`).
-2. Dead code: `isThisScriptsRecord` has had no caller since `88e69e4`.
+2. Dead code: `isThisScriptsRecord` had no caller since `88e69e4`, and is now deleted.
 3. Inside `main()` (the turn-limit clamp, the `canSpend` closure); needs a pure helper extracted to test.
 4. Equivalent: the handoff score is `hasError ? 0 : 1`, so nothing reaches 0.5.
 5. `chunkKvPairs` belongs to `kv-bulk.test.ts`, which has no row at exactly `maxBytes`.
@@ -68,7 +68,7 @@ One mutant at a time, run against the seven files only; the source restored afte
 | acquireLock › reclaims a lock left by … | rewrite — no pid `0` row | Landed |
 | extractTurns | rewrite — the 20-result cap was never exercised | Landed (keeps-the-latest test) |
 | seedEvaluations | rewrite — canary share never bounded | Landed (minority test) |
-| fitContextForJudge › keeps at most the item limit | rewrite — asserts only length | Remaining; blocked on the context-order finding below |
+| fitContextForJudge › keeps at most the item limit | rewrite — asserts only length | Landed with the context-order fix below |
 | summarizeJudgeRun › carries the usage totals … | rewrite — `toBeCloseTo` where exact may hold | Remaining |
 | estimateJudgeRun › counts two evals … four for one with tools | rewrite — `inputTokens > 0` cannot fail usefully | Remaining |
 | estimateJudgeRun › list rates, no discount by default | rewrite — two behaviours; `toBeCloseTo` | Remaining |
@@ -147,5 +147,7 @@ duplicate) and dropping the `cache.has` assertion (the cache is a caller-supplie
 
 - **The judge never sees a turn's newest tool results.** `extractTurns` keeps the last
   `MAX_TOOL_RESULTS_PER_TURN` (20); `fitContextForJudge` then keeps the first `MAX_TOOL_CONTEXT_ITEMS`
-  (10) of those, so the 10 most recent are dropped. Filed as DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS.
-- **`isThisScriptsRecord` (`judge-dedup.ts`) is dead** since `88e69e4` dropped the local source.
+  (10) of those, so the 10 most recent are dropped. Fixed as DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS:
+  `fitContextForJudge` now keeps the latest.
+- **`isThisScriptsRecord` (`judge-dedup.ts`) was dead** since `88e69e4` dropped the local source.
+  Deleted, with the two `eval-record.ts` constants only it read.

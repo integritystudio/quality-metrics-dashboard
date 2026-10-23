@@ -651,10 +651,10 @@ describe('fitContextForJudge', () => {
     expect(defined(fitted).endsWith(CONTEXT_TRUNCATION_MARKER)).toBe(true);
   });
 
-  it('keeps at most the tool-context item limit', () => {
+  it('keeps the latest MAX_TOOL_CONTEXT_ITEMS tool results, dropping the oldest', () => {
     const many = Array.from({ length: MAX_TOOL_CONTEXT_ITEMS + 1 }, (_, i) => `result ${i}`);
 
-    expect(fitContextForJudge(many)).toHaveLength(MAX_TOOL_CONTEXT_ITEMS);
+    expect(fitContextForJudge(many)).toEqual(many.slice(1));
   });
 });
 

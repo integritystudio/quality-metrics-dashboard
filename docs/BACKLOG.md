@@ -9,7 +9,7 @@ Open items from code reviews and deferred work.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | DASH-SYNC-90D-PERIOD | Write the `90d` KV entries and lift the header's 90d data gate | P3 | `'90d'` is a full period in code, but `sync-to-kv` still defaults to `--days=30`, so no `:90d` entry exists and `DATA_GATED_PERIOD` hides the button. Split out of DASH-LINT-PARENT-PARITY on 2026-10-21. Source: session 2026-10-18 |
-| DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS | The judge sees a turn's oldest tool results, not its newest | P3 | Found by the judge-suite audit's mutation check. Source: session 2026-10-22 |
+| DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS | The judge sees a turn's oldest tool results, not its newest | Done | Fixed 2026-10-22: `fitContextForJudge` keeps the latest. Found by the judge-suite audit's mutation check. Source: session 2026-10-22 |
 
 **DASH-SYNC-90D-PERIOD.** `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is a full period
 (`PERIOD_KEYS`, `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`,
@@ -43,6 +43,9 @@ recent — usually the ones the reply rests on. Every judge path calls `fitConte
 consolidated, the hallucination probe, and the usage estimate. Decide which end is meant, then make the
 two agree. The `fitContextForJudge` item-limit test asserts only a length until then.
 Acceptance: one end chosen and documented on `fitContextForJudge`, and a test pinning which items survive.
+**Done (2026-10-22).** The latest end: `fitContextForJudge` now takes `slice(-itemLimit)`, matching
+`extractTurns`, and its doc comment says why. The item-limit test asserts the surviving items are the
+newest `MAX_TOOL_CONTEXT_ITEMS`, and it failed on the old `slice(0, itemLimit)`.
 
 ### API client
 
@@ -97,9 +100,8 @@ module under test and confirm at least one of its tests fails.
 32 mutants went from 15 to 25 killed by the seven files, and each survivor is accounted for there.
 The rewrites that let a mutant through or could pass for the wrong reason have landed, and
 `test:scripts` is green (872). **What remains is the review's _Remaining_ rows:**
-- the `it.each` splits and `toBeCloseTo` → `toBe` changes;
-- moving the derive task-completion tests onto `deriveAll`, so the test-only accumulator exports can go;
-- `fitContextForJudge`'s item-limit assertion, which waits on DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS.
+- the `it.each` splits and `toBeCloseTo` → `toBe` changes; and
+- moving the derive task-completion tests onto `deriveAll`, so the test-only accumulator exports can go.
 
 **DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
 entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version

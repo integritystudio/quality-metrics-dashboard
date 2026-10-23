@@ -356,14 +356,15 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
 export const CONTEXT_TRUNCATION_MARKER = '\n…[truncated to fit the judge input cap]';
 
 /**
- * Fit tool results to what `testCaseSchema` accepts: at most the smaller of
- * MAX_TOOL_CONTEXT_ITEMS / MAX_CONTEXT_ITEMS entries, each at most
- * MAX_TEXT_LENGTH characters, so one oversized tool result cannot fail every
- * metric for its turn with "Invalid TestCase … too_big".
+ * Fit tool results to what `testCaseSchema` accepts: the latest
+ * MAX_TOOL_CONTEXT_ITEMS / MAX_CONTEXT_ITEMS entries (whichever is smaller),
+ * each at most MAX_TEXT_LENGTH characters, so one oversized tool result cannot
+ * fail every metric for its turn with "Invalid TestCase … too_big". The latest,
+ * as `extractTurns` keeps: those are what the reply rests on.
  */
 export function fitContextForJudge(toolResults: readonly string[]): string[] {
   const itemLimit = Math.min(MAX_TOOL_CONTEXT_ITEMS, MAX_CONTEXT_ITEMS);
-  return toolResults.slice(0, itemLimit).map(item =>
+  return toolResults.slice(-itemLimit).map(item =>
     item.length <= MAX_TEXT_LENGTH
       ? item
       : item.slice(0, MAX_TEXT_LENGTH - CONTEXT_TRUNCATION_MARKER.length) + CONTEXT_TRUNCATION_MARKER,
