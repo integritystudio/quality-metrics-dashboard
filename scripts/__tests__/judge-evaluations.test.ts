@@ -340,7 +340,7 @@ describe('seedEvaluations', () => {
   // the cohort is what tells them apart.
   it('marks every record seed or canary, rule-scored, with no judge model', () => {
     expect(new Set(sample.map(ev => ev.cohort))).toEqual(new Set(['seed', 'canary']));
-    expect(sample).toEqual(sample.map(() => expect.objectContaining({ evaluator: PRODUCER, evaluatorKind: 'rule' })));
+    expect(sample.filter(ev => ev.evaluator !== PRODUCER || ev.evaluatorKind !== 'rule')).toEqual([]);
     expect(sample.filter(ev => ev.judgeModel !== undefined)).toEqual([]);
   });
 
@@ -514,8 +514,8 @@ describe('evaluateTurn', () => {
   it('judges every criterion for a turn with tool results, as llm-scored normal-cohort records', async () => {
     const evals = await evaluateTurn(judgeOver(createMockLLM()), makeToolTurn(), new Set());
 
-    expect(evals).toEqual(TOOL_TURN_RECORDS.map(evaluationName =>
-      expect.objectContaining({ evaluationName, evaluatorKind: 'llm', cohort: 'normal', judgeModel: HAIKU_MODEL })));
+    expect(evals).toMatchObject(TOOL_TURN_RECORDS.map(evaluationName =>
+      ({ evaluationName, evaluatorKind: 'llm', cohort: 'normal', judgeModel: HAIKU_MODEL })));
   });
 
   it('skips criteria this model already judged', async () => {
@@ -774,7 +774,9 @@ describe('readRunState / writeRunState', () => {
 
     writeRunState(succeeded, attempted, stateFile());
 
-    expect(readRunState(stateFile())).toEqual({ succeeded, attempted, timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
+    const state = readRunState(stateFile());
+    expect(state).toMatchObject({ succeeded, attempted });
+    expect(state?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it('returns undefined for a state file written before attempted was recorded', () => {
@@ -815,9 +817,11 @@ describe('estimateJudgeRun', () => {
   });
 
   it('applies the batch discount to the cost and nothing else', () => {
-    const list = estimateJudgeRun([makeTurn()], false);
+    const { costUsd: listCost, ...listCounts } = estimateJudgeRun([makeTurn()], false);
+    const { costUsd: batchCost, ...batchCounts } = estimateJudgeRun([makeTurn()], true);
 
-    expect(estimateJudgeRun([makeTurn()], true)).toEqual({ ...list, costUsd: expect.closeTo(list.costUsd * BATCH_PRICE_RATIO) });
+    expect(batchCounts).toEqual(listCounts);
+    expect(batchCost).toBeCloseTo(listCost * BATCH_PRICE_RATIO);
   });
 });
 

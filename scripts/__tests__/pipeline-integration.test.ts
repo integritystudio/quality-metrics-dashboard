@@ -50,12 +50,12 @@ describe('pipeline contract: derive → OTel', () => {
     expect(wire.attributes).toMatchObject({
       [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'task_completion',
       [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1,
-      [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: expect.any(String),
       [EVALUATION_ATTRS.PRODUCER]: 'rule',
       [EVALUATION_ATTRS.EVALUATOR_KIND]: 'rule',
       [EVALUATION_ATTRS.COHORT]: 'normal',
       [SESSION_ATTRIBUTES.ID]: SPAN_SESSION,
     });
+    expect(typeof wire.attributes[GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]).toBe('string');
   });
 });
 

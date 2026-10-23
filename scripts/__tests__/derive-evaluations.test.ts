@@ -24,7 +24,6 @@ import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } 
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, TASK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 import { NANOSECONDS_PER_MILLISECOND, NANOSECONDS_PER_SECOND, TIME_MS } from '../../../src/lib/core/units.js';
-import { defined } from '../../src/__tests__/support/defined.js';
 import { makeSpan, SPAN_SESSION, SPAN_START_SEC, taskSpan } from './support/spans.js';
 import { useTempDir } from './support/temp-dir.js';
 import { transcriptMessage, writeJsonl } from './support/transcripts.js';
@@ -124,9 +123,9 @@ describe('deriveEvaluationLatency', () => {
       evaluationName: 'evaluation_latency',
       scoreValue: LATENCY_SECONDS,
       scoreUnit: 'seconds',
-      explanation: expect.stringContaining(String(LATENCY_SECONDS)),
       timestamp: '2024-02-08T13:46:40.000Z',
     });
+    expect(record?.explanation).toContain(String(LATENCY_SECONDS));
   });
 
   it('returns null for a span whose name is not measurable', () => {
@@ -279,15 +278,20 @@ describe('deriveAll', () => {
 // task tracking never fired. Both spellings live in the local files, so each
 // behavior is pinned for both.
 
-/** A post-rename builtin post-tool span, with the hooks' own timing of one call on 2026-09-28. */
+/** The hooks' own timing of one post-tool call on 2026-09-28. */
+const RENAMED_SPAN_TIMING: Pick<TraceSpan, 'startTime' | 'endTime' | 'duration'> = {
+  startTime: [1790553614, 235000000],
+  endTime: [1790553614, 236463666],
+  duration: [0, 1463666],
+};
+
+/** A post-rename builtin post-tool span, shaped like the hooks write it today. */
 function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
   return {
     traceId: 'trace-001',
     spanId: 'span-001',
     name: 'hook:builtin-post-tool',
-    startTime: [1790553614, 235000000],
-    endTime: [1790553614, 236463666],
-    duration: [0, 1463666],
+    ...RENAMED_SPAN_TIMING,
     status: { code: 1 },
     attributes: { [SESSION_ATTRIBUTES.ID]: SPAN_SESSION, [HOOK_ATTRIBUTES.NAME]: 'builtin-post-tool', ...attributes },
   };
@@ -422,7 +426,7 @@ const HANDOFF_OFFSETS_SEC = [0, 10, 20, 30] as const;
 type AgentOutcome = { statusCode?: number; hasError?: boolean };
 
 /** An Agent-tool hook span in one session, shaped like the hooks write it today. */
-function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId: string, startSec: number, outcome: AgentOutcome = {}): TraceSpan {
+function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId: string, startSec: number): TraceSpan {
   return {
     traceId: 'trace-001',
     spanId,
@@ -430,15 +434,23 @@ function agentHookSpan(phase: 'prepare' | 'finalize', agentName: string, spanId:
     startTime: [startSec, 0],
     endTime: [startSec, NANOSECONDS_PER_MILLISECOND],
     duration: [0, NANOSECONDS_PER_MILLISECOND],
-    status: { code: outcome.statusCode ?? OTEL_STATUS_OK },
+    status: { code: OTEL_STATUS_OK },
     attributes: {
       [SESSION_ATTRIBUTES.ID]: 'sess-agents',
       [GENAI_CORE_ATTRIBUTES.OPERATION_NAME]: 'invoke_agent',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: agentName,
       [AGENT_ATTRIBUTES.TYPE]: agentName,
       [HOOK_ATTRIBUTES.NAME]: `agent.operation.${phase}`,
-      ...(outcome.hasError !== undefined && { [AGENT_ATTRIBUTES.HAS_ERROR]: outcome.hasError }),
     },
+  };
+}
+
+/** `span` with the agent's error flag and the hook's status set as `outcome` says. */
+function withOutcome(span: TraceSpan, { statusCode, hasError }: AgentOutcome): TraceSpan {
+  return {
+    ...span,
+    status: { code: statusCode ?? OTEL_STATUS_OK },
+    attributes: { ...span.attributes, ...(hasError !== undefined && { [AGENT_ATTRIBUTES.HAS_ERROR]: hasError }) },
   };
 }
 
@@ -447,9 +459,9 @@ function handoffSpans(sender: AgentOutcome = {}, receiver: AgentOutcome = {}): T
   const [prepareFirst, finalizeFirst, prepareSecond, finalizeSecond] = HANDOFF_OFFSETS_SEC.map(offset => AGENTS_START_SEC + offset) as [number, number, number, number];
   return [
     agentHookSpan('prepare', 'Explore', 'span-p1', prepareFirst),
-    agentHookSpan('finalize', 'Explore', 'span-f1', finalizeFirst, sender),
+    withOutcome(agentHookSpan('finalize', 'Explore', 'span-f1', finalizeFirst), sender),
     agentHookSpan('prepare', 'code-reviewer', 'span-p2', prepareSecond),
-    agentHookSpan('finalize', 'code-reviewer', 'span-f2', finalizeSecond, receiver),
+    withOutcome(agentHookSpan('finalize', 'code-reviewer', 'span-f2', finalizeSecond), receiver),
   ];
 }
 
@@ -458,10 +470,10 @@ const derived = (spans: TraceSpan[], name: string): EvalRecord[] =>
 
 describe('deriveAll over the renamed agent hook spans', () => {
   it('scores agent completion from prepare and finalize counts', () => {
-    expect(derived(handoffSpans(), 'task_completion')).toEqual([expect.objectContaining({
-      scoreValue: 1,
-      explanation: expect.stringMatching(/^Agent completion: 2\/2 agents finished/),
-    })]);
+    const completion = derived(handoffSpans(), 'task_completion');
+
+    expect(completion).toMatchObject([{ scoreValue: 1 }]);
+    expect(completion[0]?.explanation).toMatch(/^Agent completion: 2\/2 agents finished/);
   });
 
   it('scores a handoff between two different agents on the receiving agent\'s span', () => {
@@ -649,17 +661,18 @@ describe('deriveAgentHeuristics', () => {
     const records = await deriveAgentHeuristics([subagentStop(path)], SINCE_MS, new Map());
 
     // The one argument is empty, so the call scores 0 and fails.
-    expect(records).toEqual([
-      expect.objectContaining({
+    expect(records).toMatchObject([
+      {
         evaluationName: 'argument_correctness',
         scoreValue: 0,
         scoreLabel: 'fail',
         spanId: 'span-stop',
         sessionId: SPAN_SESSION,
         explanation: 'code-reviewer agent: 1 tool calls',
-      }),
-      expect.objectContaining({ evaluationName: 'agent_overall', scoreLabel: expect.stringMatching(/^(pass|partial|fail)$/) }),
+      },
+      { evaluationName: 'agent_overall' },
     ]);
+    expect(records[1]?.scoreLabel).toMatch(/^(pass|partial|fail)$/);
   });
 
   it('scores a session from its transcript on the session\'s last span', async () => {
@@ -698,7 +711,7 @@ describe('deriveAgentHeuristics', () => {
 
     expect(anchoredEarly.length).toBeGreaterThan(0);
     expect(keys(anchoredEarly)).toEqual(keys(anchoredLate));
-    expect(keys(anchoredEarly)).toEqual(anchoredEarly.map(() => expect.stringMatching(new RegExp(`^session:${SPAN_SESSION}:`))));
+    expect(keys(anchoredEarly).filter(key => !key?.startsWith(`session:${SPAN_SESSION}:`))).toEqual([]);
   });
 
   it('skips a session whose last span is within the completion-age window', async () => {

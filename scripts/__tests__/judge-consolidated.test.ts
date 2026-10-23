@@ -305,7 +305,7 @@ describe('evaluateTurnConsolidated', () => {
     // faithfulness and hallucination with different instruments, and this is the
     // only field that says which one a stored record came from.
     expect(CONSOLIDATED_PRODUCER).not.toBe(PRODUCER);
-    expect(records).toEqual(TOOL_TURN_RECORDS.map(evaluationName => expect.objectContaining({
+    expect(records).toMatchObject(TOOL_TURN_RECORDS.map(evaluationName => ({
       evaluationName,
       evaluator: CONSOLIDATED_PRODUCER,
       // The mirrored legacy field must keep matching evaluatorKind.
