@@ -30,7 +30,7 @@ export function judgedByKey(sessionId: string, evaluationName: string, turnKey: 
   return `${turnScoreKey(sessionId, evaluationName, turnKey)}@${judgeModel}`;
 }
 
-/** Add both keys for one stored judge row. No model on a normal, backfill or cohort-less row means a pre-2026-09-30 Haiku row. */
+/** Add both keys for one stored judge row. No model on a normal, backfill or cohort-less row means a Haiku row. */
 export function addJudgedKeys(
   keys: Set<string>,
   row: { sessionId: string; evaluationName: string; turnKey: string; judgeModel?: string | undefined; cohort?: string | undefined },
