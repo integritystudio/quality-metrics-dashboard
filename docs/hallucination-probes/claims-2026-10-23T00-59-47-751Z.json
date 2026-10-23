@@ -1,0 +1,1202 @@
+{
+  "method": "claims",
+  "labelsPath": "/Users/alyshialedlie/.claude/mcp-servers/observability-toolkit/dashboard/docs/archive/judge-hallucination-2026-09-25.json",
+  "usd": 0.224325,
+  "comparison": {
+    "paired": 18,
+    "mae": 1.0935222786615977,
+    "recall": {
+      "hits": 13,
+      "of": 13
+    },
+    "specificity": {
+      "hits": 1,
+      "of": 5
+    }
+  },
+  "failures": [],
+  "scores": {
+    "1f00c800-3fb9-4483-87ea-0d21c0cad180|2026-08-28T03:47:25.508Z": 0,
+    "3a7b617a-3637-4b81-8e57-8f8f1fd002fa|2026-08-28T20:27:49.780Z": 0.5,
+    "3a7b617a-3637-4b81-8e57-8f8f1fd002fa|2026-08-28T20:28:21.195Z": 0.5,
+    "1f00c800-3fb9-4483-87ea-0d21c0cad180|2026-08-28T04:24:25.568Z": 0.14285714285714285,
+    "66d55031-9911-490c-b215-a111c99dd5aa|2026-08-28T17:36:05.436Z": 1,
+    "66d55031-9911-490c-b215-a111c99dd5aa|2026-08-28T17:31:00.093Z": 1,
+    "1f00c800-3fb9-4483-87ea-0d21c0cad180|2026-08-28T04:12:30.618Z": 0.7368421052631579,
+    "05ca994d-e658-483c-9c80-c80b41fd2415|2026-08-28T17:38:56.941Z": 0.3181818181818182,
+    "6e142b62-80f2-48a8-a8bd-86d0dd40c1ee|2026-08-28T04:51:20.129Z": 0.2,
+    "80e95920-cde4-4bd6-a248-7c28095b11b1|2026-08-28T16:57:03.291Z": 0.6666666666666666,
+    "80e95920-cde4-4bd6-a248-7c28095b11b1|2026-08-28T16:48:24.203Z": 0.11764705882352941,
+    "80e95920-cde4-4bd6-a248-7c28095b11b1|2026-08-28T17:03:36.043Z": 0.5882352941176471,
+    "838331dd-37c2-4123-a79b-11040f47e062|2026-09-08T20:53:08.560Z": 0.47619047619047616,
+    "838331dd-37c2-4123-a79b-11040f47e062|2026-09-08T20:19:43.498Z": 0.14285714285714285,
+    "9b32e0d4-e551-4faa-b237-73ed42e6c787|2026-08-28T17:09:41.517Z": 0.6428571428571429,
+    "9b32e0d4-e551-4faa-b237-73ed42e6c787|2026-08-28T17:18:33.211Z": 0.14285714285714285,
+    "a96ee2ba-646a-4df3-8504-2f911e1c32fc|2026-08-28T20:32:25.801Z": 0.08333333333333333,
+    "a706f2af-9bfb-4b1c-b580-9ff22d05c930|2026-08-28T03:39:15.357Z": 0.42857142857142855,
+    "a706f2af-9bfb-4b1c-b580-9ff22d05c930|2026-08-28T03:25:54.512Z": 0.6666666666666666,
+    "c2f32204-3eb2-4a74-9bfd-93b3fa59890b|2026-08-31T20:22:36.380Z": 0.3333333333333333
+  },
+  "details": {
+    "1f00c800-3fb9-4483-87ea-0d21c0cad180|2026-08-28T03:47:25.508Z": [],
+    "3a7b617a-3637-4b81-8e57-8f8f1fd002fa|2026-08-28T20:27:49.780Z": [
+      {
+        "claim": "Found a `legal` project with a `dev` config",
+        "label": "supported",
+        "evidence": "│ dev     │ 2026-02       │ 2026-07    │ 2025-11    │ dev         │ legal   │ FALSE       │ <NONE>   │"
+      },
+      {
+        "claim": "checking whether it holds `LEAN_LAW_API_KEY`",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "3a7b617a-3637-4b81-8e57-8f8f1fd002fa|2026-08-28T20:28:21.195Z": [
+      {
+        "claim": "Found `LEAN_LAW_API_KEY` in `integrity-studio/dev`",
+        "label": "supported",
+        "evidence": "LEAN_LAW_API_KEY is listed in the NAME column of the context output"
+      },
+      {
+        "claim": "Claude Code's `mcp add` doesn't take a bearer key directly for existing servers",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "1f00c800-3fb9-4483-87ea-0d21c0cad180|2026-08-28T04:24:25.568Z": [
+      {
+        "claim": "Fixed `CLAUDE.md:24` with two corrections in the same bullet",
+        "label": "supported",
+        "evidence": "The Context shows two corrections: (1) the inversion note about metrics vs traces, and (2) the change from 'only metrics prove the shipper is alive' to 'Only TRACES prove the shipper is alive' with the warning about the previous opposite statement."
+      },
+      {
+        "claim": "Changed \"the shipper is down\" to \"traces are not reaching production\" with a note that the shipper may be dead or alive and pointed elsewhere",
+        "label": "supported",
+        "evidence": "The Context states: 'if `claude-code-hooks` is not within a day, **traces are not reaching production** — the shipper is either dead or alive and pointed somewhere else, and the query cannot tell you which.'"
+      },
+      {
+        "claim": "The `MAX(r2_key)` query cannot distinguish between the shipper being dead or alive and pointed elsewhere",
+        "label": "supported",
+        "evidence": "The Context explicitly states: 'the query cannot tell you which' when referring to whether the shipper is dead or alive and pointed somewhere else."
+      },
+      {
+        "claim": "Changed \"Third stall\" to \"Third occurrence, and NOT a stall\"",
+        "label": "supported",
+        "evidence": "The Context shows: '**Third occurrence, and NOT a stall — 2026-08-22→28, OTEL5-11:**'"
+      },
+      {
+        "claim": "Added a lead clause stating the shipper ran normally and delivered every batch",
+        "label": "supported",
+        "evidence": "The Context states: 'the shipper ran normally and delivered every batch; it was pointed at the wrong endpoint.'"
+      },
+      {
+        "claim": "The rewritten OTEL5-11 entry is at `docs/BACKLOG.md:260` and states \"This is not a stall, and not the failure CLAUDE.md documents\"",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Qualified the parenthetical to \"Two genuine stalls found this way\"",
+        "label": "supported",
+        "evidence": "The Context states: '(Two genuine stalls found this way: 2026-07-27 → 08-01, ~159 MB; and 2026-08-01 → 08-08, cursor frozen at Aug 2 16:38 with `outcome: \"no-endpoint\"`.)'"
+      }
+    ],
+    "66d55031-9911-490c-b215-a111c99dd5aa|2026-08-28T17:36:05.436Z": [
+      {
+        "claim": "On `main`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "`AA1e`'s block is already committed in `7e9b71fc`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The submodule pointer change predates the user's edits",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "66d55031-9911-490c-b215-a111c99dd5aa|2026-08-28T17:31:00.093Z": [
+      {
+        "claim": "The backlog file was 89 KB / 460+ lines when read",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The backlog file is now 16 KB / 107 lines",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The backlog file changed",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "1f00c800-3fb9-4483-87ea-0d21c0cad180|2026-08-28T04:12:30.618Z": [
+      {
+        "claim": "OTEL5-11 is closed — commit `3b9a2c16`",
+        "label": "contradicted",
+        "evidence": "Line 260: \"#### OTEL5-11: Trace shipping has been stalled since 2026-08-22 while `status.json` reads `ok` — OPEN\". The status is explicitly marked OPEN, not closed."
+      },
+      {
+        "claim": "`settings.json` held the dev ingest endpoint `obtool-ingest-dev.alyshia-b38.workers.dev` with a dev key",
+        "label": "absent",
+        "evidence": "The context does not mention `settings.json`, `obtool-ingest-dev.alyshia-b38.workers.dev`, or any dev endpoint configuration."
+      },
+      {
+        "claim": "Hook processes don't inherit `settings.json`'s `env` block",
+        "label": "absent",
+        "evidence": "The context does not discuss `settings.json`, hook process environment inheritance, or an `env` block."
+      },
+      {
+        "claim": "`span-shipper.ts` fell back to `resolveOtlpEndpoint()` → read `settings.json` → POSTed every trace to a dev worker's D1",
+        "label": "absent",
+        "evidence": "The context does not describe this fallback mechanism or any dev worker endpoint."
+      },
+      {
+        "claim": "Metrics and logs looked healthy because they travel the inline SDK path, which reads the shell's zshrc-exported production endpoint",
+        "label": "absent",
+        "evidence": "The context does not explain why metrics and logs appeared healthy or describe an inline SDK path vs. file shipper distinction."
+      },
+      {
+        "claim": "The file shipper is the sole trace producer",
+        "label": "supported",
+        "evidence": "Line 273: \"and `claude-code-hooks` is the only producer of traces\"."
+      },
+      {
+        "claim": "`status.json` read `ok`",
+        "label": "supported",
+        "evidence": "Line 269: \"`~/.claude-history/telemetry/shipper-ctx/status.json` reads `{\"updatedAt\":\"2026-08-28T03:23:08.297Z\",\"outcome\":\"ok\",\"shipped\":118}`\"."
+      },
+      {
+        "claim": "Cursor advance guard (`hooks/lib/span-shipper.ts`) — full advance to `consumedEnd` now requires `!failed && (posted || discarded === 0)`",
+        "label": "absent",
+        "evidence": "The context does not describe the specific cursor advance guard logic or its conditions."
+      },
+      {
+        "claim": "Per-signal counters (`hooks/lib/shipper-status.ts`) — `shippedBySignal` / `discardedBySignal` added",
+        "label": "absent",
+        "evidence": "The context does not mention `shippedBySignal` or `discardedBySignal` fields being added."
+      },
+      {
+        "claim": "4 new tests in `span-shipper.test.ts`; suite 1,858/1,858",
+        "label": "absent",
+        "evidence": "The context does not provide test counts or suite statistics."
+      },
+      {
+        "claim": "`settings.json` rotated to `https://ingest.integritystudio.ai` + production key from Doppler `integrity-studio/prd`",
+        "label": "absent",
+        "evidence": "The context does not describe a `settings.json` rotation or key update."
+      },
+      {
+        "claim": "Endpoint on disk: `https://ingest.integritystudio.ai`",
+        "label": "supported",
+        "evidence": "Line 249: \"host | `ingest.integritystudio.ai` | `api.integritystudio.ai` (`OBTOOL_API_URL`, Doppler `integrity-studio/prd`)\". The context identifies `ingest.integritystudio.ai` as the OTLP write endpoint."
+      },
+      {
+        "claim": "`status.json`: `outcome: ok`, `shippedBySignal: {logs: 27, metrics: 20, traces: 24}`",
+        "label": "absent",
+        "evidence": "The context shows `status.json` with `outcome: ok` and `shipped: 118` but does not mention `shippedBySignal` with those specific counts."
+      },
+      {
+        "claim": "Production read API, `serviceName=claude-code-hooks`, per-day row counts — 08-23 → 1000, 08-24 → 293, 08-26 → 647, 08-27 → 1000, 08-28 → 152",
+        "label": "absent",
+        "evidence": "The context does not provide these specific per-day row counts. Line 265-266 states `startDate=2026-08-23` returned 0 rows, contradicting the claim of 1000 rows on 08-23."
+      },
+      {
+        "claim": "Before the fix every date ≥ 08-23 returned 0",
+        "label": "supported",
+        "evidence": "Line 265-266: \"`startDate=2026-08-23` → **0 rows.** Same for every later date.\""
+      },
+      {
+        "claim": "~8,709 spans backfilled by pre-seeding cursor offsets at 0 for the gap files",
+        "label": "absent",
+        "evidence": "The context does not mention backfilling 8,709 spans or pre-seeding cursor offsets."
+      },
+      {
+        "claim": "CLAUDE.md's new text calls this the \"Third stall (2026-08-22→28, OTEL5-11)\"",
+        "label": "absent",
+        "evidence": "The context does not quote or reference CLAUDE.md's text about this being the third stall."
+      },
+      {
+        "claim": "The rewritten BACKLOG entry leads with \"This is not a stall, and not the failure CLAUDE.md documents\"",
+        "label": "absent",
+        "evidence": "The context does not contain this quoted text in the BACKLOG entry for OTEL5-11."
+      },
+      {
+        "claim": "5 open items remain: OTEL5-9 (P3), OTEL5-10 (P3), AA1c (P3), OTEL5-7 items 2–3 (P4), H10FLAKE (P4)",
+        "label": "supported",
+        "evidence": "Lines 228, 242, 290, 159, 275 mark OTEL5-9, OTEL5-10, AA1c, OTEL5-7 items 2–3, and H10FLAKE all as OPEN with the stated priorities."
+      }
+    ],
+    "05ca994d-e658-483c-9c80-c80b41fd2415|2026-08-28T17:38:56.941Z": [
+      {
+        "claim": "4 backlog files are open",
+        "label": "supported",
+        "evidence": "The context lists multiple BACKLOG.md files: /Users/alyshialedlie/.claude/docs/BACKLOG.md, /Users/alyshialedlie/.claude/hooks/docs/BACKLOG.md, /Users/alyshialedlie/.claude/mcp-servers/observability-toolkit/docs/BACKLOG.md, and /Users/alyshialedlie/.claude/mcp-servers/observability-toolkit/dashboard/docs/BACKLOG.md"
+      },
+      {
+        "claim": "~/.claude/docs/BACKLOG.md has 2 open items",
+        "label": "contradicted",
+        "evidence": "The context states 'Nothing open remains in this section' for multiple sections (High Priority P1, Medium Priority P2, Claude Code Hooks Conformance, OTEL Conformance, Deferred Findings sections, Skills, Repo Hygiene, Cross-Session Telemetry, and Agent Governance), indicating all items are completed"
+      },
+      {
+        "claim": "The ARE scenario run occurred on 2026-08-17",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The ARE scenario run passes",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Nine agent scope clauses are prose, not enforced",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "`denyToolUse` exists",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The orchestrator no-recursion guard is the only non-test caller of `denyToolUse`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "~/.claude/hooks/docs/BACKLOG.md has 1 open defect and 3 recorded non-work items",
+        "label": "supported",
+        "evidence": "The context shows 'Open: OA-005' as the one remaining open item, with OA-001 through OA-004 and OA-006 through OA-007 marked as Done. The three recorded non-work items are PT-SCOPE-GATE and SG-OTEL-INGEST (proposals, not review findings) and record-only entries moved to DECISIONS.md"
+      },
+      {
+        "claim": "Error markers past `LARGE_OUTPUT_BYTES` (50 KB) are invisible to `analyzeBuiltinOutput`",
+        "label": "supported",
+        "evidence": "`analyzeBuiltinOutput` scans only the first `THRESHOLDS.LARGE_OUTPUT_BYTES` (50,000) characters, so a marker after that point is not detected"
+      },
+      {
+        "claim": "`outputSize` reports untruncated length",
+        "label": "supported",
+        "evidence": "while `outputSize` still reports the true untruncated length, making the pair look inconsistent"
+      },
+      {
+        "claim": "Three tests pin the 50 KB cost bound",
+        "label": "supported",
+        "evidence": "pinned in `lib/output-analyzer.test.ts` by three cases: a marker past the window, a marker straddling the edge by one character, and untruncated `outputSize`"
+      },
+      {
+        "claim": "PT-SCOPE-GATE was deferred 2026-08-28",
+        "label": "supported",
+        "evidence": "**Both were evaluated 2026-08-28 and are now *deferred*, not *unevaluated*:** PT-SCOPE-GATE effectively won't-fix for any inline form"
+      },
+      {
+        "claim": "SG-OTEL-INGEST was deferred and downgraded from P3 to P4",
+        "label": "supported",
+        "evidence": "SG-OTEL-INGEST downgraded P3→P4 (no consumer, nothing depends on it)"
+      },
+      {
+        "claim": "observability-toolkit/docs/BACKLOG.md has 3 open items",
+        "label": "contradicted",
+        "evidence": "The context states 'Status 2026-08-27 — 3 open' but then updates: 'What is left *(updated 2026-08-28 — now **4 open**)*: `DEDUP-KEY-INCLUDES-R2KEY`... one owner-deferred decision (`SIGNIN-WORKER`) and two unevaluated proposals (`SMOLAGENTS-CORPUS`, `SCOPE-VERDICT-ATTR`)"
+      },
+      {
+        "claim": "134,485 dupes were swept 2026-08-28",
+        "label": "supported",
+        "evidence": "**134,485 rows.** Attribution is unambiguous: the worst window (07-27..08-03, 46,631 metrics dups) is the second stall's replay era... all four tables verified `total == uniq` on 2026-08-28"
+      },
+      {
+        "claim": "Duplicates represent up to 8.3% of `metrics_data`",
+        "label": "supported",
+        "evidence": "| `metrics_data` | 1,028,673 | 85,431 | **8.3%** |"
+      },
+      {
+        "claim": "Tables are clean now",
+        "label": "supported",
+        "evidence": "all four tables verified `total == uniq` on 2026-08-28"
+      },
+      {
+        "claim": "The next replay re-corrupts the tables",
+        "label": "supported",
+        "evidence": "**Do not treat replays as safe again until this lands.** Until then, any watermark rewind is fine (same `r2_key`), but any re-*ship* must be followed by the sweep scripts"
+      },
+      {
+        "claim": "The dedup index fix requires drop+create on a ~2.2 GB D1",
+        "label": "supported",
+        "evidence": "**D1/SQLite cannot alter a unique index in place** — drop + create, on a ~2.2 GB production database, while the flush cron writes"
+      },
+      {
+        "claim": "observability-toolkit/dashboard/docs/BACKLOG.md has 0 open items",
+        "label": "supported",
+        "evidence": "### ✅ DONE — `tsconfig.scripts.json` lacks `noUncheckedIndexedAccess` parity with root (SCRIPTS-TSCONFIG-NUIA)"
+      },
+      {
+        "claim": "SCRIPTS-TSCONFIG-NUIA was completed 2026-08-28",
+        "label": "supported",
+        "evidence": "**Status 2026-08-28 — both steps done.** Step 2 (this repo) landed in `733402d` (`noUncheckedIndexedAccess: true` added to `tsconfig.scripts.json`) and `a76f475`"
+      },
+      {
+        "claim": "SCRIPTS-TSCONFIG-NUIA completion covers both repo halves",
+        "label": "supported",
+        "evidence": "Step 2 (this repo) landed in `733402d`... Root `tsconfig.json` has `noUncheckedIndexedAccess: true`; `tsconfig.scripts.json` does not... ✅ **Parent's `src/lib`** indicates parent repo work was also completed"
+      }
+    ],
+    "6e142b62-80f2-48a8-a8bd-86d0dd40c1ee|2026-08-28T04:51:20.129Z": [
+      {
+        "claim": "~/.claude/docs/BACKLOG.md contains 4 open items out of 15 sections",
+        "label": "absent",
+        "evidence": "The Context does not provide a count of open items or total sections. While multiple items are marked OPEN (OTEL5-7, OTEL5-10, H10FLAKE, AA1c), no summary statement counts them against a total of 15 sections."
+      },
+      {
+        "claim": "skills/otel-session-summary/scripts/summarize_session.ts:97 builds a URL wrong in 4 independent ways: host (ingest. vs api.integritystudio.ai), path (/api/traces vs /v1/traces), param (session_id vs sessionId), and no Authorization header",
+        "label": "supported",
+        "evidence": "| | coded | actual |\n|---|---|---|\n| host | `ingest.integritystudio.ai` | `api.integritystudio.ai` (`OBTOOL_API_URL`, Doppler `integrity-studio/prd`) |\n| path | `/api/traces` | `/v1/traces` |\n| param | `session_id` | `sessionId` |\n| auth | none | `Authorization: Bearer $OBTOOL_API_KEY` |"
+      },
+      {
+        "claim": "queryRemoteTraces returns HTTP 404",
+        "label": "supported",
+        "evidence": "Measured 2026-08-28, that URL returns **HTTP 404** both with and without a bearer token."
+      },
+      {
+        "claim": "the are-run scenario was fixed and re-run 2026-08-17 with 16/17 audited, genuine pass",
+        "label": "supported",
+        "evidence": "**Second run (`ARE_MAX_ITERATIONS=200`) is a genuine pass: 16/17 substantively audited, correct total, no truncation.**"
+      },
+      {
+        "claim": "Items 1 and 4 of OTEL5-7 were measured and decided 2026-08-28",
+        "label": "supported",
+        "evidence": "**OTEL5-7 items 1 and 4 were measured and decided 2026-08-28** (items 2 and 3 remain open)"
+      },
+      {
+        "claim": "lib/otel-exporter-env.test.ts asserts elapsed < 2000 ms",
+        "label": "supported",
+        "evidence": "`lib/otel-exporter-env.test.ts` → \"exits well under the legacy 2.7s retry floor without an OTLP endpoint\" spawns the **real** `hook-runner.js` and asserts `elapsed < 2000` ms."
+      },
+      {
+        "claim": "unloaded spawn measures 778–1796 ms",
+        "label": "supported",
+        "evidence": "Unloaded, that spawn measures **778–1796 ms** (10 samples)"
+      },
+      {
+        "claim": "Observed 2198 ms and 3006 ms alongside 77 other test files",
+        "label": "supported",
+        "evidence": "run alongside 77 other test files it intermittently exceeds it (observed 2198 ms and 3006 ms, and also passing in the same configuration)"
+      },
+      {
+        "claim": "the test passes reliably in isolation",
+        "label": "supported",
+        "evidence": "It passes reliably in isolation."
+      },
+      {
+        "claim": "the OTEL5 section header was corrected on 2026-08-28",
+        "label": "absent",
+        "evidence": "The Context does not contain any statement indicating the OTEL5 section header was corrected on 2026-08-28. While various items within OTEL5 have dates of 2026-08-28, no correction to the section header itself is mentioned."
+      }
+    ],
+    "80e95920-cde4-4bd6-a248-7c28095b11b1|2026-08-28T16:57:03.291Z": [
+      {
+        "claim": "OA-004 is done and verified",
+        "label": "supported",
+        "evidence": "c2241055 chore(backlog): mark OA-004 Done"
+      },
+      {
+        "claim": "Three commits landed on `~/.claude`: `07b68022`, `a73b367e`, and `c2241055`",
+        "label": "contradicted",
+        "evidence": "The commits are shown in the git log output, but they are not on `~/.claude` - they appear to be on the current working branch. The context shows direnv loading `~/.claude/.envrc` but the commits themselves are not described as being on that path."
+      },
+      {
+        "claim": "Commit `07b68022` added an `ANSI_ESCAPE` constant, stripped escapes in `countDiagnostics`, and flipped the pinned test from `0` to `1`",
+        "label": "absent",
+        "evidence": "The context shows commit 07b68022 with message 'fix(output-analyzer): strip ANSI escapes before counting diagnostics (OA-004)' and file changes, but does not contain details about adding an `ANSI_ESCAPE` constant or flipping a test from `0` to `1`."
+      },
+      {
+        "claim": "Commit `a73b367e` fixed `diagnosticFile` to strip escapes and included a paired count+attribution test",
+        "label": "supported",
+        "evidence": "a73b367e fix(output-analyzer): extend ANSI stripping to diagnosticFile and fix stale comment"
+      },
+      {
+        "claim": "Commit `c2241055` marked Done in `hooks/docs/BACKLOG.md`",
+        "label": "absent",
+        "evidence": "The context shows 'c2241055 chore(backlog): mark OA-004 Done' but does not specify which file was modified."
+      },
+      {
+        "claim": "`hooks/dist/lib/output-analyzer.js` was rebuilt and committed alongside the source in both fix commits",
+        "label": "supported",
+        "evidence": "Both commits show changes to 'hooks/dist/lib/output-analyzer.js' alongside source files: '07b68022' and 'a73b367e' both list changes to this file."
+      },
+      {
+        "claim": "The tree is clean apart from the pre-existing `mcp-servers/observability-toolkit` submodule change",
+        "label": "supported",
+        "evidence": "' M mcp-servers/observability-toolkit' is shown as the only modification outside the commits"
+      },
+      {
+        "claim": "The agent reports 195 tests passing with ESLint and tsc clean",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Review PASS on the second pass",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Commits are local on the current branch and nothing pushed",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Hooks backlog now has 6 open items: OA-001, OA-002, OA-003, OA-005, OA-006, OA-007",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Main `docs/BACKLOG.md` still has H10FLAKE and AA1c",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "80e95920-cde4-4bd6-a248-7c28095b11b1|2026-08-28T16:48:24.203Z": [
+      {
+        "claim": "Two backlog files exist",
+        "label": "supported",
+        "evidence": "Context shows two files: `/Users/alyshialedlie/.claude/docs/BACKLOG.md` (88506 bytes) and `hooks/docs/BACKLOG.md` (194 bytes)"
+      },
+      {
+        "claim": "`docs/BACKLOG.md` has 2 open items",
+        "label": "contradicted",
+        "evidence": "Context states: 'Open: **OBP13b**' was corrected as already DONE, and 'Nothing open remains in this section' for OTEL Conformance. H10FLAKE is marked OPEN, AA1c is marked STILL OPEN. That is 2 open items in the main backlog, but the context also shows multiple other sections with items marked DONE or CLOSED, not 2 total open items."
+      },
+      {
+        "claim": "Item H10FLAKE: `lib/otel-exporter-env.test.ts` exit-latency guard flakes under full-suite parallelism with real spawn measuring 778–1796 ms unloaded and hitting 2198/3006 ms alongside 77 peers",
+        "label": "supported",
+        "evidence": "'`lib/otel-exporter-env.test.ts` → \"exits well under the legacy 2.7s retry floor without an OTLP endpoint\" spawns the **real** `hook-runner.js` and asserts `elapsed < 2000` ms. Unloaded, that spawn measures **778–1796 ms** (10 samples)... run alongside 77 other test files it intermittently exceeds it (observed 2198 ms and 3006 ms...'"
+      },
+      {
+        "claim": "Item AA1c: Re-audit ran 2026-08-17 and passes with 16/17 audited",
+        "label": "supported",
+        "evidence": "'**Second run (`ARE_MAX_ITERATIONS=200`) is a genuine pass: 16/17 substantively audited, correct total, no truncation.**'"
+      },
+      {
+        "claim": "Every other section is fully migrated out: OTEL Conformance (OBP*), OTEL5 (5-5 through 5-11, all closed 2026-08-27/28), TMC1/TMC2, STC*, PT*, GCS*, IGN*, DOC*",
+        "label": "supported",
+        "evidence": "'**Nothing open remains in this section.** *(Corrected 2026-08-28...)' for OTEL Conformance; OTEL5 items listed as DONE/CLOSED with dates 2026-08-22 through 2026-08-28; TMC1 and TMC2 both marked DONE (2026-08-22)"
+      },
+      {
+        "claim": "Nine prose agent scope clauses plus `auto-error-resolver`'s file-count gate are still unenforced",
+        "label": "supported",
+        "evidence": "'Nine of those ten clauses are prose... What is still open is enforcement, not scoping, and it is AA1d — not this entry.'"
+      },
+      {
+        "claim": "`hooks/docs/BACKLOG.md` has 7 open items and 2 proposals",
+        "label": "supported",
+        "evidence": "Context shows 'Open: OA-001 … OA-007' (seven items) and 'PT-SCOPE-GATE and SG-OTEL-INGEST are **unevaluated proposals**' (two proposals)"
+      },
+      {
+        "claim": "OA-002: one \"0 errors\" summary suppresses a real error in the same payload",
+        "label": "supported",
+        "evidence": "'### OA-002: One \"0 errors\" summary suppresses a real error in the same payload — **Open**'"
+      },
+      {
+        "claim": "OA-004: colourised `--pretty` tsc output counts as zero errors",
+        "label": "supported",
+        "evidence": "'### OA-004: Colourised `--pretty` tsc output counts as zero errors — **Open**'"
+      },
+      {
+        "claim": "OA-003: `KillShell` detects error wording but not \"failed\"",
+        "label": "supported",
+        "evidence": "'### OA-003: `KillShell` detects error wording but not \"failed\" — **Open**'"
+      },
+      {
+        "claim": "OA-001: `project.?not found` in the configuration rule is unreachable",
+        "label": "supported",
+        "evidence": "'### OA-001: `project.?not found` in the configuration rule is unreachable — **Open**'"
+      },
+      {
+        "claim": "OA-005: error markers past 50 KB invisible to detection",
+        "label": "supported",
+        "evidence": "'### OA-005: Error markers past 50 KB are invisible to detection — **Open (deliberate)**'"
+      },
+      {
+        "claim": "OA-006: nullish tolerance differs between the two entry points",
+        "label": "supported",
+        "evidence": "'### OA-006: Nullish tolerance differs between the two entry points — **Open**'"
+      },
+      {
+        "claim": "OA-007: `errorType` and `errorCategory` can disagree",
+        "label": "supported",
+        "evidence": "'### OA-007: `errorType` and `errorCategory` can disagree — **Open**'"
+      },
+      {
+        "claim": "PT-SCOPE-GATE has a ~680 ms latency that disqualifies it",
+        "label": "absent",
+        "evidence": "Context states 'PT-SCOPE-GATE: Scope classification in `PreToolUse` — **Open (proposal; latency likely disqualifying)**' but does not specify the ~680 ms figure"
+      },
+      {
+        "claim": "AA1d shipped `denyToolUse`",
+        "label": "supported",
+        "evidence": "'**What shipped:** - `denyToolUse(reason, hookEventName?)` in `hooks/lib/hook-output.ts`'"
+      },
+      {
+        "claim": "DEDUP-016 is Won't Fix",
+        "label": "supported",
+        "evidence": "'DEDUP-016 is **Won't Fix** (recorded below so it is not \"fixed\")' and '### DEDUP-016: Decimal byte thresholds deliberately NOT converted to BYTES.* — **Won't Fix (recorded so it is not \"fixed\")**'"
+      }
+    ],
+    "80e95920-cde4-4bd6-a248-7c28095b11b1|2026-08-28T17:03:36.043Z": [
+      {
+        "claim": "OA-002 is done and verified",
+        "label": "supported",
+        "evidence": "8a9a5306 docs(backlog): mark OA-002 Done"
+      },
+      {
+        "claim": "Commit 1052c672 made hasErrorWording evaluate per-line using split('\\n').some(...) instead of testing the whole output",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Commit 1052c672 added a ?? '' guard for null-tolerance parity with analyzeOutput",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Pinned test flipped from false to true for both analyzeBuiltinOutput('KillShell', ...) and analyzeOutput(...)",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Commit 8a9a5306 marked Done in the backlog",
+        "label": "supported",
+        "evidence": "8a9a5306 docs(backlog): mark OA-002 Done"
+      },
+      {
+        "claim": "hooks/dist/lib/output-analyzer.js was rebuilt and committed with the source",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "1859 hook tests pass",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Review PASS",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Tree clean apart from the pre-existing mcp-servers/observability-toolkit submodule change",
+        "label": "supported",
+        "evidence": "--- tree --- M mcp-servers/observability-toolkit"
+      },
+      {
+        "claim": "H10FLAKE got fixed in commit 12fa9e63",
+        "label": "supported",
+        "evidence": "12fa9e63 fix(test): measure spawn-to-exit latency in H10 guard to eliminate suite-parallelism flakiness (H10FLAKE)"
+      },
+      {
+        "claim": "Commit 12fa9e63 landed between the two backlog runs",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "H10FLAKE fix times exitMs - spawnMs from the child's spawn event rather than wall-clock around execFile",
+        "label": "supported",
+        "evidence": "Switch to exitMs - spawnMs: start timing from the child's 'spawn' event (process created by the OS) and capture exit time in the execFile callback."
+      },
+      {
+        "claim": "The 2000 ms bound is unchanged",
+        "label": "supported",
+        "evidence": "The 2000 ms bound and regression coverage are unchanged."
+      },
+      {
+        "claim": "docs/BACKLOG.md is already updated to DONE",
+        "label": "supported",
+        "evidence": "360:#### H10FLAKE: The hook-runner exit-latency guard fails intermittently under full-suite parallelism — DONE (2026-08-28)"
+      },
+      {
+        "claim": "docs/BACKLOG.md has AA1c only (P3) open",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "hooks/docs/BACKLOG.md has 5 open: OA-001, OA-003, OA-005 (deliberate), OA-006, OA-007, plus the two proposals and DEDUP-016 (Won't Fix)",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Nothing pushed — all five commits are local",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "838331dd-37c2-4123-a79b-11040f47e062|2026-09-08T20:53:08.560Z": [
+      {
+        "claim": "Commit d8fa29be contains code and docs",
+        "label": "supported",
+        "evidence": "commit d8fa29be8368b368fadaf75637b4aceb1e9bb963 shows changes to docs/TrackingFiles.md and scripts/env/cleanup-runtime.sh"
+      },
+      {
+        "claim": "Commit 523e7d3c contains backlog",
+        "label": "supported",
+        "evidence": "523e7d3c 09-08 15:52 docs: mark IGN5 Done in BACKLOG.md"
+      },
+      {
+        "claim": "Code review passed",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "File scripts/env/cleanup-runtime.sh was shipped",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "SNAPSHOT_KEEP_N=3 constant is set",
+        "label": "supported",
+        "evidence": "52:SNAPSHOT_KEEP_N=3"
+      },
+      {
+        "claim": "prune_old_snapshots() is called at the tail of archive_snapshot()",
+        "label": "supported",
+        "evidence": "266:#   Calls prune_old_snapshots afterwards to enforce the SNAPSHOT_KEEP_N retention limit. and 281:  prune_old_snapshots \"$name\""
+      },
+      {
+        "claim": "Only YYYYMMDD-HHMMSS-named dirs are considered",
+        "label": "supported",
+        "evidence": "Prune considers only YYYYMMDD-HHMMSS-named directories (the snapshot pattern)"
+      },
+      {
+        "claim": "Smoke test result: 5 fake snapshots → 2 pruned, 3 kept",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "docs/TrackingFiles.md § Lifecycle now states the bound",
+        "label": "supported",
+        "evidence": "Updates TrackingFiles.md § Lifecycle to state the bound."
+      },
+      {
+        "claim": "Growth is now bounded at ~3 × live directory size",
+        "label": "supported",
+        "evidence": "51:# This bounds SNAPSHOT_DIRS growth to roughly SNAPSHOT_KEEP_N × live-directory-size."
+      },
+      {
+        "claim": "Existing 9.6 GB isn't reclaimed until the next few cleanup runs",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Agent-cache will reduce from 189 MB → ~3 MB",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Plugin-cache will reduce from 112 MB → ~10 MB",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "93 MB of tsc-cache residue is outside SNAPSHOT_DIRS and untouched",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "484 MB tarball is outside SNAPSHOT_DIRS and untouched",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Commits ef09191f, 1a160a11, 616133f6, 6dea3e55, 4f05e23e (OSS1 Wave A) interleave with IGN5 commits between 15:47 and 15:52",
+        "label": "supported",
+        "evidence": "ef09191f 09-08 15:48, 1a160a11 09-08 15:49, 616133f6 09-08 15:50, 6dea3e55 09-08 15:51, d8fa29be 09-08 15:51, 523e7d3c 09-08 15:52, 4f05e23e 09-08 15:52"
+      },
+      {
+        "claim": "Both sessions edited docs/BACKLOG.md",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "IGN5 edits survived in HEAD",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "OSS1 was closed",
+        "label": "supported",
+        "evidence": "4f05e23e docs: close OSS1 — Wave A complete, handoff deleted, OSS2 filed"
+      },
+      {
+        "claim": "OSS2 was filed",
+        "label": "supported",
+        "evidence": "4f05e23e docs: close OSS1 — Wave A complete, handoff deleted, OSS2 filed"
+      },
+      {
+        "claim": "mcp-servers/observability-toolkit is modified in the working tree (submodule pointer) and uncommitted",
+        "label": "supported",
+        "evidence": "--- status --- M mcp-servers/observability-toolkit"
+      }
+    ],
+    "838331dd-37c2-4123-a79b-11040f47e062|2026-09-08T20:19:43.498Z": [
+      {
+        "claim": "9 open work items in `docs/BACKLOG.md`, plus 1 deliberately-open + 3 closed-but-recorded in `hooks/docs/BACKLOG.md`",
+        "label": "absent",
+        "evidence": "The context shows multiple open items (IGN3, IGN4, IGN5, OSS1, AA1g, AA1h, DOC8, DOC9, DOC10) and one deliberately-open item (OA-005), but does not specify a count of 9 open items or provide a breakdown of items in `hooks/docs/BACKLOG.md`."
+      },
+      {
+        "claim": "`~/.claude-history` has 9.6 GB",
+        "label": "supported",
+        "evidence": "It is now **9.6 GB** — telemetry 3.9 GB, debug 3.1 GB, file-history 671 MB, projects 361 MB plus a 484 MB tarball of the same data."
+      },
+      {
+        "claim": "`agent-cache`: 988 KB live → 189 MB archived",
+        "label": "supported",
+        "evidence": "| `agent-cache` | 988 KB | **189 MB** | 5 |"
+      },
+      {
+        "claim": "`daemon.log` grows from 94 KB to 152 KB in one session",
+        "label": "supported",
+        "evidence": "`daemon.log` grew **94 KB → 152 KB inside one session** while this audit ran."
+      },
+      {
+        "claim": "`agent.quality.score` corpus totals are `45` and `49.5`",
+        "label": "supported",
+        "evidence": "The two totals in the corpus are `45` and `49.5`."
+      },
+      {
+        "claim": "4 of 11 records use an orphaned second schema with an unregistered `gen_ai.evaluation.dimension` attribute",
+        "label": "supported",
+        "evidence": "Four records (`flutter-claude-code`, 2026-02-28) put the dimension in an attribute — `gen_ai.evaluation.dimension` is a fourth unregistered attribute in the `gen_ai.*` namespace... So this schema is orphaned... but a consumer reading the name alone still sees 0–10 dimension values and a ~0–80 total mixed under one name."
+      },
+      {
+        "claim": "four `docs/roadmap/` docs total 2,193 L, 33% of `repomix-docs.xml`",
+        "label": "supported",
+        "evidence": "`AGENTIC_SELF_OPTIMIZATION_ARCHITECTURE.md` (969 L), `ASI_EVOLVE_AUDIT_AND_INTEGRATION.md` (834 L), `AA1_CODE_CHURN_RL_INTEGRATION_PLAN.md` (212 L), `AA2_ASI_EVOLVE_INTEGRATION_PLAN.md` (178 L). Together they are **33% of `repomix-docs.xml`**"
+      },
+      {
+        "claim": "17 `audit-history/*.json` still at `max_score: 80` vs. shipped 70",
+        "label": "supported",
+        "evidence": "All 17 `~/.claude/audit-history/{agent}.json` files still carry `max_score: 80` while the shipped rule is 70 whenever D7 is withdrawn — which it always has been."
+      },
+      {
+        "claim": "root `README.md` is dated 2026-07-12",
+        "label": "absent",
+        "evidence": "The context does not contain information about a root `README.md` or its date."
+      },
+      {
+        "claim": "`plugins/cache/` is 41 MB",
+        "label": "supported",
+        "evidence": "**`cache/` (41 MB) is a genuine fetch cache**"
+      },
+      {
+        "claim": "`marketplaces/` is 648 MB",
+        "label": "supported",
+        "evidence": "**`marketplaces/` (648 MB) must not be archived by age.**"
+      },
+      {
+        "claim": "`OBP14` and `OBP15` were marked Done on 2026-09-08",
+        "label": "supported",
+        "evidence": "#### OBP14: Done 2026-09-08 — `callAnthropicJudge` instrumented with `gen_ai.client.operation` span, `gen_ai.client.operation.duration` histogram, and `recordTokenUsage(operation='evaluate')`. Response type widened to include `usage`. Canary path left unspanned. Unblocks `AA3` Gates 3d and 3e.\n\n#### OBP15: Done 2026-09-08 — `deriveEvaluationLatency` returns `null` on non-finite duration and on epoch-ish `startTime` (seconds < 1e9)."
+      },
+      {
+        "claim": "error markers past 50 KB are invisible to `analyzeBuiltinOutput`",
+        "label": "supported",
+        "evidence": "`analyzeBuiltinOutput` scans only the first `THRESHOLDS.LARGE_OUTPUT_BYTES` (50,000) characters, so a marker after that point is not detected"
+      },
+      {
+        "claim": "three tests are pinned by the OA-005 issue",
+        "label": "supported",
+        "evidence": "pinned in `lib/output-analyzer.test.ts` by three cases: a marker past the window, a marker straddling the edge by one character, and untruncated `outputSize`"
+      }
+    ],
+    "9b32e0d4-e551-4faa-b237-73ed42e6c787|2026-08-28T17:09:41.517Z": [
+      {
+        "claim": "A file exists at ~/.claude/hooks/docs/BACKLOG.md",
+        "label": "supported",
+        "evidence": "-rw-r--r--@ 1 alyshialedlie  staff  20288 Aug 28 12:03 /Users/alyshialedlie/.claude/hooks/docs/BACKLOG.md"
+      },
+      {
+        "claim": "The BACKLOG.md file contains 5 open defects and 2 open proposals",
+        "label": "supported",
+        "evidence": "**Open: OA-001 … OA-007** (below) — seven output-analyzer known gaps... DEDUP-016 is **Won't Fix**... PT-SCOPE-GATE and SG-OTEL-INGEST are **unevaluated proposals**"
+      },
+      {
+        "claim": "Open defect OA-003 exists with priority P3 regarding KillShell routing through hasErrorWording",
+        "label": "absent",
+        "evidence": "### OA-003: `KillShell` detects error wording but not \"failed\" — **Open** (no priority level stated)"
+      },
+      {
+        "claim": "Open defect OA-001 exists with priority P4 regarding project.?not found being unreachable in the configuration rule",
+        "label": "absent",
+        "evidence": "### OA-001: `project.?not found` in the configuration rule is unreachable — **Open** (no priority level stated)"
+      },
+      {
+        "claim": "Open defect OA-005 exists with priority P4 regarding detection scanning only the first 50 KB",
+        "label": "absent",
+        "evidence": "### OA-005: Error markers past 50 KB are invisible to detection — **Open (deliberate)** (no priority level stated)"
+      },
+      {
+        "claim": "Open defect OA-006 exists with priority P4 regarding analyzeOutput and analyzeBuiltinOutput handling nullish input differently",
+        "label": "absent",
+        "evidence": "### OA-006: Nullish tolerance differs between the two entry points — **Open** (no priority level stated)"
+      },
+      {
+        "claim": "Open defect OA-007 exists with priority P4 regarding errorType and errorCategory being produced by different mechanisms",
+        "label": "absent",
+        "evidence": "### OA-007: `errorType` and `errorCategory` can disagree — **Open** (no priority level stated)"
+      },
+      {
+        "claim": "Open proposal PT-SCOPE-GATE exists with priority P4 regarding ScopeGuard-4B classification",
+        "label": "absent",
+        "evidence": "### PT-SCOPE-GATE: Scope classification in `PreToolUse` — **Open (proposal; latency likely disqualifying)** (no priority level stated)"
+      },
+      {
+        "claim": "Open proposal SG-OTEL-INGEST exists with priority P3 regarding smolagents traces",
+        "label": "absent",
+        "evidence": "### SG-OTEL-INGEST: smolagents traces into this telemetry pipeline — **Open (proposal; read the `service_name` hazard first)** (no priority level stated)"
+      },
+      {
+        "claim": "OA-002 was closed at commit 1052c672 at 12:02",
+        "label": "supported",
+        "evidence": "### OA-002: One \"0 errors\" summary suppresses a real error in the same payload — **Done** (`1052c672`)"
+      },
+      {
+        "claim": "OA-004 was closed at commit 07b68022 at 11:52",
+        "label": "supported",
+        "evidence": "### OA-004: Colourised `--pretty` tsc output counts as zero errors — **Done** (`07b68022`)"
+      },
+      {
+        "claim": "Line 5 of the BACKLOG.md file still reads 'Open: OA-001 … OA-007'",
+        "label": "supported",
+        "evidence": "5:## Open Items"
+      },
+      {
+        "claim": "OA-002 and OA-004 were marked Done in the BACKLOG.md file an hour ago",
+        "label": "absent",
+        "evidence": "The Context shows the file was last modified Aug 28 12:03, but does not indicate when OA-002 and OA-004 were marked Done"
+      },
+      {
+        "claim": "Two more backlogs exist at mcp-servers/observability-toolkit/docs/ and its dashboard/docs/ that have not been checked",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "9b32e0d4-e551-4faa-b237-73ed42e6c787|2026-08-28T17:18:33.211Z": [
+      {
+        "claim": "Four items shipped, one commit each: OA-003 in commit d9d94e7d, OA-001 in commit 09883d3a, OA-006 in commit 323b0301, OA-007 in commit ef9ddc06",
+        "label": "supported",
+        "evidence": "commit d9d94e7d7424cc23881f27bdb2771ad81e0fbd10, commit 09883d3ad1bd7b45e86f15caffb06ec662e693b1, commit 323b030116103822cbb8365fc8a195a3d228dddb, commit ef9ddc0601ff85f3dc939c508f815ca3babb98c0"
+      },
+      {
+        "claim": "OA-003 changed `KillShell` detector: `hasErrorWording` → `hasFailureWording`; \"Failed to kill shell\" now `hasError: true`",
+        "label": "supported",
+        "evidence": "commit d9d94e7d7424cc23881f27bdb2771ad81e0fbd10: -  KillShell: output => hasErrorWording(output) ? 'shell_error' : undefined, +  KillShell: output => hasFailureWording(output) ? 'shell_error' : undefined, and expect(analyzeBuiltinOutput('KillShell', 'Failed to kill shell').hasError).toBe(true);"
+      },
+      {
+        "claim": "OA-001 dropped dead `project.?not found` alternative from the `configuration` rule",
+        "label": "supported",
+        "evidence": "commit 09883d3ad1bd7b45e86f15caffb06ec662e693b1: -  [/no active project|invalid.?project|project.?not found|missing.?configuration|not.?configured|config.?error/i, 'configuration', 'configuration'], +  [/no active project|invalid.?project|missing.?configuration|not.?configured|config.?error/i, 'configuration', 'configuration'],"
+      },
+      {
+        "claim": "OA-006 made `analyzeBuiltinOutput` coerce via `?? ''` before `.length`, matching `analyzeOutput`",
+        "label": "supported",
+        "evidence": "commit 323b030116103822cbb8365fc8a195a3d228dddb: +  const coerced = output ?? ''; and -  const safeOutput = output.length > THRESHOLDS.LARGE_OUTPUT_BYTES +  const safeOutput = coerced.length > THRESHOLDS.LARGE_OUTPUT_BYTES"
+      },
+      {
+        "claim": "OA-007 added `does not exist` to the `not_found` pattern; `errorType`/`errorCategory` now agree",
+        "label": "supported",
+        "evidence": "commit ef9ddc0601ff85f3dc939c508f815ca3babb98c0: -  [/not found|\\b404\\b/i, 'not_found', 'not_found'], +  [/not found|\\b404\\b|does not exist/i, 'not_found', 'not_found'], and errorCategory: 'not_found' (changed from 'unknown')"
+      },
+      {
+        "claim": "Each diff is one or two lines in `hooks/lib/output-analyzer.ts`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Four pinned tests were rewritten in place with assertion inverted and comment replaced",
+        "label": "supported",
+        "evidence": "commit d9d94e7d: it('detects failure wording, including the word failed (OA-003)' with expect(...).toBe(true); commit 09883d3a: it('classifies \"project not found\" as not_found, not configuration (OA-001)'; commit 323b0301: comment changed to 'both entry points now coerce nullish to empty string'; commit ef9ddc06: it('agrees on not_found for errorType and errorCategory (OA-007)')"
+      },
+      {
+        "claim": "`output-analyzer.test.ts`: 195 passed",
+        "label": "supported",
+        "evidence": "Test Files  1 passed (1), Tests  195 passed (195)"
+      },
+      {
+        "claim": "Backlog updated in commit 60252dc5",
+        "label": "supported",
+        "evidence": "60252dc5 | 2026-08-28 12:16:13 -0500 | Alyshia Ledlie | docs(backlog): mark OA-003, OA-001, OA-006, OA-007 Done"
+      },
+      {
+        "claim": "Backlog header now reads \"Open: OA-005\" with six Done items named",
+        "label": "supported",
+        "evidence": "**Open: OA-005** (below, deliberate) — the one remaining output-analyzer gap. OA-001, OA-002, OA-003, OA-004, OA-006, OA-007 are Done."
+      },
+      {
+        "claim": "OA-005 is the only open defect left",
+        "label": "supported",
+        "evidence": "**Open: OA-005** (below, deliberate) — the one remaining output-analyzer gap."
+      },
+      {
+        "claim": "`does not exist` now lives in the global `ERROR_CATEGORIES` table, not just Read's path",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Two commits landed after the backlog update: `2b733c3a` (scope legacy-log assertions in `otel-monitor.test.ts`) and `65246ca9` (H10FLAKE residual risk in `docs/BACKLOG.md`), both at 12:17, ~90s after",
+        "label": "supported",
+        "evidence": "60252dc5 | 2026-08-28 12:16:13 -0500, 2b733c3a | 2026-08-28 12:17:40 -0500, 65246ca9 | 2026-08-28 12:17:50 -0500"
+      },
+      {
+        "claim": "Working tree is otherwise clean apart from the `mcp-servers/observability-toolkit` submodule",
+        "label": "supported",
+        "evidence": "=== STATUS === M mcp-servers/observability-toolkit"
+      }
+    ],
+    "a96ee2ba-646a-4df3-8504-2f911e1c32fc|2026-08-28T20:32:25.801Z": [
+      {
+        "claim": "The LeanLaw connection is authorized for Read and Impersonate permissions on Users",
+        "label": "supported",
+        "evidence": "Users: Read, Impersonate"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Clients",
+        "label": "supported",
+        "evidence": "Clients: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Matters",
+        "label": "supported",
+        "evidence": "Matters: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Time Entries",
+        "label": "supported",
+        "evidence": "TimeEntries: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Expenses",
+        "label": "supported",
+        "evidence": "Expenses: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Fixed Fees",
+        "label": "supported",
+        "evidence": "FixedFees: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Invoices",
+        "label": "supported",
+        "evidence": "Invoices: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Payments",
+        "label": "supported",
+        "evidence": "Payments: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Rates",
+        "label": "supported",
+        "evidence": "Rates: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Balances",
+        "label": "supported",
+        "evidence": "Balances: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The LeanLaw connection is authorized for Create, Read, Update, Delete permissions on Codes",
+        "label": "supported",
+        "evidence": "Codes: Create, Read, Update, Delete"
+      },
+      {
+        "claim": "The Impersonate permission on Users allows actions to be logged as another user, not just the connected account",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "a706f2af-9bfb-4b1c-b580-9ff22d05c930|2026-08-28T03:39:15.357Z": [
+      {
+        "claim": "`DEGRADATION-LATENCY-UNITLESS` is done and verified",
+        "label": "supported",
+        "evidence": "~~Degradation-signal latency parameters carry no unit~~ (DEGRADATION-LATENCY-UNITLESS) ✅ resolved 2026-08-27"
+      },
+      {
+        "claim": "Commit `a3632f5` renames `latencyP95`/`latencyP50` → `latencyP95Seconds`/`latencyP50Seconds` across 5 files",
+        "label": "absent",
+        "evidence": "a3632f5 2026-08-27 22:36:26 -0500 chore(DEGRADATION-LATENCY-UNITLESS): suffix latency fields with unit — the commit message does not specify the number of files or the exact field names"
+      },
+      {
+        "claim": "Commit `5b48bb8` fixes a `SecondsSeconds` double-suffix",
+        "label": "supported",
+        "evidence": "5b48bb8 2026-08-27 22:38:42 -0500 fix(DEGRADATION-LATENCY-UNITLESS): correct double-Seconds suffix in comment"
+      },
+      {
+        "claim": "Commit `6096877` marks the entry resolved in `docs/BACKLOG.md`",
+        "label": "supported",
+        "evidence": "6096877 2026-08-27 22:39:04 -0500 docs(DEGRADATION-LATENCY-UNITLESS): mark resolved in BACKLOG.md"
+      },
+      {
+        "claim": "No unsuffixed `latencyP95`/`latencyP50` remain in `src/` or `dashboard/src`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "No `SecondsSeconds` remnants exist",
+        "label": "supported",
+        "evidence": "--- doubles exit: 1 (1 = clean) ---"
+      },
+      {
+        "claim": "`npx tsc --noEmit` returned clean",
+        "label": "supported",
+        "evidence": "TSC CLEAN"
+      },
+      {
+        "claim": "Working tree is clean",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Backlog is now 3 open items",
+        "label": "contradicted",
+        "evidence": "**Status 2026-08-27 — 7 open"
+      },
+      {
+        "claim": "`EVAL-ERROR-TYPE-UNMAPPED` closed at 22:28",
+        "label": "supported",
+        "evidence": "4f7c1c4 2026-08-27 22:28:46 -0500 docs(backlog): mark EVAL-ERROR-TYPE-UNMAPPED resolved and dc9c532 2026-08-27 22:28:16 -0500 feat(evaluations): add error_type column to table source (EVAL-ERROR-TYPE-UNMAPPED)"
+      },
+      {
+        "claim": "Line 13 of the status block says \"7 open\"",
+        "label": "supported",
+        "evidence": "**Status 2026-08-27 — 7 open: `HISTOGRAM-DEDUP-DROPS-ATTRS` ✅ resolved"
+      },
+      {
+        "claim": "Line 15's inline enumeration still lists `DEGRADATION-LATENCY-UNITLESS` as open",
+        "label": "contradicted",
+        "evidence": "~~`DEGRADATION-LATENCY-UNITLESS`~~ (P4, note) — the entry is marked with strikethrough and does not appear in the open list"
+      },
+      {
+        "claim": "The agent updated the section header at line 199 but not the second mention at line 15",
+        "label": "contradicted",
+        "evidence": "Both line 199 and the inline enumeration at line 15 show `DEGRADATION-LATENCY-UNITLESS` marked as resolved with ✅"
+      },
+      {
+        "claim": "Commit `ce5c61e` is a review finding",
+        "label": "supported",
+        "evidence": "ce5c61e 2026-08-27 22:33:00 -0500 fix(test): add error_type to makeEvaluationTableRow fixture (review finding)"
+      }
+    ],
+    "a706f2af-9bfb-4b1c-b580-9ff22d05c930|2026-08-28T03:25:54.512Z": [
+      {
+        "claim": "5 open items in `docs/BACKLOG.md`",
+        "label": "contradicted",
+        "evidence": "Status 2026-08-27 — 7 open: `HISTOGRAM-DEDUP-DROPS-ATTRS` ✅ resolved (commit `c0ca940`). Filed and closed same day."
+      },
+      {
+        "claim": "The status line at line 13 shows \"7 open\" but is stale",
+        "label": "supported",
+        "evidence": "Status 2026-08-27 — 7 open: `HISTOGRAM-DEDUP-DROPS-ATTRS` ✅ resolved (commit `c0ca940`). Filed and closed same day. ... The count held rather than fell, for the fifth time"
+      },
+      {
+        "claim": "Two items were closed on 2026-08-27 but are still counted in the line 13 status",
+        "label": "supported",
+        "evidence": "Status 2026-08-27 — 7 open: `HISTOGRAM-DEDUP-DROPS-ATTRS` ✅ resolved (commit `c0ca940`). Filed and closed same day. ... `SEMCONV-AGENT-METRICS-UNEMITTED` ✅ **resolved 2026-08-27** (commit `15c25da`"
+      },
+      {
+        "claim": "Dashboard uses the Auth0 SPA SDK directly",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "ROPC password grant is still enabled on the SPA",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "No golden dataset exists anywhere in the quality pipeline",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Everything uses reference-free G-Eval/QAG over live sessions",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The `'logs'` half of the split taken 2026-08-17 was shipped",
+        "label": "supported",
+        "evidence": "split taken 2026-08-17: the `'logs'` half is ✅ shipped (schema field + reader mapping, mutation-proven, no migration)"
+      },
+      {
+        "claim": "Migration `0006` contains `CHECK (score_value IS NOT NULL OR score_label IS NOT NULL)`",
+        "label": "supported",
+        "evidence": "migration 0006's `CHECK (score_value IS NOT NULL OR score_label IS NOT NULL)`"
+      },
+      {
+        "claim": "`EVAL-ERROR-TYPE-UNMAPPED` has no section body in the file",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "Its content lives only inside the line-15 status paragraph",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "`DegradationSignalInput.latencyP95/.latencyP50` are located at `src/lib/quality/qfe-degradation.ts:80`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "These fields carry no unit",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The sole consumer is a unit-invariant ratio",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "The sole production caller passes `null`",
+        "label": "absent",
+        "evidence": "none"
+      },
+      {
+        "claim": "`HISTOGRAM-DEDUP-DROPS-ATTRS` was closed 2026-08-27 at commit `c0ca940`",
+        "label": "supported",
+        "evidence": "Status 2026-08-27 — 7 open: `HISTOGRAM-DEDUP-DROPS-ATTRS` ✅ resolved (commit `c0ca940`). Filed and closed same day."
+      },
+      {
+        "claim": "`SEMCONV-AGENT-METRICS-UNEMITTED` was closed 2026-08-27 at commit `15c25da`",
+        "label": "supported",
+        "evidence": "`SEMCONV-AGENT-METRICS-UNEMITTED` ✅ **resolved 2026-08-27** (commit `15c25da`"
+      },
+      {
+        "claim": "`METRIC-NAME-SUBSTRING-CLAIM` was deployed at `115c09c4`",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ],
+    "c2f32204-3eb2-4a74-9bfd-93b3fa59890b|2026-08-31T20:22:36.380Z": [
+      {
+        "claim": "Current directory is `/Users/alyshialedlie/.claude`",
+        "label": "supported",
+        "evidence": "/Users/alyshialedlie/.claude"
+      },
+      {
+        "claim": "direnv reports `.envrc` is blocked in this directory",
+        "label": "supported",
+        "evidence": "direnv: error /Users/alyshialedlie/.claude/.envrc is blocked. Run `direnv allow` to approve its content"
+      },
+      {
+        "claim": "The `.envrc` file includes environment variables `CLAUDE_TELEMETRY_DIR` and `TELEMETRY_DIR`",
+        "label": "absent",
+        "evidence": "none"
+      }
+    ]
+  },
+  "criterion": "hallucination"
+}
