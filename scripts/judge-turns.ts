@@ -359,8 +359,8 @@ export const CONTEXT_TRUNCATION_MARKER = '\n…[truncated to fit the judge input
  * Fit tool results to what `testCaseSchema` accepts: the latest
  * MAX_TOOL_CONTEXT_ITEMS / MAX_CONTEXT_ITEMS entries (whichever is smaller),
  * each at most MAX_TEXT_LENGTH characters, so one oversized tool result cannot
- * fail every metric for its turn with "Invalid TestCase … too_big". The latest,
- * as `extractTurns` keeps: those are what the reply rests on.
+ * fail every metric for its turn with "Invalid TestCase … too_big". Keeps the
+ * latest, matching `extractTurns`.
  */
 export function fitContextForJudge(toolResults: readonly string[]): string[] {
   const itemLimit = Math.min(MAX_TOOL_CONTEXT_ITEMS, MAX_CONTEXT_ITEMS);
