@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } 
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 import { emptyAccountIndex, postEvaluationRecords } from '../post-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
-import { evaluationId, MAX_BATCH_SIZE } from '../upload-evaluations.js';
+import { evaluationId, INGEST_URL_NOT_SET_MESSAGE, MAX_BATCH_SIZE } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_PREFIX } from '../../../src/lib/core/obtool-contract.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
@@ -133,5 +133,23 @@ describe('postEvaluationRecords', () => {
 
     expect(summary.byDestination).toEqual({ webhook: 1, [KEY_REF]: 1 });
     expect(ingest.requests).toHaveLength(0);
+  });
+
+  it('fails without sending when OBTOOL_INGEST_URL is unset', async () => {
+    vi.stubEnv('OBTOOL_INGEST_URL', '');
+
+    const summary = await post([record({ identityKeyRef: KEY_REF })]);
+
+    expect(summary).toMatchObject({ sent: 0, failure: INGEST_URL_NOT_SET_MESSAGE });
+    expect(ingest.requests).toHaveLength(0);
+  });
+
+  it('still counts a dry run when OBTOOL_INGEST_URL is unset', async () => {
+    vi.stubEnv('OBTOOL_INGEST_URL', '');
+
+    const summary = await post([record({ identityKeyRef: KEY_REF })], true);
+
+    expect(summary).toMatchObject({ sent: 1 });
+    expect(summary.failure).toBeUndefined();
   });
 });

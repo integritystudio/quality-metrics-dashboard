@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -17,6 +17,8 @@ import {
   payloadManifestKey,
   type ShippedIndex,
   type EvaluationPayload,
+  INGEST_URL_ENV,
+  INGEST_URL_NOT_SET_MESSAGE,
   main,
 } from '../upload-evaluations.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex } from '../account-stamps.js';
@@ -548,4 +550,21 @@ describe('main command line', () => {
       expect(await main([flag])).toBe(1);
     },
   );
+
+  describe('without an ingest URL', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    it.each([[undefined], ['']])('exits 1 naming the missing URL when the secret is set and OBTOOL_INGEST_URL is %j', async (value) => {
+      vi.stubEnv('INJECT_HMAC_SECRET', 'secret');
+      vi.stubEnv(INGEST_URL_ENV, value);
+      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(await main([])).toBe(1);
+
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining(INGEST_URL_NOT_SET_MESSAGE));
+    });
+  });
 });

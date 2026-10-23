@@ -16,6 +16,7 @@
  */
 
 import {
+  INGEST_URL_NOT_SET_MESSAGE,
   INTER_BATCH_DELAY_MS,
   MAX_BATCH_SIZE,
   WEBHOOK_DESTINATION,
@@ -115,6 +116,10 @@ export async function postEvaluationRecords(
   const { baseUrl, secret } = resolveSendConfig();
   if (!opts.dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {
     summary.failure = 'INJECT_HMAC_SECRET is not set, so unstamped records cannot be signed';
+    return summary;
+  }
+  if (!opts.dryRun && !baseUrl) {
+    summary.failure = INGEST_URL_NOT_SET_MESSAGE;
     return summary;
   }
 

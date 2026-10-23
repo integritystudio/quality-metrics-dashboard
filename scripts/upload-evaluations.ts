@@ -49,7 +49,7 @@
  * listed account and skips the age guard, and everything else in the window
  * is left unrecorded for the next normal run.
  *
- * Env: INJECT_HMAC_SECRET (required), OBTOOL_INGEST_URL (optional), and one
+ * Env: INJECT_HMAC_SECRET and OBTOOL_INGEST_URL (both required to send), and one
  * `OBTOOL_API_KEY*` per mapped account (all present under `doppler run … prd`).
  */
 
@@ -93,8 +93,8 @@ import { getOrThrow, increment, pushTo } from './collections.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
 
-/** Default ingest host. Mirrors `INGEST_API_URL` in src/tools/inject-evaluations.ts. */
-const DEFAULT_INGEST_URL = 'https://ingest.integritystudio.ai';
+export const INGEST_URL_ENV = 'OBTOOL_INGEST_URL';
+export const INGEST_URL_NOT_SET_MESSAGE = `${INGEST_URL_ENV} is not set, so there is no ingest host to send to`;
 
 /** The webhook's batch cap (`obtool-contract.ts`, shared with the ingest worker). */
 export const MAX_BATCH_SIZE = WEBHOOK_MAX_BATCH_SIZE;
@@ -621,14 +621,24 @@ export function deliveryFor(route: Route, env: NodeJS.ProcessEnv = process.env):
   return { kind: 'send', destination: destinationFor(route) };
 }
 
+const SECRET_NOT_SET_MESSAGE = 'INJECT_HMAC_SECRET is not set — nothing can be signed.';
+const RUN_UNDER_DOPPLER_HINT = 'Run under `doppler run --project integrity-studio --config prd`.';
+
+/** Why a real send cannot start, or undefined when the environment can sign and address it. */
+function sendConfigProblem(baseUrl: string | undefined, secret: string | undefined): string | undefined {
+  if (!secret) return SECRET_NOT_SET_MESSAGE;
+  if (!baseUrl) return INGEST_URL_NOT_SET_MESSAGE;
+  return undefined;
+}
+
 /**
  * Resolve the ingest base URL and HMAC secret from the environment. `asString`,
- * not `??`: an empty OBTOOL_INGEST_URL must fall back to the default host, and
- * `??` would keep the empty string and POST to `/v1/...`.
+ * not `??`: an empty OBTOOL_INGEST_URL must read as unset, and `??` would keep
+ * the empty string and POST to `/v1/...`.
  */
-export function resolveSendConfig(): { baseUrl: string; secret: string | undefined } {
+export function resolveSendConfig(): { baseUrl: string | undefined; secret: string | undefined } {
   return {
-    baseUrl: asString(process.env.OBTOOL_INGEST_URL) ?? DEFAULT_INGEST_URL,
+    baseUrl: asString(process.env[INGEST_URL_ENV]),
     secret: asString(process.env.INJECT_HMAC_SECRET),
   };
 }
@@ -678,9 +688,10 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
 export async function sendBatch(
   destination: string,
   payloads: EvaluationPayload[],
-  baseUrl: string,
+  baseUrl: string | undefined,
   secret: string | undefined,
 ): Promise<SendResult> {
+  if (baseUrl === undefined) throw new Error(INGEST_URL_NOT_SET_MESSAGE);
   if (destination === WEBHOOK_DESTINATION) {
     if (secret === undefined) throw new Error('The webhook destination needs INJECT_HMAC_SECRET');
     return postBatch(webhookRequest(baseUrl, payloads, secret));
@@ -744,7 +755,7 @@ function recordSkip(skips: Record<string, number>, delivered: string[], skip: Ma
 /** Counters and inputs one run shares across its files. */
 type RunState = {
   readonly opts: Options;
-  readonly baseUrl: string;
+  readonly baseUrl: string | undefined;
   readonly secret: string | undefined;
   readonly nowMs: number;
   readonly maxAgeMs: number;
@@ -958,8 +969,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   const opts = readOptions(argv);
   if (typeof opts === 'number') return opts;
   const { baseUrl, secret } = resolveSendConfig();
-  if (!secret && !opts.dryRun) {
-    console.error('[upload-evaluations] INJECT_HMAC_SECRET is not set — nothing can be signed. Run under `doppler run --project integrity-studio --config prd`.');
+  const problem = opts.dryRun ? undefined : sendConfigProblem(baseUrl, secret);
+  if (problem) {
+    console.error(`[upload-evaluations] ${problem} ${RUN_UNDER_DOPPLER_HINT}`);
     return 1;
   }
 
