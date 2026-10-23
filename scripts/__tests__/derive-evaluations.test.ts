@@ -16,6 +16,7 @@ import {
   postFloorMs,
   carryForwardDistributions,
   DERIVE_NO_REPOST_BEFORE_MS,
+  DRIFT_MIN_TOOL_SPANS,
   type TraceSpan,
 } from '../derive-evaluations.js';
 import { type EvalRecord } from '../eval-record.js';
@@ -548,7 +549,6 @@ describe('detectInputDrift', () => {
   const DAY_START_SEC = 1_790_553_600; // 2026-09-28T00:00:00Z
   const DAY = '2026-09-28';
   const TOOL_SPANS_PER_DAY = 25;
-  const MIN_TOOL_SPANS_TO_JUDGE = 20;
   const AGENT_FINALIZE_OFFSET_SEC = 10;
   const SYNTHETIC_INVOKE_OFFSET_SEC = 5;
 
@@ -634,12 +634,12 @@ describe('detectInputDrift', () => {
   });
 
   it('ignores a day with one tool span fewer than it needs to judge', () => {
-    expect(detectInputDrift(toolSpans(MIN_TOOL_SPANS_TO_JUDGE - 1, {}), null)).toEqual([]);
+    expect(detectInputDrift(toolSpans(DRIFT_MIN_TOOL_SPANS - 1, {}), null)).toEqual([]);
   });
 
   it('judges a day that has exactly the tool spans it needs', () => {
-    expect(detectInputDrift(toolSpans(MIN_TOOL_SPANS_TO_JUDGE, {}), null)).toEqual([
-      expect.stringMatching(new RegExp(`^${DAY}: ${MIN_TOOL_SPANS_TO_JUDGE} of ${MIN_TOOL_SPANS_TO_JUDGE} tool spans carry no success flag`)),
+    expect(detectInputDrift(toolSpans(DRIFT_MIN_TOOL_SPANS, {}), null)).toEqual([
+      expect.stringMatching(new RegExp(`^${DAY}: ${DRIFT_MIN_TOOL_SPANS} of ${DRIFT_MIN_TOOL_SPANS} tool spans carry no success flag`)),
     ]);
   });
 

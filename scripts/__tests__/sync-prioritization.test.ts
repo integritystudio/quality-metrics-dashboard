@@ -2,6 +2,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { prioritizeTraces, computeBudgetAllocation, MIN_TRACE_BUDGET, type KVEntry } from '../sync-to-kv.js';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
+import { PERIOD_MS } from '../../src/lib/constants.js';
 import { evaluation } from './support/evaluations.js';
 
 const WORST_SCORE = 0.1;
@@ -10,7 +11,7 @@ const REFERENCED_SCORE = 0.6;
 const BEST_SCORE = 0.9;
 const NEARLY_PERFECT_SCORE = 0.99;
 const OLD_TRACE_DAYS_AGO = 25;
-const PAST_RECENCY_WINDOW_DAYS = 31;
+const PAST_RECENCY_WINDOW_DAYS = PERIOD_MS['30d'] / TIME_MS.DAY + 1;
 const TRACE_KEY_MARKER = 'trace:';
 
 /** A trace's two KV entries, the evaluations entry first. */

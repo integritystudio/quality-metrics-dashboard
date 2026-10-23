@@ -48,10 +48,10 @@ One mutant at a time, run against the seven files only; the source restored afte
 | judge-consolidated:251 | tool turn `> 0` → `>= 0` | killed | killed |
 | judge-consolidated:580 | `max_tokens` stop reason inverted | survived | killed |
 
-**16 → 25 of 32 killed.** Every module under test now has a killed mutant within the seven files except
+**15 → 25 of 32 killed.** Every module under test now has a killed mutant within the seven files except
 `judge-dedup`, whose live code is covered by `judge-cloud-source.test.ts`.
 
-1. Killed by a test outside the seven (`judge-consolidated-batch.test.ts`, `judge-cloud-source.test.ts`).
+1. Survives the seven; a test outside them kills it (`judge-consolidated-batch.test.ts`, `judge-cloud-source.test.ts`).
 2. Dead code: `isThisScriptsRecord` has had no caller since `88e69e4`.
 3. Inside `main()` (the turn-limit clamp, the `canSpend` closure); needs a pure helper extracted to test.
 4. Equivalent: the handoff score is `hasError ? 0 : 1`, so nothing reaches 0.5.

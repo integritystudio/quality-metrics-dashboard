@@ -94,7 +94,7 @@ module under test and confirm at least one of its tests fails.
 
 **Status (2026-10-22).** The verdict and the spot-check are written in
 [`docs/reviews/2026-10-22-judge-suite-test-audit.md`](reviews/2026-10-22-judge-suite-test-audit.md):
-32 mutants went from 16 to 25 killed by the seven files, and each survivor is accounted for there.
+32 mutants went from 15 to 25 killed by the seven files, and each survivor is accounted for there.
 The rewrites that let a mutant through or could pass for the wrong reason have landed, and
 `test:scripts` is green (872). **What remains is the review's _Remaining_ rows:**
 - the `it.each` splits and `toBeCloseTo` → `toBe` changes;

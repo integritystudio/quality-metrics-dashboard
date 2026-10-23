@@ -15,7 +15,8 @@ import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/co
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { makeToolTurn, SEED_RECORDS } from './support/fixtures.js';
-import { SPAN_SESSION, taskSpan } from './support/spans.js';
+import { SPAN_SESSION, SPAN_START_SEC, taskSpan } from './support/spans.js';
+import { TIME_MS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
 type WireRecord = { timestamp: string; attributes: Record<string, unknown> };
@@ -45,8 +46,7 @@ describe('pipeline contract: derive → OTel', () => {
 
     const wire = overTheWire(derived);
 
-    // The scored span's start, SPAN_START_SEC.
-    expect(wire.timestamp).toBe('2024-02-08T13:46:40.000Z');
+    expect(wire.timestamp).toBe(new Date(SPAN_START_SEC * TIME_MS.SECOND).toISOString());
     expect(turnKeyOf(wire.timestamp)).toBe('2024-02-08T13:46:40');
     expect(wire.attributes).toMatchObject({
       [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'task_completion',

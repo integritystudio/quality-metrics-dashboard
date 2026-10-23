@@ -395,7 +395,7 @@ describe('createConsolidatedProvider', () => {
   const API_KEY = 'test-key-value';
   const END_TURN_STOP_REASON = 'end_turn';
   const REPLY_TEXT = '{"relevance":{}}';
-  let server: RecordingServer;
+  let server: RecordingServer | undefined;
 
   beforeAll(async () => {
     server = await startRecordingServer({ tls: true });
@@ -404,11 +404,11 @@ describe('createConsolidatedProvider', () => {
 
   afterAll(async () => {
     vi.unstubAllEnvs();
-    await server.close();
+    await server?.close();
   });
 
   function answerWith(stopReason: string): void {
-    server.respondWith(() => ({
+    defined(server).respondWith(() => ({
       status: HttpStatus.Ok,
       headers: { [CONTENT_TYPE_HEADER]: ContentType.Json },
       body: JSON.stringify({
