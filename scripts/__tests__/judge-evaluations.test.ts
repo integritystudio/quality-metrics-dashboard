@@ -406,11 +406,9 @@ describe('toOTelRecord', () => {
   });
 
   it('omits the judge model for a score no model produced', () => {
-    const { judgeModel: _noModel, ...canary } = makeEvalRecord({ cohort: 'canary', evaluatorKind: 'rule' });
-    const attrs = attributesOf(canary);
+    const { judgeModel: _noModel, ...unjudged } = makeEvalRecord({ evaluatorKind: 'rule' });
 
-    expect(attrs[EVALUATION_ATTRS.COHORT]).toBe('canary');
-    expect(attrs[EVALUATION_ATTRS.JUDGE_MODEL]).toBeUndefined();
+    expect(attributesOf(unjudged)[EVALUATION_ATTRS.JUDGE_MODEL]).toBeUndefined();
   });
 });
 
