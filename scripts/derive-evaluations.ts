@@ -654,7 +654,7 @@ export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDa
  */
 const INVOKE_AGENT_OPERATION = 'invoke_agent';
 /** Fewer tool spans than this in a day cannot tell a renamed attribute from a few hooks that failed before recording one. */
-const DRIFT_MIN_TOOL_SPANS = 20;
+export const DRIFT_MIN_TOOL_SPANS = 20;
 /** A day's tool spans may lack a success flag up to this share; past it the flag has most likely been renamed. */
 const DRIFT_MAX_MISSING_SUCCESS_SHARE = 0.5;
 

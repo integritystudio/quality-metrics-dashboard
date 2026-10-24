@@ -2,13 +2,16 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { prioritizeTraces, computeBudgetAllocation, MIN_TRACE_BUDGET, type KVEntry } from '../sync-to-kv.js';
 import type { EvaluationResult } from '../../../src/backends/index.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
+import { PERIOD_MS } from '../../src/lib/constants.js';
 import { evaluation } from './support/evaluations.js';
 
 const WORST_SCORE = 0.1;
 const MID_SCORE = 0.5;
 const REFERENCED_SCORE = 0.6;
 const BEST_SCORE = 0.9;
+const NEARLY_PERFECT_SCORE = 0.99;
 const OLD_TRACE_DAYS_AGO = 25;
+const PAST_RECENCY_WINDOW_DAYS = PERIOD_MS['30d'] / TIME_MS.DAY + 1;
 const TRACE_KEY_MARKER = 'trace:';
 
 /** A trace's two KV entries, the evaluations entry first. */
@@ -61,7 +64,9 @@ describe('prioritizeTraces', () => {
   it('ranks a trace without evaluations last, as if it scored 1', () => {
     const entries = [...traceEntries('unscored'), ...traceEntries('scored')];
 
-    expect(rankedIds(entries, [scored('scored', BEST_SCORE)])).toEqual(['scored', 'scored', 'unscored', 'unscored']);
+    // Past the recency window, so only the score separates the two.
+    expect(rankedIds(entries, [scored('scored', NEARLY_PERFECT_SCORE, PAST_RECENCY_WINDOW_DAYS)]))
+      .toEqual(['scored', 'scored', 'unscored', 'unscored']);
   });
 
   it('keeps both entries of a trace together however the input interleaves them', () => {
@@ -76,11 +81,13 @@ describe('prioritizeTraces', () => {
     const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
     const entries = [
       { key: `org:${ORG}:evaluations:trace:t1`, value: '{}' },
+      ...traceEntries('other'),
       { key: `org:${ORG}:trace:t1`, value: '{}' },
       ...traceEntries('t1'),
     ];
 
-    expect(rankedIds(entries)).toEqual(['t1', 't1', 't1', 't1']);
+    expect(rankedIds(entries, [scored('t1', WORST_SCORE), scored('other', BEST_SCORE)]))
+      .toEqual(['t1', 't1', 't1', 't1', 'other', 'other']);
   });
 
   it('returns nothing for no entries', () => {
