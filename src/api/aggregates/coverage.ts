@@ -17,7 +17,7 @@ export { RULE_EVALUATOR_TYPE };
 /**
  * Remove rule-based evaluations before computing the coverage matrix.
  * Rule evals have per-span traceId granularity that inflates the input universe
- * (CVG-RULE-FILTER). Keeps LLM judge evals and seed/canary evals (evaluatorType
+ * (CVG-RULE-FILTER). Keeps LLM judge evals and seed evals (evaluatorType
  * undefined or any non-rule value).
  */
 export function filterJudgeEvals(

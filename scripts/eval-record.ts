@@ -25,7 +25,7 @@ export const PRODUCER = 'dashboard:judge-evaluations';
 export const RULE_EVALUATOR_TYPE = _RULE_EVALUATOR_TYPE;
 
 /**
- * A seeded or canary score is a SHA-256 of the session and turn key mapped into
+ * A seeded score is a SHA-256 of the session and turn key mapped into
  * a range — deterministic and reproducible, with no model and no relationship
  * to the content being scored. That makes its *kind* `rule`; what marks it as
  * not-real-data is the cohort, never the kind (OBP16).
