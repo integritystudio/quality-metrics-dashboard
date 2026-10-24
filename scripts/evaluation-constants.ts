@@ -8,7 +8,7 @@
 import { join } from 'node:path';
 
 export const HOME = process.env.HOME ?? '';
-// Must match the producer: hooks/lib/constants.ts writes telemetry here.
+// Must match the producer: hooks/lib/core/constants.ts writes telemetry here.
 // `TELEMETRY_DIR` overrides it, as it does for the other scripts that read
 // telemetry, so a run can be pointed at a scratch directory.
 // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- an empty TELEMETRY_DIR must fall back to the default, not resolve paths against cwd
