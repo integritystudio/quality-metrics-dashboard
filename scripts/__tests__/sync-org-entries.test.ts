@@ -15,7 +15,6 @@ import {
   type OrgComputation,
   type OrgReadBackend,
 } from '../sync-to-kv.js';
-import { CANARY_EVALUATOR_TYPE } from '../evaluation-constants.js';
 import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
@@ -25,6 +24,8 @@ import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 /** 01:08 UTC, so every window's start is mid-day and the day rounding is visible. */
 const NOW = new Date('2026-10-08T01:08:00.000Z');
 const METRIC = FIXTURE_METRIC;
+/** Not a quality metric, so rows under it never reach a `metric:*` entry. */
+const FILLER_METRIC = 'filler';
 const TRACE_ID = 'a1b2c3d4e5f60718a1b2c3d4e5f60718';
 const SESSION_ID = 'session-1';
 const PREVIOUS_WEEK_SCORE = 0.3;
@@ -265,12 +266,12 @@ describe('dashboardEntry', () => {
 });
 
 describe('computeOrgEntries evaluation truncation', () => {
-  // Newest first, as the server returns them. Canary filler is dropped before
-  // aggregation, so only the two labelled rows reach the metric entries.
+  // Newest first, as the server returns them. The filler is named after no
+  // quality metric, so only the two labelled rows reach the metric entries.
   const newest = evaluation('newest', '2026-10-07T12:00:00.000Z', { traceId: TRACE_ID });
   const oldest = evaluation('oldest', '2026-09-20T12:00:00.000Z');
   const filler = (count: number): EvaluationResult[] => Array.from({ length: count }, (_, i) =>
-    evaluation(`canary-${i}`, '2026-10-06T12:00:00.000Z', { evaluatorType: CANARY_EVALUATOR_TYPE }));
+    evaluation(`filler-${i}`, '2026-10-06T12:00:00.000Z', { evaluationName: FILLER_METRIC }));
 
   describe('one row past QUERY_LIMIT', () => {
     let result: OrgComputation;

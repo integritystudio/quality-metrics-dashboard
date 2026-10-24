@@ -242,13 +242,3 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null | 
  * coverage filter (`src/api/aggregates/coverage.ts`) and the evaluation record
  * writer (`scripts/eval-record.ts`). */
 export const RULE_EVALUATOR_TYPE = 'rule';
-
-/**
- * Canary evaluations carry synthetic scores. Records written before OBP16 mark
- * one in the overloaded `evaluatorType`.
- *
- * Deprecation candidate: nothing produces canary records any more. This stays
- * only so the read-side filters keep excluding rows already stored in D1, KV
- * and local JSONL. Remove it, and those filters, once none remain.
- */
-export const CANARY_EVALUATOR_TYPE = 'canary';

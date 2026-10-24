@@ -24,7 +24,7 @@ const relevanceEval: EvaluationResult = evaluation('e-relevance', '2026-10-08T10
   evaluationName: 'relevance',
   scoreValue: 0.8,
   evaluatorKind: 'llm',
-  cohort: 'normal',   // 'canary' is filtered by the sync; use a non-excluded cohort
+  cohort: 'normal',
   traceId: 'trace-a',
   sessionId: 'sess-1',
 });

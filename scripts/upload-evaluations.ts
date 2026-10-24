@@ -65,7 +65,7 @@ import {
   LEGACY_EVALUATOR_TYPE_ATTR,
   LEGACY_SCORE_UNIT_ATTR,
 } from './eval-record.js';
-import { CANARY_EVALUATOR_TYPE, TELEMETRY_DIR } from './evaluation-constants.js';
+import { TELEMETRY_DIR } from './evaluation-constants.js';
 import {
   ACCOUNT_INDEX_WINDOW_DAYS,
   IDENTITY_KEY_REF_FIELD,
@@ -204,7 +204,7 @@ export type EvaluationPayload = {
   metadata?: Record<string, unknown>;
 }
 
-type MapSkip = 'not-an-evaluation' | 'canary' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
+type MapSkip = 'not-an-evaluation' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
 
 type MapResult =
   | {
@@ -261,12 +261,6 @@ function readCore(
   maxAgeMs: number,
 ): RecordCore | MapSkip {
   const cohort = asString(attrs[EVALUATION_ATTRS.COHORT]);
-  const legacyType = asString(attrs[LEGACY_EVALUATOR_TYPE_ATTR]);
-  // Canary scores are synthetic and would drag every average they land in.
-  // Deprecation candidate: nothing writes canary records any more; this guards
-  // pre-OBP16 rows already stored, which mark a canary in the overloaded legacy
-  // field, and goes with `CANARY_EVALUATOR_TYPE` once none remain.
-  if (legacyType === CANARY_EVALUATOR_TYPE) return 'canary';
 
   const tMs = recordEventMs(r);
   if (!Number.isNaN(tMs) && nowMs - tMs > maxAgeMs) return 'too-old';

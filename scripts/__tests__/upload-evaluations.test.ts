@@ -167,11 +167,6 @@ describe('mapRecord', () => {
     expect(payload?.traceId).toBe('top-level-trace');
   });
 
-  it('drops canary records marked by the legacy overloaded field', () => {
-    const { skip } = mapRecord(record({ [LEGACY_EVALUATOR_TYPE_ATTR]: 'canary' }), NOW, MAX_AGE_MS);
-    expect(skip).toBe('canary');
-  });
-
   it('drops records older than the max age rather than mis-dating them', () => {
     const old = {
       timestamp: '2026-09-01T00:00:00.000Z',

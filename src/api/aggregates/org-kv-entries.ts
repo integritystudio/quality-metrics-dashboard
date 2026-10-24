@@ -22,7 +22,6 @@ import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { pushTo } from '../../lib/collections.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import {
-  CANARY_EVALUATOR_TYPE,
   LATENCY_P95,
   RATE_DISPLAY_PRECISION,
   bigintReplacer,
@@ -116,20 +115,6 @@ export function toKVValue(value: unknown): string {
   return json;
 }
 
-/**
- * Drop canary evaluations before aggregation — their scores are synthetic and
- * would drag every average they land in.
- *
- * Records written before OBP16 mark a canary in the overloaded `evaluatorType`.
- *
- * Deprecation candidate: nothing produces canary records any more, so this only
- * guards rows already stored. Remove it, with `CANARY_EVALUATOR_TYPE`, once none
- * remain.
- */
-function filterCanary(evals: EvaluationResult[]): EvaluationResult[] {
-  return evals.filter(ev => ev.evaluatorType !== CANARY_EVALUATOR_TYPE);
-}
-
 export function buildCalibrationEntry(
   state: CalibrationState | null,
 ): KVEntry | null {
@@ -185,9 +170,9 @@ function spanSessionId(span: { attributes?: Record<string, unknown> | undefined 
   return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.session_id) as string | undefined;
 }
 
-/** Groups by metric with canaries dropped, the input every aggregate is built from. */
+/** Groups by metric, the input every aggregate is built from. */
 function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {
-  return group(filterCanary(evals), ev => ev.evaluationName);
+  return group(evals, ev => ev.evaluationName);
 }
 
 /** Narrows to rows with a non-empty `traceId`, so `group` keys them by `string`. */

@@ -20,5 +20,3 @@ export const TELEMETRY_DIR = process.env.TELEMETRY_DIR || join(HOME, '.claude-hi
  * dashboard served the percentiles from 2026-03-23 (CALIBRATION-READ-WRONG-DIR).
  */
 export const CALIBRATION_STATE_DIR = TELEMETRY_DIR;
-
-export { CANARY_EVALUATOR_TYPE } from '../src/api/api-constants.js';

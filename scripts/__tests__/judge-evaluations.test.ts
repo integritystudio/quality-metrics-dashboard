@@ -351,12 +351,6 @@ describe('seedEvaluations', () => {
     expect(sample.filter(ev => ev.judgeModel !== undefined)).toEqual([]);
   });
 
-  it('keeps canaries a small minority of seeded records', () => {
-    const MAX_CANARY_SHARE = 0.1;
-
-    expect(sample.filter(ev => ev.cohort === 'canary').length / sample.length).toBeLessThan(MAX_CANARY_SHARE);
-  });
-
   it('keeps seed-cohort scores inside their bands', () => {
     // Faithfulness and tool_correctness are seeded too; their bands are not pinned here.
     const bands: Array<[name: string, low: number, high: number]> = [
