@@ -204,7 +204,7 @@ export type EvaluationPayload = {
   metadata?: Record<string, unknown>;
 }
 
-type MapSkip = 'not-an-evaluation' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
+type MapSkip = 'not-an-evaluation' | 'shipped-as-event' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
 
 type MapResult =
   | {
@@ -371,6 +371,9 @@ export function mapRecord(record: unknown, nowMs: number, maxAgeMs: number): Map
   if (typeof record !== 'object' || record === null) return { skip: 'not-an-evaluation' };
   const r = record as Record<string, unknown>;
   if (r.name !== EVALUATION_RESULT_EVENT) return { skip: 'not-an-evaluation' };
+  // Only `appendEvaluation` stamps an id, and it also writes the record as a log event the span
+  // shipper carries under the writer's own key (HDF12); a webhook copy would only be dropped (RSR3).
+  if (stampedEvaluationId(r)) return { skip: 'shipped-as-event' };
 
   const attrs = recordAttributes(r);
   const core = readCore(r, attrs, nowMs, maxAgeMs);
@@ -418,9 +421,9 @@ export function fingerprint(line: string): string {
  * would give the same evaluation two ids.
  *
  * A record the hooks stamped with `integritystudio.evaluation.id` (HDF12) keeps
- * that id verbatim: the same record also ships as a log event, and ingest
- * projects it into the table under that id, so the webhook copy sent here must
- * carry the same one for the dedup index to see them as one evaluation.
+ * that id verbatim: ingest projects its log event into the table under that id.
+ * `mapRecord` no longer sends such a record (`shipped-as-event`), so this branch
+ * only keeps any other caller's id consistent with the row ingest already holds.
  */
 export function evaluationId(record: Record<string, unknown>): string {
   const stampedId = stampedEvaluationId(record);

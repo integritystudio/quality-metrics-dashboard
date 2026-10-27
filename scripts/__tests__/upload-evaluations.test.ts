@@ -176,6 +176,20 @@ describe('mapRecord', () => {
     expect(mapRecord(old, NOW, MAX_AGE_MS).skip).toBe('too-old');
   });
 
+  it('skips a record the hooks stamped with an evaluation id: it already shipped as a log event (RSR3)', () => {
+    const stamped = record({
+      [EVALUATION_ATTRS.PRODUCER]: 'hook:stop-quality-evaluation',
+      [EVALUATION_ATTRS.COHORT]: 'canary',
+      [INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]: STAMPED_EVALUATION_ID,
+    });
+    expect(mapRecord(stamped, NOW, MAX_AGE_MS).skip).toBe('shipped-as-event');
+  });
+
+  it('still maps a record whose id stamp is malformed, since no event carried it under that id', () => {
+    const malformed = record({ [INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]: 'not-an-id' });
+    expect(mapRecord(malformed, NOW, MAX_AGE_MS).skip).toBeUndefined();
+  });
+
   it('drops non-evaluation lines', () => {
     expect(mapRecord({ name: 'something.else' }, NOW, MAX_AGE_MS).skip).toBe('not-an-evaluation');
     expect(mapRecord(null, NOW, MAX_AGE_MS).skip).toBe('not-an-evaluation');
