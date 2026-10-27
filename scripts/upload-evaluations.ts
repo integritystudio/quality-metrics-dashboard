@@ -291,12 +291,15 @@ function scoreFields(attrs: Record<string, unknown>): Partial<EvaluationPayload>
   return fields;
 }
 
-/** Correlation ids. toOTelRecord puts trace and span top-level; the quality-evaluation hook puts them in attributes, so both are read. */
+/**
+ * Correlation ids. Trace and span are the record's own context, the operation evaluated (semconv).
+ * The hook's bare `trace.id` / `span.id` attributes are not read: they name the judge's call, not that operation.
+ */
 function idFields(r: Record<string, unknown>, attrs: Record<string, unknown>): Partial<EvaluationPayload> {
   const fields: Partial<EvaluationPayload> = {};
-  const traceId = asString(r.traceId) ?? asString(attrs['trace.id']);
+  const traceId = asString(r.traceId);
   if (traceId) fields.traceId = traceId;
-  const spanId = asString(r.spanId) ?? asString(attrs['span.id']);
+  const spanId = asString(r.spanId);
   if (spanId) fields.spanId = spanId;
   const sessionId = asString(attrs[EVALUATION_ATTRS.SESSION_ID]);
   if (sessionId) fields.sessionId = sessionId;

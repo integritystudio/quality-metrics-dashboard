@@ -58,16 +58,16 @@ function record(attrs: Record<string, unknown>, extra: Record<string, unknown> =
 }
 
 describe('mapRecord', () => {
-  it('maps a quality-evaluation hook record, reading trace/span ids from attributes', () => {
+  it('maps a quality-evaluation hook record, never reading the judge-span attributes as its trace/span', () => {
     const { payload, skip } = mapRecord(record({
       [EVALUATION_ATTRS.PRODUCER]: 'hook:stop-quality-evaluation',
       [EVALUATION_ATTRS.EVALUATOR_KIND]: 'llm',
       [EVALUATION_ATTRS.COHORT]: 'normal',
       [SESSION_ATTRIBUTES.ID]: 'sess-1',
-      'trace.id': 'trace-1',
-      'span.id': 'span-1',
+      'trace.id': 'judge-trace',
+      'span.id': 'judge-span',
       [GENAI_EVALUATION_ATTRIBUTES.EXPLANATION]: 'because',
-    }), NOW, MAX_AGE_MS);
+    }, { traceId: 'trace-1', spanId: 'span-1' }), NOW, MAX_AGE_MS);
 
     expect(skip).toBeUndefined();
     expect(payload).toMatchObject({
