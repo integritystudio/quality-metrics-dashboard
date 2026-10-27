@@ -78,7 +78,8 @@ import {
 } from './account-stamps.js';
 import { DRY_RUN_FLAG, UPLOAD_EXIT_SEND_FAILED, runWithRetry } from './pipeline-stages.js';
 import { CliArgError, parseCli, positiveIntArg, positiveNumberArg, runIfMain, type CliSpec } from './cli-args.js';
-import { describeFetchError, http1Fetch } from '../../src/lib/core/http1-fetch.js';
+import { describeFetchError } from '../../src/lib/core/describe-unknown.js';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import {
   WEBHOOK_MAX_BATCH_SIZE,
   WEBHOOK_MAX_EXPLANATION_LENGTH,

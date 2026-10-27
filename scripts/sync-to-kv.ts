@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { CloudBackend, ALL_ORGS_SCOPE } from '../../src/backends/cloud.js';
-import { http1Fetch, describeFetchError } from '../../src/lib/core/http1-fetch.js';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { EvaluationResult } from '../../src/backends/index.js';
 import { loadDegradationState, saveDegradationState } from '../../src/lib/quality/qfe-backtest.js';
 import { loadCalibrationState } from '../../src/lib/quality/qfe-percentiles.js';
@@ -71,7 +71,7 @@ import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } 
 import { DRY_RUN_FLAG, SYNC_BUDGET_FLAG } from './pipeline-stages.js';
 import { incrementIn, pushTo } from './collections.js';
 import { msToNs } from './hrt.js';
-import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
+import { describeFetchError, describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
 
 type CloudflareConfig = {
