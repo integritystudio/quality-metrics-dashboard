@@ -107,17 +107,28 @@ export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
   }
 }
 
-/**
- * The `--source=` family chose between local telemetry files and the cloud;
- * only the cloud remains, so these now fail rather than being ignored.
- */
-const REMOVED_SOURCE_FLAGS = ['--source', '--judge-source', '--derive-source'] as const;
+/** The `--source=` family chose between local telemetry files and the cloud; only the cloud remains. */
+const CLOUD_ONLY_REASON = 'derive and the judge read the cloud only';
 
-export function rejectRemovedSourceFlags(args: readonly string[]): void {
-  const stale = args.find(arg => REMOVED_SOURCE_FLAGS.some(flag => arg === flag || arg.startsWith(`${flag}=`)));
-  if (stale !== undefined) {
-    const [flagName = stale] = stale.split('=');
-    throw new CliArgError(`${flagName} was removed: derive and the judge read the cloud only`, 'unknown');
+/**
+ * Flags a stage no longer reads, each with why. Unknown flags are otherwise
+ * ignored, so a stale one would run the stage as if it were absent, which for
+ * the judge is a paid run.
+ */
+const REMOVED_FLAGS: ReadonlyMap<string, string> = new Map([
+  ['--backfill', 'the judge writes no placeholder scores'],
+  ['--seed', 'the judge has no offline mode (use --dry-run to price a run)'],
+  ['--source', CLOUD_ONLY_REASON],
+  ['--judge-source', CLOUD_ONLY_REASON],
+  ['--derive-source', CLOUD_ONLY_REASON],
+]);
+
+/** Throw on the first removed flag in `args`, given bare or as `--flag=value`. */
+export function rejectRemovedFlags(args: readonly string[]): void {
+  for (const arg of args) {
+    const [name = arg] = arg.split('=');
+    const reason = REMOVED_FLAGS.get(name);
+    if (reason !== undefined) throw new CliArgError(`${name} was removed: ${reason}`, 'unknown');
   }
 }
 
@@ -169,7 +180,7 @@ type StageScope = {
 
 /** A stage's `--days=` from its populate override, else its default. */
 function stageScopeArgs(args: readonly string[], scope: StageScope): string[] {
-  rejectRemovedSourceFlags(args);
+  rejectRemovedFlags(args);
   const cli = parseCli(args, { values: [scope.daysFlag] });
   const days = positiveIntArg(scope.daysFlag, cli.value(scope.daysFlag)) ?? scope.defaultDays;
   return [`${DAYS_FLAG}${days}`];
@@ -213,16 +224,6 @@ export const JUDGE_BATCH_FLAG = '--batch';
 export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
 /** judge-evaluations flag populate forwards: a cap on turns judged. */
 export const JUDGE_LIMIT_FLAG = '--limit';
-
-/** Asked the judge for hashed synthetic scores; nothing it produced was kept, so it was removed. */
-const REMOVED_SEED_FLAG = '--seed';
-
-/** Unknown flags are otherwise ignored, so a stale `--seed` would start a paid judge run. */
-export function rejectRemovedSeedFlag(args: readonly string[]): void {
-  if (args.includes(REMOVED_SEED_FLAG)) {
-    throw new CliArgError(`${REMOVED_SEED_FLAG} was removed: the judge has no offline mode (use --dry-run to price a run)`, 'unknown');
-  }
-}
 /** Every stage's preview switch: compute and report, write nothing. */
 export const DRY_RUN_FLAG = '--dry-run';
 

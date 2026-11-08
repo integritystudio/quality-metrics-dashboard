@@ -48,7 +48,7 @@ import { canonicalizeAttributes } from '../../src/lib/observability/attribute-al
 import type { AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedSourceFlags } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
 import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
@@ -781,7 +781,7 @@ function updateCalibration(allEvals: readonly EvalRecord[], dryRun: boolean): vo
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
-  rejectRemovedSourceFlags(argv);
+  rejectRemovedFlags(argv);
   const dateScope = resolveDateScope(argv);
   const scope = readScope(dateScope, DERIVE_DEFAULT_DAYS);
   const postDays = resolvePostDays(argv);

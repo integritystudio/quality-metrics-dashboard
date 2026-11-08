@@ -21,11 +21,9 @@ import {
   evaluateTurnsBatched,
   processBatch,
   anthropicProviderFor,
-  rejectRemovedFlags,
   acquireLock,
   type JudgeMessagesClient,
 } from '../judge-evaluations.js';
-import { CliArgError } from '../cli-args.js';
 import {
   normalizeScore,
   toOTelRecord,
@@ -849,16 +847,6 @@ describe('evaluateTurnsBatched', () => {
 
     const recorded = batchProvider({ failure: runFailure });
     await expect(evaluateTurnsBatched(recorded, judgeOver(recorded), [makeTurn()], new Set())).rejects.toBe(runFailure);
-  });
-});
-
-describe('rejectRemovedFlags', () => {
-  it.each(['--backfill', '--seed'])('refuses the removed %s flag instead of starting a judge run', (flag) => {
-    expect(() => rejectRemovedFlags(['--limit', '5', flag])).toThrow(CliArgError);
-  });
-
-  it('accepts the flags the judge still reads', () => {
-    expect(() => rejectRemovedFlags(['--dry-run', '--batch', '--source=cloud', '--days=7'])).not.toThrow();
   });
 });
 

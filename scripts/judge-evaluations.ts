@@ -42,8 +42,8 @@ import type { EvaluatorKind, EvaluationCohort } from '../../src/lib/core/shared-
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
-import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedSeedFlag, rejectRemovedSourceFlags } from './pipeline-stages.js';
-import { CliArgError, exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
+import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags } from './pipeline-stages.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,
@@ -618,21 +618,10 @@ const JUDGE_CLI: CliSpec = {
   switches: [DRY_RUN_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
 };
 
-/** Unknown flags are otherwise ignored, so a stale `--backfill` would start a paid judge run. */
-const REMOVED_BACKFILL_FLAG = '--backfill';
-
-export function rejectRemovedFlags(args: readonly string[]): void {
-  if (args.includes(REMOVED_BACKFILL_FLAG)) {
-    throw new CliArgError(`${REMOVED_BACKFILL_FLAG} was removed`, 'unknown');
-  }
-  rejectRemovedSeedFlag(args);
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const { cli, requestedLimit } = exitOnCliArgError('Error:', () => {
     rejectRemovedFlags(args);
-    rejectRemovedSourceFlags(args);
     const parsed = parseCli(args, JUDGE_CLI);
     return { cli: parsed, requestedLimit: positiveIntArg(JUDGE_LIMIT_FLAG, parsed.value(JUDGE_LIMIT_FLAG)) };
   });

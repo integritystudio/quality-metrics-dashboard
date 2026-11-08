@@ -18,6 +18,7 @@ import {
   isTransientNetworkFailure,
   judgeScopeArgs,
   nextStepAfter,
+  rejectRemovedFlags,
   runWithRetry,
 } from '../pipeline-stages.js';
 import { defined } from '../../src/__tests__/support/defined.js';
@@ -244,5 +245,21 @@ describe('deriveScopeArgs', () => {
     ['the removed --derive-source', ['--derive-source=local'], /--derive-source was removed/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => deriveScopeArgs(args)).toThrow(message);
+  });
+});
+
+describe('rejectRemovedFlags', () => {
+  it.each([
+    ['--backfill', /--backfill was removed: the judge writes no placeholder scores/],
+    ['--seed', /--seed was removed: the judge has no offline mode/],
+    ['--source', /--source was removed: derive and the judge read the cloud only/],
+    ['--source=cloud', /--source was removed/],
+    ['--derive-source=local', /--derive-source was removed/],
+  ])('refuses %s instead of running the stage without it', (flag, message) => {
+    expect(() => rejectRemovedFlags(['--limit', '5', flag])).toThrow(message);
+  });
+
+  it('accepts the flags the stages still read', () => {
+    expect(() => rejectRemovedFlags(['--dry-run', '--batch', '--per-criterion', '--limit', '5', '--days=7', '--sources'])).not.toThrow();
   });
 });

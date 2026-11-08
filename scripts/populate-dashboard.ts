@@ -54,7 +54,7 @@ import {
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
-  rejectRemovedSeedFlag,
+  rejectRemovedFlags,
   SYNC_RETRY_DELAYS_MS,
   deriveScopeArgs,
   isTransientNetworkFailure,
@@ -107,7 +107,7 @@ type PopulateArgs = {
 };
 
 function readArgs(argv: readonly string[]): PopulateArgs {
-  rejectRemovedSeedFlag(argv);
+  rejectRemovedFlags(argv);
   const cli = parseCli(argv, POPULATE_CLI);
   const limit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
   return {
