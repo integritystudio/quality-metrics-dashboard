@@ -13,7 +13,6 @@ npm run typecheck    # TS 7 — use this, NOT bare `npx tsc` (see TypeScript ver
 npm run typecheck:scripts    # TS 7 against scripts/ (tsconfig.scripts.json); add `-- --pretty false` for greppable output
 npm run lint         # ESLint (src/, scripts/, worker/)
 npm run build        # Production build
-npm run populate -- --seed   # Data pipeline (offline, synthetic judge scores)
 npm run populate             # Data pipeline (real judge; needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY)
 npm run test:e2e             # Playwright, chromium project (Auth0 stubbed; see E2E)
 npm run sync                 # KV sync only (--budget=3000 default)
@@ -119,7 +118,7 @@ A staff-only clone of the Flutter customer dashboard (IntegrityLandingPage `lib/
 - **`--mode test` is load-bearing**: `src/lib/auth0.ts` throws at import without `VITE_AUTH0_*`, and plain `vite` loads `.env` — untracked, so present only on developer machines. Test mode loads the tracked `.env.test` placeholders, which suffice because the SDK is stubbed under `VITE_E2E=1`.
 - **Never wrap an e2e run in `doppler run`** — the webServer's `tsx` child then never binds its port, and Playwright does *not* fail the health gate: it proceeds, and every API-backed spec fails against a dead proxy (`ECONNREFUSED 127.0.0.1:3001`). Export `OBTOOL_API_URL`/`OBTOOL_API_KEY` via `doppler secrets get … --plain` instead.
 - Seven specs assert on rendered metric content and **skip themselves** when `/api/health` reports `hasData: false` (worker-scoped fixture in `e2e/fixtures.ts`). Expect **36 passed / 7 skipped**.
-- **Lifting the skips needs evaluations in the cloud table**, not KV: `hasData` is `checkHealth()` asking the cloud API for ≥1 evaluation in 7 days. A plain `npm run populate` under `doppler run` does it after a few minutes (ingest → R2 → `*/5` flush → D1), but writes **production** telemetry unless `DEV_ORG_ID` scopes it. `--seed` does not lift them honestly: its synthetic scores land in real aggregates. Detail: [`docs/data-pipeline.md`](docs/data-pipeline.md#e2e-data-skips-and-the-pipeline).
+- **Lifting the skips needs evaluations in the cloud table**, not KV: `hasData` is `checkHealth()` asking the cloud API for ≥1 evaluation in 7 days. A plain `npm run populate` under `doppler run` does it after a few minutes (ingest → R2 → `*/5` flush → D1), but writes **production** telemetry unless `DEV_ORG_ID` scopes it. Detail: [`docs/data-pipeline.md`](docs/data-pipeline.md#e2e-data-skips-and-the-pipeline).
 
 ## Integration Tests (`e2e/integration/`)
 

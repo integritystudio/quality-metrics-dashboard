@@ -88,12 +88,11 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 | 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
-npm run populate -- --seed          # offline (synthetic judge scores)
 npm run populate                    # full (needs a judge API key, see below)
-npm run populate -- --dry-run --seed  # preview only, no writes
+npm run populate -- --dry-run      # preview only, no writes
 npm run populate -- --skip-judge    # rule-based + upload + sync
 npm run populate -- --skip-sync     # derive + judge + upload
-npm run populate -- --limit 5 --seed  # judge at most 5 turns
+npm run populate -- --limit 5      # judge at most 5 turns
 npm run populate -- --batch         # judge through the Message Batches API: 50% off, minutes not seconds
 npm run populate -- --per-criterion # one call per criterion (~10x cost)
 npm run populate -- --judge-days=30 # judge turns from the last 30 days instead of 7
@@ -103,7 +102,7 @@ npm run populate -- --derive-days=14      # derive over the last 14 days instead
 **Judge credentials.** The judge prefers `LLM_JUDGE_ANTHROPIC_KEY` and falls back to
 `ANTHROPIC_API_KEY`, so judge spend is attributable to its own key in the Usage and Cost
 Admin API rather than blended into a shared one. With neither set, populate fails closed
-(exit 1) rather than publishing synthetic scores; pass `--seed` explicitly for offline mode. The `[judge] summary:` line reports the key's variable name (never its
+(exit 1) rather than publishing synthetic scores; `--dry-run` prices a run without one. The `[judge] summary:` line reports the key's variable name (never its
 value) alongside real `response.usage` totals, the USD they imply, and the pre-run estimate.
 
 **Judge cost modes.** `--batch` is the cheap default for unattended runs and is what
