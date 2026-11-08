@@ -12,8 +12,10 @@
  * Turn text is read from the local transcripts. Judged, withheld and
  * held-for-key turns are dropped before `--limit` (judge-selection.ts).
  *
- * Results are posted straight to ingest (post-evaluations.ts) and appended to
- * `evaluations-<today>.jsonl`, which holds them for a re-send if the post fails.
+ * Results are posted straight to ingest (post-evaluations.ts). Each record
+ * routed to a mapped account is first appended to `logs-<today>.jsonl` as a log
+ * event (evaluation-events.ts), which the span shipper carries at the next
+ * session Stop if the post fails. `--seed` posts and writes nothing.
  *
  * Usage:
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run
@@ -29,7 +31,7 @@
  * judge spend is attributable to its own key (see judge-credentials.ts).
  */
 
-import { readFileSync, writeFileSync, appendFileSync, unlinkSync, linkSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, linkSync, renameSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type AnthropicSdk from '@anthropic-ai/sdk';
@@ -105,7 +107,7 @@ import {
   type ProviderUsage,
 } from './judge-usage.js';
 import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
-import { EVALUATIONS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
+import { appendEvaluationEvents } from './evaluation-events.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 const CONCURRENCY = 3;
@@ -561,15 +563,6 @@ function releaseLock(): void {
 }
 
 
-/** Append to today's file and return its path; each record keeps its turn time. */
-function writeEvaluations(evals: EvalRecord[]): string {
-  const today = toDateOnly(new Date());
-  const outFile = join(TELEMETRY_DIR, datedJsonlName(EVALUATIONS_FILE_PREFIX, today));
-  const content = `${evals.map(e => JSON.stringify(toOTelRecord(e))).join('\n')}\n`;
-  appendFileSync(outFile, content);
-  return outFile;
-}
-
 export async function processBatch<T, R>(
   items: T[],
   concurrency: number,
@@ -747,21 +740,22 @@ async function main(): Promise<void> {
     if (flatEvals.length === 0) {
       return;
     }
+    if (!judgeKey) {
+      console.log(`[judge] --seed: ${flatEvals.length} records scored; none written or posted`);
+      return;
+    }
 
-    // The file holds the records for a re-send. They also go straight to ingest,
-    // because `upload-evaluations` refuses anything older than --max-age-hours
-    // and a judged turn is usually weeks old.
-    const outFile = writeEvaluations(flatEvals);
-
-    if (judgeKey) {
-      const posted = await postEvaluationRecords(flatEvals.map(ev => toOTelRecord(ev)), { dryRun: false, accounts });
-      console.log(`[judge] posted ${formatPostSummary(posted)}`);
-      if (posted.failure) {
-        // Ingest drops any id it already holds, so re-sending the whole file is safe.
-        console.error(`[judge] records are in ${outFile}; re-send them with upload-evaluations --days=1 and a --max-age-hours that reaches the oldest turn`);
-        // Soft, so populate still runs upload + sync; this outranks a summary code.
-        process.exitCode = JUDGE_EXIT_POST_FAILED;
-      }
+    const records = flatEvals.map(ev => toOTelRecord(ev) as Record<string, unknown>);
+    // Written before the post, so a run killed mid-post still ships them.
+    const backup = appendEvaluationEvents(records, accounts);
+    console.log(`[judge] backup: ${backup.written}/${records.length} records as log events in ${backup.file}`);
+    const posted = await postEvaluationRecords(records, { dryRun: false, accounts });
+    console.log(`[judge] posted ${formatPostSummary(posted)}`);
+    if (posted.failure) {
+      console.error(`[judge] the span shipper delivers the ${backup.written} account-stamped records at the next session Stop; `
+        + `the other ${records.length - backup.written} were not delivered, and the next run re-judges their turns`);
+      // Soft, so populate still runs its later stages; this outranks a summary code.
+      process.exitCode = JUDGE_EXIT_POST_FAILED;
     }
 
   } finally {

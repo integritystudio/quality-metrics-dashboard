@@ -36,12 +36,12 @@
  *   tsx scripts/upload-evaluations.ts --max-age-hours=48
  *   tsx scripts/upload-evaluations.ts --days=11 --only-keys=manifest.jsonl
  *
- * Derive posts every record itself and writes no file (cloud-read Phase 6), so
- * what this script carries is the records only it delivers:
- * `hook:stop-session-summary`, `hook:stop-quality-evaluation` and
- * `survival-fitness`. The judge posts its own records too (Phase 4) but still
- * appends them to these files, so a judge record young enough to pass the age
- * guard is sent again here, and ingest drops it on its `evaluationId`.
+ * Derive posts every record itself and writes no file (cloud-read Phase 6).
+ * The judge posts its own records and backs them up as log events in
+ * `logs-*.jsonl` (evaluation-events.ts), not in these files. The hook producers
+ * (`hook:stop-session-summary`, `hook:stop-quality-evaluation`,
+ * `survival-fitness`) ship as log events too, so every record left here is
+ * skipped as `shipped-as-event` (RSR3).
  *
  * `--only-keys` re-ships exactly the records a manifest names, for replacing
  * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md): each line is
@@ -131,7 +131,7 @@ const MAX_SEND_ATTEMPTS = SEND_RETRY_DELAYS_MS.length + 1;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /** Recorded on every row this script ships, so cloud rows are attributable. */
-const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
+export const UPLOAD_SERVICE_NAME = 'dashboard:upload-evaluations';
 
 /**
  * `evaluations-YYYY-MM-DD.jsonl`, written by the hooks and the judge. Derive's
