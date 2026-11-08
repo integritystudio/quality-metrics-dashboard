@@ -11,7 +11,7 @@
  * judge-hallucination-eval.ts). Over HTTP/1.1 a dead connection is dropped
  * from the pool and the next request opens a new one.
  *
- * Both imports are dynamic so that a `--seed` run never loads the SDK.
+ * Both imports are dynamic so that a `--dry-run` never loads the SDK.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';

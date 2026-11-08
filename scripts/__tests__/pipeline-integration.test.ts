@@ -2,19 +2,19 @@
  * M34: the record contract between derive, the judge and sync. Both producers
  * post OTel `gen_ai.evaluation.result` events that sync later reads back from
  * the cloud; these tests pin, across a JSON round trip, the fields it reads.
- * Seed metrics, canaries and dedup are judge-evaluations.test.ts's.
+ * Judge criteria and dedup are judge-evaluations.test.ts's.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { trackTaskActivity, deriveTaskCompletionPerSession, sessionTasks } from '../derive-evaluations.js';
-import { seedEvaluations } from '../judge-evaluations.js';
+import { evaluateTurn } from '../judge-evaluations.js';
 import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { turnKeyOf } from '../judge-dedup.js';
-import { TOOL_CORRECTNESS_CRITERIA } from '../judge-criteria.js';
 import { evaluatorKindSchema, evaluationCohortSchema } from '../../../src/lib/core/shared-schemas.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
-import { makeToolTurn, SEED_RECORDS } from './support/fixtures.js';
+import { makeToolTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
+import { createMockLLM, judgeOver } from './support/mock-judge.js';
 import { SPAN_SESSION, SPAN_START_SEC, taskSpan } from './support/spans.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
@@ -61,13 +61,14 @@ describe('pipeline contract: derive → OTel', () => {
 });
 
 describe('pipeline contract: derive + judge → sync', () => {
-  it('sends every derived and seeded record with a 0-1 score and a kind and cohort the backend accepts', () => {
-    const records = [derivedTaskCompletion(), ...seedEvaluations([makeToolTurn()], new Set()).evals];
+  it('sends every derived and judged record with a 0-1 score and a kind and cohort the backend accepts', async () => {
+    const judged = await evaluateTurn(judgeOver(createMockLLM()), makeToolTurn(), new Set());
+    const records = [derivedTaskCompletion(), ...judged];
 
     const attributes = records.map(r => overTheWire(r).attributes);
 
     expect(attributes.map(a => a[GENAI_EVALUATION_ATTRIBUTES.NAME]))
-      .toEqual(['task_completion', ...SEED_RECORDS, TOOL_CORRECTNESS_CRITERIA.name]);
+      .toEqual(['task_completion', ...TOOL_TURN_RECORDS]);
     expect(attributes.filter(a => !isUnitScore(a[GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]))).toEqual([]);
     expect(attributes.filter(a => !evaluatorKindSchema.safeParse(a[EVALUATION_ATTRS.EVALUATOR_KIND]).success)).toEqual([]);
     expect(attributes.filter(a => !evaluationCohortSchema.safeParse(a[EVALUATION_ATTRS.COHORT]).success)).toEqual([]);

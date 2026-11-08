@@ -21,14 +21,13 @@
  *
  * Usage:
  *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
- *   npm run populate -- --seed                # offline: synthetic judge scores
- *   npm run populate -- --dry-run --seed      # preview only, no writes
+ *   npm run populate -- --dry-run             # preview only, no writes
  *   npm run populate -- --skip-judge          # rule-based + upload + sync only
  *   npm run populate -- --skip-derive --skip-judge --sync-budget 700
  *                                             # refresh only: upload + sync, capped KV writes (the hourly launchd job)
  *   npm run populate -- --skip-upload         # derive + judge + sync (derive still posts its own records)
  *   npm run populate -- --skip-sync           # derive + judge + upload only
- *   npm run populate -- --limit 5 --seed      # judge at most 5 turns
+ *   npm run populate -- --limit 5             # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
  *   npm run populate -- --judge-days=30       # judge turns from the last 30 days instead of 7
@@ -39,7 +38,7 @@
  *   3-12  a stage's soft failure, forwarded after the remaining stages still
  *         ran; each code is documented on its constant in pipeline-stages.ts
  *   1     any other stage failure, and the pipeline stops there. Also: no judge
- *         key and neither --seed nor --skip-judge given, so nothing runs
+ *         key and no --skip-judge given, so nothing runs
  *
  * derive-evaluations, upload-evaluations and sync-to-kv are retried on transient
  * network failures with the bounded schedule in pipeline-stages.ts.
@@ -55,7 +54,7 @@ import {
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
-  JUDGE_SEED_FLAG,
+  rejectRemovedSeedFlag,
   SYNC_RETRY_DELAYS_MS,
   deriveScopeArgs,
   isTransientNetworkFailure,
@@ -84,7 +83,7 @@ const POPULATE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG, SYNC_BUDGET_ARG],
   switches: [
     SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_UPLOAD_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
-    JUDGE_SEED_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
+    JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
 
@@ -99,7 +98,6 @@ type PopulateArgs = {
   skipUpload: boolean;
   skipSync: boolean;
   dryRun: boolean;
-  seed: boolean;
   batch: boolean;
   perCriterion: boolean;
   limit: string | undefined;
@@ -109,6 +107,7 @@ type PopulateArgs = {
 };
 
 function readArgs(argv: readonly string[]): PopulateArgs {
+  rejectRemovedSeedFlag(argv);
   const cli = parseCli(argv, POPULATE_CLI);
   const limit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
   return {
@@ -117,7 +116,6 @@ function readArgs(argv: readonly string[]): PopulateArgs {
     skipUpload: cli.has(SKIP_UPLOAD_FLAG),
     skipSync: cli.has(SKIP_SYNC_FLAG),
     dryRun: cli.has(DRY_RUN_FLAG),
-    seed: cli.has(JUDGE_SEED_FLAG),
     batch: cli.has(JUDGE_BATCH_FLAG),
     perCriterion: cli.has(JUDGE_PER_CRITERION_FLAG),
     limit: limit === undefined ? undefined : String(limit),
@@ -127,21 +125,20 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   };
 }
 
-const { skipDerive, skipJudge, skipUpload, skipSync, dryRun, seed, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
+const { skipDerive, skipJudge, skipUpload, skipSync, dryRun, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key: never fall back to
 // synthetic scores, which fill the dashboard with plausible numbers while every
-// stage reports success. Seeded scores only on request (--seed), or --skip-judge
-// to leave judge metrics out. resolveJudgeApiKey counts both credential names.
+// stage reports success. --skip-judge leaves judge metrics out.
+// resolveJudgeApiKey counts both credential names.
 // Dry runs are exempt: the judge's own --dry-run spends nothing.
-if (!seed && !skipJudge && !dryRun && !resolveJudgeApiKey()) {
+if (!skipJudge && !dryRun && !resolveJudgeApiKey()) {
   console.error(
     `[populate] Error: neither ${JUDGE_API_KEY_ENV} nor ${DEFAULT_API_KEY_ENV} is set, so the ` +
     'judge cannot run. Refusing to fall back to synthetic scores: a seeded dashboard looks ' +
     'populated and is fabricated. Set the key (e.g. run under `doppler run --project ' +
-    'integrity-studio --config prd`), pass --seed to ask for synthetic scores explicitly, ' +
-    'or pass --skip-judge to leave judge metrics out.',
+    'integrity-studio --config prd`), or pass --skip-judge to leave judge metrics out.',
   );
   process.exit(1);
 }
@@ -248,7 +245,6 @@ async function runDerive(): Promise<void> {
 function runJudge(): void {
   const judgeArgs: string[] = [...judgeScope];
   if (dryRun) judgeArgs.push(DRY_RUN_FLAG);
-  if (seed) judgeArgs.push(JUDGE_SEED_FLAG);
   if (limit) judgeArgs.push(JUDGE_LIMIT_FLAG, limit);
   if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
   if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);

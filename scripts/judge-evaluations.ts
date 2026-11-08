@@ -15,7 +15,7 @@
  * Results are posted straight to ingest (post-evaluations.ts). Each record
  * routed to a mapped account is first appended to `logs-<today>.jsonl` as a log
  * event (evaluation-events.ts), which the span shipper carries at the next
- * session Stop if the post fails. `--seed` posts and writes nothing.
+ * session Stop if the post fails.
  *
  * Usage:
  *   npx tsx dashboard/scripts/judge-evaluations.ts --dry-run
@@ -32,7 +32,6 @@
  */
 
 import { readFileSync, writeFileSync, unlinkSync, linkSync, renameSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type AnthropicSdk from '@anthropic-ai/sdk';
 import pLimit from 'p-limit';
@@ -43,7 +42,7 @@ import type { EvaluatorKind, EvaluationCohort } from '../../src/lib/core/shared-
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
-import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_SEED_FLAG, DRY_RUN_FLAG, rejectRemovedSourceFlags } from './pipeline-stages.js';
+import { JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG, JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedSeedFlag, rejectRemovedSourceFlags } from './pipeline-stages.js';
 import { CliArgError, exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import {
   createBatchProvider,
@@ -68,9 +67,7 @@ import {
   NORMAL_COHORT,
   PRODUCER,
   SCORE_PREVIEW_DECIMALS,
-  SEED_COHORT,
   SESSION_ID_PREVIEW_LEN,
-  SYNTHETIC_EVALUATOR_KIND,
   EVAL_SCORE_PRECISION,
   legacyEvaluatorType,
   normalizeScore,
@@ -90,7 +87,7 @@ import {
   TOOL_INTEGRATION_CRITERIA,
   TOOL_SELECTION_CRITERIA,
 } from './judge-criteria.js';
-import { judgedByKey, turnKeyOf, turnScoreKey } from './judge-dedup.js';
+import { judgedByKey, turnKeyOf } from './judge-dedup.js';
 import {
   anchorTurns,
   extractTurns,
@@ -107,7 +104,7 @@ import {
   type ProviderUsage,
 } from './judge-usage.js';
 import { evalFailures, failureClasses, readRunState, resetFailureTracking, summarizeJudgeRun, trackFailure, writeRunState } from './judge-failures.js';
-import { appendEvaluationEvents } from './evaluation-events.js';
+import { appendEvaluationEvents, type EventBackup } from './evaluation-events.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 const CONCURRENCY = 3;
@@ -130,8 +127,8 @@ const DRY_RUN_TOP_SESSIONS = 10;
 const MAX_TURN_LIMIT = 10_000;
 
 /**
- * `kind` and `cohort` are separate fields on purpose (OBP16), so a hashed seed
- * score can never be written as a judged one. `judgeModel` is omitted for any
+ * `kind` and `cohort` are separate fields on purpose (OBP16), so a record
+ * cannot claim to be judged unless it was. `judgeModel` is omitted for any
  * score no model produced.
  */
 type EvalRecordFields = {
@@ -239,81 +236,6 @@ export function createLLMJudge(llm: LLMProvider, batch = false): LLMJudge {
       error: (msg) => console.error(`  [error] ${msg}`),
     },
   });
-}
-
-/** Largest value of the two hash bytes a seeded score is read from. */
-const UINT16_MAX = 0xFFFF;
-
-export function hashToScore(input: string, min: number, max: number): number {
-  const hash = createHash('sha256').update(input).digest();
-  const value = hash.readUInt16BE(0) / UINT16_MAX;
-  return normalizeScore(min + value * (max - min));
-}
-
-export type SeedResult = {
-  evals: EvalRecord[];
-}
-
-type ScoreRange = { readonly min: number; readonly max: number };
-
-type SeedMetric = {
-  evalName: string;
-  label: string;
-  /** Prefix of the hashed input, so each metric draws its own score. */
-  hashKey: string;
-  range: ScoreRange;
-  /** Seeded only for turns with tool results. */
-  needsTools?: boolean;
-}
-
-/** Hallucination's draw; faithfulness is seeded as its complement. */
-const SEED_HALLUCINATION: SeedMetric = {
-  evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination', hashKey: 'hal',
-  range: { min: 0.0, max: 0.09 },
-};
-
-/** In record order. */
-const SEED_METRICS: readonly SeedMetric[] = [
-  {
-    evalName: RELEVANCE_EVAL_NAME, label: 'Relevance', hashKey: 'rel',
-    range: { min: 0.70, max: 1.0 },
-  },
-  {
-    evalName: COHERENCE_EVAL_NAME, label: 'Coherence', hashKey: 'coh',
-    range: { min: 0.75, max: 1.0 },
-  },
-  { ...SEED_HALLUCINATION, evalName: FAITHFULNESS_EVAL_NAME, label: 'Faithfulness' },
-  SEED_HALLUCINATION,
-  {
-    evalName: TOOL_CORRECTNESS_CRITERIA.name, label: 'Tool correctness', hashKey: 'tc',
-    range: { min: 0.75, max: 1.0 }, needsTools: true,
-  },
-];
-
-export function seedEvaluations(turns: Turn[], existingKeys: Set<string>): SeedResult {
-  const evals: EvalRecord[] = [];
-
-  for (const turn of turns) {
-    const turnKey = turnKeyOf(turn.timestamp);
-    const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
-
-    for (const metric of SEED_METRICS) {
-      if (metric.needsTools && turn.toolResults.length === 0) continue;
-      if (existingKeys.has(turnScoreKey(turn.sessionId, metric.evalName, turnKey))) continue;
-      const { min, max } = metric.range;
-      const drawn = hashToScore(`${metric.hashKey}:${turn.sessionId}:${turnKey}`, min, max);
-      const score = metric.evalName === FAITHFULNESS_EVAL_NAME ? normalizeScore(1 - drawn) : drawn;
-      evals.push(createEvalRecord(turn, {
-        evaluationName: metric.evalName,
-        scoreValue: score,
-        explanation: `${metric.label} (seeded) for session ${sessionPreview}`,
-        kind: SYNTHETIC_EVALUATOR_KIND,
-        cohort: SEED_COHORT,
-      }));
-    }
-  }
-
-  return { evals };
 }
 
 export type EvaluateTurnOptions = {
@@ -551,7 +473,7 @@ export function acquireLock(lockFile: string = LOCK_FILE): boolean {
   return lockOwnerAlive(owner) ? false : reclaimLock(lockFile, owner);
 }
 
-/** Take the lock or exit 1: two runs must not append to the ledger at once. */
+/** Take the lock or exit 1: two runs at once would judge the same turns twice. */
 function acquireLockOrExit(): void {
   if (acquireLock()) return;
   console.error('Error: Another judge-evaluations process is running (lockfile exists)');
@@ -562,6 +484,33 @@ function releaseLock(): void {
   try { unlinkSync(LOCK_FILE); } catch { /* ignore */ }
 }
 
+
+/** The backup is a fallback: failing to write it is logged and never stops the post. */
+function writeEventBackup(records: ReadonlyArray<Record<string, unknown>>, accounts: AccountIndex): EventBackup | undefined {
+  try {
+    const backup = appendEvaluationEvents(records, accounts);
+    console.log(`[judge] backup: ${backup.written}/${records.length} records as log events in ${backup.file}`);
+    return backup;
+  } catch (err) {
+    console.error(`[judge] backup not written (${describeUnknown(err)}); the post is the only delivery`);
+    return undefined;
+  }
+}
+
+/** Back the records up as log events, then post them; a failed post sets the soft exit code. */
+async function deliverEvaluations(flatEvals: EvalRecord[], accounts: AccountIndex): Promise<void> {
+  const records = flatEvals.map(ev => toOTelRecord(ev) as Record<string, unknown>);
+  // Written before the post, so a run killed mid-post still ships them.
+  const backedUp = writeEventBackup(records, accounts)?.written ?? 0;
+  const posted = await postEvaluationRecords(records, { dryRun: false, accounts });
+  console.log(`[judge] posted ${formatPostSummary(posted)}`);
+  if (posted.failure) {
+    console.error(`[judge] the span shipper delivers the ${backedUp} backed-up records at the next session Stop; `
+      + `the other ${records.length - backedUp} were not delivered, and the next run re-judges their turns`);
+    // Soft, so populate still runs its later stages; this outranks a summary code.
+    process.exitCode = JUDGE_EXIT_POST_FAILED;
+  }
+}
 
 export async function processBatch<T, R>(
   items: T[],
@@ -666,7 +615,7 @@ async function judgeTurns(
 /** Flags judge-evaluations reads itself; --days=/--date= are read by derive's resolvers. */
 const JUDGE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG],
-  switches: [DRY_RUN_FLAG, JUDGE_SEED_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
+  switches: [DRY_RUN_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
 };
 
 /** Unknown flags are otherwise ignored, so a stale `--backfill` would start a paid judge run. */
@@ -676,6 +625,7 @@ export function rejectRemovedFlags(args: readonly string[]): void {
   if (args.includes(REMOVED_BACKFILL_FLAG)) {
     throw new CliArgError(`${REMOVED_BACKFILL_FLAG} was removed`, 'unknown');
   }
+  rejectRemovedSeedFlag(args);
 }
 
 async function main(): Promise<void> {
@@ -687,7 +637,6 @@ async function main(): Promise<void> {
     return { cli: parsed, requestedLimit: positiveIntArg(JUDGE_LIMIT_FLAG, parsed.value(JUDGE_LIMIT_FLAG)) };
   });
   const dryRun = cli.has(DRY_RUN_FLAG);
-  const seed = cli.has(JUDGE_SEED_FLAG);
   const batch = cli.has(JUDGE_BATCH_FLAG);
   // Consolidated is the default (JCP4); --per-criterion opts out.
   const consolidated = !cli.has(JUDGE_PER_CRITERION_FLAG);
@@ -704,8 +653,7 @@ async function main(): Promise<void> {
     return;
   }
   const { turns, accounts, existingKeys } = discovery;
-  // --seed posts nothing, so only a real run skips turns it could not deliver.
-  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit, deliverableOnly: !seed });
+  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit, deliverableOnly: true });
 
   if (dryRun) {
     const selection = select(existingKeys);
@@ -714,11 +662,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Validate API key early (before expensive operations). Seed mode needs no
-  // key; the LLM branch below narrows on the same value.
-  const judgeKey = seed ? undefined : await resolveWorkingJudgeApiKey();
-  if (!seed && !judgeKey) {
-    console.error(`Error: no working ${JUDGE_API_KEY_ENV} or ${DEFAULT_API_KEY_ENV}: unset, or rejected by Anthropic (or use --seed for offline mode)`);
+  // Validate the API key before anything is spent.
+  const judgeKey = await resolveWorkingJudgeApiKey();
+  if (!judgeKey) {
+    console.error(`Error: no working ${JUDGE_API_KEY_ENV} or ${DEFAULT_API_KEY_ENV}: unset, or rejected by Anthropic (use --dry-run to price a run without one)`);
     process.exit(1);
   }
 
@@ -732,32 +679,8 @@ async function main(): Promise<void> {
 
     resetFailureTracking();
 
-    // No key means --seed; the guard above exited otherwise.
-    const flatEvals = judgeKey
-      ? await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated })
-      : seedEvaluations(allTurns, existingKeys).evals;
-
-    if (flatEvals.length === 0) {
-      return;
-    }
-    if (!judgeKey) {
-      console.log(`[judge] --seed: ${flatEvals.length} records scored; none written or posted`);
-      return;
-    }
-
-    const records = flatEvals.map(ev => toOTelRecord(ev) as Record<string, unknown>);
-    // Written before the post, so a run killed mid-post still ships them.
-    const backup = appendEvaluationEvents(records, accounts);
-    console.log(`[judge] backup: ${backup.written}/${records.length} records as log events in ${backup.file}`);
-    const posted = await postEvaluationRecords(records, { dryRun: false, accounts });
-    console.log(`[judge] posted ${formatPostSummary(posted)}`);
-    if (posted.failure) {
-      console.error(`[judge] the span shipper delivers the ${backup.written} account-stamped records at the next session Stop; `
-        + `the other ${records.length - backup.written} were not delivered, and the next run re-judges their turns`);
-      // Soft, so populate still runs its later stages; this outranks a summary code.
-      process.exitCode = JUDGE_EXIT_POST_FAILED;
-    }
-
+    const flatEvals = await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated });
+    if (flatEvals.length > 0) await deliverEvaluations(flatEvals, accounts);
   } finally {
     releaseLock();
   }

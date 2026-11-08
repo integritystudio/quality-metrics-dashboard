@@ -18,8 +18,8 @@
  *   environment — an account key, or `INJECT_HMAC_SECRET` for an unstamped
  *   turn, which takes the webhook. A run that has the secret judges it.
  *
- * The last two apply only when the run posts (`deliverableOnly`); `--seed`
- * writes its file and posts nothing.
+ * The last two apply only under `deliverableOnly`, which every judge run sets;
+ * tests clear it to check the judged rule alone.
  */
 
 import { ascending } from 'd3-array';

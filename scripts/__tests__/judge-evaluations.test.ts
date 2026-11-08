@@ -17,8 +17,6 @@ import {
   type Turn,
 } from '../judge-turns.js';
 import {
-  hashToScore,
-  seedEvaluations,
   evaluateTurn,
   evaluateTurnsBatched,
   processBatch,
@@ -43,7 +41,6 @@ import {
   HAIKU_MODEL,
   JUDGE_MAX_TOKENS,
   RELEVANCE_EVAL_NAME,
-  TOOL_CORRECTNESS_CRITERIA,
 } from '../judge-criteria.js';
 import {
   evalFailures,
@@ -64,7 +61,6 @@ import {
   BATCH_PRICE_RATIO,
   type JudgeTokenUsage,
 } from '../judge-usage.js';
-import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import type { LLMProvider } from '../../../src/lib/judge/llm-as-judge.js';
 import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
@@ -77,7 +73,8 @@ import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attribu
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 import { TRANSCRIPT_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
-import { judgedKeys, makeToolTurn, makeTurn, scoredKeys, SEED_RECORDS, TOOL_TURN_RECORDS, turnSeries } from './support/fixtures.js';
+import { judgedKeys, makeToolTurn, makeTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
+import { createMockLLM, judgeOver, mockResponse } from './support/mock-judge.js';
 import { useTempDir } from './support/temp-dir.js';
 import { transcriptMessage, writeJsonl } from './support/transcripts.js';
 
@@ -281,93 +278,6 @@ describe('normalizeScore', () => {
   });
 });
 
-describe('hashToScore', () => {
-  const UPPER_HALF = { min: 0.5, max: 1.0 };
-  const NARROW_RANGE = { min: 0.3, max: 0.9 };
-  const SAMPLE_COUNT = 100;
-
-  it('returns the same score for the same input', () => {
-    expect(hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max)).toBe(hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max));
-  });
-
-  it('returns different scores for different inputs', () => {
-    expect(hashToScore('test:abc', UPPER_HALF.min, UPPER_HALF.max)).not.toBe(hashToScore('test:def', UPPER_HALF.min, UPPER_HALF.max));
-  });
-
-  it('stays within the range it is given', () => {
-    const scores = Array.from({ length: SAMPLE_COUNT }, (_, i) => hashToScore(`input-${i}`, NARROW_RANGE.min, NARROW_RANGE.max));
-
-    expect(scores.filter(score => !(score >= NARROW_RANGE.min && score <= NARROW_RANGE.max))).toEqual([]);
-  });
-
-  it('returns at most 4 decimal places', () => {
-    const decimals = hashToScore('test', 0, 1).toString().split('.')[1]?.length ?? 0;
-
-    expect(decimals).toBeLessThanOrEqual(EVAL_SCORE_PRECISION);
-  });
-});
-
-describe('seedEvaluations', () => {
-  const SAMPLE_TURNS = 200;
-  const sample = seedEvaluations(turnSeries(SAMPLE_TURNS, { toolResults: ['ctx'] }), new Set()).evals;
-  const scoresOf = (cohort: string, name: string): number[] =>
-    sample.filter(ev => ev.cohort === cohort && ev.evaluationName === name).map(ev => ev.scoreValue);
-  const namesOf = (turn: Turn, existingKeys = new Set<string>()): string[] =>
-    seedEvaluations([turn], existingKeys).evals.map(e => e.evaluationName);
-
-  it('seeds relevance, coherence, faithfulness and hallucination for a turn without tool results', () => {
-    expect(namesOf(makeTurn())).toEqual(SEED_RECORDS);
-  });
-
-  it('adds tool_correctness for a turn with tool results', () => {
-    expect(namesOf(makeToolTurn())).toEqual([...SEED_RECORDS, TOOL_CORRECTNESS_CRITERIA.name]);
-  });
-
-  it('seeds only the metrics no stored score already covers', () => {
-    const turn = makeTurn();
-
-    expect(namesOf(turn, scoredKeys(turn, [HALLUCINATION_EVAL_NAME]))).toEqual([RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME]);
-    expect(namesOf(turn, scoredKeys(turn, SEED_RECORDS))).toEqual([]);
-  });
-
-  it('scores faithfulness and hallucination as complements', () => {
-    const { evals } = seedEvaluations([makeTurn()], new Set());
-    const score = (name: string): number => defined(evals.find(e => e.evaluationName === name)).scoreValue;
-
-    expect(score(FAITHFULNESS_EVAL_NAME) + score(HALLUCINATION_EVAL_NAME)).toBeCloseTo(1, EVAL_SCORE_PRECISION);
-  });
-
-  it('gives the same records for the same turn on every run', () => {
-    const turn = makeToolTurn();
-
-    expect(seedEvaluations([turn], new Set())).toEqual(seedEvaluations([turn], new Set()));
-  });
-
-  // OBP16: a seed score is hashed, so it may not claim an LLM produced it.
-  it('marks every record seed, rule-scored, with no judge model', () => {
-    expect(new Set(sample.map(ev => ev.cohort))).toEqual(new Set(['seed']));
-    expect(sample.filter(ev => ev.evaluator !== PRODUCER || ev.evaluatorKind !== 'rule')).toEqual([]);
-    expect(sample.filter(ev => ev.judgeModel !== undefined)).toEqual([]);
-  });
-
-  it('keeps seed-cohort scores inside their bands', () => {
-    // Faithfulness and tool_correctness are seeded too; their bands are not pinned here.
-    const bands: Array<[name: string, low: number, high: number]> = [
-      [RELEVANCE_EVAL_NAME, 0.70, 1.0],
-      [COHERENCE_EVAL_NAME, 0.75, 1.0],
-      [HALLUCINATION_EVAL_NAME, 0.0, 0.09],
-    ];
-
-    // Negated rather than `< low || > high`: NaN fails every comparison, so the
-    // positive form would let a NaN score through both arms.
-    const outOfBand = bands.flatMap(([name, low, high]) =>
-      scoresOf('seed', name).filter(score => !(score >= low && score <= high)).map(score => `${name}=${score}`));
-
-    expect(bands.filter(([name]) => scoresOf('seed', name).length === 0)).toEqual([]);
-    expect(outOfBand).toEqual([]);
-  });
-});
-
 describe('toOTelRecord', () => {
   const attributesOf = (record: EvalRecord): Record<string, unknown> =>
     (toOTelRecord(record) as { attributes: Record<string, unknown> }).attributes;
@@ -462,24 +372,6 @@ describe('processBatch', () => {
 
 // evaluateTurn (B14)
 //
-// G-Eval makes 2 calls: (1) step generation, (2) evaluation scoring (1-5 scale).
-// QAG makes 2 calls: (1) statement extraction (JSON array), (2) verdict per statement.
-
-const MOCK_GEVAL_STEPS = '1. Check quality\n2. Assess completeness\n3. Verify accuracy';
-const MOCK_GEVAL_SCORE = 4;
-const JUDGE_TIMEOUT_MS = 5000;
-
-function mockResponse(prompt: string): { text: string } {
-  if (prompt.includes('Generate detailed')) return { text: MOCK_GEVAL_STEPS };
-  if (prompt.includes('statements') || prompt.includes('claims')) return { text: JSON.stringify(['The response is correct.']) };
-  if (prompt.includes('verdict') || prompt.includes('supported')) return { text: 'yes' };
-  return { text: String(MOCK_GEVAL_SCORE) };
-}
-
-function createMockLLM(): LLMProvider {
-  return { generate: (prompt: string) => Promise.resolve(mockResponse(prompt)) };
-}
-
 function createFailingLLM(failKeyword: string): LLMProvider {
   return {
     generate(prompt: string) {
@@ -488,8 +380,6 @@ function createFailingLLM(failKeyword: string): LLMProvider {
     },
   };
 }
-
-const judgeOver = (llm: LLMProvider): LLMJudge => new LLMJudge(llm, { timeoutMs: JUDGE_TIMEOUT_MS, maxRetries: 0 });
 
 async function judgedNames(llm: LLMProvider, turn: Turn, existingKeys = new Set<string>()): Promise<string[]> {
   return (await evaluateTurn(judgeOver(llm), turn, existingKeys)).map(e => e.evaluationName);
@@ -963,8 +853,8 @@ describe('evaluateTurnsBatched', () => {
 });
 
 describe('rejectRemovedFlags', () => {
-  it('refuses the removed --backfill flag instead of starting a judge run', () => {
-    expect(() => rejectRemovedFlags(['--limit', '5', '--backfill'])).toThrow(CliArgError);
+  it.each(['--backfill', '--seed'])('refuses the removed %s flag instead of starting a judge run', (flag) => {
+    expect(() => rejectRemovedFlags(['--limit', '5', flag])).toThrow(CliArgError);
   });
 
   it('accepts the flags the judge still reads', () => {

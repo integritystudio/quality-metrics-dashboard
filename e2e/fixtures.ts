@@ -56,13 +56,12 @@ const WARM_UP_TIMEOUT_MS = WARM_UP_MINUTES * TIME_MS.MINUTE;
  *
  * `hasData` is `checkHealth()` in src/api/data-loader.ts — "did the CLOUD API
  * return at least one evaluation in the last 7 days", over HTTP through
- * CloudBackend. Note what does NOT satisfy it: `npm run populate -- --seed`
- * derives and judges into *local* evaluations-*.jsonl and syncs to *KV*, and
- * the e2e API reads neither. Lifting these skips means putting evaluation rows
- * into the cloud store itself.
+ * CloudBackend. Note what does NOT satisfy it: a sync to *KV*, which the e2e
+ * API does not read. Lifting these skips means putting evaluation rows into
+ * the cloud store itself.
  */
 export const NO_DATA_SKIP_REASON =
-  'API reports hasData: false (no cloud evaluations in the last 7d) — these specs need rows in the cloud store, which `npm run populate -- --seed` does not provide';
+  'API reports hasData: false (no cloud evaluations in the last 7d) — these specs need rows in the cloud store, which a KV sync alone does not provide';
 
 type WorkerFixtures = {
   /**

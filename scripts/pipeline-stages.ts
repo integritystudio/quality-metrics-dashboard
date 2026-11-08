@@ -211,9 +211,18 @@ export const JUDGE_BATCH_FLAG = '--batch';
  * kept for comparison runs and as the way back if the default regresses.
  */
 export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
-/** judge-evaluations flags populate forwards: synthetic scores, and a cap on turns judged. */
-export const JUDGE_SEED_FLAG = '--seed';
+/** judge-evaluations flag populate forwards: a cap on turns judged. */
 export const JUDGE_LIMIT_FLAG = '--limit';
+
+/** Asked the judge for hashed synthetic scores; nothing it produced was kept, so it was removed. */
+const REMOVED_SEED_FLAG = '--seed';
+
+/** Unknown flags are otherwise ignored, so a stale `--seed` would start a paid judge run. */
+export function rejectRemovedSeedFlag(args: readonly string[]): void {
+  if (args.includes(REMOVED_SEED_FLAG)) {
+    throw new CliArgError(`${REMOVED_SEED_FLAG} was removed: the judge has no offline mode (use --dry-run to price a run)`, 'unknown');
+  }
+}
 /** Every stage's preview switch: compute and report, write nothing. */
 export const DRY_RUN_FLAG = '--dry-run';
 

@@ -16,8 +16,7 @@ export function turnKeyOf(at: string | number): string {
  * `${sessionId}:${evaluationName}:${turnKey}` for every row, and the same key
  * suffixed `@<judgeModel>` for every LLM row (JUDGE-MODEL-METADATA-ONLY,
  * 2026-10-01). The LLM paths check the suffixed key, so a turn Haiku judged is
- * still judged by a different model; the seed path checks the plain key, so it
- * never seeds a turn any judge scored. Rows written before the model was
+ * still judged by a different model. Rows written before the model was
  * recorded are all Haiku 4.5, so a row with no model and no cohort, or a
  * `normal` or `backfill` one, counts as one.
  */
