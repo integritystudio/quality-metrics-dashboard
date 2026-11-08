@@ -127,10 +127,30 @@ function hasInvalidDateParam(query: URLSearchParams): boolean {
   });
 }
 
-/** `sessionId` exactly, against the `session_id` column, as obtool-api does. */
+const ATTR_PARAM_PREFIX = 'attr.';
+
+/**
+ * `sessionId` exactly, against the `session_id` column; `attr.<key>=<value>`
+ * entries against the parsed `attributes` JSON column — both as obtool-api does.
+ */
 function filterTraces(rows: TraceWireRow[], query: URLSearchParams): TraceWireRow[] {
   const sessionId = query.get(SESSION_ID_PARAM);
-  return sessionId ? rows.filter((row) => row.session_id === sessionId) : rows;
+  const attrFilters: Array<[string, string]> = [];
+  for (const [key, value] of query.entries()) {
+    if (key.startsWith(ATTR_PARAM_PREFIX)) attrFilters.push([key.slice(ATTR_PARAM_PREFIX.length), value]);
+  }
+  if (!sessionId && attrFilters.length === 0) return rows;
+  return rows.filter((row) => {
+    if (sessionId && row.session_id !== sessionId) return false;
+    if (attrFilters.length > 0) {
+      if (row.attributes === null) return false;
+      let attrs: Record<string, unknown>;
+      try { attrs = JSON.parse(row.attributes) as Record<string, unknown>; }
+      catch { return false; }
+      if (attrFilters.some(([k, v]) => attrs[k] !== v)) return false;
+    }
+    return true;
+  });
 }
 
 function inDateWindow(timestampNs: string, query: URLSearchParams): boolean {
