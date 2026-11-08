@@ -63,7 +63,6 @@ import {
   EVALUATION_ATTRS,
   EVALUATION_RESULT_EVENT,
   LEGACY_EVALUATOR_TYPE_ATTR,
-  LEGACY_SCORE_UNIT_ATTR,
 } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import {
@@ -278,8 +277,7 @@ function readCore(
 /** Score-shaped optional fields; an absent one is left off the payload entirely. */
 function scoreFields(attrs: Record<string, unknown>): Partial<EvaluationPayload> {
   const fields: Partial<EvaluationPayload> = {};
-  // COMPAT until 2026-10-29: records written before 2026-09-29 carry the unit under the old key.
-  const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]) ?? asString(attrs[LEGACY_SCORE_UNIT_ATTR]);
+  const scoreUnit = asString(attrs[EVALUATION_ATTRS.SCORE_UNIT]);
   if (scoreUnit) fields.scoreUnit = scoreUnit;
   const scoreLabel = asString(attrs[EVALUATION_ATTRS.SCORE_LABEL]);
   if (scoreLabel) fields.scoreLabel = truncate(scoreLabel, WEBHOOK_MAX_NAME_LENGTH);

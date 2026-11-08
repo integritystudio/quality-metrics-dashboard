@@ -34,7 +34,6 @@ import {
   EVALUATION_ATTRS,
   EVAL_SCORE_PRECISION,
   LEGACY_EVALUATOR_TYPE_ATTR,
-  LEGACY_SCORE_UNIT_ATTR,
   PRODUCER,
   type EvalRecord,
 } from '../eval-record.js';
@@ -411,7 +410,8 @@ describe('toOTelRecord', () => {
     const attrs = attributesOf(makeEvalRecord({ scoreUnit: 'seconds' }));
 
     expect(attrs[EVALUATION_ATTRS.SCORE_UNIT]).toBe('seconds');
-    expect(attrs[LEGACY_SCORE_UNIT_ATTR]).toBeUndefined();
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserting the retired key stays unwritten
+    expect(attrs[GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]).toBeUndefined();
   });
 
   it('omits the judge model for a score no model produced', () => {

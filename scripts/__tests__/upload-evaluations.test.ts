@@ -23,7 +23,7 @@ import {
 } from '../upload-evaluations.js';
 import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex } from '../account-stamps.js';
 import { deriveToolCorrectness } from '../derive-evaluations.js';
-import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, LEGACY_SCORE_UNIT_ATTR, toOTelRecord } from '../eval-record.js';
+import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, toOTelRecord } from '../eval-record.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
@@ -118,28 +118,25 @@ describe('mapRecord', () => {
     expect(payload?.metadata).not.toHaveProperty('judgeModel');
   });
 
-  // COMPAT until 2026-10-29 for its score-unit half: the old gen_ai.evaluation.score.unit key.
   it('maps a derive record that carries only the legacy overloaded evaluator.type', () => {
     const { payload } = mapRecord(record({
       [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations',
       [LEGACY_EVALUATOR_TYPE_ATTR]: 'rule',
-      [LEGACY_SCORE_UNIT_ATTR]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
     expect(payload).toMatchObject({
       evaluator: 'derive-evaluations',
       evaluatorType: 'rule',
-      scoreUnit: 'ratio_0_1',
     });
   });
 
-  it('reads the score unit from its integritystudio key, over the old gen_ai key', () => {
+  it('no longer reads the score unit from the old gen_ai key (EVAL-KEY-COMPAT-REMOVAL)', () => {
     const { payload } = mapRecord(record({
-      [EVALUATION_ATTRS.SCORE_UNIT]: 'seconds',
-      [LEGACY_SCORE_UNIT_ATTR]: 'ratio_0_1',
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserting the retired key is ignored
+      [GENAI_EVALUATION_ATTRIBUTES.SCORE_UNIT]: 'ratio_0_1',
     }), NOW, MAX_AGE_MS);
 
-    expect(payload?.scoreUnit).toBe('seconds');
+    expect(payload?.scoreUnit).toBeUndefined();
   });
 
   it('carries a score label from toOTelRecord to the payload, and omits one never set', () => {
