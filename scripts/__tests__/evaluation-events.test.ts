@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { appendEvaluationEvents, toEvaluationEventLine } from '../evaluation-events.js';
 import { emptyAccountIndex, routeEvaluationRecords, type RoutedRecord } from '../post-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
-import { UPLOAD_SERVICE_NAME, evaluationId } from '../upload-evaluations.js';
+import { EVALUATION_SERVICE_NAME, evaluationId } from '../evaluation-delivery.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 function routed(records: Array<Record<string, unknown>>, accounts: AccountIndex = emptyAccountIndex()): RoutedRecord[] {
-  return routeEvaluationRecords(records, accounts, NOW.getTime());
+  return routeEvaluationRecords(records, accounts);
 }
 
 const lineFor = (r: Record<string, unknown>, accounts?: AccountIndex) =>
@@ -73,7 +73,7 @@ describe('toEvaluationEventLine', () => {
       severityText: 'INFO',
       eventName: EVALUATION_RESULT_EVENT,
       traceId: 'trace-1',
-      resource: { serviceName: UPLOAD_SERVICE_NAME },
+      resource: { serviceName: EVALUATION_SERVICE_NAME },
       identityKeyRef: KEY_REF,
     });
     expect(line.attributes[INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES.ID]).toBe(evaluationId(r));

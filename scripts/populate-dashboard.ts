@@ -8,25 +8,20 @@
  *                            POSTed to ingest (`--days=7 --post-days=2`)
  *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
- *                            (`--days=7`), POSTed to ingest and
- *                            appended to evaluations-<date>.jsonl
- *   3. upload-evaluations  → ship the hooks' and survival-fitness records in evaluations JSONL
- *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
+ *                            (`--days=7`), POSTed to ingest
+ *   3. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
- * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
- * `'table'`), so every record has to get there: steps 1-2 post their own, and
- * step 3 carries what is still only on disk. Without that the pipeline looks
- * healthy at every stage and still computes an empty dashboard
- * (docs/data-pipeline.md § Historical incidents). It needs `INJECT_HMAC_SECRET`.
+ * Step 3 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
+ * `'table'`). Steps 1-2 post their own records, and the hooks' records reach it
+ * as log events through the span shipper.
  *
  * Usage:
  *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
  *   npm run populate -- --dry-run             # preview only, no writes
- *   npm run populate -- --skip-judge          # rule-based + upload + sync only
+ *   npm run populate -- --skip-judge          # rule-based + sync only
  *   npm run populate -- --skip-derive --skip-judge --sync-budget 700
- *                                             # refresh only: upload + sync, capped KV writes (the hourly launchd job)
- *   npm run populate -- --skip-upload         # derive + judge + sync (derive still posts its own records)
- *   npm run populate -- --skip-sync           # derive + judge + upload only
+ *                                             # refresh only: sync, capped KV writes (the hourly launchd job)
+ *   npm run populate -- --skip-sync           # derive + judge only
  *   npm run populate -- --limit 5             # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
@@ -40,7 +35,7 @@
  *   1     any other stage failure, and the pipeline stops there. Also: no judge
  *         key and no --skip-judge given, so nothing runs
  *
- * derive-evaluations, upload-evaluations and sync-to-kv are retried on transient
+ * derive-evaluations and sync-to-kv are retried on transient
  * network failures with the bounded schedule in pipeline-stages.ts.
  */
 
@@ -75,14 +70,13 @@ const STDERR_CAPTURE_MAX_BYTES = 16 * BYTES.MB;
 
 const SKIP_DERIVE_FLAG = '--skip-derive';
 const SKIP_JUDGE_FLAG = '--skip-judge';
-const SKIP_UPLOAD_FLAG = '--skip-upload';
 const SKIP_SYNC_FLAG = '--skip-sync';
 /** Forwarded to sync-to-kv as `--budget=<n>`; unset leaves sync's own default. */
 const SYNC_BUDGET_ARG = '--sync-budget';
 const POPULATE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG, SYNC_BUDGET_ARG],
   switches: [
-    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_UPLOAD_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
+    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
     JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
@@ -95,7 +89,6 @@ const POPULATE_CLI: CliSpec = {
 type PopulateArgs = {
   skipDerive: boolean;
   skipJudge: boolean;
-  skipUpload: boolean;
   skipSync: boolean;
   dryRun: boolean;
   batch: boolean;
@@ -113,7 +106,6 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   return {
     skipDerive: cli.has(SKIP_DERIVE_FLAG),
     skipJudge: cli.has(SKIP_JUDGE_FLAG),
-    skipUpload: cli.has(SKIP_UPLOAD_FLAG),
     skipSync: cli.has(SKIP_SYNC_FLAG),
     dryRun: cli.has(DRY_RUN_FLAG),
     batch: cli.has(JUDGE_BATCH_FLAG),
@@ -125,7 +117,7 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   };
 }
 
-const { skipDerive, skipJudge, skipUpload, skipSync, dryRun, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
+const { skipDerive, skipJudge, skipSync, dryRun, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key: never fall back to
@@ -234,7 +226,7 @@ async function runDerive(): Promise<void> {
   const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
   if (derive.ok) return;
   continueOrAbort('derive', 'derive-evaluations', derive,
-    status => `[populate] derive-evaluations exited ${status}; continuing to judge, upload + sync, then exiting ${status}`);
+    status => `[populate] derive-evaluations exited ${status}; continuing to judge + sync, then exiting ${status}`);
 }
 
 /**
@@ -251,26 +243,7 @@ function runJudge(): void {
   const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
   if (judge.ok) return;
   continueOrAbort('judge', 'judge-evaluations', judge,
-    status => `[populate] judge-evaluations exited ${status}; continuing to upload + sync, then exiting ${status}`);
-}
-
-/**
- * Wait out a transient failure like derive and sync do, and carry on to sync if
- * a send still fails (UPLOAD-FAILURE-ABORTS-PIPELINE).
- */
-async function runUpload(): Promise<void> {
-  if (!process.env.INJECT_HMAC_SECRET && !dryRun) {
-    // Fail loudly. A silent skip here is what the dead-dashboard failure mode
-    // looked like: every step green, nothing reaching the cloud.
-    console.error('[populate] Error: INJECT_HMAC_SECRET is not set, so derived evaluations cannot reach the cloud and sync-to-kv would compute an empty dashboard. Run under `doppler run --project integrity-studio --config prd`, or pass --skip-upload to accept that.');
-    process.exit(1);
-  }
-  const uploadArgs: string[] = [];
-  if (dryRun) uploadArgs.push(DRY_RUN_FLAG);
-  const upload = await runWithNetworkRetry('upload-evaluations', 'upload-evaluations.ts', uploadArgs);
-  if (upload.ok) return;
-  continueOrAbort('upload', 'upload-evaluations', upload,
-    status => `[populate] upload-evaluations exited ${status}; continuing to sync, then exiting ${status}`);
+    status => `[populate] judge-evaluations exited ${status}; continuing to sync, then exiting ${status}`);
 }
 
 async function runSync(): Promise<void> {
@@ -284,7 +257,6 @@ async function runSync(): Promise<void> {
 async function main(): Promise<void> {
   if (!dryRun && !skipDerive) await runDerive();
   if (!skipJudge) runJudge();
-  if (!skipUpload) await runUpload();
   if (!skipSync) await runSync();
 
   const total = sum(results, r => r.ms);

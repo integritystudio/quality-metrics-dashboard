@@ -5,7 +5,6 @@ import {
   nonNegativeNumberArg,
   parseCli,
   positiveIntArg,
-  positiveNumberArg,
 } from '../cli-args.js';
 
 const SPEC = { values: ['--limit', '--source='], switches: ['--dry-run'] };
@@ -69,7 +68,6 @@ describe('parseCli', () => {
 describe('number arguments', () => {
   it('pass an absent argument through as undefined', () => {
     expect(positiveIntArg('--limit', undefined)).toBeUndefined();
-    expect(positiveNumberArg('--hours', undefined)).toBeUndefined();
     expect(nonNegativeNumberArg('--settle', undefined)).toBeUndefined();
   });
 
@@ -81,12 +79,6 @@ describe('number arguments', () => {
 
   it.each(['0', '-3', '1.5', '7d', 'ten', ''])('positiveIntArg rejects %j', (raw) => {
     expect(() => positiveIntArg('--limit', raw)).toThrow(`--limit must be a positive integer, got "${raw}"`);
-  });
-
-  it('positiveNumberArg accepts fractions but not zero', () => {
-    const FRACTIONAL_HOURS = 1.5;
-    expect(positiveNumberArg('--hours', String(FRACTIONAL_HOURS))).toBe(FRACTIONAL_HOURS);
-    expect(() => positiveNumberArg('--hours', '0')).toThrow('--hours must be a positive number');
   });
 
   it('nonNegativeNumberArg accepts zero but not negatives', () => {

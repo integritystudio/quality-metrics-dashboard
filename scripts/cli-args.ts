@@ -159,14 +159,6 @@ export function positiveIntArg(label: string, raw: string | undefined): number |
   return value;
 }
 
-/** `raw` as a number above zero; `undefined` when absent. Throws `CliArgError` when it is not one. */
-export function positiveNumberArg(label: string, raw: string | undefined): number | undefined {
-  if (raw === undefined) return undefined;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) throw new CliArgError(`${displayLabel(label)} must be a positive number, got "${raw}"`);
-  return value;
-}
-
 /** `raw` as a number at or above zero; `undefined` when absent. Throws `CliArgError` when it is not one. */
 export function nonNegativeNumberArg(label: string, raw: string | undefined): number | undefined {
   if (raw === undefined) return undefined;

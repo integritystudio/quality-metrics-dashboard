@@ -12,8 +12,6 @@ import {
   JUDGE_EXIT_POST_FAILED,
   JUDGE_SOFT_FAILURE_EXITS,
   SYNC_RETRY_DELAYS_MS,
-  UPLOAD_EXIT_SEND_FAILED,
-  UPLOAD_SOFT_FAILURE_EXITS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
@@ -128,13 +126,6 @@ describe('pipeline exit-code contract', () => {
     expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_INPUT_DRIFT)).toBe(true);
   });
 
-  // Regression: the 2026-09-28 18:00 run lost its sync to an upload that gave
-  // up on a network blip and exited 1 (UPLOAD-FAILURE-ABORTS-PIPELINE).
-  it('treats a failed upload send as soft, so sync still runs, and nothing else', () => {
-    expect(UPLOAD_SOFT_FAILURE_EXITS.has(UPLOAD_EXIT_SEND_FAILED)).toBe(true);
-    expect(UPLOAD_SOFT_FAILURE_EXITS.has(1)).toBe(false);
-  });
-
   it('gives every soft code its own number, none of them 0 or the generic 1', () => {
     const codes = [
       JUDGE_EXIT_NO_SCORES,
@@ -146,7 +137,6 @@ describe('pipeline exit-code contract', () => {
       DERIVE_EXIT_POST_FAILED,
       DERIVE_EXIT_READ_FAILED,
       DERIVE_EXIT_INPUT_DRIFT,
-      UPLOAD_EXIT_SEND_FAILED,
     ];
 
     expect(new Set(codes).size).toBe(codes.length);
@@ -164,9 +154,9 @@ describe('pipeline exit-code contract', () => {
   });
 
   // Regression: the 06:00 runs on 2026-09-29 and 09-30 hit the judge's batch
-  // wall clock, exited 1, and lost their upload and sync
+  // wall clock, exited 1, and lost their sync
   // (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN).
-  it('treats the judge\'s batch wall clock as soft, so upload and sync still run', () => {
+  it('treats the judge\'s batch wall clock as soft, so sync still runs', () => {
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
   });
 
@@ -189,7 +179,6 @@ describe('nextStepAfter', () => {
     ['judge', JUDGE_EXIT_POST_FAILED],
     ['judge', JUDGE_EXIT_DISCOVERY_FAILED],
     ['judge', JUDGE_EXIT_BATCH_WALL_CLOCK],
-    ['upload', UPLOAD_EXIT_SEND_FAILED],
   ] as const)('returns true for soft %s exit %i', (stage, code) => {
     expect(nextStepAfter(stage, code)).toBe(true);
   });
@@ -198,7 +187,6 @@ describe('nextStepAfter', () => {
     ['derive', 1],
     ['judge', 1],
     ['judge', 0],
-    ['upload', 1],
   ] as const)('returns false for hard %s exit %i', (stage, code) => {
     expect(nextStepAfter(stage, code)).toBe(false);
   });
@@ -253,6 +241,7 @@ describe('rejectRemovedFlags', () => {
     ['--source=cloud', /--source was removed/],
     ['--derive-source=local', /--derive-source was removed/],
     ['--judge-source=local', /--judge-source was removed/],
+    ['--skip-upload', /--skip-upload was removed: populate has no upload stage/],
   ])('refuses %s instead of running the stage without it', (flag, message) => {
     expect(() => rejectRemovedFlags(['--limit', '5', flag])).toThrow(message);
   });

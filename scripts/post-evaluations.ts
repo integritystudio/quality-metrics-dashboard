@@ -2,17 +2,17 @@
  * Post evaluation records straight to ingest, with no local file or state
  * between producer and cloud (cloud-read migration Phase 3).
  *
- * What makes this safe without `upload-evaluations`' shipped-fingerprint
- * state: every payload carries `evaluationId`, and the ingest worker keeps
- * one row per `(org_id, evaluation_id)` (migration 0015). Re-posting a window
+ * What makes this safe without local state: every payload carries
+ * `evaluationId`, and the ingest worker keeps one row per
+ * `(org_id, evaluation_id)` (migration 0015). Re-posting a window
  * is a no-op for everything already stored, so a producer can simply re-send
  * whatever it derives, and a failed run is retried by running it again.
  *
- * Mapping and routing are `upload-evaluations`' own (`mapRecord`,
+ * Mapping and routing are `evaluation-delivery`'s (`mapRecord`,
  * `routeRecord`): a stamped record goes to its account's org with that
  * account's key, a `null` stamp is withheld, and an unstamped one takes the
- * HMAC webhook into `HOME_ORG_ID`. No age guard: the flush dates each row by
- * its `evaluatedAtMs`.
+ * HMAC webhook into `HOME_ORG_ID`. The flush dates each row by its
+ * `evaluatedAtMs`, however old.
  */
 
 import {
@@ -30,7 +30,7 @@ import {
   type MapSkip,
   type Route,
   type RouteBasis,
-} from './upload-evaluations.js';
+} from './evaluation-delivery.js';
 import type { AccountIndex } from './account-stamps.js';
 import { sleep } from './sleep.js';
 import { increment, pushTo } from './collections.js';
@@ -39,8 +39,6 @@ export type PostOptions = {
   dryRun: boolean;
   /** Routes unstamped records; an empty index sends them all to the webhook. */
   accounts: AccountIndex;
-  /** Injected for tests; defaults to `Date.now()`. */
-  nowMs?: number;
 }
 
 /**
@@ -69,10 +67,10 @@ export function emptyAccountIndex(): AccountIndex {
   return { sessionSpans: new Map(), bySpan: new Map() };
 }
 
-/** Map and route each of `records` (OTel-shaped, as `toOTelRecord` writes them). No age guard. */
-export function routeEvaluationRecords(records: readonly unknown[], accounts: AccountIndex, nowMs: number = Date.now()): RoutedRecord[] {
+/** Map and route each of `records` (OTel-shaped, as `toOTelRecord` writes them). */
+export function routeEvaluationRecords(records: readonly unknown[], accounts: AccountIndex): RoutedRecord[] {
   return records.map((record): RoutedRecord => {
-    const mapped = mapRecord(record, nowMs, Number.POSITIVE_INFINITY);
+    const mapped = mapRecord(record);
     if (mapped.skip) return { skip: mapped.skip };
     const { route, basis } = routeRecord(mapped, accounts);
     return { record: record as Record<string, unknown>, payload: mapped.payload, route, basis };
@@ -104,7 +102,7 @@ function batchRecords(routed: readonly RoutedRecord[], summary: PostSummary): Ma
 
 /** Map, route and post `records` (OTel-shaped, as `toOTelRecord` writes them). */
 export async function postEvaluationRecords(records: readonly unknown[], opts: PostOptions): Promise<PostSummary> {
-  return postRoutedRecords(routeEvaluationRecords(records, opts.accounts, opts.nowMs), opts.dryRun);
+  return postRoutedRecords(routeEvaluationRecords(records, opts.accounts), opts.dryRun);
 }
 
 /**

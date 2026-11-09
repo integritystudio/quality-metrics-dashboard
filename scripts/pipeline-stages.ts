@@ -39,7 +39,7 @@ export const JUDGE_EXIT_DISCOVERY_FAILED = 7;
  * processing (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN). The batch was cancelled, the
  * scores it had already produced were kept and posted, and the rest of the
  * run's requests were abandoned; the next run picks those turns up again.
- * Numbered after the upload code because 8 to 11 were taken.
+ * Numbered 12: 8 to 10 are taken, and 11 was the removed upload stage's.
  */
 export const JUDGE_EXIT_BATCH_WALL_CLOCK = 12;
 /**
@@ -80,19 +80,8 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
 export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]);
 
-/**
- * upload-evaluations exit: a send to ingest failed. Its state is saved up to
- * the last accepted batch, so the next run re-sends the rest and ingest drops
- * any id it already holds. Nothing is lost, and sync-to-kv still has what
- * derive and the judge posted themselves (UPLOAD-FAILURE-ABORTS-PIPELINE).
- */
-export const UPLOAD_EXIT_SEND_FAILED = 11;
-
-/** Upload exits populate forwards to its own exit instead of aborting, so sync-to-kv still runs. */
-export const UPLOAD_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([UPLOAD_EXIT_SEND_FAILED]);
-
 /** Stage name used in `nextStepAfter`. */
-export type PipelineStage = 'derive' | 'judge' | 'upload';
+export type PipelineStage = 'derive' | 'judge';
 
 /**
  * Returns true when the pipeline should continue to the next step after
@@ -103,7 +92,6 @@ export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
   switch (stage) {
     case 'derive': return DERIVE_SOFT_FAILURE_EXITS.has(exitCode);
     case 'judge': return JUDGE_SOFT_FAILURE_EXITS.has(exitCode);
-    case 'upload': return UPLOAD_SOFT_FAILURE_EXITS.has(exitCode);
   }
 }
 
@@ -121,6 +109,7 @@ const REMOVED_FLAGS: ReadonlyMap<string, string> = new Map([
   ['--source', CLOUD_ONLY_REASON],
   ['--judge-source', CLOUD_ONLY_REASON],
   ['--derive-source', CLOUD_ONLY_REASON],
+  ['--skip-upload', 'populate has no upload stage: derive and the judge post their own records'],
 ]);
 
 /** Throw on the first removed flag in `args`, given bare or as `--flag=value`. */
@@ -141,8 +130,8 @@ export const SYNC_BUDGET_FLAG = '--budget';
 
 /**
  * How far back derive posts when nothing narrower is asked for: an unscoped
- * run, and every populate run through `--post-days=`. Matches upload's and the
- * span shipper's two-day window; ingest drops a re-sent id, so a record posted
+ * run, and every populate run through `--post-days=`. Matches the span
+ * shipper's two-day window; ingest drops a re-sent id, so a record posted
  * twice is harmless, but a wider window re-sends every run.
  */
 export const DERIVE_POST_WINDOW_DAYS = 2;

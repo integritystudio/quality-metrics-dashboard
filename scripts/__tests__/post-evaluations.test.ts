@@ -3,13 +3,12 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } 
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
 import { emptyAccountIndex, postEvaluationRecords, undeliveredCount } from '../post-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
-import { evaluationId, INGEST_URL_NOT_SET_MESSAGE, MAX_BATCH_SIZE } from '../upload-evaluations.js';
+import { evaluationId, INGEST_URL_NOT_SET_MESSAGE, MAX_BATCH_SIZE } from '../evaluation-delivery.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_PREFIX } from '../../../src/lib/core/obtool-contract.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 
-const NOW = Date.parse('2026-09-28T12:00:00.000Z');
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
 const API_KEY = 'test-api-key';
 const HMAC_SECRET = 'test-hmac-secret';
@@ -52,7 +51,7 @@ afterEach(() => {
 });
 
 const post = (records: unknown[], dryRun = false) =>
-  postEvaluationRecords(records, { dryRun, accounts: emptyAccountIndex(), nowMs: NOW });
+  postEvaluationRecords(records, { dryRun, accounts: emptyAccountIndex() });
 
 describe('postEvaluationRecords', () => {
   it('sends a stamped record to its account with that key, carrying its evaluationId', async () => {

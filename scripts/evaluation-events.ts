@@ -28,7 +28,7 @@ import { EVALUATION_RESULT_EVENT } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { LOGS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
 import type { RoutedRecord } from './post-evaluations.js';
-import { UPLOAD_SERVICE_NAME } from './upload-evaluations.js';
+import { EVALUATION_SERVICE_NAME } from './evaluation-delivery.js';
 
 type HrTime = [seconds: number, nanoseconds: number];
 
@@ -76,7 +76,7 @@ export function toEvaluationEventLine(entry: RoutedRecord, observedMs: number): 
     },
     ...(traceId && { traceId }),
     ...(spanId && { spanId }),
-    resource: { serviceName: UPLOAD_SERVICE_NAME },
+    resource: { serviceName: EVALUATION_SERVICE_NAME },
     [IDENTITY_KEY_REF_FIELD]: route.ref,
   };
 }

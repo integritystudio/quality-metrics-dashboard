@@ -1,23 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, afterEach } from 'vitest';
 
-import { ACCOUNT_INDEX_WINDOW_DAYS, buildAccountIndex, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
+import { indexSpanRecords, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
 import { anchorTurns, turnSourceFields, type Turn } from '../judge-turns.js';
 import { EVALUATION_RESULT_EVENT, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../derive-evaluations.js';
-import { fingerprint, mapRecord, routeRecord } from '../upload-evaluations.js';
+import { mapRecord, routeRecord } from '../evaluation-delivery.js';
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { NANOSECONDS_PER_MILLISECOND, TIME_MS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
-// TKR8 Phase 1: evaluations carry the account of what they score, and upload
+// TKR8 Phase 1: evaluations carry the account of what they score, and delivery
 // routes on that stamp instead of joining by trace and time. Phase 2: they also
-// name the span they score, and upload can route by that span's stamp.
+// name the span they score, and delivery can route by that span's stamp.
 
-const NOW = Date.parse('2026-09-23T12:00:00.000Z');
 const HOME_REF = 'OBTOOL_API_KEY';
 const GMAIL_REF = 'OBTOOL_API_KEY_ALYSHIA_LEDLIE';
 const SESSION = 's1';
@@ -37,17 +33,11 @@ const spanLine = ({ spanId, traceId, atMs, ref, sessionId = SESSION }: SpanFixtu
 });
 
 describe('TKR8 Phase 1 — account stamps on evaluations', () => {
-  let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'tkr8-stamps-')); });
   afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
     setSpanAccounts(new Map());
   });
 
-  const index = (spans: SpanFixture[]): AccountIndex => {
-    writeFileSync(join(dir, 'traces-2026-09-23.jsonl'), `${spans.map(span => spanLine(span)).join('\n')}\n`);
-    return buildAccountIndex(dir, ACCOUNT_INDEX_WINDOW_DAYS, NOW);
-  };
+  const index = (spans: SpanFixture[]): AccountIndex => indexSpanRecords(spans.map(span => JSON.parse(spanLine(span)) as unknown));
 
   /** A session that ran `/login` between two turns, both on one trace id. */
   const switchedSession = (): AccountIndex => index([
@@ -179,7 +169,14 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
     });
   });
 
-  describe('upload', () => {
+  describe('indexSpanRecords', () => {
+    it('skips a record that is not an object, rather than failing the whole index', () => {
+      const idx = indexSpanRecords(['identityKeyRef', JSON.parse(spanLine({ spanId: 'a1', traceId: 't1', atMs: at('10:00'), ref: GMAIL_REF })) as unknown]);
+      expect(idx.bySpan.get('a1')).toBe(GMAIL_REF);
+    });
+  });
+
+  describe('delivery', () => {
     const evalLine = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
       timestamp: '2026-09-23T11:30:00.000Z',
       name: EVALUATION_RESULT_EVENT,
@@ -187,11 +184,8 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       traceId: 't1',
       ...extra,
     });
-    const MAX_AGE_HOURS = 36;
-    const MAX_AGE_MS = MAX_AGE_HOURS * TIME_MS.HOUR;
-
     it("reads the record's stamp for routing but never puts it in the shipped payload", () => {
-      const mapped = mapRecord(evalLine({ identityKeyRef: GMAIL_REF }), NOW, MAX_AGE_MS);
+      const mapped = mapRecord(evalLine({ identityKeyRef: GMAIL_REF }));
       expect(mapped.accountRef).toBe(GMAIL_REF);
       expect(JSON.stringify(mapped.payload)).not.toContain(GMAIL_REF);
     });
@@ -201,43 +195,32 @@ describe('TKR8 Phase 1 — account stamps on evaluations', () => {
       // spanId falls through to the webhook — the time-based join was removed
       // once join=0 held across all pipeline runs (TKR9, 2026-10-01).
       const idx = switchedSession();
-      const stamped = mapRecord(evalLine({ identityKeyRef: HOME_REF }), NOW, MAX_AGE_MS);
+      const stamped = mapRecord(evalLine({ identityKeyRef: HOME_REF }));
       expect(routeRecord(stamped, idx)).toEqual({ route: { kind: 'keyed', ref: HOME_REF }, basis: 'stamp' });
-      const unstamped = mapRecord(evalLine(), NOW, MAX_AGE_MS);
+      const unstamped = mapRecord(evalLine());
       expect(routeRecord(unstamped, idx)).toEqual({ route: { kind: 'webhook' }, basis: 'join' });
     });
 
     it("routes an unstamped record by its span's stamp before any join", () => {
       // Span a1 is home's; the time join would say gmail (evaluated 11:30).
       const idx = switchedSession();
-      const bySpan = mapRecord(evalLine({ spanId: 'a1' }), NOW, MAX_AGE_MS);
+      const bySpan = mapRecord(evalLine({ spanId: 'a1' }));
       expect(routeRecord(bySpan, idx)).toEqual({ route: { kind: 'keyed', ref: HOME_REF }, basis: 'span' });
-      const unknownSpan = mapRecord(evalLine({ spanId: 'not-indexed' }), NOW, MAX_AGE_MS);
+      const unknownSpan = mapRecord(evalLine({ spanId: 'not-indexed' }));
       expect(routeRecord(unknownSpan, idx).basis).toBe('join');
     });
 
     it('forwards the response id as the payload field, not in metadata', () => {
       const mapped = mapRecord(evalLine({
         attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'relevance', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 0.8, [GENAI_RESPONSE_ATTRIBUTES.ID]: 'msg_1' },
-      }), NOW, MAX_AGE_MS);
+      }));
       expect(defined(mapped.payload).responseId).toBe('msg_1');
       expect(defined(mapped.payload).metadata).not.toHaveProperty('responseId');
     });
 
     it('withholds a record stamped with an unmapped account', () => {
-      const mapped = mapRecord(evalLine({ identityKeyRef: null }), NOW, MAX_AGE_MS);
+      const mapped = mapRecord(evalLine({ identityKeyRef: null }));
       expect(routeRecord(mapped, switchedSession())).toEqual({ route: { kind: 'withheld' }, basis: 'stamp' });
-    });
-
-    it('fingerprints a stamped line the same as the line written before stamping', () => {
-      // derive rewrites its rule records every run; a stamp must not make an
-      // already-shipped record look new and ship twice.
-      const before = JSON.stringify(evalLine());
-      const after = JSON.stringify(evalLine({ identityKeyRef: HOME_REF }));
-      expect(fingerprint(after)).toBe(fingerprint(before));
-      const withSpan = JSON.stringify(evalLine({ spanId: 's-a', identityKeyRef: HOME_REF }));
-      expect(fingerprint(withSpan)).toBe(fingerprint(before));
-      expect(fingerprint(JSON.stringify(evalLine({ traceId: 't2' })))).not.toBe(fingerprint(before));
     });
   });
 });

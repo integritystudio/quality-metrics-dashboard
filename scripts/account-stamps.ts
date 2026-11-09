@@ -9,10 +9,10 @@
  * Evaluations are produced later, by batch jobs that may run under a different
  * account, so they must not read "the current account". The producers look up
  * the stamp of the span or turn they score here and copy it onto the record
- * (Phase 1); `upload-evaluations` then routes on the record's own stamp.
+ * (Phase 1); `evaluation-delivery` then routes on the record's own stamp.
  *
  * Lookups:
- * - `derive-evaluations` and `upload-evaluations` score or route a span they
+ * - `derive-evaluations` and `evaluation-delivery` score or route a span they
  *   hold: `bySpan`.
  * - `judge-evaluations` scores a transcript turn, whose own spans are the
  *   session's spans between that turn and the next: `turnAccount` for its
@@ -20,19 +20,12 @@
  * The pre-Phase-1 time-based join was removed under TKR9; see `indexSpanRecords`.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { asHrTime, hrtToMs, type HrTime } from './hrt.js';
 import { pushTo } from './collections.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
-
-/**
- * Trace files read for the account index, in days. Wider than the upload
- * window because the judge scores backlog turns whose spans are older than
- * the evaluation record itself.
- */
-export const ACCOUNT_INDEX_WINDOW_DAYS = 7;
 
 /** Only identity-map secret names are read from the environment. */
 export const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
@@ -120,11 +113,6 @@ export function* traceFileRecords(
   }
 }
 
-/** Index the spans in `files` (names under `dir`). */
-export function indexTraceFiles(dir: string, files: readonly string[]): AccountIndex {
-  return indexSpanRecords(traceFileRecords(dir, files));
-}
-
 export type SpanRecordFields = {
   spanId: string | undefined;
   traceId: string | undefined;
@@ -180,17 +168,6 @@ export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
   return index;
 }
 
-/** Index the stamped spans in the trace files dated within `windowDays`. */
-export function buildAccountIndex(dir: string, windowDays: number, nowMs: number): AccountIndex {
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => fileInWindow(f, TRACE_FILE_PATTERN, windowDays, nowMs));
-  } catch {
-    files = [];
-  }
-  return indexTraceFiles(dir, files);
-}
-
 /**
  * The account a transcript turn ran under: the stamp of the session's first
  * span at or after the turn started (`fromMs`) and before the next turn
@@ -200,7 +177,7 @@ export function buildAccountIndex(dir: string, windowDays: number, nowMs: number
  * run in a concurrent one, since they share the account file, and the turn
  * belongs to the account it *started* under. `undefined` when no stamped span
  * falls in the turn (spans aged out, or written before TKR6), so the record
- * stays unstamped and upload falls back rather than guessing.
+ * stays unstamped and delivery falls back rather than guessing.
  */
 export function turnAccount(
   index: AccountIndex,

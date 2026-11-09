@@ -27,7 +27,7 @@ import {
   HAIKU_MODEL,
 } from '../judge-criteria.js';
 import { PRODUCER, toOTelRecord, type EvalRecord } from '../eval-record.js';
-import { evaluationId } from '../upload-evaluations.js';
+import { evaluationId } from '../evaluation-delivery.js';
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { MAX_TOKENS_STOP_REASON } from '../judge-anthropic-client.js';
