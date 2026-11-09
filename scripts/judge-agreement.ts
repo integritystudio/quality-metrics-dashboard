@@ -30,7 +30,7 @@ import {
   type Turn,
   type TranscriptInfo,
 } from './judge-turns.js';
-import { discoverCloudSessions } from './judge-cloud-source.js';
+import { discoverCloudSessions, type CloudSessions } from './judge-cloud-source.js';
 import { readScope } from './derive-evaluations.js';
 import { JUDGE_DEFAULT_DAYS } from './pipeline-stages.js';
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
@@ -364,11 +364,17 @@ async function main(): Promise<void> {
   const pricing = judgePricing();
 
   console.log(`[agreement] discovering the last ${JUDGE_DEFAULT_DAYS} days' sessions from the cloud…`);
-  const { transcripts } = await discoverCloudSessions(readScope(null, JUDGE_DEFAULT_DAYS));
+  let discovered: CloudSessions;
+  try {
+    discovered = await discoverCloudSessions(readScope(null, JUDGE_DEFAULT_DAYS));
+  } catch (err) {
+    return refuse(`cloud discovery failed: ${describeUnknown(err)}`);
+  }
+  const { transcripts, missing } = discovered;
   const sample = await sampleTurns(transcripts, args.limit);
   const turnsWithTools = sample.turns.filter(t => t.toolResults.length > 0).length;
   console.log(
-    `[agreement] ${transcripts.length} transcripts discovered, ${sample.transcriptsScanned} scanned, `
+    `[agreement] ${transcripts.length} transcripts discovered (${missing} cloud sessions without one here), ${sample.transcriptsScanned} scanned, `
     + `${sample.turns.length} turns sampled (${turnsWithTools} with tool results, ${sample.skippedOversize} skipped as oversize)`,
   );
   if (sample.turns.length === 0) return refuse('no turns to evaluate');
