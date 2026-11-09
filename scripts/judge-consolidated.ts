@@ -68,7 +68,7 @@ import {
   JUDGE_MAX_TOKENS,
   JUDGE_DEFAULT_TEMPERATURE,
 } from './judge-criteria.js';
-import { judgedByKey, turnKeyOf } from './judge-dedup.js';
+import { turnJudgedKey } from './judge-dedup.js';
 import { trackFailure } from './judge-failures.js';
 import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
@@ -173,7 +173,7 @@ export type ConsolidatedSelection = {
 export type ConsolidatedCriteriaOptions = {
   /**
    * Model this run judges with. The dedup check skips only the criteria this
-   * model already scored (`judgedByKey`), so a second model re-scores what Haiku
+   * model already scored (`turnJudgedKey`), so a second model re-scores what Haiku
    * judged. Defaults to HAIKU_MODEL, the only judge so far.
    */
   judgeModel?: string;
@@ -233,9 +233,8 @@ export function selectCriteria(
   existingKeys: Set<string>,
   options: ConsolidatedCriteriaOptions = {},
 ): ConsolidatedSelection {
-  const turnKey = turnKeyOf(turn.timestamp);
   const judgeModel = options.judgeModel ?? HAIKU_MODEL;
-  const missing = (name: string): boolean => !existingKeys.has(judgedByKey(turn.sessionId, name, turnKey, judgeModel));
+  const missing = (name: string): boolean => !existingKeys.has(turnJudgedKey(turn, name, judgeModel));
   const criteria: GEvalConfig[] = [];
   const recordNames: string[] = [];
 
@@ -430,6 +429,7 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
     evaluatorKind: LLM_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     judgeModel: HAIKU_MODEL,
+    stableEvaluationKey: turnJudgedKey(turn, evaluationName, HAIKU_MODEL),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
     ...turnSourceFields(turn),

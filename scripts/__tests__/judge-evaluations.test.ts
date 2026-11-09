@@ -399,6 +399,13 @@ describe('evaluateTurn', () => {
       ({ evaluationName, evaluatorKind: 'llm', cohort: 'normal', judgeModel: HAIKU_MODEL })));
   });
 
+  it('keys each record by its turn, criterion and model, so a turn judged again posts under the same id', async () => {
+    const turn = makeTurn();
+    const evals = await evaluateTurn(judgeOver(createMockLLM()), turn, new Set());
+
+    expect(evals.map(e => e.stableEvaluationKey)).toEqual([...judgedKeys(turn, PLAIN_CRITERIA)]);
+  });
+
   it('skips criteria this model already judged', async () => {
     const turn = makeTurn();
 

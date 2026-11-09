@@ -144,10 +144,10 @@ export type EvalRecord = {
   responseId?: string;
   /**
    * When set, `evaluationId()` hashes only this string rather than the full
-   * record. Use for session-level records where the span anchor changes between
-   * runs (last-span advances as the session grows), so the server-side dedup
-   * key stays stable across consecutive derive runs
-   * (AGENT-HEURISTIC-INPROGRESS-DUPLICATES).
+   * record, so the server-side dedup key survives what changes between runs:
+   * derive's session-level span anchor (AGENT-HEURISTIC-INPROGRESS-DUPLICATES),
+   * and the judge's score and explanation when it judges a turn again before
+   * its first records reach the cloud (`turnJudgedKey`).
    */
   stableEvaluationKey?: string;
 }

@@ -26,7 +26,8 @@ import {
   TOOL_CORRECTNESS_CRITERIA,
   HAIKU_MODEL,
 } from '../judge-criteria.js';
-import { PRODUCER } from '../eval-record.js';
+import { PRODUCER, toOTelRecord, type EvalRecord } from '../eval-record.js';
+import { evaluationId } from '../upload-evaluations.js';
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { MAX_TOKENS_STOP_REASON } from '../judge-anthropic-client.js';
@@ -308,6 +309,20 @@ describe('evaluateTurnConsolidated', () => {
       sessionId: turn.sessionId,
       timestamp: turn.timestamp,
     })));
+  });
+
+  it('posts a turn judged again under the same evaluation ids, so ingest keeps the first scores', async () => {
+    const turn = toolTurn();
+    const postedIds = (records: EvalRecord[]): string[] =>
+      records.map(r => evaluationId(toOTelRecord(r) as Record<string, unknown>));
+    const relevanceOf = (records: EvalRecord[]): number | undefined =>
+      records.find(r => r.evaluationName === RELEVANCE_EVAL_NAME)?.scoreValue;
+
+    const first = await evaluateTurnConsolidated(createFakeProvider({}), turn, new Set());
+    const again = await evaluateTurnConsolidated(createFakeProvider({ [RELEVANCE_EVAL_NAME]: LOW_SCORE }), turn, new Set());
+
+    expect(relevanceOf(again)).not.toBe(relevanceOf(first));
+    expect(postedIds(again)).toEqual(postedIds(first));
   });
 
   it('normalizes scores like G-Eval and writes no hallucination record', async () => {

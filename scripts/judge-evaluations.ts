@@ -87,7 +87,7 @@ import {
   TOOL_INTEGRATION_CRITERIA,
   TOOL_SELECTION_CRITERIA,
 } from './judge-criteria.js';
-import { judgedByKey, turnKeyOf } from './judge-dedup.js';
+import { turnJudgedKey } from './judge-dedup.js';
 import {
   anchorTurns,
   extractTurns,
@@ -157,7 +157,7 @@ function createEvalRecord(
     ...(evaluatorType && { evaluatorType }),
     evaluatorKind: kind,
     cohort,
-    ...(judgeModel && { judgeModel }),
+    ...(judgeModel && { judgeModel, stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel) }),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
     ...turnSourceFields(turn),
@@ -255,7 +255,6 @@ export async function evaluateTurn(
   options: EvaluateTurnOptions = {},
 ): Promise<EvalRecord[]> {
   const evals: EvalRecord[] = [];
-  const turnKey = turnKeyOf(turn.timestamp);
   const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
   const toolContext = fitContextForJudge(turn.toolResults);
   // Every criterion catches its own failure, so a collected promise can only
@@ -267,8 +266,7 @@ export async function evaluateTurn(
     return Promise.resolve();
   };
 
-  const isJudged = (evalName: string): boolean =>
-    existingKeys.has(judgedByKey(turn.sessionId, evalName, turnKey, HAIKU_MODEL));
+  const isJudged = (evalName: string): boolean => existingKeys.has(turnJudgedKey(turn, evalName, HAIKU_MODEL));
   const record = (evalName: string, value: number, reason: string): void => {
     evals.push(createEvalRecord(turn, {
       evaluationName: evalName,

@@ -28,6 +28,19 @@ export function judgedByKey(sessionId: string, evaluationName: string, turnKey: 
   return `${turnScoreKey(sessionId, evaluationName, turnKey)}@${judgeModel}`;
 }
 
+/**
+ * One criterion a model judged on a turn. Also the record's
+ * `stableEvaluationKey`, so a turn judged again before its first records
+ * reach the cloud posts under the same evaluation id and ingest drops it.
+ */
+export function turnJudgedKey(
+  turn: { sessionId: string; timestamp: string },
+  evaluationName: string,
+  judgeModel: string,
+): string {
+  return judgedByKey(turn.sessionId, evaluationName, turnKeyOf(turn.timestamp), judgeModel);
+}
+
 /** Add both keys for one stored judge row. No model on a normal, backfill or cohort-less row means a Haiku row. */
 export function addJudgedKeys(
   keys: Set<string>,
