@@ -4,11 +4,6 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 
-/**
- * `evaluations-YYYY-MM-DD.jsonl`: the hooks' own records and the judge's
- * records. Derive writes no file since cloud-read Phase 6; it posts every record.
- */
-export const EVALUATIONS_FILE_PREFIX = 'evaluations';
 export const LOGS_FILE_PREFIX = 'logs';
 export const TRACES_FILE_PREFIX = 'traces';
 const JSONL_EXTENSION = '.jsonl';
