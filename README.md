@@ -83,15 +83,14 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 | Step | Script | Output |
 |------|--------|--------|
 | 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion, over spans the cloud holds for the last 7 days (`--days=7 --post-days=2`, cloud-read Phase 1) — the last 2 days POSTed straight to ingest (Phase 3). No file since Phase 6, and never a record before 2026-09-28, whose D1 copies carry no id |
-| 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination, over turns the cloud lists for the last 7 days (`--days=7`; turn text is read from local transcripts) — POSTed straight to ingest (Phase 4) and appended to `evaluations-<date>.jsonl` |
-| 3. Upload | `upload-evaluations.ts` | Ships the hooks' and `survival-fitness` records in `evaluations-*.jsonl` to the cloud `evaluations` table (the next stage reads the cloud, not these files) |
-| 4. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
+| 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination, over turns the cloud lists for the last 7 days (`--days=7`; turn text is read from local transcripts) — POSTed straight to ingest (Phase 4); a failed post waits in `.judge-pending.jsonl` for the next run |
+| 3. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
 npm run populate                    # full (needs a judge API key, see below)
 npm run populate -- --dry-run      # preview only, no writes
-npm run populate -- --skip-judge    # rule-based + upload + sync
-npm run populate -- --skip-sync     # derive + judge + upload
+npm run populate -- --skip-judge    # rule-based + sync
+npm run populate -- --skip-sync     # derive + judge
 npm run populate -- --limit 5      # judge at most 5 turns
 npm run populate -- --batch         # judge through the Message Batches API: 50% off, minutes not seconds
 npm run populate -- --per-criterion # one call per criterion (~10x cost)
@@ -125,7 +124,7 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 |---------|-------------|
 | `npm run dev` | Vite dev server + Hono API |
 | `npm run build` | Production Vite build |
-| `npm run populate` | Full data pipeline (derive + judge + upload + sync) |
+| `npm run populate` | Full data pipeline (derive + judge + sync) |
 | `npm run sync` | KV sync only (`--budget=450` default, `--budget=5000` for bulk) |
 | `npm test` | Vitest for `src/` + `worker/` (Vite context) |
 | `npm run test:scripts` | Vitest for `scripts/` (separate config; a bare `npx vitest run <path>` under `scripts/__tests__` finds no tests) |
@@ -136,7 +135,7 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `doppler run --project integrity-studio --config dev -- npm run test:e2e:integration` | Auth0 integration tests against deployed worker |
 | `npm run deploy:worker` | Deploy Cloudflare Worker |
 | `npm run deploy:secrets` / `deploy:secrets:dev` | Sync Supabase secrets from Doppler to both production Workers (`--config prd`) or the dev Worker (`--config dev`); refuses a config/target mismatch |
-| `npm run derive` / `upload` | Run one pipeline stage |
+| `npm run derive` | Run one pipeline stage |
 | `npm run trace-coverage` | Trace coverage report |
 | `npm run dev:worker` | `wrangler dev` (local Worker) |
 | `npm run filetree` | Regenerate the Project Structure section below |
@@ -213,7 +212,6 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 │   ├── judge-consolidated.ts (4,598 tokens)
 │   ├── judge-evaluations.ts (5,870 tokens)
 │   ├── sync-to-kv.ts (7,425 tokens)
-│   ├── upload-evaluations.ts (7,035 tokens)
 │   ├── ... (31 more)
 │   └── __tests__/ (1,995 tokens)
 │       └── support/ (1,995 tokens)
