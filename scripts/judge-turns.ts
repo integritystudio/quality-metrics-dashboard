@@ -6,14 +6,11 @@ import { existsSync, readdirSync } from 'node:fs';
 import { group } from 'd3-array';
 import { join, basename } from 'node:path';
 import { sanitizeForPrompt } from '../../src/lib/judge/llm-as-judge.js';
-import { otelLogEntrySchema, transcriptEntrySchema, type TranscriptEntry } from '../../src/lib/validation/dashboard-schemas.js';
+import { transcriptEntrySchema, type TranscriptEntry } from '../../src/lib/validation/dashboard-schemas.js';
 import { streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
-import { HOOK_ATTRIBUTES, TRANSCRIPT_ATTRIBUTES } from '../src/lib/hook-attributes.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
-import { HOOK_NAME } from '../src/api/api-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-stamps.js';
 import type { EvalRecord } from './eval-record.js';
-import { LOGS_FILE_PREFIX, listTelemetryJsonl } from './telemetry-files.js';
 import { HOME } from './evaluation-constants.js';
 
 
@@ -101,9 +98,9 @@ export function anchorTurns(turns: Turn[], index: AccountIndex): void {
 }
 
 /**
- * Alternate directories where session transcripts may exist.
- * Checked in order when a log-referenced path is missing, and scanned
- * directly to discover transcripts not referenced in logs at all.
+ * Directories where session transcripts may exist, first match winning:
+ * checked when a recorded path is missing, and scanned to find a session's
+ * transcript by id.
  */
 export const TRANSCRIPT_DIRS: readonly string[] = [
   join(HOME, '.claude', 'projects'),
@@ -129,59 +126,11 @@ export function resolveTranscriptPath(originalPath: string): string | null {
   return null;
 }
 
-/** The transcript path log attribute; the hooks moved it under `integritystudio.` on 2026-09-29. */
-export const TRANSCRIPT_PATH_ATTR = TRANSCRIPT_ATTRIBUTES.PATH;
-
-export const LEGACY_TRANSCRIPT_PATH_ATTR = 'transcript.path';
-
-/**
- * A token-metrics log record's transcript path, under its canonical key, else
- * under the key older records carry. These are raw `logs-*.jsonl` lines, which
- * no alias table rewrites, so both spellings reach this reader.
- */
-export function transcriptPathOf(attrs: Record<string, unknown>): string | undefined {
-  const canonical = attrs[TRANSCRIPT_PATH_ATTR];
-  if (typeof canonical === 'string') return canonical;
-  const legacy = attrs[LEGACY_TRANSCRIPT_PATH_ATTR];
-  return typeof legacy === 'string' ? legacy : undefined;
-}
-
-/** Discover transcripts from telemetry logs (primary) and directory scan (fallback) */
-export async function _discoverTranscripts(): Promise<TranscriptInfo[]> {
-  // Track by sessionId (UUID) to deduplicate across sources
-  const seen = new Set<string>();
-  const transcripts: TranscriptInfo[] = [];
-
-  for (const filepath of listTelemetryJsonl(LOGS_FILE_PREFIX)) {
-    // eslint-disable-next-line no-await-in-loop -- files are streamed one at a time to bound memory
-    for await (const entry of streamJsonlWithValidation(filepath, otelLogEntrySchema)) {
-      const attrs = entry.attributes;
-      if (attrs?.[HOOK_ATTRIBUTES.NAME] !== HOOK_NAME.TOKEN_METRICS) continue;
-
-      const tPath = transcriptPathOf(attrs);
-      if (!tPath) continue;
-
-      const sessionId = basename(tPath, '.jsonl');
-      if (seen.has(sessionId)) continue;
-
-      const resolved = resolveTranscriptPath(tPath);
-      if (!resolved) continue;
-
-      seen.add(sessionId);
-      const traceId = typeof entry.traceId === 'string' ? entry.traceId : '';
-      transcripts.push({ path: resolved, sessionId, traceId });
-    }
-  }
-
-  transcripts.push(...scanTranscriptDirs(TRANSCRIPT_DIRS, seen));
-  return transcripts;
-}
-
 /**
  * Transcripts found by listing `<dir>/<slug>/<sessionId>.jsonl` under each of
  * `dirs`, first directory winning. Session ids already in `seen` are skipped;
- * the rest are added to it. Reads no telemetry, so the cloud source uses it to
- * find the transcript of a session the cloud named.
+ * the rest are added to it. The cloud source uses it to find the transcript of
+ * a session the cloud named.
  */
 export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, seen = new Set<string>()): TranscriptInfo[] {
   const transcripts: TranscriptInfo[] = [];

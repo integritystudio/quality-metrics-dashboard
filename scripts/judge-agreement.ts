@@ -2,7 +2,8 @@
 /**
  * Judge agreement check: per-criterion vs consolidated, on real turns, once.
  *
- * Loads N turns through the pipeline's own transcript discovery, scores each
+ * Loads N turns from the transcripts of the sessions the cloud names over the
+ * judge's default window (`discoverCloudSessions`), scores each
  * turn both ways against the REAL Anthropic API, and writes
  * docs/judge-agreement-<YYYY-MM-DD>.json with the per-criterion exact-match
  * rate and mean absolute difference on the 1–5 scale, plus each
@@ -25,11 +26,13 @@ import { ascending } from 'd3-array';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import {
-  _discoverTranscripts,
   extractTurns,
   type Turn,
   type TranscriptInfo,
 } from './judge-turns.js';
+import { discoverCloudSessions } from './judge-cloud-source.js';
+import { readScope } from './derive-evaluations.js';
+import { JUDGE_DEFAULT_DAYS } from './pipeline-stages.js';
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { resetFailureTracking } from './judge-failures.js';
 import {
@@ -360,8 +363,8 @@ async function main(): Promise<void> {
 
   const pricing = judgePricing();
 
-  console.log('[agreement] discovering transcripts through the pipeline…');
-  const transcripts = await _discoverTranscripts();
+  console.log(`[agreement] discovering the last ${JUDGE_DEFAULT_DAYS} days' sessions from the cloud…`);
+  const { transcripts } = await discoverCloudSessions(readScope(null, JUDGE_DEFAULT_DAYS));
   const sample = await sampleTurns(transcripts, args.limit);
   const turnsWithTools = sample.turns.filter(t => t.toolResults.length > 0).length;
   console.log(

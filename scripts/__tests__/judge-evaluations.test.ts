@@ -13,7 +13,6 @@ import {
   MAX_TOOL_CONTEXT_ITEMS,
   MAX_TOOL_RESULTS_PER_TURN,
   MAX_TURN_TEXT_LEN,
-  transcriptPathOf,
   type Turn,
 } from '../judge-turns.js';
 import {
@@ -70,7 +69,6 @@ import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-sche
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-import { TRANSCRIPT_ATTRIBUTES } from '../../src/lib/hook-attributes.js';
 import { judgedKeys, makeToolTurn, makeTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
 import { createMockLLM, judgeOver, mockResponse } from './support/mock-judge.js';
 import { useTempDir } from './support/temp-dir.js';
@@ -231,33 +229,6 @@ describe('extractTurns', () => {
     writeFileSync(path, ['not json', ...lines].join('\n'));
 
     expect((await extractTurns({ path, sessionId: SESSION, traceId: TRACE })).map(t => t.userText)).toEqual(['Hello']);
-  });
-});
-
-// transcriptPathOf — `transcript.path` moved under `integritystudio.` (hooks 2026-09-29)
-//
-// Discovery reads raw logs-*.jsonl, which no alias table rewrites, so both
-// spellings reach it. Reading only the old key would drop every post-rename
-// session to the slower directory scan.
-
-describe('transcriptPathOf', () => {
-  const NEW_PATH = '/home/u/.claude/projects/slug/new-session.jsonl';
-  const OLD_PATH = '/home/u/.claude/projects/slug/old-session.jsonl';
-
-  it.each([
-    ['only the canonical key', { [TRANSCRIPT_ATTRIBUTES.PATH]: NEW_PATH }, NEW_PATH],
-    ['only the legacy key', { 'transcript.path': OLD_PATH }, OLD_PATH],
-    ['both keys', { [TRANSCRIPT_ATTRIBUTES.PATH]: NEW_PATH, 'transcript.path': OLD_PATH }, NEW_PATH],
-  ])('reads the path from a record with %s', (_shape, attrs, expected) => {
-    expect(transcriptPathOf(attrs)).toBe(expected);
-  });
-
-  it('skips a non-string canonical value for the legacy one', () => {
-    expect(transcriptPathOf({ [TRANSCRIPT_ATTRIBUTES.PATH]: 42, 'transcript.path': OLD_PATH })).toBe(OLD_PATH);
-  });
-
-  it('is undefined when neither key holds a string', () => {
-    expect(transcriptPathOf({ 'transcript.path': null })).toBeUndefined();
   });
 });
 

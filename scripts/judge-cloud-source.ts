@@ -1,6 +1,7 @@
 /**
  * Cloud discovery for `judge-evaluations` (cloud-read migration
- * Phase 4). Which sessions to judge, which account each turn ran under, and
+ * Phase 4); `judge-agreement` samples from the same sessions
+ * (`discoverCloudSessions`). Which sessions to judge, which account each turn ran under, and
  * which turns are already scored all come from obtool-api; only the turn text
  * still comes from the transcripts on this machine (Phase 5 keeps it there).
  *
@@ -119,15 +120,32 @@ async function loadJudgedRows(fromMs: number, env: NodeJS.ProcessEnv): Promise<E
   return rows;
 }
 
+export type CloudSessions = {
+  /** Built from the cloud spans; anchors turns and routes their posts. */
+  accounts: AccountIndex;
+  transcripts: TranscriptInfo[];
+  /** Sessions the cloud names that have no transcript here. */
+  missing: number;
+}
+
+/** The sessions the cloud's spans name for turns on `dates`, and their transcripts on this machine. */
+export async function discoverCloudSessions(
+  dates: ReadonlySet<string>,
+  env: NodeJS.ProcessEnv = process.env,
+  nowMs: number = Date.now(),
+): Promise<CloudSessions> {
+  const loaded = await loadCloudSpans(spanScopeDates(dates, nowMs), env, CLI_PREFIX);
+  const accounts = indexCloudSpans(loaded);
+  return { accounts, ...transcriptsForSessions(accounts.sessionSpans.keys()) };
+}
+
 /** Discover the sessions, accounts and judged turns for turns on `dates`. */
 export async function discoverFromCloud(
   dates: ReadonlySet<string>,
   env: NodeJS.ProcessEnv = process.env,
   nowMs: number = Date.now(),
 ): Promise<CloudJudgeDiscovery> {
-  const loaded = await loadCloudSpans(spanScopeDates(dates, nowMs), env, CLI_PREFIX);
-  const accounts = indexCloudSpans(loaded);
-  const { transcripts, missing } = transcriptsForSessions(accounts.sessionSpans.keys());
+  const { accounts, transcripts, missing } = await discoverCloudSessions(dates, env, nowMs);
   const existingKeys = judgedKeys(await loadJudgedRows(dateScopeBounds(dates).fromMs, env));
   console.log(`${CLI_PREFIX} sessions=${accounts.sessionSpans.size} withTranscript=${transcripts.length} withoutTranscript=${missing} judgedKeys=${existingKeys.size}`);
   return { transcripts, accounts, existingKeys, sessionsWithoutTranscript: missing };
