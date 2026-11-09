@@ -1,11 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Ship locally-derived evaluations to the cloud `evaluations` table.
- *
- * `sync-to-kv` reads only the cloud, and the span shipper ships only
- * `(traces|logs|metrics)-*.jsonl`, so without this stage the hooks' records in
- * `evaluations-<date>.jsonl` never leave the disk and every sync computes an
- * empty dashboard, as it did for five months (DASHBOARD-PIPELINE-DEAD;
+ * Ship the records in `evaluations-<date>.jsonl` to the cloud `evaluations`
+ * table. Before the hooks wrote each record as a log event too (HDF12), this
+ * stage was their only way off the disk (DASHBOARD-PIPELINE-DEAD;
  * docs/data-pipeline.md § Stages, `upload-evaluations.ts`).
  *
  * Each record is routed by the account that produced it (`routeRecord`): its
@@ -36,12 +33,14 @@
  *   tsx scripts/upload-evaluations.ts --max-age-hours=48
  *   tsx scripts/upload-evaluations.ts --days=11 --only-keys=manifest.jsonl
  *
- * Derive posts every record itself and writes no file (cloud-read Phase 6).
- * The judge posts its own records and backs them up as log events in
- * `logs-*.jsonl` (evaluation-events.ts), not in these files. The hook producers
+ * Derive posts every record itself and writes no file (cloud-read Phase 6),
+ * and the judge no longer writes these files (it posts, backs up as log events
+ * and keeps a failed post in `.judge-pending.jsonl`). The hook producers
  * (`hook:stop-session-summary`, `hook:stop-quality-evaluation`,
- * `survival-fitness`) ship as log events too, so every record left here is
- * skipped as `shipped-as-event` (RSR3).
+ * `survival-fitness`) stamp `integritystudio.evaluation.id` and ship as log
+ * events, so their records are skipped as `shipped-as-event` (RSR3). Judge
+ * records the files still hold carry no stamp: they are sent while
+ * `--max-age-hours` reaches them, and ingest drops any whose id it already has.
  *
  * `--only-keys` re-ships exactly the records a manifest names, for replacing
  * rows deleted from D1 (docs/roadmap/builtin-key-eval-cleanup.md): each line is
@@ -204,7 +203,7 @@ export type EvaluationPayload = {
   metadata?: Record<string, unknown>;
 }
 
-type MapSkip = 'not-an-evaluation' | 'shipped-as-event' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
+export type MapSkip = 'not-an-evaluation' | 'shipped-as-event' | 'no-name' | 'no-score' | 'too-large' | 'too-old';
 
 type MapResult =
   | {

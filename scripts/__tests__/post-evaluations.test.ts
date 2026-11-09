@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
-import { emptyAccountIndex, postEvaluationRecords } from '../post-evaluations.js';
+import { emptyAccountIndex, postEvaluationRecords, undeliveredCount } from '../post-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
 import { evaluationId, INGEST_URL_NOT_SET_MESSAGE, MAX_BATCH_SIZE } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
@@ -126,6 +126,17 @@ describe('postEvaluationRecords', () => {
 
     expect(summary.sent).toBe(0);
     expect(summary.failure).toMatch(/^POST to OBTOOL_API_KEY_TEST failed: 400/);
+  });
+
+  it('counts as undelivered only what a failed post left unsent, not what landed or can never ship', async () => {
+    ingest.respondWith(req => ({ status: req.path === WEBHOOK_INGEST_PATH ? HttpStatus.Ok : HttpStatus.BadRequest, body: '{}' }));
+    const records = [record(), record({ identityKeyRef: null }), record({ identityKeyRef: KEY_REF })];
+
+    const summary = await post(records);
+
+    expect(summary).toMatchObject({ sent: 1, withheld: 1, byDestination: { webhook: 1 } });
+    expect(summary.failure).toMatch(/^POST to OBTOOL_API_KEY_TEST failed/);
+    expect(undeliveredCount(records.length, summary)).toBe(1);
   });
 
   it('counts but never sends on a dry run', async () => {

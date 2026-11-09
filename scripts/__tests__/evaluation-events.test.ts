@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { appendEvaluationEvents, toEvaluationEventLine } from '../evaluation-events.js';
-import { emptyAccountIndex } from '../post-evaluations.js';
+import { emptyAccountIndex, routeEvaluationRecords, type RoutedRecord } from '../post-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
 import { UPLOAD_SERVICE_NAME, evaluationId } from '../upload-evaluations.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
-import { assertDefined } from '../../src/__tests__/support/defined.js';
+import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 import type { AccountIndex } from '../account-stamps.js';
 
 const NOW = new Date('2026-11-08T12:00:00.000Z');
@@ -50,6 +50,13 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+function routed(records: Array<Record<string, unknown>>, accounts: AccountIndex = emptyAccountIndex()): RoutedRecord[] {
+  return routeEvaluationRecords(records, accounts, NOW.getTime());
+}
+
+const lineFor = (r: Record<string, unknown>, accounts?: AccountIndex) =>
+  toEvaluationEventLine(defined(routed([r], accounts)[0]), NOW.getTime());
+
 const readLines = (): Array<Record<string, unknown>> =>
   readFileSync(join(dir, LOGS_FILE), 'utf-8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
 
@@ -57,7 +64,7 @@ describe('toEvaluationEventLine', () => {
   it('writes a stamped record as a shippable log event carrying the id the post sends', () => {
     const r = record({ identityKeyRef: KEY_REF });
 
-    const line = toEvaluationEventLine(r, emptyAccountIndex(), NOW.getTime());
+    const line = lineFor(r);
 
     assertDefined(line);
     expect(line).toMatchObject({
@@ -74,7 +81,7 @@ describe('toEvaluationEventLine', () => {
   });
 
   it('routes an unstamped record by the account of the span it names', () => {
-    const line = toEvaluationEventLine(record({ spanId: 'span-1' }), indexWithSpan('span-1', KEY_REF), NOW.getTime());
+    const line = lineFor(record({ spanId: 'span-1' }), indexWithSpan('span-1', KEY_REF));
 
     expect(line?.identityKeyRef).toBe(KEY_REF);
   });
@@ -84,7 +91,7 @@ describe('toEvaluationEventLine', () => {
     ['stamped null, so it is withheld', record({ identityKeyRef: null })],
     ['not an evaluation', record({ name: 'something.else', identityKeyRef: KEY_REF })],
   ])('writes nothing for a record that is %s', (_label, r) => {
-    expect(toEvaluationEventLine(r, emptyAccountIndex(), NOW.getTime())).toBeUndefined();
+    expect(lineFor(r)).toBeUndefined();
   });
 });
 
@@ -92,7 +99,7 @@ describe('appendEvaluationEvents', () => {
   it("appends only the shippable records to the logs file named for today's UTC date", () => {
     writeFileSync(join(dir, LOGS_FILE), '{"existing":true}\n');
 
-    const backup = appendEvaluationEvents([record({ identityKeyRef: KEY_REF }), record()], emptyAccountIndex(), NOW, dir);
+    const backup = appendEvaluationEvents(routed([record({ identityKeyRef: KEY_REF }), record()]), NOW, dir);
 
     expect(backup).toEqual({ file: join(dir, LOGS_FILE), written: 1 });
     const [existing, event] = readLines();
@@ -102,7 +109,7 @@ describe('appendEvaluationEvents', () => {
   });
 
   it('leaves the logs file untouched when no record qualifies', () => {
-    const backup = appendEvaluationEvents([record()], emptyAccountIndex(), NOW, dir);
+    const backup = appendEvaluationEvents(routed([record()]), NOW, dir);
 
     expect(backup.written).toBe(0);
     expect(existsSync(join(dir, LOGS_FILE))).toBe(false);

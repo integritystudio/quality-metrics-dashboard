@@ -17,9 +17,6 @@
  * - **held for a key**: its records would route to a secret missing from the
  *   environment — an account key, or `INJECT_HMAC_SECRET` for an unstamped
  *   turn, which takes the webhook. A run that has the secret judges it.
- *
- * The last two apply only under `deliverableOnly`, which every judge run sets;
- * tests clear it to check the judged rule alone.
  */
 
 import { ascending } from 'd3-array';
@@ -36,8 +33,6 @@ export type TurnSkip = 'judged' | 'withheld' | 'held-for-key';
 export type SelectOptions = {
   /** Most turns to select; applied after every skip. */
   limit: number;
-  /** Skip turns whose records could not be delivered this run. */
-  deliverableOnly: boolean;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -62,10 +57,9 @@ function deliverySecret(turn: Turn): string | null {
 export function turnSkip(
   turn: Turn,
   existingKeys: Set<string>,
-  opts: Pick<SelectOptions, 'deliverableOnly' | 'env'>,
+  opts: Pick<SelectOptions, 'env'>,
 ): TurnSkip | undefined {
   if (selectCriteria(turn, existingKeys).recordNames.length === 0) return 'judged';
-  if (!opts.deliverableOnly) return undefined;
   const secret = deliverySecret(turn);
   if (secret === null) return 'withheld';
   return asString((opts.env ?? process.env)[secret]) ? undefined : 'held-for-key';

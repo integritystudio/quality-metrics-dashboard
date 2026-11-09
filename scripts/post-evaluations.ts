@@ -27,6 +27,8 @@ import {
   routeRecord,
   sendBatch,
   type EvaluationPayload,
+  type MapSkip,
+  type Route,
   type RouteBasis,
 } from './upload-evaluations.js';
 import type { AccountIndex } from './account-stamps.js';
@@ -40,6 +42,14 @@ export type PostOptions = {
   /** Injected for tests; defaults to `Date.now()`. */
   nowMs?: number;
 }
+
+/**
+ * One record, mapped and routed once for everything that reads it: the post,
+ * and the judge's log-event backup, whose id is then the posted one by construction.
+ */
+export type RoutedRecord =
+  | { skip: MapSkip }
+  | { skip?: undefined; record: Record<string, unknown>; payload: EvaluationPayload; route: Route; basis: RouteBasis };
 
 export type PostSummary = {
   /** Accepted by ingest (or, on a dry run, would have been sent). */
@@ -59,26 +69,26 @@ export function emptyAccountIndex(): AccountIndex {
   return { sessionSpans: new Map(), bySpan: new Map() };
 }
 
-/**
- * Map and route `records` into one batch per destination, counting everything
- * that ships nowhere as it goes.
- */
-function batchRecords(
-  records: readonly unknown[],
-  accounts: AccountIndex,
-  nowMs: number,
-  summary: PostSummary,
-): Map<string, EvaluationPayload[]> {
-  const batches = new Map<string, EvaluationPayload[]>();
-  for (const record of records) {
+/** Map and route each of `records` (OTel-shaped, as `toOTelRecord` writes them). No age guard. */
+export function routeEvaluationRecords(records: readonly unknown[], accounts: AccountIndex, nowMs: number = Date.now()): RoutedRecord[] {
+  return records.map((record): RoutedRecord => {
     const mapped = mapRecord(record, nowMs, Number.POSITIVE_INFINITY);
-    if (mapped.skip) {
-      increment(summary.skipped, mapped.skip);
+    if (mapped.skip) return { skip: mapped.skip };
+    const { route, basis } = routeRecord(mapped, accounts);
+    return { record: record as Record<string, unknown>, payload: mapped.payload, route, basis };
+  });
+}
+
+/** One batch per destination, counting everything that ships nowhere as it goes. */
+function batchRecords(routed: readonly RoutedRecord[], summary: PostSummary): Map<string, EvaluationPayload[]> {
+  const batches = new Map<string, EvaluationPayload[]>();
+  for (const entry of routed) {
+    if (entry.skip) {
+      increment(summary.skipped, entry.skip);
       continue;
     }
-    const { route, basis } = routeRecord(mapped, accounts);
-    summary.routedBy[basis]++;
-    const delivery = deliveryFor(route);
+    summary.routedBy[entry.basis]++;
+    const delivery = deliveryFor(entry.route);
     if (delivery.kind === 'withheld') {
       summary.withheld++;
       continue;
@@ -87,21 +97,22 @@ function batchRecords(
       increment(summary.heldForKey, delivery.ref);
       continue;
     }
-    pushTo(batches, delivery.destination, mapped.payload);
+    pushTo(batches, delivery.destination, entry.payload);
   }
   return batches;
 }
 
+/** Map, route and post `records` (OTel-shaped, as `toOTelRecord` writes them). */
+export async function postEvaluationRecords(records: readonly unknown[], opts: PostOptions): Promise<PostSummary> {
+  return postRoutedRecords(routeEvaluationRecords(records, opts.accounts, opts.nowMs), opts.dryRun);
+}
+
 /**
- * Map, route and post `records` (OTel-shaped, as `toOTelRecord` writes them).
- * Stops at the first rejected batch and reports it in `failure`; everything
- * before it was accepted, and a re-run re-sends the rest without duplicating
- * what landed.
+ * Post records already routed. Stops at the first rejected batch and reports
+ * it in `failure`; everything before it was accepted, and a re-run re-sends
+ * the rest without duplicating what landed.
  */
-export async function postEvaluationRecords(
-  records: readonly unknown[],
-  opts: PostOptions,
-): Promise<PostSummary> {
+export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun: boolean): Promise<PostSummary> {
   const summary: PostSummary = {
     sent: 0,
     byDestination: {},
@@ -110,15 +121,14 @@ export async function postEvaluationRecords(
     heldForKey: {},
     routedBy: { stamp: 0, span: 0, join: 0 },
   };
-  const nowMs = opts.nowMs ?? Date.now();
-  const batches = batchRecords(records, opts.accounts, nowMs, summary);
+  const batches = batchRecords(routed, summary);
 
   const { baseUrl, secret } = resolveSendConfig();
-  if (!opts.dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {
+  if (!dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {
     summary.failure = 'INJECT_HMAC_SECRET is not set, so unstamped records cannot be signed';
     return summary;
   }
-  if (!opts.dryRun && !baseUrl) {
+  if (!dryRun && !baseUrl) {
     summary.failure = INGEST_URL_NOT_SET_MESSAGE;
     return summary;
   }
@@ -126,7 +136,7 @@ export async function postEvaluationRecords(
   for (const [destination, payloads] of batches) {
     for (let i = 0; i < payloads.length; i += MAX_BATCH_SIZE) {
       const chunk = payloads.slice(i, i + MAX_BATCH_SIZE);
-      if (!opts.dryRun) {
+      if (!dryRun) {
         // eslint-disable-next-line no-await-in-loop -- batches are paced below and abort on the first failure
         const res = await sendBatch(destination, chunk, baseUrl, secret);
         if (!res.ok) {
@@ -141,6 +151,16 @@ export async function postEvaluationRecords(
     }
   }
   return summary;
+}
+
+/**
+ * Of `total` records posted, those neither accepted nor dropped for good: the
+ * batches from the failed one on, and any held for a missing key. Skipped and
+ * withheld records never ship, so a re-post would not deliver them either.
+ */
+export function undeliveredCount(total: number, summary: PostSummary): number {
+  const skipped = Object.values(summary.skipped).reduce((sum, n) => sum + n, 0);
+  return total - summary.sent - skipped - summary.withheld;
 }
 
 /** One log line in the same `k=v` shape as upload's summary. */

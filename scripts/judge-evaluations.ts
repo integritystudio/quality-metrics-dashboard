@@ -61,7 +61,8 @@ import { discoverFromCloud } from './judge-cloud-source.js';
 import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched } from './judge-consolidated.js';
 import { readScope, resolveDateScope } from './derive-evaluations.js';
 import { selectTurns, formatTurnSelection, type TurnSelection } from './judge-selection.js';
-import { formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
+import { formatPostSummary, postRoutedRecords, routeEvaluationRecords, undeliveredCount, type RoutedRecord } from './post-evaluations.js';
+import { JUDGE_PENDING_FILE, addPendingKeys, readPendingEvaluations, writePendingEvaluations } from './judge-pending.js';
 import {
   LLM_EVALUATOR_KIND,
   NORMAL_COHORT,
@@ -484,10 +485,10 @@ function releaseLock(): void {
 
 
 /** The backup is a fallback: failing to write it is logged and never stops the post. */
-function writeEventBackup(records: ReadonlyArray<Record<string, unknown>>, accounts: AccountIndex): EventBackup | undefined {
+function writeEventBackup(routed: readonly RoutedRecord[]): EventBackup | undefined {
   try {
-    const backup = appendEvaluationEvents(records, accounts);
-    console.log(`[judge] backup: ${backup.written}/${records.length} records as log events in ${backup.file}`);
+    const backup = appendEvaluationEvents(routed);
+    console.log(`[judge] backup: ${backup.written}/${routed.length} records as log events in ${backup.file}`);
     return backup;
   } catch (err) {
     console.error(`[judge] backup not written (${describeUnknown(err)}); the post is the only delivery`);
@@ -495,19 +496,39 @@ function writeEventBackup(records: ReadonlyArray<Record<string, unknown>>, accou
   }
 }
 
-/** Back the records up as log events, then post them; a failed post sets the soft exit code. */
-async function deliverEvaluations(flatEvals: EvalRecord[], accounts: AccountIndex): Promise<void> {
-  const records = flatEvals.map(ev => toOTelRecord(ev) as Record<string, unknown>);
-  // Written before the post, so a run killed mid-post still ships them.
-  const backedUp = writeEventBackup(records, accounts)?.written ?? 0;
-  const posted = await postEvaluationRecords(records, { dryRun: false, accounts });
-  console.log(`[judge] posted ${formatPostSummary(posted)}`);
-  if (posted.failure) {
-    console.error(`[judge] the span shipper delivers the ${backedUp} backed-up records at the next session Stop; `
-      + `the other ${records.length - backedUp} were not delivered, and the next run re-judges their turns`);
-    // Soft, so populate still runs its later stages; this outranks a summary code.
-    process.exitCode = JUDGE_EXIT_POST_FAILED;
+/** Best effort: a record the file cannot keep is judged again by the next run, which the log says. */
+function savePending(records: readonly EvalRecord[]): void {
+  try {
+    writePendingEvaluations(records);
+  } catch (err) {
+    console.error(`[judge] ${JUDGE_PENDING_FILE} not updated (${describeUnknown(err)})`
+      + `${records.length > 0 ? `; the next run re-judges the turns of these ${records.length} records` : ''}`);
   }
+}
+
+/**
+ * Back this run's records up as log events, then post them after the ones a
+ * failed post left. A failed post keeps every record for the next run and sets
+ * the soft exit code; a successful one clears the pending file.
+ */
+async function deliverEvaluations(fresh: EvalRecord[], pending: EvalRecord[], accounts: AccountIndex): Promise<void> {
+  const route = (evals: EvalRecord[]): RoutedRecord[] => routeEvaluationRecords(evals.map(ev => toOTelRecord(ev)), accounts);
+  const freshRouted = route(fresh);
+  // Written before the post, so a run killed mid-post still ships them; the
+  // pending records were backed up by the run that judged them.
+  if (freshRouted.length > 0) writeEventBackup(freshRouted);
+  const all = [...pending, ...fresh];
+  const posted = await postRoutedRecords([...route(pending), ...freshRouted], false);
+  console.log(`[judge] posted ${formatPostSummary(posted)}`);
+  if (!posted.failure) {
+    if (pending.length > 0) savePending([]);
+    return;
+  }
+  savePending(all);
+  console.error(`[judge] ${undeliveredCount(all.length, posted)} of ${all.length} records were not delivered; `
+    + `${JUDGE_PENDING_FILE} keeps them for the next run to post without judging their turns again`);
+  // Soft, so populate still runs its later stages; this outranks a summary code.
+  process.exitCode = JUDGE_EXIT_POST_FAILED;
 }
 
 export async function processBatch<T, R>(
@@ -640,7 +661,11 @@ async function main(): Promise<void> {
     return;
   }
   const { turns, accounts, existingKeys } = discovery;
-  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit, deliverableOnly: true });
+  const { records: pending, dropped } = readPendingEvaluations();
+  if (dropped > 0) console.warn(`[judge] ${dropped} unreadable lines in ${JUDGE_PENDING_FILE} ignored`);
+  if (pending.length > 0) console.log(`[judge] ${pending.length} records from a failed post are posted before this run's`);
+  addPendingKeys(existingKeys, pending);
+  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit });
 
   if (dryRun) {
     const selection = select(existingKeys);
@@ -667,7 +692,7 @@ async function main(): Promise<void> {
     resetFailureTracking();
 
     const flatEvals = await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated });
-    if (flatEvals.length > 0) await deliverEvaluations(flatEvals, accounts);
+    if (flatEvals.length > 0 || pending.length > 0) await deliverEvaluations(flatEvals, pending, accounts);
   } finally {
     releaseLock();
   }

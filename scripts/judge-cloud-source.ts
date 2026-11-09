@@ -13,7 +13,7 @@
  * - **Transcripts**: found by session id under `TRANSCRIPT_DIRS`, never through
  *   the local token-metrics logs, so no telemetry file is read.
  * - **Already judged**: `/v1/evaluations` rows from the judge's two producers,
- *   one query per account and producer, keyed like `turnScoreKey`. This
+ *   one query per account and producer, keyed like `judgedByKey`. This
  *   is the cloud's record of what reached the dashboard, so a turn judged
  *   locally but never delivered is judged again, and this time posted.
  */
@@ -25,7 +25,7 @@ import { msToNs, nsToMs } from './hrt.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
-import { turnKeyOf, addJudgedKeys } from './judge-dedup.js';
+import { turnKeyOf, addJudgedKey } from './judge-dedup.js';
 import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo } from './judge-turns.js';
 
 /** Every producer the judge has written under: per-criterion and consolidated. */
@@ -42,7 +42,7 @@ export type CloudJudgeDiscovery = {
   transcripts: TranscriptInfo[];
   /** Built from the cloud spans; anchors turns and routes their posts. */
   accounts: AccountIndex;
-  /** Both dedup keys (`addJudgedKeys`) for every turn the cloud holds a judge row for. */
+  /** The dedup key (`addJudgedKey`) for every turn and criterion the cloud holds a judge row for. */
   existingKeys: Set<string>;
   /** Sessions the cloud names that have no transcript here: judged only where they ran. */
   sessionsWithoutTranscript: number;
@@ -75,13 +75,13 @@ function evaluationEventMs(row: EvaluationResult): number {
   return typeof legacy === 'number' ? legacy : nsToMs(row.timestamp);
 }
 
-/** Dedup keys in `turnScoreKey`'s shape, plain and per judge model; a row without a session scores no transcript turn. */
+/** Dedup keys in `judgedByKey`'s shape; a row without a session scores no transcript turn. */
 export function judgedKeys(rows: Iterable<EvaluationResult>): Set<string> {
   const keys = new Set<string>();
   for (const row of rows) {
     if (!row.sessionId) continue;
     const turnKey = turnKeyOf(evaluationEventMs(row));
-    addJudgedKeys(keys, { sessionId: row.sessionId, evaluationName: row.evaluationName, turnKey, judgeModel: row.judgeModel, cohort: row.cohort });
+    addJudgedKey(keys, { sessionId: row.sessionId, evaluationName: row.evaluationName, turnKey, judgeModel: row.judgeModel, cohort: row.cohort });
   }
   return keys;
 }

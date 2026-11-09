@@ -12,20 +12,13 @@ export function turnKeyOf(at: string | number): string {
 }
 
 /**
- * The dedup set holds two keys per judged criterion: the plain
- * `${sessionId}:${evaluationName}:${turnKey}` for every row, and the same key
- * suffixed `@<judgeModel>` for every LLM row (JUDGE-MODEL-METADATA-ONLY,
- * 2026-10-01). The LLM paths check the suffixed key, so a turn Haiku judged is
- * still judged by a different model. Rows written before the model was
- * recorded are all Haiku 4.5, so a row with no model and no cohort, or a
- * `normal` or `backfill` one, counts as one.
+ * The dedup set holds one key per criterion a model judged on a turn,
+ * `${sessionId}:${evaluationName}:${turnKey}@${judgeModel}`
+ * (JUDGE-MODEL-METADATA-ONLY), so a turn Haiku judged is still judged by a
+ * different model.
  */
-export function turnScoreKey(sessionId: string, evaluationName: string, turnKey: string): string {
-  return `${sessionId}:${evaluationName}:${turnKey}`;
-}
-
 export function judgedByKey(sessionId: string, evaluationName: string, turnKey: string, judgeModel: string): string {
-  return `${turnScoreKey(sessionId, evaluationName, turnKey)}@${judgeModel}`;
+  return `${sessionId}:${evaluationName}:${turnKey}@${judgeModel}`;
 }
 
 /**
@@ -41,12 +34,15 @@ export function turnJudgedKey(
   return judgedByKey(turn.sessionId, evaluationName, turnKeyOf(turn.timestamp), judgeModel);
 }
 
-/** Add both keys for one stored judge row. No model on a normal, backfill or cohort-less row means a Haiku row. */
-export function addJudgedKeys(
+/**
+ * Add the key for one stored judge row. Rows written before the model was
+ * recorded are all Haiku 4.5, so one with no model and no cohort, or a
+ * `normal` or `backfill` one, counts as Haiku; any other has no key.
+ */
+export function addJudgedKey(
   keys: Set<string>,
   row: { sessionId: string; evaluationName: string; turnKey: string; judgeModel?: string | undefined; cohort?: string | undefined },
 ): void {
-  keys.add(turnScoreKey(row.sessionId, row.evaluationName, row.turnKey));
   const mayBeLegacyHaiku = row.cohort === undefined || row.cohort === NORMAL_COHORT || row.cohort === BACKFILL_COHORT;
   const judgeModel = row.judgeModel ?? (mayBeLegacyHaiku ? HAIKU_MODEL : undefined);
   if (judgeModel) keys.add(judgedByKey(row.sessionId, row.evaluationName, row.turnKey, judgeModel));

@@ -19,7 +19,7 @@ function judged(...turns: Turn[]): Set<string> {
   return new Set(turns.flatMap(t => [...judgedKeys(t, PLAIN_CRITERIA)]));
 }
 
-const opts = { limit: Number.POSITIVE_INFINITY, deliverableOnly: true, env: ENV };
+const opts = { limit: Number.POSITIVE_INFINITY, env: ENV };
 
 describe('turnKeyOf', () => {
   it('keys an ISO timestamp, or the same instant as epoch ms, to the second', () => {
@@ -75,14 +75,6 @@ describe('turnSkip', () => {
 
     expect(selectTurns([t], new Set(), { ...opts, env: {} }).heldForKey).toEqual({ [WEBHOOK_SECRET_ENV]: 1 });
     expect(turnSkip(t, new Set(), opts)).toBeUndefined();
-  });
-
-  it('judges undeliverable turns when the run posts nothing', () => {
-    const local = { deliverableOnly: false, env: {} };
-    const { identityKeyRef: _unstamped, ...unstamped } = turn('2');
-
-    expect(turnSkip(turn('1', { identityKeyRef: null }), new Set(), local)).toBeUndefined();
-    expect(turnSkip(unstamped, new Set(), local)).toBeUndefined();
   });
 
   it('reports a judged turn as judged even when it is also undeliverable', () => {

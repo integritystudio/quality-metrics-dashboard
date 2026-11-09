@@ -13,7 +13,7 @@ import {
 } from '../judge-cloud-source.js';
 import { anchorTurns, type Turn } from '../judge-turns.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME } from '../judge-criteria.js';
-import { turnSkip } from '../judge-selection.js';
+import { selectCriteria } from '../judge-consolidated.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 
@@ -94,18 +94,20 @@ describe('indexCloudSpans', () => {
 });
 
 describe('judgedKeys', () => {
+  /** No criterion left to score for the turn, the rule `turnSkip` reports as judged. */
+  const isJudged = (keys: Set<string>): boolean => selectCriteria(turn(), keys).recordNames.length === 0;
+
   it('marks a turn judged when the cloud holds a row per criterion at its event time', () => {
     const keys = judgedKeys([row(RELEVANCE_EVAL_NAME), row(COHERENCE_EVAL_NAME)]);
 
-    expect(turnSkip(turn(), keys, { deliverableOnly: false })).toBe('judged');
+    expect(isJudged(keys)).toBe(true);
   });
 
   it('dates a pre-event-time row by its evaluatedAtMs attribute, not its receipt time', () => {
     const receivedNs = BigInt(TURN_MS + RECEIPT_LAG_HOURS * TIME_MS.HOUR) * NS_PER_MS;
     const legacy = (name: string) => row(name, { timestamp: receivedNs, attributes: { evaluatedAtMs: TURN_MS } });
 
-    expect(turnSkip(turn(), judgedKeys([legacy(RELEVANCE_EVAL_NAME), legacy(COHERENCE_EVAL_NAME)]), { deliverableOnly: false }))
-      .toBe('judged');
+    expect(isJudged(judgedKeys([legacy(RELEVANCE_EVAL_NAME), legacy(COHERENCE_EVAL_NAME)]))).toBe(true);
   });
 
   it('skips a row with no session, which scores no transcript turn', () => {
@@ -115,15 +117,13 @@ describe('judgedKeys', () => {
   it('does not mark a turn judged for Haiku when only another model judged it', () => {
     const opus = (name: string) => row(name, { evaluatorKind: 'llm', judgeModel: 'claude-opus-5' });
 
-    expect(turnSkip(turn(), judgedKeys([opus(RELEVANCE_EVAL_NAME), opus(COHERENCE_EVAL_NAME)]), { deliverableOnly: false }))
-      .toBeUndefined();
+    expect(isJudged(judgedKeys([opus(RELEVANCE_EVAL_NAME), opus(COHERENCE_EVAL_NAME)]))).toBe(false);
   });
 
   it('does not mark a turn judged on seeded rows, which name no judge', () => {
     const seeded = (name: string) => row(name, { evaluatorKind: 'rule', cohort: 'seed' });
 
-    expect(turnSkip(turn(), judgedKeys([seeded(RELEVANCE_EVAL_NAME), seeded(COHERENCE_EVAL_NAME)]), { deliverableOnly: false }))
-      .toBeUndefined();
+    expect(isJudged(judgedKeys([seeded(RELEVANCE_EVAL_NAME), seeded(COHERENCE_EVAL_NAME)]))).toBe(false);
   });
 });
 

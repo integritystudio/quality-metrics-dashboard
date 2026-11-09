@@ -178,9 +178,8 @@ type StageScope = {
   defaultDays: number;
 }
 
-/** A stage's `--days=` from its populate override, else its default. */
+/** A stage's `--days=` from its populate override, else its default. Removed flags are populate's `readArgs` check. */
 function stageScopeArgs(args: readonly string[], scope: StageScope): string[] {
-  rejectRemovedFlags(args);
   const cli = parseCli(args, { values: [scope.daysFlag] });
   const days = positiveIntArg(scope.daysFlag, cli.value(scope.daysFlag)) ?? scope.defaultDays;
   return [`${DAYS_FLAG}${days}`];

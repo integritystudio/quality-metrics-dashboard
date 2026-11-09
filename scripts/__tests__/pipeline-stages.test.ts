@@ -221,8 +221,6 @@ describe('judgeScopeArgs', () => {
     ['a zero day count', ['--judge-days=0'], /--judge-days must be a positive integer/],
     ['a fractional day count', ['--judge-days=1.5'], /--judge-days must be a positive integer/],
     ['a day count with trailing text', ['--judge-days=7d'], /--judge-days must be a positive integer/],
-    ['the removed --judge-source', ['--judge-source=local'], /--judge-source was removed/],
-    ['the removed --source', ['--source=local'], /--source was removed/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => judgeScopeArgs(args)).toThrow(message);
   });
@@ -242,7 +240,6 @@ describe('deriveScopeArgs', () => {
 
   it.each([
     ['a zero day count', ['--derive-days=0'], /--derive-days must be a positive integer/],
-    ['the removed --derive-source', ['--derive-source=local'], /--derive-source was removed/],
   ])('rejects %s', (_label, args, message) => {
     expect(() => deriveScopeArgs(args)).toThrow(message);
   });
@@ -255,6 +252,7 @@ describe('rejectRemovedFlags', () => {
     ['--source', /--source was removed: derive and the judge read the cloud only/],
     ['--source=cloud', /--source was removed/],
     ['--derive-source=local', /--derive-source was removed/],
+    ['--judge-source=local', /--judge-source was removed/],
   ])('refuses %s instead of running the stage without it', (flag, message) => {
     expect(() => rejectRemovedFlags(['--limit', '5', flag])).toThrow(message);
   });
