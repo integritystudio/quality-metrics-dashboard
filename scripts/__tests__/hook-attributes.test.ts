@@ -7,14 +7,14 @@
  * `integritystudio.agent.has_error` fails here, because a reader using it would
  * see `undefined` on every canonicalized span.
  *
- * A key the alias table has never heard of passes — `canonicalAttrKey` returns
- * an unknown key unchanged — so this is a guard against reading a legacy key,
+ * A key the alias table has never heard of passes — `canonicalizeAttributes`
+ * keeps an unknown key unchanged — so this is a guard against reading a legacy key,
  * not a spell-check. The namespace assertion below is what catches a typo in
  * the prefix. Keys the hooks take from the OTel registry rather than mint are
  * listed by exact spelling, so a misspelt one still fails.
  */
 import { describe, expect, it } from 'vitest';
-import { canonicalAttrKey } from '../../../src/lib/observability/attribute-aliases.js';
+import { canonicalizeAttributes } from '../../../src/lib/observability/attribute-aliases.js';
 import * as hookAttributes from '../../src/lib/hook-attributes.js';
 
 /**
@@ -32,7 +32,7 @@ const OTEL_SEMCONV_KEYS = new Set(['vcs.change.id']);
 
 describe('hook span attribute keys', () => {
   it.each(ALL_KEYS)('%s is canonical, not a legacy alias', (key) => {
-    expect(canonicalAttrKey(key)).toBe(key);
+    expect(Object.keys(canonicalizeAttributes({ [key]: 1 }))).toEqual([key]);
   });
 
   it.each(ALL_KEYS)('%s is in the vendor namespace or a known semconv key', (key) => {
