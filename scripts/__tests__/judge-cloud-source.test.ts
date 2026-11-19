@@ -110,6 +110,7 @@ describe('judgedKeys', () => {
     const keys = judgedKeys([row(RELEVANCE_EVAL_NAME), row(COHERENCE_EVAL_NAME)]);
 
     expect(isJudged(keys)).toBe(false);
+    expect(keys.size).toBe(2);
     expect([...keys].every(key => key.endsWith(`@${LEGACY_HAIKU_MODEL}`))).toBe(true);
   });
 
