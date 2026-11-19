@@ -38,6 +38,7 @@ import {
   RULE_EVALUATOR_TYPE,
   SYNTHETIC_EVALUATOR_KIND as RULE_EVALUATOR_KIND,
   NORMAL_COHORT,
+  legacyEvaluatorTypeField,
   toOTelRecord,
   type EvalRecord,
 } from './eval-record.js';
@@ -86,7 +87,7 @@ function ruleRecord(span: LocalTraceSpan, sessionId: string, score: RuleScore): 
     timestamp: hrtToISO(span.startTime),
     ...score,
     evaluator: RULE_EVALUATOR_TYPE,
-    evaluatorType: RULE_EVALUATOR_TYPE,
+    ...legacyEvaluatorTypeField(RULE_EVALUATOR_KIND),
     evaluatorKind: RULE_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     traceId: span.traceId,

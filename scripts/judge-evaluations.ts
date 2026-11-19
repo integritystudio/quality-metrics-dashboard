@@ -70,7 +70,7 @@ import {
   SCORE_PREVIEW_DECIMALS,
   SESSION_ID_PREVIEW_LEN,
   EVAL_SCORE_PRECISION,
-  legacyEvaluatorType,
+  legacyEvaluatorTypeField,
   normalizeScore,
   toOTelRecord,
   type EvalRecord,
@@ -146,7 +146,6 @@ function createEvalRecord(
   turn: Turn,
   { evaluationName, scoreValue, explanation, kind, cohort, judgeModel }: EvalRecordFields,
 ): EvalRecord {
-  const evaluatorType = legacyEvaluatorType(kind);
   return {
     timestamp: turn.timestamp,
     evaluationName,
@@ -155,7 +154,7 @@ function createEvalRecord(
     explanation,
     evaluator: PRODUCER,
     // Narrowed to the kind axis; the cohort has its own field now.
-    ...(evaluatorType && { evaluatorType }),
+    ...legacyEvaluatorTypeField(kind),
     evaluatorKind: kind,
     cohort,
     ...(judgeModel && { judgeModel, stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel) }),

@@ -45,13 +45,14 @@ import {
   G_EVAL_MAX_STEPS,
   LLM_TEMPERATURE_EVALUATION,
 } from '../../src/lib/judge/llm-judge-constants.js';
-import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
+import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { type Turn, fitContextForJudge, turnSourceFields } from './judge-turns.js';
 import {
   type EvalRecord,
   LLM_EVALUATOR_KIND,
   NORMAL_COHORT,
+  legacyEvaluatorTypeField,
   SESSION_ID_PREVIEW_LEN,
   SCORE_PREVIEW_DECIMALS,
   normalizeScore,
@@ -425,7 +426,7 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
     scoreLabel: scoreLabelForMetric(evaluationName, scoreValue),
     explanation,
     evaluator: CONSOLIDATED_PRODUCER,
-    evaluatorType: LLM_EVALUATOR_TYPE,
+    ...legacyEvaluatorTypeField(LLM_EVALUATOR_KIND),
     evaluatorKind: LLM_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
     judgeModel: HAIKU_MODEL,

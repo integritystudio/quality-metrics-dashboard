@@ -35,12 +35,14 @@ export const SYNTHETIC_EVALUATOR_KIND: EvaluatorKind = 'rule';
 export const LLM_EVALUATOR_KIND: EvaluatorKind = 'llm';
 
 /**
- * The legacy `evaluatorType` value for a kind, or `undefined` when the kind has
- * none. Three of the four kinds are also members of the older enum; the fourth,
- * `ground_truth`, is not, and is left unset rather than coerced.
+ * The deprecated `evaluatorType` field for a kind, to spread into a record; the
+ * one place that writes it. Three of the four kinds are also members of the
+ * older enum; the fourth, `ground_truth`, is not, and is left unset rather than
+ * coerced.
  */
-export function legacyEvaluatorType(kind: EvaluatorKind): EvaluatorType | undefined {
-  return kind === 'ground_truth' ? undefined : kind;
+export function legacyEvaluatorTypeField(kind: EvaluatorKind): Pick<EvalRecord, 'evaluatorType'> {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- still written so the query/export surface keeps filtering
+  return kind === 'ground_truth' ? {} : { evaluatorType: kind };
 }
 
 export const NORMAL_COHORT: EvaluationCohort = 'normal';

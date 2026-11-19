@@ -30,6 +30,7 @@ import {
   EVAL_SCORE_PRECISION,
   LEGACY_EVALUATOR_TYPE_ATTR,
   PRODUCER,
+  legacyEvaluatorTypeField,
   type EvalRecord,
 } from '../eval-record.js';
 import {
@@ -85,7 +86,7 @@ function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
     scoreValue: DEFAULT_SCORE,
     explanation: 'Test explanation',
     evaluator: PRODUCER,
-    evaluatorType: 'llm',
+    ...legacyEvaluatorTypeField('llm'),
     evaluatorKind: 'llm',
     cohort: 'normal',
     judgeModel: 'claude-haiku-4-5-20251001',
