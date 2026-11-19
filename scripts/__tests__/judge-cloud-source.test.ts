@@ -12,7 +12,7 @@ import {
   transcriptsForSessions,
 } from '../judge-cloud-source.js';
 import { anchorTurns, type Turn } from '../judge-turns.js';
-import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME } from '../judge-criteria.js';
+import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, HAIKU_MODEL, LEGACY_HAIKU_MODEL } from '../judge-criteria.js';
 import { selectCriteria } from '../judge-consolidated.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
@@ -96,16 +96,26 @@ describe('indexCloudSpans', () => {
 describe('judgedKeys', () => {
   /** No criterion left to score for the turn, the rule `turnSkip` reports as judged. */
   const isJudged = (keys: Set<string>): boolean => selectCriteria(turn(), keys).recordNames.length === 0;
+  /** A row the current judge wrote. */
+  const judged = (name: string, extra: Partial<EvaluationResult> = {}): EvaluationResult =>
+    row(name, { evaluatorKind: 'llm', judgeModel: HAIKU_MODEL, ...extra });
 
   it('marks a turn judged when the cloud holds a row per criterion at its event time', () => {
-    const keys = judgedKeys([row(RELEVANCE_EVAL_NAME), row(COHERENCE_EVAL_NAME)]);
+    const keys = judgedKeys([judged(RELEVANCE_EVAL_NAME), judged(COHERENCE_EVAL_NAME)]);
 
     expect(isJudged(keys)).toBe(true);
   });
 
+  it('counts a row with no judge model as the legacy Haiku\'s, so the current judge scores the turn again', () => {
+    const keys = judgedKeys([row(RELEVANCE_EVAL_NAME), row(COHERENCE_EVAL_NAME)]);
+
+    expect(isJudged(keys)).toBe(false);
+    expect([...keys].every(key => key.endsWith(`@${LEGACY_HAIKU_MODEL}`))).toBe(true);
+  });
+
   it('dates a pre-event-time row by its evaluatedAtMs attribute, not its receipt time', () => {
     const receivedNs = BigInt(TURN_MS + RECEIPT_LAG_HOURS * TIME_MS.HOUR) * NS_PER_MS;
-    const legacy = (name: string) => row(name, { timestamp: receivedNs, attributes: { evaluatedAtMs: TURN_MS } });
+    const legacy = (name: string) => judged(name, { timestamp: receivedNs, attributes: { evaluatedAtMs: TURN_MS } });
 
     expect(isJudged(judgedKeys([legacy(RELEVANCE_EVAL_NAME), legacy(COHERENCE_EVAL_NAME)]))).toBe(true);
   });

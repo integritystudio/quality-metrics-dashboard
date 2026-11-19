@@ -12,6 +12,7 @@ import { resetFailureTracking } from '../judge-failures.js';
 import { judgedByKey, TIMESTAMP_TURN_KEY_LEN } from '../judge-dedup.js';
 import {
   HAIKU_MODEL,
+  JUDGE_EFFORT,
   RELEVANCE_EVAL_NAME,
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
@@ -29,9 +30,8 @@ type BatchRequest = BatchRequests[number];
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const PROVIDER_MAX_TOKENS = 1024;
-const TEMPERATURE = 0.1;
 const FAST_MS = 5;
-const BASE = { model: MODEL, maxTokens: PROVIDER_MAX_TOKENS, temperature: TEMPERATURE, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
+const BASE = { model: MODEL, maxTokens: PROVIDER_MAX_TOKENS, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
 const VERDICT_SCORE = 4;
 const VERDICT_FAITHFULNESS = (VERDICT_SCORE - G_EVAL_MIN_SCORE) / G_EVAL_SCORE_RANGE;
 const COST_CLOSE_TO_DIGITS = 10;
@@ -102,17 +102,17 @@ describe('adaptBatchProvider', () => {
     const [request] = submitted.flat();
     assertDefined(request);
     expect(request.params.max_tokens).toBe(CONSOLIDATED_MAX_TOKENS);
-    expect(request.params.output_config).toEqual({ format: { type: 'json_schema', schema } });
+    expect(request.params.output_config).toEqual({ effort: JUDGE_EFFORT, format: { type: 'json_schema', schema } });
   });
 
-  it('leaves a schema-less call on the provider budget with no output_config', async () => {
+  it('leaves a schema-less call on the provider budget with no output format', async () => {
     const { client, submitted } = fakeClient();
     const provider = adaptBatchProvider(await createBatchProvider({ ...BASE, client }));
     await provider.generate(STEPS_PROMPT_MARKER);
     const [request] = submitted.flat();
     assertDefined(request);
     expect(request.params.max_tokens).toBe(PROVIDER_MAX_TOKENS);
-    expect(request.params.output_config).toBeUndefined();
+    expect(request.params.output_config).toEqual({ effort: JUDGE_EFFORT });
   });
 });
 

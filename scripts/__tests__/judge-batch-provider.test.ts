@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import type Anthropic from '@anthropic-ai/sdk';
 import {
   createBatchProvider,
-  toOutputConfig,
+  toRequestSettings,
   BatchRequestFailedError,
   BatchWallClockExceededError,
   BATCH_CANCEL_GRACE_MS,
@@ -20,7 +20,7 @@ import {
 } from '../judge-failures.js';
 import { createUsageTotals } from '../judge-usage.js';
 import { evaluateTurnsBatched, BATCH_MODE_JUDGE_TIMEOUT_MS, BATCH_MODE_MAX_RETRIES } from '../judge-evaluations.js';
-import { COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
+import { COHERENCE_EVAL_NAME, JUDGE_EFFORT, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { evaluateTurnsConsolidatedBatched } from '../judge-consolidated.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
@@ -35,11 +35,10 @@ type BatchRequests = Parameters<BatchClient['create']>[0]['requests'];
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 1024;
-const TEMPERATURE = 0.1;
 const BATCH_ID = 'msgbatch_test';
 /** Real timers, kept short: the provider's intervals are injectable. */
 const FAST_MS = 5;
-const BASE = { model: MODEL, maxTokens: MAX_TOKENS, temperature: TEMPERATURE, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
+const BASE = { model: MODEL, maxTokens: MAX_TOKENS, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
 /**
  * A 2xx whose body is no batch: the SDK resolves it, and the provider has
  * nothing to read a status from. The one thing the fake can hand back that
@@ -146,10 +145,11 @@ describe('createBatchProvider', () => {
     expect(defined(requests[0]).params).toEqual({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
       messages: [{ role: 'user', content: 'alpha' }],
+      thinking: { type: 'disabled' },
+      output_config: { effort: JUDGE_EFFORT },
     });
-    expect(defined(requests[1]).params).toMatchObject({ temperature: 0.7 });
+    expect(defined(requests[1]).params).not.toHaveProperty('temperature');
   });
 
   it('polls until the batch has ended and only then reads results', async () => {
@@ -249,17 +249,20 @@ describe('createBatchProvider', () => {
     expect(client.create).toHaveBeenCalledTimes(1);
   });
 
-  it('maps a jsonSchema option onto output_config', async () => {
+  it('maps a jsonSchema option onto output_config beside the judge settings', async () => {
     const schema = { type: 'object', properties: { score: { type: 'number' } } };
-    expect(toOutputConfig({ jsonSchema: schema })).toEqual({ output_config: { format: { type: 'json_schema', schema } } });
-    expect(toOutputConfig({ temperature: 0 })).toEqual({});
+    expect(toRequestSettings({ jsonSchema: schema })).toEqual({
+      thinking: { type: 'disabled' },
+      output_config: { effort: JUDGE_EFFORT, format: { type: 'json_schema', schema } },
+    });
+    expect(toRequestSettings({ temperature: 0 })).toEqual({ thinking: { type: 'disabled' }, output_config: { effort: JUDGE_EFFORT } });
 
     const { client, submitted } = fakeClient({ results: echo });
     const provider = await createBatchProvider({ ...BASE, client });
     const structured = provider.generate('structured', { jsonSchema: schema });
     await provider.flush();
     await structured;
-    expect(defined(defined(submitted[0])[0]).params.output_config).toEqual({ format: { type: 'json_schema', schema } });
+    expect(defined(defined(submitted[0])[0]).params.output_config).toEqual({ effort: JUDGE_EFFORT, format: { type: 'json_schema', schema } });
   });
 
   it('rejects a succeeded request when the onUsage callback throws, instead of leaving it pending (JUDGE-BATCH-SETTLE-THROW-LEAVES-PENDING)', async () => {
@@ -277,7 +280,7 @@ describe('createBatchProvider', () => {
 // The wall clock (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN)
 
 /** The provider's own intervals: these tests run on vitest's clock, so none of them waits. */
-const PRODUCTION = { model: MODEL, maxTokens: MAX_TOKENS, temperature: TEMPERATURE };
+const PRODUCTION = { model: MODEL, maxTokens: MAX_TOKENS };
 const POLLS_TO_WALL_CLOCK = 4;
 const POLLS_OF_GRACE = 3;
 /** A wall clock and a grace a few polls long, for the cases that do not turn on the production numbers. */
@@ -605,7 +608,7 @@ describe('a per-criterion --batch run cut short by the wall clock', () => {
       statuses: ['ended', 'in_progress'],
       afterCancel: ['ended'],
       results: requests => requests.map((request): ResultLine => {
-        if (!request.params.output_config) return succeeded(request.custom_id, STEPS_TEXT);
+        if (!request.params.output_config?.format) return succeeded(request.custom_id, STEPS_TEXT);
         if (!promptOf(request).includes(SCORED_MARKER)) return { custom_id: request.custom_id, result: { type: 'canceled' } };
         return succeeded(request.custom_id, VERDICT_TEXT);
       }),

@@ -37,6 +37,7 @@ import {
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
   HAIKU_MODEL,
+  JUDGE_EFFORT,
   JUDGE_MAX_TOKENS,
   RELEVANCE_EVAL_NAME,
 } from '../judge-criteria.js';
@@ -719,19 +720,22 @@ describe('anthropicProviderFor', () => {
     const result = await anthropicProviderFor(client).generate('rate it', { jsonSchema: SCORE_SCHEMA });
 
     expect(calls).toEqual([expect.objectContaining({
-      output_config: { format: { type: 'json_schema', schema: SCORE_SCHEMA } },
+      output_config: { effort: JUDGE_EFFORT, format: { type: 'json_schema', schema: SCORE_SCHEMA } },
+      thinking: { type: 'disabled' },
       max_tokens: JUDGE_MAX_TOKENS,
     })]);
     expect(result).toEqual({ text: verdict });
   });
 
-  it('omits output_config when no schema is given', async () => {
+  it('sends only the judge settings when no schema is given, and never a temperature', async () => {
     const { client, calls } = makeFakeAnthropicClient('Score: 4');
 
     await anthropicProviderFor(client).generate('rate it');
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]).not.toHaveProperty('output_config');
+    expect(calls[0]).toMatchObject({ thinking: { type: 'disabled' }, output_config: { effort: JUDGE_EFFORT } });
+    expect(calls[0]).not.toHaveProperty('temperature');
+    expect(calls[0]).not.toHaveProperty('output_config.format');
   });
 
   it('folds usage into the totals and hands each response to onUsage', async () => {

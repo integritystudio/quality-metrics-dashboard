@@ -1,7 +1,7 @@
 /** Keys for the already-judged set. */
 
 import { NORMAL_COHORT, BACKFILL_COHORT } from './eval-record.js';
-import { HAIKU_MODEL } from './judge-criteria.js';
+import { LEGACY_HAIKU_MODEL } from './judge-criteria.js';
 
 export const TIMESTAMP_TURN_KEY_LEN = 19; // ISO 8601 up to seconds: "2026-02-09T01:11:15"
 
@@ -44,6 +44,6 @@ export function addJudgedKey(
   row: { sessionId: string; evaluationName: string; turnKey: string; judgeModel?: string | undefined; cohort?: string | undefined },
 ): void {
   const mayBeLegacyHaiku = row.cohort === undefined || row.cohort === NORMAL_COHORT || row.cohort === BACKFILL_COHORT;
-  const judgeModel = row.judgeModel ?? (mayBeLegacyHaiku ? HAIKU_MODEL : undefined);
+  const judgeModel = row.judgeModel ?? (mayBeLegacyHaiku ? LEGACY_HAIKU_MODEL : undefined);
   if (judgeModel) keys.add(judgedByKey(row.sessionId, row.evaluationName, row.turnKey, judgeModel));
 }

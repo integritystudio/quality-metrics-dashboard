@@ -16,6 +16,7 @@
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ClientOptions } from '@anthropic-ai/sdk';
+import { JUDGE_EFFORT } from './judge-criteria.js';
 
 type SdkFetch = NonNullable<ClientOptions['fetch']>;
 
@@ -47,11 +48,14 @@ export function jsonSchemaFormat(schema: JsonOutputSchema): Anthropic.Messages.J
   return { type: 'json_schema', schema };
 }
 
-/** `{}` without a schema, so the request is unchanged. */
-export function jsonSchemaOutputConfig(
+/** Every judge request's thinking and output settings, with the JSON schema as `output_config.format` when given. */
+export function judgeRequestSettings(
   schema: JsonOutputSchema | undefined,
-): Pick<Anthropic.Messages.MessageCreateParamsNonStreaming, 'output_config'> {
-  return schema ? { output_config: { format: jsonSchemaFormat(schema) } } : {};
+): Pick<Anthropic.Messages.MessageCreateParamsNonStreaming, 'thinking' | 'output_config'> {
+  return {
+    thinking: { type: 'disabled' },
+    output_config: { effort: JUDGE_EFFORT, ...(schema && { format: jsonSchemaFormat(schema) }) },
+  };
 }
 
 /** A Messages API response's text blocks, joined; thinking and tool blocks are dropped. */

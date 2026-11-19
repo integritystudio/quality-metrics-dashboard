@@ -45,9 +45,16 @@ export const QAG_MODE_RECORDS = {
   fabrication: { evalName: HALLUCINATION_EVAL_NAME, label: 'Hallucination' },
 } as const satisfies Record<QagVerificationMode, { evalName: string; label: string }>;
 
-export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const HAIKU_MODEL = 'claude-haiku-5-5';
+
+/** The judge of every stored row written before `judgeModel` was recorded. */
+export const LEGACY_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
 export const JUDGE_MAX_TOKENS = 1024;
 
-/** Low temperature for consistent, deterministic evaluation scores */
-export const JUDGE_DEFAULT_TEMPERATURE = 0.1;
+/**
+ * Haiku 5.5 rejects sampling parameters (`temperature`), so consistency comes
+ * from the request shape instead: thinking off at low effort, which is also the
+ * cheapest setting and the nearest to the non-thinking calls Haiku 4.5 made.
+ */
+export const JUDGE_EFFORT = 'low';

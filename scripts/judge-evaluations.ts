@@ -54,7 +54,7 @@ import {
 import { toDateOnly } from '../src/api/api-constants.js';
 import { resolveWorkingJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
 import type { AccountIndex } from './account-stamps.js';
-import { createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, judgeRequestSettings, responseText } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
 import { incrementIn } from './collections.js';
 import { discoverFromCloud } from './judge-cloud-source.js';
@@ -79,7 +79,6 @@ import {
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
   HAIKU_MODEL,
-  JUDGE_DEFAULT_TEMPERATURE,
   JUDGE_MAX_TOKENS,
   QAG_MODE_RECORDS,
   RELEVANCE_EVAL_NAME,
@@ -198,15 +197,14 @@ export function anthropicProviderFor(
   return {
     async generate(
       prompt: string,
-      options?: { temperature?: number; logprobs?: boolean; jsonSchema?: ResponseJsonSchema }
+      options?: { logprobs?: boolean; jsonSchema?: ResponseJsonSchema }
     ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
       const response = await client.messages.create({
         model: HAIKU_MODEL,
         // The backstop for a schema-constrained reply (reasoning plus score); never below 512.
         max_tokens: JUDGE_MAX_TOKENS,
-        temperature: options?.temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
-        ...jsonSchemaOutputConfig(options?.jsonSchema),
+        ...judgeRequestSettings(options?.jsonSchema),
       });
       if (response.usage) {
         const seen = toJudgeTokenUsage(response.usage);
@@ -584,7 +582,6 @@ async function judgeTurns(
     ? await createBatchProvider({
       model: HAIKU_MODEL,
       maxTokens: JUDGE_MAX_TOKENS,
-      temperature: JUDGE_DEFAULT_TEMPERATURE,
       onUsage: (u) => addUsage(usage, u),
     })
     : undefined;

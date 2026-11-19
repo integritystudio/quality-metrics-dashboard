@@ -23,7 +23,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { LLMProvider } from '../../src/lib/judge/llm-as-judge.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 import { TIME_MS, DURATION_MS } from '../../src/lib/core/units.js';
-import { createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
+import { createJudgeAnthropicClient, judgeRequestSettings, responseText } from './judge-anthropic-client.js';
 import { resolveWorkingJudgeApiKey } from './judge-credentials.js';
 import { sleep } from './sleep.js';
 
@@ -114,7 +114,6 @@ export type BatchClient = {
 export type BatchProviderOptions = {
   model: string;
   maxTokens: number;
-  temperature: number;
   /** Defaults to a real client built from the judge's API key. */
   client?: BatchClient;
   pollIntervalMs?: number;
@@ -149,7 +148,7 @@ export type BatchLLMProvider = {
  * `generate()` options. `jsonSchema` is the structured-output option a sibling
  * change adds to the judge library's `LLMProvider`; this tree's contract does
  * not carry it yet, so it is declared here and honoured by
- * {@link toOutputConfig} — the one place to touch when it lands.
+ * {@link toRequestSettings} — the one place to touch when it lands.
  */
 export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate']>[1]> & {
   jsonSchema?: Anthropic.Messages.JSONOutputFormat['schema'];
@@ -157,9 +156,9 @@ export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate'
   maxTokens?: number;
 };
 
-/** Maps `jsonSchema` onto the request's `output_config.format`; nothing when the option is absent. */
-export function toOutputConfig(options?: BatchGenerateOptions): Pick<MessageParams, 'output_config'> {
-  return jsonSchemaOutputConfig(options?.jsonSchema);
+/** The judge's thinking and output settings, with `jsonSchema` as `output_config.format` when present. */
+export function toRequestSettings(options?: BatchGenerateOptions): Pick<MessageParams, 'thinking' | 'output_config'> {
+  return judgeRequestSettings(options?.jsonSchema);
 }
 
 function toError(value: unknown): Error {
@@ -218,9 +217,8 @@ class MessageBatchProvider implements BatchLLMProvider {
     return {
       model: this.options.model,
       max_tokens: options?.maxTokens ?? this.options.maxTokens,
-      temperature: options?.temperature ?? this.options.temperature,
       messages: [{ role: 'user', content: prompt }],
-      ...toOutputConfig(options),
+      ...toRequestSettings(options),
     };
   }
 

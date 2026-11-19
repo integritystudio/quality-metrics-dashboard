@@ -43,7 +43,6 @@ import {
   G_EVAL_VALID_SCORES,
   G_EVAL_MIN_STEPS,
   G_EVAL_MAX_STEPS,
-  LLM_TEMPERATURE_EVALUATION,
 } from '../../src/lib/judge/llm-judge-constants.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
@@ -67,11 +66,10 @@ import {
   TOOL_INTEGRATION_CRITERIA,
   HAIKU_MODEL,
   JUDGE_MAX_TOKENS,
-  JUDGE_DEFAULT_TEMPERATURE,
 } from './judge-criteria.js';
 import { turnJudgedKey } from './judge-dedup.js';
 import { trackFailure } from './judge-failures.js';
-import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, jsonSchemaOutputConfig, responseText } from './judge-anthropic-client.js';
+import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, judgeRequestSettings, responseText } from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
@@ -134,7 +132,6 @@ export type JsonSchemaObject = Record<string, unknown>;
 export type ConsolidatedGenerateOptions = {
   /** When set, the call is made with `output_config.format` = this JSON schema. */
   schema?: JsonSchemaObject;
-  temperature?: number;
 }
 
 export type ConsolidatedResponse = {
@@ -342,7 +339,6 @@ export function buildConsolidatedPrompt(
 async function generateEvaluationSteps(provider: ConsolidatedProvider, config: GEvalConfig): Promise<string> {
   const response = await provider.generate(
     buildStepsPrompt(sanitizeForPrompt(config.criteria)),
-    { temperature: config.temperature ?? LLM_TEMPERATURE_EVALUATION },
   );
   const normalized = normalizeEvaluationSteps(response.text);
   if (normalized.steps.length < G_EVAL_MIN_STEPS) {
@@ -523,7 +519,6 @@ export async function evaluateTurnConsolidated(
     const prompt = buildConsolidatedPrompt(turn, toolContext, prepared);
     const response = await provider.generate(prompt, {
       schema: buildConsolidatedSchema(names),
-      temperature: LLM_TEMPERATURE_EVALUATION,
     });
     parsed = parseConsolidatedResponse(response.text, names);
   } catch (err) {
@@ -566,13 +561,12 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
 
   return {
     async generate(prompt: string, generateOptions: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {
-      const { schema, temperature } = generateOptions;
+      const { schema } = generateOptions;
       const response = await client.messages.create({
         model: HAIKU_MODEL,
         max_tokens: schema ? CONSOLIDATED_MAX_TOKENS : JUDGE_MAX_TOKENS,
-        temperature: temperature ?? JUDGE_DEFAULT_TEMPERATURE,
         messages: [{ role: 'user', content: prompt }],
-        ...jsonSchemaOutputConfig(schema),
+        ...judgeRequestSettings(schema),
       });
 
       const usage = toJudgeTokenUsage(response.usage);
@@ -611,9 +605,8 @@ export async function createConsolidatedTurnEvaluator(
 export function adaptBatchProvider(batch: BatchLLMProvider): ConsolidatedProvider {
   return {
     async generate(prompt: string, options: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {
-      const { schema, temperature } = options;
+      const { schema } = options;
       const { text } = await batch.generate(prompt, {
-        ...(temperature !== undefined && { temperature }),
         ...(schema && { jsonSchema: schema, maxTokens: CONSOLIDATED_MAX_TOKENS }),
       });
       return { text };
