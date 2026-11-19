@@ -39,7 +39,6 @@ import {
   buildCalibrationEntry,
   computeOrgKvEntries,
   toKVValue,
-  QUERY_LIMIT,
   TRACE_EVALS_KEY_PREFIX,
   TRACE_KEY_PREFIX,
   type KVEntry,
@@ -588,25 +587,24 @@ export function prioritizeTraces(
 }
 
 /**
- * Enumerate org ids with cloud rows in the query window (P4). Uses the
+ * Enumerate org ids with evaluations in the query window (P4) through
+ * `/v1/evaluations/orgs`, one request answered by index seeks; paging the
+ * window's rows to collect their org ids overloaded D1 (RSR15). Uses the
  * env-gated all-orgs scope; when the deployed obtool-api rejects it
- * (ALLOW_ALL_ORGS_SCOPE unset → 403), falls back to the home org alone so the
- * sync keeps working before that env flip lands. An org with zero evaluations
- * gets no KV keys — its dashboard correctly serves no_data.
+ * (ALLOW_ALL_ORGS_SCOPE unset → 403, or a deploy without the route → 404),
+ * falls back to the home org alone so the sync keeps working. An org with zero
+ * evaluations gets no KV keys — its dashboard correctly serves no_data.
  */
 async function discoverOrgIds(now: Date): Promise<string[]> {
   const ids = new Set<string>([HOME_ORG_ID]);
   try {
     const probe = new CloudBackend({ orgId: ALL_ORGS_SCOPE, fetch: http1Fetch });
     const start = new Date(now.getTime() - MAX_DAYS_MS);
-    const evals = await probe.queryEvaluations({
+    const orgIds = await probe.listEvaluationOrgIds({
       startDate: msToNs(start.getTime()),
       endDate: msToNs(now.getTime()),
-      limit: QUERY_LIMIT,
     });
-    for (const ev of evals) {
-      if (ev.orgId) ids.add(ev.orgId);
-    }
+    for (const orgId of orgIds) ids.add(orgId);
   } catch (err) {
     console.warn(
       '[sync-to-kv] all-orgs enumeration unavailable — syncing HOME org only. ' +
