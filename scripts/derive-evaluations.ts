@@ -44,7 +44,6 @@ import {
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
-import { canonicalizeAttributes } from '../../src/lib/observability/attribute-aliases.js';
 import type { AccountRef } from './account-stamps.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
@@ -98,27 +97,9 @@ function ruleRecord(span: LocalTraceSpan, sessionId: string, score: RuleScore): 
 }
 
 /**
- * A span's attributes under their canonical keys. The hooks renamed `builtin.*`
- * on 2026-09-18, so local trace files hold both spellings; reading the legacy
- * key off a post-rename span found nothing and scored every builtin tool call a
- * failure. Cloud spans arrive canonicalized already, and a bag with no legacy
- * key is returned as-is, so this is free on the cloud path. Memoized per
- * attribute bag: the derivations and the drift check each read every span, so
- * a legacy-keyed bag was otherwise rebuilt up to five times. Assumes attribute
- * bags are never mutated after load; mutating one would serve a stale result.
- */
-const canonicalAttrs = new WeakMap<LocalTraceSpan['attributes'], Record<string, unknown>>();
-
-function attrsOf(span: LocalTraceSpan): Record<string, unknown> {
-  let attrs = canonicalAttrs.get(span.attributes);
-  if (!attrs) canonicalAttrs.set(span.attributes, attrs = canonicalizeAttributes(span.attributes));
-  return attrs;
-}
-
-/**
  * MCP post-tool keys as `[canonical, legacy]`. The hooks moved `mcp.*` under
- * `integritystudio.` on 2026-09-29, and the alias table has no rows for them,
- * so `attrsOf` leaves an older span on the unprefixed key.
+ * `integritystudio.` on 2026-09-29 and no migration renamed the stored rows,
+ * so an older span keeps the unprefixed key.
  */
 const MCP_ATTR = {
   SUCCESS: [MCP_ATTRIBUTES.SUCCESS, 'mcp.success'],
@@ -191,7 +172,7 @@ function toolSuccessOf(span: LocalTraceSpan, attrs: Record<string, unknown>): un
 
 export function deriveToolCorrectness(span: LocalTraceSpan): EvalRecord | null {
   if (!isToolSpan(span)) return null;
-  const attrs = attrsOf(span);
+  const attrs = span.attributes;
   const isBuiltin = span.name === BUILTIN_POST_TOOL_SPAN;
   const isMcp = !isBuiltin;
 
@@ -228,7 +209,7 @@ export function deriveEvaluationLatency(span: LocalTraceSpan): EvalRecord | null
   const [startSec] = span.startTime;
   if (startSec < MIN_PLAUSIBLE_EPOCH_SECONDS) return null;
 
-  const attrs = attrsOf(span);
+  const attrs = span.attributes;
 
   let hookType: string;
   if (span.name === BUILTIN_POST_TOOL_SPAN) hookType = `builtin/${attrString(attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME], 'unknown')}`;
@@ -271,7 +252,7 @@ export const STATUS_SCORES: { pending: number; in_progress: number; completed: n
 
 export function trackTaskActivity(span: LocalTraceSpan): void {
   if (span.name !== BUILTIN_POST_TOOL_SPAN) return;
-  const attrs = attrsOf(span);
+  const attrs = span.attributes;
   const tool = attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME];
   if (tool !== 'TaskCreate' && tool !== 'TaskUpdate') return;
 
@@ -365,7 +346,7 @@ function trackAgentActivity(span: LocalTraceSpan): void {
   if (isPre) entry.pre++;
   if (isPost) {
     const agentName = attrString(span.attributes[GENAI_AGENT_ATTRIBUTES.AGENT_NAME], 'unknown');
-    const attrs = attrsOf(span);
+    const attrs = span.attributes;
     // Score on the agent's own error flag (set from Agent tool `is_error`); fall
     // back to span status so a hook crash is also counted as a failure.
     const hasError = attrs[AGENT_ATTRIBUTES.HAS_ERROR] === true || span.status?.code === OTEL_STATUS_ERROR_CODE;
@@ -474,7 +455,7 @@ type TranscriptLimit = ReturnType<typeof pLimit>;
 function subagentJob(
   span: LocalTraceSpan,
   sessionId: string,
-  attrs: ReturnType<typeof attrsOf>,
+  attrs: LocalTraceSpan['attributes'],
   limit: TranscriptLimit,
 ): Promise<EvalRecord[]> | null {
   if (span.name !== SUBAGENT_STOP_SPAN) return null;
@@ -525,7 +506,7 @@ export async function deriveAgentHeuristics(
 
   for (const span of spans) {
     if (hrtToSeconds(span.startTime) * TIME_MS.SECOND < sinceMs) continue;
-    const attrs = attrsOf(span);
+    const attrs = span.attributes;
     const sessionId = attrString(attrs[SESSION_ATTRIBUTES.ID]);
     if (!sessionId) continue;
     const last = lastSpanBySession.get(sessionId);
@@ -683,7 +664,7 @@ function tallyDayInputs(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet
     if (dateScope && !dateScope.has(date)) continue;
     let day = days.get(date);
     if (!day) days.set(date, day = { agentEvidence: 0, agentMatched: 0, toolSpans: 0, toolMissingSuccess: 0 });
-    const attrs = attrsOf(span);
+    const attrs = span.attributes;
     if (attrs[GENAI_CORE_ATTRIBUTES.OPERATION_NAME] === INVOKE_AGENT_OPERATION) day.agentEvidence++;
     if (span.name === AGENT_PREPARE_SPAN || span.name === AGENT_FINALIZE_SPAN) day.agentMatched++;
     if (isToolSpan(span)) {

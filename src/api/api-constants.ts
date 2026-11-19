@@ -210,8 +210,8 @@ export function spanAttr<K extends SpanAttrType>(span: SpanLike, key: string, ty
 
 /**
  * An attribute of `type` under its canonical key, else under the key it had
- * before a rename. Cloud reads resolve a legacy key through the alias table only
- * once it has a row, raw reads never do, so readers of renamed keys ask for both.
+ * before a rename. No read translates keys, and the D1 migrations renamed only the
+ * keys they list, so readers of other renamed keys ask for both.
  * A canonical value of the wrong type falls through to the legacy key.
  */
 export function renamedAttr(span: SpanLike, canonical: string, legacy: string): string | undefined;

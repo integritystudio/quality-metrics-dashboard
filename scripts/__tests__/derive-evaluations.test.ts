@@ -92,7 +92,7 @@ const TASK_SESSIONS = [
 const UNSCORED_SPANS = [
   ['no spans', []],
   ['a span from another hook', [makeSpan({ name: 'hook:mcp-post-tool' })]],
-  ['a tool other than the task tools', [makeSpan({ attributes: { 'builtin.tool': 'Read' } })]],
+  ['a tool other than the task tools', [makeSpan({ attributes: { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read' } })]],
   ['an update to a status outside the three', [taskSpan('TaskUpdate', { status: 'deleted', id: 't1' })]],
   ['updates with neither a create nor a status', [taskSpan('TaskUpdate'), taskSpan('TaskUpdate')]],
 ] as const;
@@ -287,8 +287,8 @@ describe('deriveAll', () => {
 // Regression: derive read `builtin.*` keys, the hooks started writing
 // `gen_ai.tool.name` / `integritystudio.tool.*` / `integritystudio.task.*`, and
 // every builtin tool call scored 0 (3,363 of 3,365 records on 2026-09-26) while
-// task tracking never fired. Both spellings live in the local files, so each
-// behavior is pinned for both.
+// task tracking never fired. Migration 0019 renamed the stored rows, so derive
+// reads the new keys only.
 
 /** The hooks' own timing of one post-tool call on 2026-09-28. */
 const RENAMED_SPAN_TIMING: Pick<TraceSpan, 'startTime' | 'endTime' | 'duration'> = {
@@ -312,7 +312,6 @@ function renamedToolSpan(attributes: Record<string, unknown>): TraceSpan {
 describe('deriveToolCorrectness across the builtin.* rename', () => {
   it.each([
     ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash', [TOOL_ATTRIBUTES.SUCCESS]: true }],
-    ['legacy', { 'builtin.tool': 'Bash', 'builtin.success': true }],
   ])('scores a successful call 1 from %s keys', (_era, attributes) => {
     expect(deriveToolCorrectness(renamedToolSpan(attributes)))
       .toMatchObject({ scoreValue: 1, explanation: 'Tool Bash completed successfully' });
@@ -320,7 +319,6 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
 
   it.each([
     ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit', [TOOL_ATTRIBUTES.SUCCESS]: false, [TOOL_ATTRIBUTES.ERROR_TYPE]: 'file_not_read' }],
-    ['legacy', { 'builtin.tool': 'Edit', 'builtin.success': false, 'builtin.error_type': 'file_not_read' }],
   ])('scores a failed call 0 with its error type from %s keys', (_era, attributes) => {
     expect(deriveToolCorrectness(renamedToolSpan(attributes)))
       .toMatchObject({ scoreValue: 0, explanation: 'Tool Edit failed: file_not_read' });
@@ -330,7 +328,6 @@ describe('deriveToolCorrectness across the builtin.* rename', () => {
 describe('task tracking across the builtin.* rename', () => {
   it.each([
     ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'TaskUpdate', [TASK_ATTRIBUTES.ID]: 't1', [TASK_ATTRIBUTES.STATUS]: 'completed' }],
-    ['legacy', { 'builtin.tool': 'TaskUpdate', 'builtin.task_id': 't1', 'builtin.task_status': 'completed' }],
   ])('scores a completed task 1 from %s keys', (_era, attributes) => {
     trackTaskActivity(renamedToolSpan(attributes));
 
@@ -365,9 +362,9 @@ describe('deriveAll across the builtin.* rename', () => {
 
 // mcp.* key rename (hooks 2026-09-29)
 //
-// The hooks moved `mcp.*` under `integritystudio.`. The alias table has no rows
-// for these keys, so `attrsOf` leaves each era on its own spelling and derive
-// must read the new key, then the old one. Reading only the old key would score
+// The hooks moved `mcp.*` under `integritystudio.`. No migration renamed the
+// stored rows, so each era keeps its own spelling and derive must read the new
+// key, then the old one. Reading only the old key would score
 // every post-rename MCP call 0, as the builtin.* rename did.
 
 /** An MCP post-tool span carrying `attributes`, shaped like the hooks write it. */
@@ -611,10 +608,6 @@ describe('detectInputDrift', () => {
     expect(detectInputDrift(renamed, null)).toEqual([
       expect.stringMatching(new RegExp(`^${DAY}: ${TOOL_SPANS_PER_DAY} of ${TOOL_SPANS_PER_DAY} tool spans carry no success flag`)),
     ]);
-  });
-
-  it('reads the success flag through the alias table, as derive does', () => {
-    expect(detectInputDrift(toolSpans(TOOL_SPANS_PER_DAY, { 'builtin.success': true }), null)).toEqual([]);
   });
 
   it.each([

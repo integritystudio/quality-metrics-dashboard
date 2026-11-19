@@ -47,7 +47,7 @@ function makeSessionSpanWire(name = 'hook:builtin-post-tool', attrs: Record<stri
     endTimeUnixNano: 1737000001_000_000_000n,
     attributes: {
       [SESSION_ATTRIBUTES.ID]: 'sess-abc',
-      'builtin.tool': 'Read',
+      [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read',
       ...attrs,
     },
   });
@@ -123,9 +123,9 @@ describe('GET /sessions/:sessionId', () => {
   it('builds tool usage from span attributes', async () => {
     const toolAttrs = { [HOOK_ATTRIBUTES.TYPE]: 'builtin', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse' };
     fixture.setTraces([
-      makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }),
-      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Read' }), span_id: 'span-002', trace_id: 'trace-002' },
-      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Write' }), span_id: 'span-003', trace_id: 'trace-003' },
+      makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read' }),
+      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read' }), span_id: 'span-002', trace_id: 'trace-002' },
+      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Write' }), span_id: 'span-003', trace_id: 'trace-003' },
     ]);
 
     const res = await sessionRoutes.request('/sessions/sess-abc');
@@ -134,27 +134,9 @@ describe('GET /sessions/:sessionId', () => {
     expect(body.toolUsage.Write).toBe(1);
   });
 
-  // Regression: the hooks renamed builtin.* on 2026-09-18 and this route kept
-  // reading the legacy keys, so post-rename sessions showed every tool as
-  // 'unknown'. CloudBackend canonicalizes both eras; the route reads canonical.
-  it('builds tool usage from post-rename canonical keys and legacy keys alike', async () => {
-    const toolAttrs = { [HOOK_ATTRIBUTES.TYPE]: 'builtin', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse' };
-    fixture.setTraces([
-      makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' }),
-      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': undefined, [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash' }), span_id: 'span-002', trace_id: 'trace-002' },
-      { ...makeSessionSpanWire('hook:builtin-post-tool', { ...toolAttrs, 'builtin.tool': 'Bash' }), span_id: 'span-003', trace_id: 'trace-003' },
-    ]);
-
-    const res = await sessionRoutes.request('/sessions/sess-abc');
-    const body = await res.json<SessionDetailBody>();
-
-    expect(body.toolUsage).toEqual({ Bash: 3 });
-  });
-
   it('reports a failed tool call from post-rename canonical keys', async () => {
     fixture.setTraces([
       makeSessionSpanWire('hook:builtin-post-tool', {
-        'builtin.tool': undefined,
         [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Edit',
         [TOOL_ATTRIBUTES.HAS_ERROR]: true,
         [TOOL_ATTRIBUTES.ERROR_TYPE]: 'file_not_read',
@@ -176,7 +158,6 @@ describe('GET /sessions/:sessionId', () => {
   // wire must count as an error after CloudBackend coerces it to the string 'ERROR'.
   it('counts a span with numeric status_code 2 as an error', async () => {
     const span = makeSessionSpanWire('hook:builtin-post-tool', {
-      'builtin.tool': undefined,
       [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Bash',
     });
     fixture.setTraces([{ ...span, status_code: 2 }]);
@@ -192,7 +173,7 @@ describe('GET /sessions/:sessionId', () => {
   // session reported no agent activity. The name is copied from a real span.
   it('builds agent activity from the finalize hook spans', async () => {
     const finalize = {
-      'builtin.tool': undefined,
+      [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: undefined,
       [HOOK_ATTRIBUTES.NAME]: 'agent.operation.finalize',
       [GENAI_AGENT_ATTRIBUTES.AGENT_NAME]: 'Explore',
       [AGENT_ATTRIBUTES.OUTPUT_SIZE]: 300,
@@ -349,14 +330,14 @@ describe('GET /sessions/:sessionId when the span read hits its cap', () => {
 });
 
 // On 2026-09-29 the hooks moved these unprefixed keys under `integritystudio.`.
-// CloudBackend rewrites a legacy key only once the alias table has a row for
-// it, so the route asks for the new key and falls back to the old one. Every
+// No reader translates keys, and the D1 migrations renamed only the keys they
+// list, so the route asks for the new key and falls back to the old one. Every
 // case serves one session under one spelling and expects the same body. Hook
 // names are copied from real spans.
 describe('GET /sessions/:sessionId across the integritystudio.* key rename', () => {
   function hookSpanWire(hookName: string, spanId: string, attributes: Attributes) {
     return {
-      ...makeSessionSpanWire(`hook:${hookName}`, { 'builtin.tool': undefined, [HOOK_ATTRIBUTES.NAME]: hookName, ...attributes }),
+      ...makeSessionSpanWire(`hook:${hookName}`, { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: undefined, [HOOK_ATTRIBUTES.NAME]: hookName, ...attributes }),
       span_id: spanId,
     };
   }

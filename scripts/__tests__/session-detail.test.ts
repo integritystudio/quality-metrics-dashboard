@@ -50,8 +50,8 @@ describe('computeSessionDetail multi-agent attribution', () => {
 
 // Regression: the hooks renamed builtin.* on 2026-09-18 and the session detail
 // kept reading the legacy keys, so every post-rename tool call surfaced as
-// 'unknown' with no error details or file access. Spans reach this function
-// through CloudBackend, which canonicalizes both eras, so it reads canonical.
+// 'unknown' with no error details or file access. Migration 0019 renamed the
+// stored rows, so it reads canonical.
 describe('computeSessionDetail after the builtin.* rename', () => {
   const postTool = { [HOOK_ATTRIBUTES.TYPE]: 'builtin', [HOOK_ATTRIBUTES.TRIGGER]: 'PostToolUse' };
 
@@ -114,9 +114,8 @@ describe('computeSessionDetail after the agent hook rename', () => {
 });
 
 // On 2026-09-29 the hooks moved these unprefixed keys under `integritystudio.`.
-// Spans reach this function through CloudBackend, which rewrites a legacy key
-// only once the alias table has a row for it, so each reader asks for the new
-// key and falls back to the old one. Every case writes one session under one
+// No reader translates keys, and the D1 migrations renamed only the keys they
+// list, so each reader asks for the new key and falls back to the old one. Every case writes one session under one
 // spelling and expects the same detail. Hook names are copied from real spans.
 describe('computeSessionDetail across the integritystudio.* key rename', () => {
   function hookSpan(hookName: string, attributes: Attributes) {

@@ -31,9 +31,8 @@ agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
   const now = new Date();
   const { windowStart, startDate, endDate } = agentStatsWindow(period, now);
 
-  // OBP7b: CloudBackend canonicalizes attribute keys on read (legacy pre-cutover
-  // D1 rows included) and applies non-sessionId attributeFilter entries
-  // client-side, so a single canonical-key query covers every row era.
+  // D1 holds canonical attribute keys only (migrations 0018, 0019, 0025), so a
+  // single canonical-key query covers every row era.
   //
   // queryTraces types startDate/endDate as `string | bigint` but validates the
   // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks

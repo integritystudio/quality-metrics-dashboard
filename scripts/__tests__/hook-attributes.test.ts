@@ -2,19 +2,12 @@
  * Nothing here can reach the emitter — `~/.claude/hooks/` is a separate repo
  * with no package relationship to this one — so parity with what the hooks
  * actually write stays held by citation. What is checkable is that every key is
- * a *canonical* spelling rather than one of the pre-rename aliases the parent's
- * table rewrites on read: `agent.has_error` in place of
- * `integritystudio.agent.has_error` fails here, because a reader using it would
- * see `undefined` on every canonicalized span.
- *
- * A key the alias table has never heard of passes — `canonicalizeAttributes`
- * keeps an unknown key unchanged — so this is a guard against reading a legacy key,
- * not a spell-check. The namespace assertion below is what catches a typo in
- * the prefix. Keys the hooks take from the OTel registry rather than mint are
- * listed by exact spelling, so a misspelt one still fails.
+ * a *canonical* spelling: in the vendor namespace or a semconv key listed by
+ * exact spelling, and not one of the retired vendor keys a rename replaced.
+ * Stored rows hold canonical keys only (migrations 0018, 0019, 0025) and no
+ * reader translates, so a reader using a retired key sees `undefined`.
  */
 import { describe, expect, it } from 'vitest';
-import { canonicalizeAttributes } from '../../../src/lib/observability/attribute-aliases.js';
 import * as hookAttributes from '../../src/lib/hook-attributes.js';
 
 /**
@@ -29,10 +22,12 @@ const ALL_KEYS = Object.values(hookAttributes).flatMap(group => Object.values(gr
 const VENDOR_PREFIX = 'integritystudio.';
 /** OTel semconv keys the hooks emit as-is (`~/.claude/hooks/lib/survival/code-survival.ts`). */
 const OTEL_SEMCONV_KEYS = new Set(['vcs.change.id']);
+/** Vendor-namespaced keys a later rename retired; the unprefixed legacy keys fail the namespace check. */
+const RETIRED_VENDOR_KEYS = new Set(['integritystudio.session.is_resume', 'integritystudio.quality.eval_skipped']);
 
 describe('hook span attribute keys', () => {
-  it.each(ALL_KEYS)('%s is canonical, not a legacy alias', (key) => {
-    expect(Object.keys(canonicalizeAttributes({ [key]: 1 }))).toEqual([key]);
+  it.each(ALL_KEYS)('%s is not a retired key', (key) => {
+    expect(RETIRED_VENDOR_KEYS.has(key)).toBe(false);
   });
 
   it.each(ALL_KEYS)('%s is in the vendor namespace or a known semconv key', (key) => {

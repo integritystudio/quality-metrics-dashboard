@@ -3,9 +3,8 @@
  * the fixtures that stand in for them. Semconv keys (`gen_ai.*`, `session.id`)
  * come from `otel-attributes.ts` instead.
  *
- * Canonical spellings only: a legacy key reads `undefined` off a canonicalized
- * span. `canonicalizeAttributes` (parent) and `attrsOf` (`derive-evaluations.ts`)
- * are what map the legacy forms onto these.
+ * Canonical spellings only: stored rows hold canonical keys (migrations 0018,
+ * 0019, 0025) and no reader translates, so a legacy key reads `undefined`.
  *
  * The emitter is `~/.claude/hooks/lib/`, a separate repo this one cannot import,
  * so parity with it is held by citation — as `scripts/eval-record.ts` holds it
