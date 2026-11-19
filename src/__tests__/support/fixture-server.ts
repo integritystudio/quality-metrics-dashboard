@@ -318,6 +318,7 @@ const EVAL_WIRE_DEFAULTS: EvalWireRow = {
   attributes: EMPTY_ATTRIBUTES,
   r2_key: FIXTURE_R2_KEY,
   batch_index: 0,
+  evaluation_id: null,
 };
 
 /**
