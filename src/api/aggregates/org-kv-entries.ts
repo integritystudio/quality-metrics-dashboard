@@ -14,17 +14,17 @@ import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js'
 import { computeRollingDegradationSignals, type DegradationState } from '../parent/qfe-backtest.js';
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { BYTES, SECONDS } from '../parent/units.js';
+import { SECONDS } from '../parent/units.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { PERCENT_MULTIPLIER, PERIOD_KEYS, PERIOD_MS, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, TIME_MS, type Period } from '../../lib/constants.js';
+import { PERCENT_MULTIPLIER, PERIOD_KEYS, PERIOD_MS, TIME_MS, type Period } from '../../lib/constants.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { pushTo } from '../../lib/collections.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import {
   LATENCY_P95,
   RATE_DISPLAY_PRECISION,
-  bigintReplacer,
+  extractFiniteScores,
   msToNs,
   timestampToMs,
 } from '../api-constants.js';
@@ -39,13 +39,20 @@ import {
 } from '../code-quality-summary.js';
 import { computeSessionDetail, type AgentActivityEntry } from '../session-detail.js';
 import { agentStatsKey, agentStatsWindow, computeAgentStats, isAgentFinalizeSpan } from './agent-stats.js';
-import { computeCorrelations } from './correlations.js';
 import { computePipeline } from './pipeline.js';
-import { computeCoverage } from './coverage.js';
-import { projectEvaluationRow } from './evaluation-rows.js';
 import { computeAllDashboardEntries } from './dashboard-summary.js';
-import { computeMetricDetailView, metricDetailKey, previousWindow } from './metric-detail.js';
-import { computeTrend, trendKey, type ScoredBucket } from './trend.js';
+import { previousWindow } from './metric-detail.js';
+import type { ScoredBucket } from './trend.js';
+import { toKVValue, type KVEntry } from './kv-entry.js';
+import {
+  correlationsEntry,
+  coverageEntries,
+  dashboardEntries,
+  evaluationRowsEntry,
+  metricDetailEntry,
+  pipelineEntry,
+  trendEntry,
+} from './evaluation-entries.js';
 import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 const LOG_PREFIX = '[org-kv-entries]';
@@ -60,22 +67,6 @@ const MAX_SESSION_DURATIONS = 10_000;
 const MAX_AGENT_SESSIONS = 100;
 const MAX_RECENT_SESSIONS = 20;
 
-/** Input axes the coverage matrix is built for — one KV key per (period, axis). */
-const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
-/**
- * Hard cap on the number of input columns stored per coverage key.
- * The dashboard grid renders at most `COVERAGE_GRID_MAX_INPUTS = 30`, so a few
- * hundred is ample headroom for all views. Without a cap the column count grows
- * with each new trace or session in the window (COVERAGE-INPUT-SET-UNBOUNDED).
- */
-const MAX_COVERAGE_COLUMNS = 500;
-/** Cloudflare KV's per-value limit. A value past it fails its whole bulk-put batch (`kvBulkPut` throws). */
-// eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
-const KV_VALUE_LIMIT_BYTES = 25 * BYTES.MB;
-/** Fraction of the limit at which the sync warns, so the column cap is lowered before a write fails. */
-const KV_VALUE_WARN_RATIO = 0.8;
-const KV_VALUE_WARN_BYTES = Math.round(KV_VALUE_LIMIT_BYTES * KV_VALUE_WARN_RATIO);
-
 export const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
 const SPAN_QUERY_LIMIT = 1_000_000;
@@ -88,32 +79,8 @@ const SPAN_QUERY_LIMIT = 1_000_000;
 export const KV_ENTRY_TTL_DAYS = 90;
 export const KV_ENTRY_TTL_SECONDS = SECONDS.DAY * KV_ENTRY_TTL_DAYS;
 
-const MAX_EVAL_ROWS = 200;
 /** Metric detail baselines each period against the one before it, so the read spans two of the longest. */
 const METRIC_DETAIL_WINDOWS = 2;
-
-/** `hashBasis`, when set, is what change detection hashes instead of `value`. */
-export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
-
-/**
- * Serialize a KV entry value. Backend spans and evaluations carry `bigint`
- * timestamps (`startTimeUnixNano`, `endTimeUnixNano`, `timestamp`) that
- * `JSON.stringify` throws on; the replacer writes them in their decimal-string
- * wire form, which `timestampToMs` on the read side already accepts. Every KV
- * entry value must be built through this, never bare `JSON.stringify` — the
- * bigint-bearing types nest at varying depth (SYNC-KV-BIGINT). A replacer
- * rather than `jsonSafe`, which deep-copies the value before it is serialized.
- *
- * Throws when the value has no JSON form (`undefined`, a function, a symbol):
- * `JSON.stringify` returns `undefined` for those, and `kvBulkPut` splices the
- * value into its envelope as text, so nothing later would catch it
- * (KV-VALUE-NOT-JSON-UNGUARDED).
- */
-export function toKVValue(value: unknown): string {
-  const json: string | undefined = JSON.stringify(value, bigintReplacer);
-  if (typeof json !== 'string') throw new TypeError(`${LOG_PREFIX} KV value has no JSON form (${typeof value})`);
-  return json;
-}
 
 export function buildCalibrationEntry(
   state: CalibrationState | null,
@@ -135,35 +102,6 @@ export function buildCalibrationEntry(
     lastCalibrated: state.lastCalibrated,
   };
   return { key: META_CALIBRATION_KEY, value: toKVValue(payload) };
-}
-
-/** The view's own run-time stamp; a nested `timestamp` (`worstExplanation.timestamp`) is event time, i.e. data. */
-const DASHBOARD_RUN_STAMP_FIELD = 'timestamp';
-/** Each metric's query window, built from the run's `now`, at any depth. */
-const DASHBOARD_PERIOD_FIELD = 'period';
-/**
- * Sparkline bucket indices shift with the exact `now` — two runs on the same UTC
- * day over the same data disagree on which bucket holds an evaluation unless the
- * boundaries are day-aligned. Exclude from the hash so the key is not rewritten
- * solely because the run time moved within the same day (SYNC-DASHBOARD-TIMESTAMP-WRITES).
- */
-const DASHBOARD_SPARKLINES_FIELD = 'sparklines';
-
-/**
- * A dashboard summary or role view as a KV entry. The view's top-level `timestamp`,
- * each metric's `period`, and `sparklines` come from the run's clock, so the change
- * hash leaves them out and a sync over unchanged data rewrites no `dashboard:*` key
- * (SYNC-DASHBOARD-TIMESTAMP-WRITES). The stored value keeps them, so they show the
- * run that last changed the data, not the latest run.
- */
-export function dashboardEntry(key: string, view: object): KVEntry {
-  const hashBasis = JSON.stringify(view, function (this: unknown, field: string, v: unknown) {
-    if (field === DASHBOARD_PERIOD_FIELD) return undefined;
-    if (field === DASHBOARD_SPARKLINES_FIELD) return undefined;
-    if (field === DASHBOARD_RUN_STAMP_FIELD && this === view) return undefined;
-    return bigintReplacer(field, v);
-  });
-  return { key, value: toKVValue(view), hashBasis };
 }
 
 function spanSessionId(span: { attributes?: Record<string, unknown> | undefined }): string | undefined {
@@ -336,38 +274,12 @@ async function readOrgEvaluations(backend: OrgReadBackend, nowMs: number, maxDay
 
 /** `dashboard:`, role views, `correlations:`, `coverage:` and `pipeline:` for one period. */
 function computePeriodEntries(period: Period, grouped: EvaluationsByName, dates: { start: string; end: string }): KVEntry[] {
-  const entries: KVEntry[] = [];
-
-  // Dashboard: one projection shared with the dev route — now includes `cqi` and `sparklines`.
-  const { full, roleViews } = computeAllDashboardEntries(grouped, dates);
-  entries.push(dashboardEntry(`dashboard:${period}`, full));
-  for (const [role, view] of Object.entries(roleViews)) {
-    entries.push(dashboardEntry(`dashboard:${period}:${role}`, view));
-  }
-
-  // Correlations: shared with the dev route.
-  entries.push({ key: `correlations:${period}`, value: toKVValue(computeCorrelations(grouped)) });
-
-  // Coverage: shared filter + matrix, one KV key per (period, inputKey).
-  for (const inputKey of COVERAGE_INPUT_KEYS) {
-    const matrix = computeCoverage(grouped, { inputKey, maxInputs: MAX_COVERAGE_COLUMNS });
-    const coverageKey = `coverage:${period}:${inputKey}`;
-    const coverageValue = toKVValue({ period, ...matrix });
-    const coverageSizeBytes = new TextEncoder().encode(coverageValue).length;
-    if (coverageSizeBytes > KV_VALUE_WARN_BYTES) {
-      console.warn(
-        `${LOG_PREFIX} ${coverageKey} is ${Math.round(coverageSizeBytes / BYTES.KB)} KB,` +
-        ` over ${KV_VALUE_WARN_RATIO * PERCENT_MULTIPLIER}% of KV's ${KV_VALUE_LIMIT_BYTES / BYTES.MB} MiB value limit` +
-        ' — reduce MAX_COVERAGE_COLUMNS',
-      );
-    }
-    entries.push({ key: coverageKey, value: coverageValue });
-  }
-
-  // Pipeline: shared with the dev route.
-  entries.push({ key: `pipeline:${period}`, value: toKVValue({ period, ...computePipeline(grouped) }) });
-
-  return entries;
+  return [
+    ...dashboardEntries(period, computeAllDashboardEntries(grouped, dates)),
+    correlationsEntry(period, grouped),
+    ...coverageEntries(period, grouped),
+    pipelineEntry(period, computePipeline(grouped)),
+  ];
 }
 
 /**
@@ -395,15 +307,9 @@ function computeMetricDetailEntries(
       const evals = current.get(name);
       if (!config || !evals) continue;
 
-      const view = computeMetricDetailView(evals, previous.get(name) ?? [], config, {
-        period,
-        topN: DEFAULT_TOP_N,
-        bucketCount: DEFAULT_BUCKET_COUNT,
-      });
-      for (const w of view.worstEvaluations) {
-        if (w.traceId) referencedTraceIds.add(w.traceId);
-      }
-      entries.push({ key: metricDetailKey(name, period), value: toKVValue(view) });
+      const detail = metricDetailEntry({ name, period }, evals, extractFiniteScores(previous.get(name) ?? []), config);
+      for (const traceId of detail.referencedTraceIds) referencedTraceIds.add(traceId);
+      entries.push(detail.entry);
     }
   }
   return { entries, referencedTraceIds };
@@ -419,12 +325,7 @@ function computeEvaluationRowEntries(
     for (const name of metricNames) {
       const evals = grouped.get(name);
       if (!evals || evals.length === 0) continue;
-      const sorted = evals.toSorted((a, b) => (b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0));
-      const rows = sorted.slice(0, MAX_EVAL_ROWS).map(e => projectEvaluationRow(e));
-      entries.push({
-        key: `metric:evaluations:${name}:${period}`,
-        value: toKVValue({ rows }),
-      });
+      entries.push(evaluationRowsEntry({ name, period }, evals));
     }
   }
   return entries;
@@ -450,13 +351,9 @@ function computeTrendEntries(
     for (const name of metricNames) {
       const config = getQualityMetric(name);
       if (!config) continue;
-      const { view, buckets } = computeTrend(name, cached.get(name) ?? [], config, {
-        period,
-        bucketCount: DEFAULT_TREND_BUCKETS,
-        now,
-      });
+      const { entry, buckets } = trendEntry({ name, period }, cached.get(name) ?? [], config, now);
       periodBuckets[name] = buckets;
-      entries.push({ key: trendKey(name, period), value: toKVValue(view) });
+      entries.push(entry);
     }
   }
   return { entries, degradationBuckets };

@@ -56,7 +56,20 @@ export function computeMetricDetailView(
   config: QualityMetricConfig,
   options: { period: Period; topN: number; bucketCount: number },
 ): MetricDetailView {
-  const previousScores = extractFiniteScores(previousEvaluations);
+  return computeMetricDetailFromBaseline(evaluations, extractFiniteScores(previousEvaluations), config, options);
+}
+
+/**
+ * {@link computeMetricDetailView} with the baseline already reduced to its
+ * finite scores, which is all the previous window contributes; a host reading
+ * the baseline as scores alone (the KV sync Workflow) skips the rows.
+ */
+export function computeMetricDetailFromBaseline(
+  evaluations: EvaluationResult[],
+  previousScores: number[],
+  config: QualityMetricConfig,
+  options: { period: Period; topN: number; bucketCount: number },
+): MetricDetailView {
   const previousValues = previousScores.length > 0
     ? computeAggregations(previousScores, config.aggregations)
     : undefined;

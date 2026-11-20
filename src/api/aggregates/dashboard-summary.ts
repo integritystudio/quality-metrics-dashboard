@@ -28,27 +28,37 @@ export type DashboardFullResult = ReturnType<typeof computeDashboardSummary> & {
   sparklines: DashboardSparklines;
 };
 
+/** What a sparkline reads from a row: when it happened and what it scored. */
+export type SparklineInput = Pick<EvaluationResult, 'scoreValue' | 'timestamp'>;
+
+/** One metric's sparkline: the mean score per even bucket over `[startMs, endMs)`, `null` where a bucket is empty. */
+export function computeMetricSparkline(
+  evals: SparklineInput[],
+  startMs: number,
+  endMs: number,
+  buckets: number,
+): Array<number | null> {
+  const range = endMs - startMs;
+  if (range <= 0 || evals.length === 0) return [];
+  const bucketWidth = range / buckets;
+  const valid = evals.filter(ev => Number.isFinite(ev.scoreValue));
+  const bucketMap = rollup(
+    valid,
+    es => mean(es, e => e.scoreValue as number) ?? null,
+    e => Math.min(Math.floor((Number(e.timestamp) / NANOS_TO_MS - startMs) / bucketWidth), buckets - 1),
+  );
+  return Array.from({ length: buckets }, (_, i) => bucketMap.get(i) ?? null);
+}
+
 function computeSparklines(
   evaluationsByMetric: Map<string, EvaluationResult[]>,
   startMs: number,
   endMs: number,
   buckets: number,
-): Record<string, Array<number | null>> {
-  const range = endMs - startMs;
-  const sparklines: Record<string, Array<number | null>> = {};
+): DashboardSparklines {
+  const sparklines: DashboardSparklines = {};
   for (const [metricName, evals] of evaluationsByMetric) {
-    if (range <= 0 || evals.length === 0) {
-      sparklines[metricName] = [];
-      continue;
-    }
-    const bucketWidth = range / buckets;
-    const valid = evals.filter(ev => Number.isFinite(ev.scoreValue));
-    const bucketMap = rollup(
-      valid,
-      es => mean(es, e => e.scoreValue as number) ?? null,
-      e => Math.min(Math.floor((Number(e.timestamp) / NANOS_TO_MS - startMs) / bucketWidth), buckets - 1),
-    );
-    sparklines[metricName] = Array.from({ length: buckets }, (_, i) => bucketMap.get(i) ?? null);
+    sparklines[metricName] = computeMetricSparkline(evals, startMs, endMs, buckets);
   }
   return sparklines;
 }
@@ -58,6 +68,10 @@ type DashboardParts = {
   cqi: CompositeQualityIndex | undefined;
   sparklines: DashboardSparklines;
 };
+
+function partsOf(dashboard: ReturnType<typeof computeDashboardSummary>, sparklines: DashboardSparklines): DashboardParts {
+  return { dashboard, cqi: computeCQI(dashboard.metrics), sparklines };
+}
 
 type DashboardRoleView = ReturnType<typeof computeRoleView> & {
   sparklines: DashboardSparklines;
@@ -71,11 +85,7 @@ function computeDashboardParts(
   const dashboard = computeDashboardSummary(evaluationsByMetric, { period: dates });
   const startMs = new Date(dates.start).getTime();
   const endMs = new Date(dates.end).getTime();
-  return {
-    dashboard,
-    cqi: computeCQI(dashboard.metrics),
-    sparklines: computeSparklines(evaluationsByMetric, startMs, endMs, SPARKLINE_BUCKET_COUNT),
-  };
+  return partsOf(dashboard, computeSparklines(evaluationsByMetric, startMs, endMs, SPARKLINE_BUCKET_COUNT));
 }
 
 function projectRoleView({ dashboard, cqi, sparklines }: DashboardParts, role: Role): DashboardRoleView {
@@ -115,11 +125,28 @@ export function computeDashboardRoleView(
 export function computeAllDashboardEntries(
   evaluationsByMetric: Map<string, EvaluationResult[]>,
   dates: { start: string; end: string },
-): {
+): DashboardEntries {
+  return entriesOf(computeDashboardParts(evaluationsByMetric, dates));
+}
+
+export type DashboardEntries = {
   full: DashboardFullResult;
   roleViews: Record<string, DashboardRoleView>;
-} {
-  const parts = computeDashboardParts(evaluationsByMetric, dates);
+};
+
+/**
+ * {@link computeAllDashboardEntries} from a summary and sparklines already
+ * computed, for a host that builds each metric's result and sparkline in its
+ * own partition and assembles the summary with `assembleDashboardSummary`.
+ */
+export function assembleDashboardEntries(
+  dashboard: ReturnType<typeof computeDashboardSummary>,
+  sparklines: DashboardSparklines,
+): DashboardEntries {
+  return entriesOf(partsOf(dashboard, sparklines));
+}
+
+function entriesOf(parts: DashboardParts): DashboardEntries {
   const { dashboard, cqi, sparklines } = parts;
   const full: DashboardFullResult = { ...dashboard, cqi, sparklines };
   const roleViews: Record<string, DashboardRoleView> = {};

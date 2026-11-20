@@ -8,11 +8,14 @@
  * Callers load the evaluations; this module filters and projects them.
  */
 
-import { computeCoverageMatrix } from '../parent/quality-visualization.js';
+import { computeCoverageMatrix, type CoverageInput } from '../parent/quality-visualization.js';
 import { RULE_EVALUATOR_TYPE } from '../api-constants.js';
 import type { EvaluationResult } from '../../types.js';
 
 export { RULE_EVALUATOR_TYPE };
+
+/** What the coverage matrix reads from a row; a full `EvaluationResult` qualifies. */
+export type CoverageRow = CoverageInput & Pick<EvaluationResult, 'evaluatorType'>;
 
 /**
  * Remove rule-based evaluations before computing the coverage matrix.
@@ -20,10 +23,10 @@ export { RULE_EVALUATOR_TYPE };
  * (CVG-RULE-FILTER). Keeps LLM judge evals and seed evals (evaluatorType
  * undefined or any non-rule value).
  */
-export function filterJudgeEvals(
-  byMetric: Map<string, EvaluationResult[]>,
-): Map<string, EvaluationResult[]> {
-  const filtered = new Map<string, EvaluationResult[]>();
+export function filterJudgeEvals<Row extends Pick<EvaluationResult, 'evaluatorType'>>(
+  byMetric: Map<string, Row[]>,
+): Map<string, Row[]> {
+  const filtered = new Map<string, Row[]>();
   for (const [metric, evals] of byMetric) {
     const judgeEvals = evals.filter(e => e.evaluatorType !== RULE_EVALUATOR_TYPE);
     if (judgeEvals.length > 0) filtered.set(metric, judgeEvals);
@@ -37,7 +40,7 @@ export function filterJudgeEvals(
  * so one fixture through both yields the same value.
  */
 export function computeCoverage(
-  evaluationsByMetric: Map<string, EvaluationResult[]>,
+  evaluationsByMetric: Map<string, CoverageRow[]>,
   options: {
     inputKey: 'traceId' | 'sessionId';
     maxInputs?: number;

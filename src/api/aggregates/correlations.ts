@@ -21,7 +21,7 @@ export type CorrelationsResult = {
  * One fixture through both the route and the sync yields the same value.
  */
 export function computeCorrelations(
-  evaluationsByMetric: Map<string, EvaluationResult[]>,
+  evaluationsByMetric: Map<string, Array<Pick<EvaluationResult, 'scoreValue'>>>,
 ): CorrelationsResult {
   const metricTimeSeries = new Map<string, number[]>();
   for (const [name, evals] of evaluationsByMetric) {
