@@ -38,21 +38,15 @@ import {
 import {
   buildCalibrationEntry,
   computeOrgKvEntries,
-  TRACE_EVALS_KEY_PREFIX,
-  TRACE_KEY_PREFIX,
   type OrgComputation,
   type OrgReadBackend,
 } from '../src/api/aggregates/org-kv-entries.js';
 import { toKVValue, type KVEntry } from '../src/api/aggregates/kv-entry.js';
-export {
-  addRecentSession,
-  buildCalibrationEntry,
-  buildTraceEntries,
-  KV_ENTRY_TTL_DAYS,
-  KV_ENTRY_TTL_SECONDS,
-  QUERY_LIMIT,
-} from '../src/api/aggregates/org-kv-entries.js';
-export { dashboardEntry, toKVValue } from '../src/api/aggregates/kv-entry.js';
+import { TRACE_EVALS_KEY_PREFIX, TRACE_KEY_PREFIX } from '../src/api/aggregates/trace-entries.js';
+export { buildCalibrationEntry, QUERY_LIMIT } from '../src/api/aggregates/org-kv-entries.js';
+export { addRecentSession } from '../src/api/aggregates/session-entries.js';
+export { buildTraceEntries } from '../src/api/aggregates/trace-entries.js';
+export { dashboardEntry, KV_ENTRY_TTL_DAYS, KV_ENTRY_TTL_SECONDS, toKVValue } from '../src/api/aggregates/kv-entry.js';
 export type { KVEntry } from '../src/api/aggregates/kv-entry.js';
 export type { OrgComputation, OrgReadBackend } from '../src/api/aggregates/org-kv-entries.js';
 import {

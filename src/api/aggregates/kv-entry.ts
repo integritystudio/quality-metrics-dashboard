@@ -7,11 +7,20 @@
  */
 
 import { bigintReplacer } from '../api-constants.js';
+import { SECONDS } from '../parent/units.js';
 
 const LOG_PREFIX = '[kv-entry]';
 
 /** `hashBasis`, when set, is what change detection hashes instead of `value`. */
 export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
+
+/**
+ * TTL for per-trace and per-session KV entries (seconds).
+ * Must exceed the longest `--days` query window so entries are not prematurely expired.
+ * 90 days is 3x the default 30-day window and prevents unbounded key accumulation.
+ */
+export const KV_ENTRY_TTL_DAYS = 90;
+export const KV_ENTRY_TTL_SECONDS = SECONDS.DAY * KV_ENTRY_TTL_DAYS;
 
 /**
  * Serialize a KV entry value. Backend spans and evaluations carry `bigint`

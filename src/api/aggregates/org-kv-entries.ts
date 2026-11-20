@@ -8,26 +8,16 @@
  * or `process.argv`.
  */
 
-import { descending, group, minIndex, quantile } from 'd3-array';
+import { group } from 'd3-array';
 import { queriedDateWindow, type CloudBackend } from '../parent/backends.js';
 import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js';
 import { computeRollingDegradationSignals, type DegradationState } from '../parent/qfe-backtest.js';
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
-import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { SECONDS } from '../parent/units.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { PERCENT_MULTIPLIER, PERIOD_KEYS, PERIOD_MS, TIME_MS, type Period } from '../../lib/constants.js';
-import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
+import { PERIOD_KEYS, PERIOD_MS, TIME_MS, type Period } from '../../lib/constants.js';
 import { pushTo } from '../../lib/collections.js';
-import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
-import {
-  LATENCY_P95,
-  RATE_DISPLAY_PRECISION,
-  extractFiniteScores,
-  msToNs,
-  timestampToMs,
-} from '../api-constants.js';
+import { extractFiniteScores, msToNs } from '../api-constants.js';
 import {
   CODE_EVENT,
   CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
@@ -37,8 +27,7 @@ import {
   summarizeCodeQuality,
   type CodeQualityResponse,
 } from '../code-quality-summary.js';
-import { computeSessionDetail, type AgentActivityEntry } from '../session-detail.js';
-import { agentStatsKey, agentStatsWindow, computeAgentStats, isAgentFinalizeSpan } from './agent-stats.js';
+import { agentStatsWindow, isAgentFinalizeSpan } from './agent-stats.js';
 import { computePipeline } from './pipeline.js';
 import { computeAllDashboardEntries } from './dashboard-summary.js';
 import { previousWindow } from './metric-detail.js';
@@ -53,6 +42,15 @@ import {
   pipelineEntry,
   trendEntry,
 } from './evaluation-entries.js';
+import {
+  accumulateSessionAgents,
+  agentEntries as buildAgentEntries,
+  agentStatsEntry,
+  sessionEntry,
+  spanSessionId,
+  type AgentAccumulator,
+} from './session-entries.js';
+import { buildTraceEntries } from './trace-entries.js';
 import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 const LOG_PREFIX = '[org-kv-entries]';
@@ -60,24 +58,10 @@ const LOG_PREFIX = '[org-kv-entries]';
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
 const META_CALIBRATION_KEY = 'meta:calibration';
-export const TRACE_KEY_PREFIX = 'trace:';
-export const TRACE_EVALS_KEY_PREFIX = 'evaluations:trace:';
-
-const MAX_SESSION_DURATIONS = 10_000;
-const MAX_AGENT_SESSIONS = 100;
-const MAX_RECENT_SESSIONS = 20;
 
 export const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
 const SPAN_QUERY_LIMIT = 1_000_000;
-
-/**
- * TTL for per-trace and per-session KV entries (seconds).
- * Must exceed the longest `--days` query window so entries are not prematurely expired.
- * 90 days is 3x the default 30-day window and prevents unbounded key accumulation.
- */
-export const KV_ENTRY_TTL_DAYS = 90;
-export const KV_ENTRY_TTL_SECONDS = SECONDS.DAY * KV_ENTRY_TTL_DAYS;
 
 /** Metric detail baselines each period against the one before it, so the read spans two of the longest. */
 const METRIC_DETAIL_WINDOWS = 2;
@@ -104,10 +88,6 @@ export function buildCalibrationEntry(
   return { key: META_CALIBRATION_KEY, value: toKVValue(payload) };
 }
 
-function spanSessionId(span: { attributes?: Record<string, unknown> | undefined }): string | undefined {
-  return (span.attributes?.[SESSION_ATTRIBUTES.ID] ?? span.attributes?.session_id) as string | undefined;
-}
-
 /** Groups by metric, the input every aggregate is built from. */
 function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {
   return group(evals, ev => ev.evaluationName);
@@ -118,51 +98,8 @@ function hasTraceId<T extends { traceId?: string | undefined }>(row: T): row is 
   return Boolean(row.traceId);
 }
 
-/** In-memory cross-session accumulator for a single agent. Never serialized directly. */
-type AgentAccumulator = {
-  totalInvocations: number;
-  totalErrors: number;
-  rateLimitEvents: number;
-  totalOutputSize: number;
-  weightedDurationSum: number;
-  sessionDurations: number[];
-  truncatedCount: number;
-  emptyCount: number;
-  totalSessionCount: number;
-  lastSeenDate: string | null;
-  sessions: Array<{
-    sessionId: string;
-    invocations: number;
-    errors: number;
-    hasRateLimit: boolean;
-    avgDurationMs: number;
-    date: string | null;
-    project: string | null;
-  }>;
-}
-
 /** The two cloud reads one org's aggregation makes; a `CloudBackend` scoped to that org. */
 export type OrgReadBackend = Pick<CloudBackend, 'queryEvaluations' | 'queryTraces'>;
-
-/**
- * Add one session to an agent's bounded buffer of recent sessions. Once the
- * buffer holds `capacity`, a dated entry replaces the oldest dated session (the
- * first of a tie) if it is newer; when no buffered session has a date, it
- * replaces the last slot. An undated entry is dropped from a full buffer.
- */
-export function addRecentSession<T extends { date: string | null }>(sessions: T[], entry: T, capacity: number): void {
-  if (sessions.length < capacity) {
-    sessions.push(entry);
-    return;
-  }
-  if (!entry.date) return;
-  const datedIdx = minIndex(sessions, s => s.date);
-  const oldestIdx = datedIdx >= 0 ? datedIdx : sessions.length - 1;
-  const oldestDate = sessions[oldestIdx]?.date;
-  if (!oldestDate || entry.date > oldestDate) {
-    sessions[oldestIdx] = entry;
-  }
-}
 
 export type OrgComputation = {
   /** All computed entries under their BARE (unprefixed) keys. */
@@ -174,30 +111,6 @@ export type OrgComputation = {
   spanCount: number;
   periodCounts: string;
   hitCap: boolean;
-}
-
-/** Per-trace KV entries; spans/evaluations carry bigint timestamps, hence toKVValue. */
-export function buildTraceEntries(
-  traceIds: string[],
-  evalsByTrace: Map<string, EvaluationResult[]>,
-  spansByTrace: Map<string, TraceSpan[]>,
-): KVEntry[] {
-  const traceEntries: KVEntry[] = [];
-  for (const traceId of traceIds) {
-    const traceEvals = evalsByTrace.get(traceId) ?? [];
-    const spans = spansByTrace.get(traceId) ?? [];
-    traceEntries.push({
-      key: `${TRACE_EVALS_KEY_PREFIX}${traceId}`,
-      value: toKVValue({ evaluations: traceEvals }),
-      expirationTtl: KV_ENTRY_TTL_SECONDS,
-    });
-    traceEntries.push({
-      key: `${TRACE_KEY_PREFIX}${traceId}`,
-      value: toKVValue({ traceId, spans, evaluations: traceEvals }),
-      expirationTtl: KV_ENTRY_TTL_SECONDS,
-    });
-  }
-  return traceEntries;
 }
 
 /**
@@ -237,12 +150,6 @@ type OrgEvaluations = {
 }
 
 type EvaluationsByName = Map<string, EvaluationResult[]>;
-
-/** What `accumulateAgent` reads from one session's detail. */
-type AgentSessionContext = {
-  timespan: { start: string } | null;
-  sessionInfo: { projectName: string } | null;
-};
 
 /**
  * One read serves every window: the periods, each metric-detail baseline and the
@@ -395,109 +302,13 @@ function computeDegradationEntries(
   return entries;
 }
 
-/** Fold one session's activity for one agent into that agent's cross-session totals. */
-function accumulateAgent(
-  agents: Map<string, AgentAccumulator>,
-  ag: AgentActivityEntry,
-  sessionId: string,
-  detail: AgentSessionContext,
-): void {
-  let acc = agents.get(ag.agentName);
-  if (!acc) {
-    acc = {
-      totalInvocations: 0, totalErrors: 0, rateLimitEvents: 0,
-      totalOutputSize: 0, weightedDurationSum: 0, sessionDurations: [],
-      truncatedCount: 0, emptyCount: 0,
-      totalSessionCount: 0, lastSeenDate: null, sessions: [],
-    };
-    agents.set(ag.agentName, acc);
-  }
-  acc.totalInvocations += ag.invocations;
-  acc.totalErrors += ag.errors;
-  acc.rateLimitEvents += ag.rateLimitEvents;
-  acc.totalOutputSize += ag.totalOutputSize;
-  acc.truncatedCount += ag.truncatedCount;
-  acc.emptyCount += ag.emptyCount;
-  // One duration entry per session; capped to bound memory for p95 computation
-  if (ag.avgDurationMs > 0) {
-    acc.weightedDurationSum += ag.avgDurationMs * ag.invocations;
-    if (acc.sessionDurations.length < MAX_SESSION_DURATIONS) {
-      acc.sessionDurations.push(ag.avgDurationMs);
-    }
-  }
-  // sessionDate is always ISO 8601 UTC (from toISOString()), so
-  // lexicographic comparison is equivalent to chronological ordering.
-  const sessionDate = detail.timespan?.start ?? null;
-  acc.totalSessionCount++;
-  if (sessionDate && (!acc.lastSeenDate || sessionDate > acc.lastSeenDate)) {
-    acc.lastSeenDate = sessionDate;
-  }
-  const entry: AgentAccumulator['sessions'][number] = {
-    sessionId,
-    invocations: ag.invocations,
-    errors: ag.errors,
-    hasRateLimit: ag.hasRateLimit,
-    avgDurationMs: ag.avgDurationMs,
-    date: sessionDate,
-    project: detail.sessionInfo?.projectName ?? null,
-  };
-  addRecentSession(acc.sessions, entry, MAX_AGENT_SESSIONS);
-}
-
-/** `agent:<name>` per agent. */
-function buildAgentEntries(agents: Map<string, AgentAccumulator>, now: Date): KVEntry[] {
-  const agentEntries: KVEntry[] = [];
-  const computedAt = now.toISOString();
-
-  for (const [agentName, acc] of agents) {
-    // ISO 8601 sorts lexicographically — take most recent sessions first
-    const sessions = acc.sessions
-      .slice()
-      .toSorted((a, b) => descending(a.date ?? '', b.date ?? ''))
-      .slice(0, MAX_RECENT_SESSIONS);
-    const lastSeen = acc.lastSeenDate;
-    const totalSessions = acc.totalSessionCount;
-    const perInvocation = (total: number): number => (acc.totalInvocations > 0 ? total / acc.totalInvocations : 0);
-    const rate = (count: number): number => +perInvocation(count).toFixed(RATE_DISPLAY_PRECISION);
-
-    const detail = {
-      agentName,
-      totalSessions,
-      totalInvocations: acc.totalInvocations,
-      totalErrors: acc.totalErrors,
-      errorRate: rate(acc.totalErrors),
-      rateLimitEvents: acc.rateLimitEvents,
-      avgOutputSize: Math.round(perInvocation(acc.totalOutputSize)),
-      avgDurationMs: Math.round(perInvocation(acc.weightedDurationSum)),
-      p95DurationMs: Math.round(quantile(acc.sessionDurations, LATENCY_P95 / PERCENT_MULTIPLIER) ?? 0),
-      truncatedRate: rate(acc.truncatedCount),
-      emptyOutputRate: rate(acc.emptyCount),
-      lastSeen,
-      computedAt,
-      sessions,
-    };
-
-    agentEntries.push({ key: `agent:${agentName}`, value: toKVValue(detail) });
-  }
-  return agentEntries;
-}
-
-/**
- * `meta:agents:<period>`: the agents page, from the projection the dev route
- * uses on its live read. The spans are the agent-finalize spans of the span
- * read, cut to the period; the evaluations are the period's rows (the
- * projection keeps only those on an agent's trace).
- */
+/** `meta:agents:<period>` from the agent-finalize spans of the span read and each period's rows. */
 function computeAgentStatsEntries(allSpans: TraceSpan[], orgEvals: OrgEvaluations, now: Date, maxDaysMs: number): KVEntry[] {
   const agentSpans = allSpans.filter(isAgentFinalizeSpan);
-  const entries: KVEntry[] = [];
-  for (const period of PERIOD_KEYS.filter(p => PERIOD_MS[p] <= maxDaysMs)) {
+  return PERIOD_KEYS.filter(p => PERIOD_MS[p] <= maxDaysMs).map(period => {
     const { windowStart } = agentStatsWindow(period, now);
-    const spans = agentSpans.filter(span => timestampToMs(span.startTimeUnixNano) >= windowStart.getTime());
-    const stats = computeAgentStats(spans, orgEvals.between(windowStart.getTime()), period, now);
-    entries.push({ key: agentStatsKey(period), value: toKVValue(stats) });
-  }
-  return entries;
+    return agentStatsEntry(period, agentSpans, orgEvals.between(windowStart.getTime()), now);
+  });
 }
 
 /** `session:<id>` per session with spans, then the `agent:` entries accumulated across them. */
@@ -525,29 +336,10 @@ function computeSessionAndAgentEntries(
 
   const agentCrossSession = new Map<string, AgentAccumulator>();
   const sessionEntries: KVEntry[] = [];
-  for (const [sessionId, sessionSpans] of spansBySession) {
-    const evaluations = evalsBySession.get(sessionId) ?? [];
-    const detail = computeSessionDetail(
-      { sessionId, spans: sessionSpans, evaluations, evaluationsTruncated },
-      computeMultiAgentEvaluation,
-    );
-    sessionEntries.push({
-      key: `session:${sessionId}`,
-      value: toKVValue({
-        ...detail,
-        agentActivity: detail.agentActivity.map(
-          ({ totalOutputSize: _, ...rest }) => rest,
-        ),
-        // The worker has no spans to build this from, so /api/agents/:sessionId
-        // serves the graph precomputed here.
-        workflowGraph: buildWorkflowGraph(detail.multiAgentEvaluation, sessionSpans),
-      }),
-      expirationTtl: KV_ENTRY_TTL_SECONDS,
-    });
-
-    for (const ag of detail.agentActivity) {
-      accumulateAgent(agentCrossSession, ag, sessionId, detail);
-    }
+  for (const [sessionId, spans] of spansBySession) {
+    const { entry, activity } = sessionEntry({ sessionId, spans, evaluations: evalsBySession.get(sessionId) ?? [], evaluationsTruncated });
+    sessionEntries.push(entry);
+    accumulateSessionAgents(agentCrossSession, activity);
   }
   return { sessionEntries, agentEntries: buildAgentEntries(agentCrossSession, now) };
 }
