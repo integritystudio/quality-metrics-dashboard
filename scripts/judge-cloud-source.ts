@@ -20,7 +20,7 @@
  */
 
 import type { EvaluationResult } from '../../src/backends/index.js';
-import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-stamps.js';
+import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-index.js';
 import { dateScopeBounds, loadCloudSpans, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
 import { msToNs, nsToMs } from './hrt.js';
 import { toDateOnly } from '../src/api/api-constants.js';

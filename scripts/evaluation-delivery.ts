@@ -28,7 +28,7 @@ import {
   asString,
   type AccountIndex,
   type AccountRef,
-} from './account-stamps.js';
+} from './account-index.js';
 import { runWithRetry } from './pipeline-stages.js';
 import { describeFetchError } from '../../src/lib/core/describe-unknown.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';

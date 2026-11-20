@@ -31,7 +31,7 @@ import {
   type Route,
   type RouteBasis,
 } from './evaluation-delivery.js';
-import type { AccountIndex } from './account-stamps.js';
+import type { AccountIndex } from './account-index.js';
 import { sleep } from './sleep.js';
 import { increment, pushTo } from './collections.js';
 

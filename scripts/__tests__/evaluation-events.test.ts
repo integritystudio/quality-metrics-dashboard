@@ -10,7 +10,7 @@ import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attribu
 import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
-import type { AccountIndex } from '../account-stamps.js';
+import type { AccountIndex } from '../account-index.js';
 
 const NOW = new Date('2026-11-08T12:00:00.000Z');
 const LOGS_FILE = 'logs-2026-11-08.jsonl';

@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Trace coverage: local `traces-*.jsonl` vs the cloud `/v1/traces` (Phase 0 of
- * docs/roadmap/dashboard-cloud-read-migration.md). Read-only.
+ * docs/roadmap/dashboard-cloud-read-migration.md). Read-only, and a debugging
+ * and internal-observability check: no pipeline stage depends on its output.
  *
  * Every later phase moves a producer from the local files to the cloud, so it
  * inherits whatever the shipper failed to deliver. This measures that gap
@@ -27,7 +28,8 @@ import { PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToMs, nsToMs } from './hrt.js';
 import { getOrThrow, incrementIn, pushTo } from './collections.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
-import { TRACE_FILE_PATTERN, fileInWindow, asString, readSpanRecord, traceFileRecords, type AccountRef } from './account-stamps.js';
+import { asString, readSpanRecord, type AccountRef } from './account-index.js';
+import { TRACE_FILE_PATTERN, fileInWindow, traceFileRecords } from './telemetry-files.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { CHECK_EXIT, nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';

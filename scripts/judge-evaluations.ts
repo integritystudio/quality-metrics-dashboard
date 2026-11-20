@@ -53,7 +53,7 @@ import {
 } from './judge-batch-provider.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { resolveWorkingJudgeApiKey, JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV, type JudgeApiKey } from './judge-credentials.js';
-import type { AccountIndex } from './account-stamps.js';
+import type { AccountIndex } from './account-index.js';
 import { createJudgeAnthropicClient, judgeRequestSettings, responseText } from './judge-anthropic-client.js';
 import { sleep } from './sleep.js';
 import { incrementIn } from './collections.js';

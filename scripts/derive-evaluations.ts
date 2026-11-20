@@ -45,7 +45,7 @@ import {
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
-import type { AccountRef } from './account-stamps.js';
+import type { AccountRef } from './account-index.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';

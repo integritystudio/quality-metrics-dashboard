@@ -20,7 +20,7 @@
  */
 
 import { ascending } from 'd3-array';
-import { asString } from './account-stamps.js';
+import { asString } from './account-index.js';
 import { selectCriteria } from './judge-consolidated.js';
 import type { Turn } from './judge-turns.js';
 import { increment } from './collections.js';

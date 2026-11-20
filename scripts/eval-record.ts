@@ -8,7 +8,7 @@ import type { EvaluatorType, EvaluatorKind, EvaluationCohort } from '../../src/l
 import { GENAI_EVALUATION_ATTRIBUTES, GENAI_RESPONSE_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 import { knownLabelSchema, type KnownLabel } from '../../src/lib/quality/qfe-label-ordinals.js';
-import { IDENTITY_KEY_REF_FIELD, type AccountRef } from './account-stamps.js';
+import { IDENTITY_KEY_REF_FIELD, type AccountRef } from './account-index.js';
 import { RULE_EVALUATOR_TYPE as _RULE_EVALUATOR_TYPE, SCORE_ROUND_FACTOR } from '../src/api/api-constants.js';
 
 export const SESSION_ID_PREVIEW_LEN = 8;

@@ -23,7 +23,7 @@ import { INTEGRITYSTUDIO_EVALUATION_ATTRIBUTES } from '../../src/lib/core/shared
 import { NANOSECONDS_PER_SECOND, TIME_MS } from '../../src/lib/core/units.js';
 import { severityCodec, type OtelLogSeverity } from '../../src/lib/otel/constants-otel.js';
 import { toDateOnly } from '../src/api/api-constants.js';
-import { IDENTITY_KEY_REF_FIELD } from './account-stamps.js';
+import { IDENTITY_KEY_REF_FIELD } from './account-index.js';
 import { EVALUATION_RESULT_EVENT } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import { LOGS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';

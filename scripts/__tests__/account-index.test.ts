@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 
-import { indexSpanRecords, turnAccount, turnSpan, type AccountIndex } from '../account-stamps.js';
+import { indexSpanRecords, turnAccount, turnSpan, type AccountIndex } from '../account-index.js';
 import { anchorTurns, turnSourceFields, type Turn } from '../judge-turns.js';
 import { EVALUATION_RESULT_EVENT, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { deriveEvaluationLatency, setSpanAccounts, type TraceSpan } from '../derive-evaluations.js';

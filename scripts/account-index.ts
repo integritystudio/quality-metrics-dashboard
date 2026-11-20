@@ -1,10 +1,13 @@
 /**
- * Account stamps on local spans, indexed for the evaluation pipeline (TKR8).
+ * Account stamps on spans, indexed for the evaluation pipeline (TKR8).
  *
  * The hooks' file exporters stamp every span record with `identityKeyRef` —
  * the identity map's secret name for the account signed in when the span was
  * *written*, or `null` for an unmapped account (TKR6). It is a record field,
- * never an attribute, so it is never shipped.
+ * never an attribute, so it is never shipped. In the cloud the org scope of
+ * the key that reads a span back stands in for it: `cloud-trace-source` and
+ * `judge-cloud-source` stamp each `/v1/traces` span with that key's name and
+ * feed it through `indexSpanRecords` unchanged.
  *
  * Evaluations are produced later, by batch jobs that may run under a different
  * account, so they must not read "the current account". The producers look up
@@ -18,11 +21,11 @@
  *   session's spans between that turn and the next: `turnAccount` for its
  *   stamp and `turnSpan` for the span it is parented to (Phase 2).
  * The pre-Phase-1 time-based join was removed under TKR9; see `indexSpanRecords`.
+ *
+ * This module never touches the filesystem; the local trace-file readers live
+ * in `telemetry-files.ts` and are used only by `trace-coverage`.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { TIME_MS } from '../../src/lib/core/units.js';
 import { asHrTime, hrtToMs, type HrTime } from './hrt.js';
 import { pushTo } from './collections.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
@@ -32,9 +35,6 @@ export const IDENTITY_KEY_REF_PATTERN = /^OBTOOL_API_KEY(?:_[A-Z0-9]+)*$/;
 
 /** Record field the hooks' file exporters stamp (`appendJsonl`, TKR6). */
 export const IDENTITY_KEY_REF_FIELD = 'identityKeyRef';
-
-/** `traces-YYYY-MM-DD.jsonl` — the stamped spans. */
-export const TRACE_FILE_PATTERN = /^traces-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 
 /**
  * Start time given to a stamp whose span has none: it sorts last and is never at
@@ -73,44 +73,6 @@ export type AccountIndex = {
 
 export function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-/** Whether a dated file (`<prefix>-YYYY-MM-DD.jsonl`) is inside the window. */
-export function fileInWindow(file: string, pattern: RegExp, windowDays: number, nowMs: number): boolean {
-  const date = pattern.exec(file)?.[1];
-  if (date === undefined) return false;
-  // Compare on the date in the name, never mtime: derive rewrites evaluation
-  // files wholesale, so mtime says nothing about which day's records are inside.
-  return Date.parse(`${date}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
-}
-
-/** Every parseable line of the trace files `files` (names under `dir`). */
-export function* traceFileRecords(
-  dir: string,
-  files: readonly string[],
-  onReadError?: (file: string, err: unknown) => void,
-): Generator {
-  for (const file of files) {
-    let text: string;
-    try {
-      text = readFileSync(join(dir, file), 'utf8');
-    } catch (err) {
-      onReadError?.(file, err);
-      continue;
-    }
-    for (const line of text.split('\n')) {
-      if (!line.trim()) continue;
-      // `unknown`, not a cast to Record: JSON.parse returns whatever the line
-      // held, and a bare JSON string would make `'x' in span` throw below.
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      yield parsed;
-    }
-  }
 }
 
 export type SpanRecordFields = {
