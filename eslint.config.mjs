@@ -14,6 +14,9 @@ import sonarjs from 'eslint-plugin-sonarjs';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import { FIXTURE_MAGIC_NUMBERS_RULE, MAGIC_NUMBERS_OPTIONS, MAGIC_NUMBERS_RULE, localPlugin } from './eslint-rules/no-magic-numbers-ignore-bitwise.mjs';
 
+const SOURCE_FILES = ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'];
+const SRC_FILES = ['src/**/*.{ts,tsx}'];
+
 const TEST_FILES = ['src/**/*.test.{ts,tsx}', 'src/__tests__/**/*.{ts,tsx}', 'worker/**/*.test.ts', 'worker/__tests__/**/*.ts', 'scripts/**/*.test.ts', 'scripts/__tests__/**/*.ts'];
 
 // Files that ship nothing: a devDependency import here is correct. Mirrors the
@@ -185,7 +188,7 @@ export default tseslint.config(
   },
   // Regex safety (polynomial backtracking, unused captures, confusable ranges) everywhere.
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     plugins: regexp.configs['flat/recommended'].plugins,
     rules: {
       ...regexp.configs['flat/recommended'].rules,
@@ -194,11 +197,11 @@ export default tseslint.config(
     },
   },
   // TanStack Query hook hygiene (the preset is a one-element array).
-  ...tanstackQuery.configs['flat/recommended'].map(config => ({ ...config, files: ['src/**/*.{ts,tsx}'] })),
+  ...tanstackQuery.configs['flat/recommended'].map(config => ({ ...config, files: SRC_FILES })),
   // Type-aware React rules. Rules that eslint-plugin-react or react-hooks already
   // enforce above are switched off here so each finding is reported once.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: SRC_FILES,
     plugins: eslintReact.configs['recommended-type-checked'].plugins,
     settings: eslintReact.configs['recommended-type-checked'].settings,
     rules: {
@@ -222,7 +225,7 @@ export default tseslint.config(
   },
   // src/ only: the browser and API server log through warn/error; scripts and the worker log by design.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: SRC_FILES,
     rules: {
       'no-console': ['error', { allow: ['warn', 'error'] }],
     },
@@ -304,7 +307,7 @@ export default tseslint.config(
   // dist/ path, and @parent (the sanctioned alias) is confined to the
   // boundary modules so every parent dependency is visible in one place.
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [
@@ -345,7 +348,7 @@ export default tseslint.config(
   // since ESLint 8.53.0 and removed in 11, so @stylistic is the only option. Error
   // rather than warn so `--fix` keeps it true; the tree was swept when it landed.
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     plugins: { '@stylistic': stylistic },
     rules: {
       '@stylistic/indent': ['error', 2, { SwitchCase: 1 }],
@@ -367,7 +370,7 @@ export default tseslint.config(
   // Complexity controls, at the parent's levels. `warn` there is effectively an
   // error here: `npm run lint` runs under --max-warnings 0 (DASH-LINT-PARENT-PARITY).
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     rules: {
       'complexity': ['warn', 12],
       'max-depth': ['warn', 4],
@@ -379,7 +382,7 @@ export default tseslint.config(
   // parent's fixture-exempting variant instead: numbers inside a `const`
   // object or array literal are fixture data, everything else is still named.
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     ignores: TEST_FILES,
     plugins: { local: localPlugin },
     rules: {
@@ -399,7 +402,7 @@ export default tseslint.config(
   // assertion checks — the parent switches the rule off for its test block, and
   // `ignores` does the same here without depending on block order.
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     ignores: TEST_FILES,
     plugins: { sonarjs },
     rules: {
@@ -413,7 +416,7 @@ export default tseslint.config(
   // the plugin skips every imported TS file, builds no graph, and both rules pass
   // silently. Adds ~1s to a full lint.
   {
-    files: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.ts'],
+    files: SOURCE_FILES,
     plugins: { import: importX },
     settings: {
       'import-x/extensions': importX.flatConfigs.typescript.settings['import-x/extensions'],
