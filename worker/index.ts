@@ -763,7 +763,7 @@ app.get('/api/correlations', requirePermission(PERMISSION.read), validQuery(z.ob
 
 app.get('/api/degradation-signals', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
-  // Key matches DEGRADATION_KV_KEY in src/lib/quality/quality-constants.ts + period suffix
+  // Key matches DEGRADATION_KV_KEY in src/api/aggregates/kv-entry.ts + period suffix
   const data = await getSessionKv<unknown>(c, `meta/dashboard/degradation-signals:${period}`);
   if (!data) return c.json({ period, reports: [], computedAt: null });
   return c.json(data);

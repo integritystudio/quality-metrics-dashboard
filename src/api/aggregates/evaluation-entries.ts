@@ -133,17 +133,21 @@ export function statelessDegradation(): DegradationState {
 
 /**
  * `meta/dashboard/degradation-signals:<period>` for each period, in the order
- * given. `state` is updated in place: each period reads the breach counts the
- * one before it left, so the latest period's win, and `lastRun` becomes `now`.
- * The caller owns persistence.
+ * given. Every period reads the breach counts the run started from, so a run
+ * adds at most one to a metric's count however many periods it breaches in.
+ * `state` is then updated in place: a metric keeps the highest count any
+ * period reported (zero once it breaches in none), and `lastRun` becomes
+ * `now`. The caller owns persistence.
  */
 export function degradationEntries(periods: PeriodDegradation[], state: DegradationState, now: Date): KVEntry[] {
+  const advanced = new Map<string, number>();
   const entries = periods.map(({ period, prepared }): KVEntry => {
     const window = { startDate: new Date(now.getTime() - PERIOD_MS[period]).toISOString(), endDate: now.toISOString() };
     const reports = finishDegradationSignals(prepared, state, window);
-    for (const r of reports) state.breaches[r.metricName] = r.signal.consecutiveBreaches;
+    for (const r of reports) advanced.set(r.metricName, Math.max(advanced.get(r.metricName) ?? 0, r.signal.consecutiveBreaches));
     return { key: `${DEGRADATION_KV_KEY}:${period}`, value: toKVValue({ period, reports, computedAt: now.toISOString() }) };
   });
+  for (const [metricName, consecutiveBreaches] of advanced) state.breaches[metricName] = consecutiveBreaches;
   state.lastRun = now.toISOString();
   return entries;
 }
