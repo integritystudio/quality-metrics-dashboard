@@ -1,7 +1,6 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { loadEnv } from 'vite';
 import { parentDistStub } from './vite-plugins.js';
 import { API_HOST, API_PORT } from './src/api/config.js';
 
@@ -13,24 +12,32 @@ import { API_HOST, API_PORT } from './src/api/config.js';
  */
 const TEST_CIRCUIT_BREAKER_MAX_FAILURES = String(Number.MAX_SAFE_INTEGER);
 
+const CLIENT_ENV_PREFIX = 'VITE_';
+const PROXY_ENV_PREFIX = 'API_PROXY_';
+const DEV_SERVER_PORT = 5173;
+const API_ROUTE_PREFIX = '/api';
+
+function fromHere(relativePath: string): string {
+  return path.resolve(import.meta.dirname, relativePath);
+}
+
 export default defineConfig(({ command, mode }) => {
   // Merge .env file vars with process.env VITE_* vars (process.env wins — allows CI injection)
-  const fileEnv = loadEnv(mode, process.cwd(), 'VITE_');
-  const merged: Record<string, string> = { ...fileEnv };
+  const clientEnv: Record<string, string> = loadEnv(mode, process.cwd(), CLIENT_ENV_PREFIX);
   for (const [k, v] of Object.entries(process.env)) {
-    if (k.startsWith('VITE_') && v !== undefined) merged[k] = v;
+    if (k.startsWith(CLIENT_ENV_PREFIX) && v !== undefined) clientEnv[k] = v;
   }
   // The SPA always calls /api on its own origin; in dev this proxy forwards it
   // server to server. API_PROXY_TARGET (shell or .env) points it at a deployed
   // Worker instead of the local API server. It has no VITE_ prefix, so it never
   // reaches the bundle.
-  const apiProxyTarget = loadEnv(mode, process.cwd(), 'API_PROXY_').API_PROXY_TARGET
+  const apiProxyTarget = loadEnv(mode, process.cwd(), PROXY_ENV_PREFIX).API_PROXY_TARGET
     || `http://${API_HOST}:${API_PORT}`;
 
   return {
     base: '/',
     define: command === 'build' ? Object.fromEntries(
-      Object.entries(merged).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)])
+      Object.entries(clientEnv).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)])
     ) : {},
     plugins: [
       react(),
@@ -53,17 +60,17 @@ export default defineConfig(({ command, mode }) => {
     },
     resolve: {
       alias: {
-        '@parent': path.resolve(import.meta.dirname, '../dist'),
-        'web-worker': path.resolve(import.meta.dirname, 'src/stubs/web-worker.ts'),
+        '@parent': fromHere('../dist'),
+        'web-worker': fromHere('src/stubs/web-worker.ts'),
         ...(process.env.VITE_E2E ? {
-          '@auth0/auth0-react': path.resolve(import.meta.dirname, 'src/stubs/auth0-e2e.ts'),
+          '@auth0/auth0-react': fromHere('src/stubs/auth0-e2e.ts'),
         } : {}),
       },
     },
     server: {
-      port: 5173,
+      port: DEV_SERVER_PORT,
       proxy: {
-        '/api': {
+        [API_ROUTE_PREFIX]: {
           target: apiProxyTarget,
           changeOrigin: true,
         },

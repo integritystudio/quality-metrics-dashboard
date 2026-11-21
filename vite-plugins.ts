@@ -1,7 +1,8 @@
 import type { Plugin } from 'vite';
 import path from 'path';
 import { existsSync } from 'fs';
-import { fileURLToPath } from 'url';
+
+const STUB_ID_PREFIX = '\0dist/';
 
 /** Matches imports through the @parent/ alias (resolves to ../dist/ at runtime) */
 export const PARENT_ALIAS_RE = /^@parent\//;
@@ -19,28 +20,24 @@ export const PARENT_ALIAS_RE = /^@parent\//;
  * `npx vitest --clearCache` is the reset for that case.
  */
 export function parentDistStub(): Plugin {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const parentDistAbs = path.resolve(here, '../dist');
+  const parentDistAbs = path.resolve(import.meta.dirname, '../dist');
   return {
     name: 'parent-dist-stub',
     enforce: 'pre',
     resolveId(source) {
-      // Fast path: most imports are not @parent; skip the stat entirely.
+      // Matches the bare alias (if this plugin sees it first) or the resolved
+      // absolute path (if Vite's alias plugin ran first).
       const isAlias = PARENT_ALIAS_RE.test(source);
-      const isResolved = !isAlias && source.startsWith(parentDistAbs);
-      if (!isAlias && !isResolved) return;
-      // When the parent is built locally, let the real exports resolve so
-      // tests exercise actual schema behavior.
+      if (!isAlias && !source.startsWith(parentDistAbs)) return;
+      // A locally built parent resolves for real so tests exercise actual schemas.
       if (existsSync(parentDistAbs)) return;
-      // Match either the bare alias (if our plugin sees it first) or the
-      // already-resolved absolute path (Vite's alias plugin may have run first).
-      if (isAlias) {
-        return '\0' + source.replace(PARENT_ALIAS_RE, 'dist/');
-      }
-      return '\0dist/' + path.relative(parentDistAbs, source);
+      const relativePath = isAlias
+        ? source.replace(PARENT_ALIAS_RE, '')
+        : path.relative(parentDistAbs, source);
+      return STUB_ID_PREFIX + relativePath;
     },
     load(id) {
-      if (id.startsWith('\0dist/')) {
+      if (id.startsWith(STUB_ID_PREFIX)) {
         return 'export {};';
       }
     },
