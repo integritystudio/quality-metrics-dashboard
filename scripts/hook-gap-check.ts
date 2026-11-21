@@ -15,9 +15,11 @@
  *
  * Reads only the transcripts on this machine. Exits `HOOK_GAP_EXIT_FOUND` when
  * a session not yet acknowledged has a gap in the window, so the launchd
- * wrapper logs it. Acknowledged sessions are listed, each with its reason, in
- * `hook-gap-known.json` beside this script; they are still printed, as known,
- * but no longer fail the run. A file that does not parse acknowledges nothing.
+ * wrapper logs it. Acknowledged gaps are listed in `hook-gap-known.json`
+ * beside this script: a session id, the last gap turn acknowledged
+ * (`through`), and a reason. Gap turns up to `through` are still printed, as
+ * known, but no longer fail the run; a later gap in the same session does. A
+ * file that does not parse acknowledges nothing.
  *
  * Usage: tsx hook-gap-check.ts [--days=N | --date=YYYY-MM-DD]
  */
@@ -35,11 +37,11 @@ import { HOOK_GAP_EXIT_FOUND, JUDGE_DEFAULT_DAYS, rejectRemovedFlags } from './p
 import { exitOnCliArgError, runIfMain } from './cli-args.js';
 
 const CLI_PREFIX = '[hook-gap]';
-/** Sessions whose gaps are already acknowledged; see the module comment. */
+/** Gaps already acknowledged; see the module comment. */
 export const KNOWN_HOOK_GAPS_FILE = join(import.meta.dirname, 'hook-gap-known.json');
 
 const knownHookGapsSchema = z.object({
-  sessions: z.array(z.object({ sessionId: z.string().min(1), reason: z.string().min(1) })),
+  sessions: z.array(z.object({ sessionId: z.string().min(1), through: z.iso.datetime(), reason: z.string().min(1) })),
 });
 /** Turns shorter than this are system notices, not work; see the module comment. */
 // eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
@@ -157,28 +159,39 @@ export async function scanHookGaps(dirs: readonly string[], fromMs: number, toMs
   return withGaps;
 }
 
+/** Acknowledged gaps: session id to the epoch ms of the last gap turn acknowledged. */
+export type KnownHookGaps = ReadonlyMap<string, number>;
+
 /**
- * The acknowledged session ids in `path`: none when the file is absent, and
- * none (logged) when it does not parse, so a broken file never hides a gap.
+ * The acknowledged gaps in `path`: none when the file is absent, and none
+ * (logged) when it does not parse, so a broken file never hides a gap.
  */
-export function readKnownHookGaps(path: string = KNOWN_HOOK_GAPS_FILE): Set<string> {
-  if (!existsSync(path)) return new Set();
+export function readKnownHookGaps(path: string = KNOWN_HOOK_GAPS_FILE): KnownHookGaps {
+  if (!existsSync(path)) return new Map();
   try {
     const parsed = knownHookGapsSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
-    if (parsed.success) return new Set(parsed.data.sessions.map((s) => s.sessionId));
+    if (parsed.success) return new Map(parsed.data.sessions.map((s) => [s.sessionId, Date.parse(s.through)]));
     console.error(`${CLI_PREFIX} ${path} does not match its schema; no session counts as known`);
   } catch (err) {
     console.error(`${CLI_PREFIX} ${path} is unreadable (${describeUnknown(err)}); no session counts as known`);
   }
-  return new Set();
+  return new Map();
 }
 
-/** Split `found` into sessions already acknowledged and sessions that should fail the run. */
-export function partitionKnown(found: readonly SessionHookGaps[], known: ReadonlySet<string>): { known: SessionHookGaps[]; unknown: SessionHookGaps[] } {
-  return {
-    known: found.filter((s) => known.has(s.sessionId)),
-    unknown: found.filter((s) => !known.has(s.sessionId)),
-  };
+/**
+ * Split `found` into gaps already acknowledged and gaps that should fail the
+ * run. A session's gap turns after its `through` are new, so the session lands
+ * in `unknown` carrying only those turns.
+ */
+export function partitionKnown(found: readonly SessionHookGaps[], known: KnownHookGaps): { known: SessionHookGaps[]; unknown: SessionHookGaps[] } {
+  const split: { known: SessionHookGaps[]; unknown: SessionHookGaps[] } = { known: [], unknown: [] };
+  for (const s of found) {
+    const throughMs = known.get(s.sessionId);
+    const newTurns = throughMs === undefined ? s.gapTurns : s.gapTurns.filter((at) => !(Date.parse(at) <= throughMs));
+    if (newTurns.length === 0) split.known.push(s);
+    else split.unknown.push({ ...s, gapTurns: newTurns });
+  }
+  return split;
 }
 
 function describeGaps(s: SessionHookGaps): string {

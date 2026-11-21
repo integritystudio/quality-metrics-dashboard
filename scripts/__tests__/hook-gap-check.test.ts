@@ -80,26 +80,36 @@ describe('scanHookGaps', () => {
 
 describe('known hook gaps', () => {
   const dir = useTempDir('hook-gap-known-');
-  const gaps = (sessionId: string): SessionHookGaps => ({ sessionId, cwd: HOME, turns: 1, gapTurns: ['2026-11-20T23:13:24.000Z'] });
-  const knownFile = (body: string): string => {
+  const ACKNOWLEDGED_TURN = '2026-11-20T23:13:24.000Z';
+  const LATER_TURN = '2026-11-21T09:00:00.000Z';
+  const gaps = (sessionId: string, ...gapTurns: string[]): SessionHookGaps => ({ sessionId, cwd: HOME, turns: gapTurns.length, gapTurns });
+  const knownFile = (body: unknown): string => {
     const path = join(dir(), 'known.json');
-    writeFileSync(path, body);
+    writeFileSync(path, typeof body === 'string' ? body : JSON.stringify(body));
     return path;
   };
+  const acknowledged = (): ReturnType<typeof readKnownHookGaps> =>
+    readKnownHookGaps(knownFile({ sessions: [{ sessionId: SESSION_ID, through: ACKNOWLEDGED_TURN, reason: 'reported upstream' }] }));
 
   it('fails the run only for sessions not acknowledged', () => {
-    const known = readKnownHookGaps(knownFile(JSON.stringify({ sessions: [{ sessionId: SESSION_ID, reason: 'reported upstream' }] })));
-
-    const split = partitionKnown([gaps(SESSION_ID), gaps(OTHER_SESSION_ID)], known);
+    const split = partitionKnown([gaps(SESSION_ID, ACKNOWLEDGED_TURN), gaps(OTHER_SESSION_ID, ACKNOWLEDGED_TURN)], acknowledged());
 
     expect(split.known.map((s) => s.sessionId)).toEqual([SESSION_ID]);
     expect(split.unknown.map((s) => s.sessionId)).toEqual([OTHER_SESSION_ID]);
   });
 
-  it('acknowledges nothing when the file is absent, malformed, or missing a reason', () => {
-    expect(readKnownHookGaps(join(dir(), 'absent.json'))).toEqual(new Set());
-    expect(readKnownHookGaps(knownFile('{not json'))).toEqual(new Set());
-    expect(readKnownHookGaps(knownFile(JSON.stringify({ sessions: [{ sessionId: SESSION_ID }] })))).toEqual(new Set());
+  it('fails the run for a gap after the acknowledged one in the same session, carrying only the new turn', () => {
+    const split = partitionKnown([gaps(SESSION_ID, ACKNOWLEDGED_TURN, LATER_TURN)], acknowledged());
+
+    expect(split.known).toEqual([]);
+    expect(split.unknown).toEqual([gaps(SESSION_ID, LATER_TURN)].map((s) => ({ ...s, turns: 2 })));
+  });
+
+  it('acknowledges nothing when the file is absent, malformed, or an entry lacks a reason or through', () => {
+    expect(readKnownHookGaps(join(dir(), 'absent.json')).size).toBe(0);
+    expect(readKnownHookGaps(knownFile('{not json')).size).toBe(0);
+    expect(readKnownHookGaps(knownFile({ sessions: [{ sessionId: SESSION_ID, through: ACKNOWLEDGED_TURN }] })).size).toBe(0);
+    expect(readKnownHookGaps(knownFile({ sessions: [{ sessionId: SESSION_ID, reason: 'no through' }] })).size).toBe(0);
   });
 
   it('parses the committed list', () => {
