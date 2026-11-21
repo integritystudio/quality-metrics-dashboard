@@ -135,6 +135,7 @@ const REMOVED_FLAGS: ReadonlyMap<string, string> = new Map([
   ['--judge-source', CLOUD_ONLY_REASON],
   ['--derive-source', CLOUD_ONLY_REASON],
   ['--skip-upload', 'populate has no upload stage: derive and the judge post their own records'],
+  ['--content', 'the judge reads turn text from the cloud only (ship-turn-content posts it)'],
 ]);
 
 /** Throw on the first removed flag in `args`, given bare or as `--flag=value`. */
@@ -235,26 +236,6 @@ export const JUDGE_BATCH_FLAG = '--batch';
  * kept for comparison runs and as the way back if the default regresses.
  */
 export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
-/**
- * judge-evaluations flag: where turn text comes from. `local` reads the
- * transcripts on this machine; `cloud` reads the redacted turns
- * ship-turn-content posted (`GET /v1/turns`), so the judge can run where no
- * transcript is. `cloud` is the default: a turn no stamped span anchors is
- * never shipped, so only `local` judges it.
- */
-export const JUDGE_CONTENT_FLAG = '--content=';
-export const TURN_CONTENT_SOURCES = ['local', 'cloud'] as const;
-export type TurnContentSource = typeof TURN_CONTENT_SOURCES[number];
-export const DEFAULT_TURN_CONTENT_SOURCE: TurnContentSource = 'cloud';
-
-/** The judge's turn-text source from `--content=`; throws on any other value. */
-export function turnContentSourceArg(raw: string | undefined): TurnContentSource {
-  if (raw === undefined) return DEFAULT_TURN_CONTENT_SOURCE;
-  const source = TURN_CONTENT_SOURCES.find((s) => s === raw);
-  if (source === undefined) throw new CliArgError(`${JUDGE_CONTENT_FLAG} must be one of ${TURN_CONTENT_SOURCES.join(', ')}, got "${raw}"`);
-  return source;
-}
-
 /** judge-evaluations flag populate forwards: a cap on turns judged. */
 export const JUDGE_LIMIT_FLAG = '--limit';
 /** Every stage's preview switch: compute and report, write nothing. */

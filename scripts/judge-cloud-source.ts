@@ -1,9 +1,8 @@
 /**
  * Cloud discovery for `judge-evaluations` (cloud-read migration
  * Phase 4); `judge-agreement` samples from the same sessions
- * (`discoverCloudSessions`). Which sessions to judge, which account each turn ran under, and
- * which turns are already scored all come from obtool-api; only the turn text
- * still comes from the transcripts on this machine (Phase 5 keeps it there).
+ * (`discoverCloudSessions`). Which sessions to judge, which account each turn ran under,
+ * which turns are already scored and the turn text itself all come from obtool-api.
  *
  * - **Sessions and anchoring**: `/v1/traces` over the scope, one query per
  *   account key (`loadCloudSpans`, derive's cloud reader). Every span is
@@ -11,8 +10,11 @@
  *   exactly as local trace files are, so `anchorTurns` runs unchanged. The
  *   session list is the set of sessions those spans name; `/v1/sessions` is
  *   built from the same spans, so a second read would add nothing.
- * - **Transcripts**: found by session id under `TRANSCRIPT_DIRS`, never through
- *   the local token-metrics logs, so no telemetry file is read.
+ * - **Turn text**: the redacted turns `ship-turn-content` posted, read back
+ *   from `/v1/turns` (`turnsFromCloud`). The judge opens no transcript.
+ * - **Transcripts**: only for `ship-turn-content`, `judge-agreement` and
+ *   `judge-quality-eval`, found by session id under `TRANSCRIPT_DIRS`
+ *   (`discoverCloudSessions`, `transcriptsForSessions`).
  * - **Already judged**: `/v1/evaluations` rows from the judge's two producers,
  *   one query per account and producer, keyed like `judgedByKey`. This
  *   is the cloud's record of what reached the dashboard, so a turn judged
@@ -45,13 +47,10 @@ const CLI_PREFIX = '[judge:cloud]';
 const LEGACY_EVENT_TIME_ATTR = 'evaluatedAtMs';
 
 export type CloudJudgeDiscovery = {
-  transcripts: TranscriptInfo[];
   /** Built from the cloud spans; anchors turns and routes their posts. */
   accounts: AccountIndex;
   /** The dedup key (`addJudgedKey`) for every turn and criterion the cloud holds a judge row for. */
   existingKeys: Set<string>;
-  /** Sessions the cloud names that have no transcript here: judged only where they ran. */
-  sessionsWithoutTranscript: number;
 }
 
 /**
@@ -133,14 +132,18 @@ export type CloudSessions = {
   missing: number;
 }
 
+/** The account index built from the cloud's spans for turns on `dates`. */
+async function loadCloudAccounts(dates: ReadonlySet<string>, env: NodeJS.ProcessEnv, nowMs: number): Promise<AccountIndex> {
+  return indexCloudSpans(await loadCloudSpans(spanScopeDates(dates, nowMs), env, CLI_PREFIX));
+}
+
 /** The sessions the cloud's spans name for turns on `dates`, and their transcripts on this machine. */
 export async function discoverCloudSessions(
   dates: ReadonlySet<string>,
   env: NodeJS.ProcessEnv = process.env,
   nowMs: number = Date.now(),
 ): Promise<CloudSessions> {
-  const loaded = await loadCloudSpans(spanScopeDates(dates, nowMs), env, CLI_PREFIX);
-  const accounts = indexCloudSpans(loaded);
+  const accounts = await loadCloudAccounts(dates, env, nowMs);
   return { accounts, ...transcriptsForSessions(accounts.sessionSpans.keys()) };
 }
 
@@ -150,10 +153,10 @@ export async function discoverFromCloud(
   env: NodeJS.ProcessEnv = process.env,
   nowMs: number = Date.now(),
 ): Promise<CloudJudgeDiscovery> {
-  const { accounts, transcripts, missing } = await discoverCloudSessions(dates, env, nowMs);
+  const accounts = await loadCloudAccounts(dates, env, nowMs);
   const existingKeys = judgedKeys(await loadJudgedRows(dateScopeBounds(dates).fromMs, env));
-  console.log(`${CLI_PREFIX} sessions=${accounts.sessionSpans.size} withTranscript=${transcripts.length} withoutTranscript=${missing} judgedKeys=${existingKeys.size}`);
-  return { transcripts, accounts, existingKeys, sessionsWithoutTranscript: missing };
+  console.log(`${CLI_PREFIX} sessions=${accounts.sessionSpans.size} judgedKeys=${existingKeys.size}`);
+  return { accounts, existingKeys };
 }
 
 /**
@@ -185,8 +188,7 @@ export function turnsFromCloudRows(rows: Iterable<CloudTurn>): { turns: Turn[]; 
 
 /**
  * The redacted turns every account's org holds for `dates` (`GET /v1/turns`),
- * shipped by `ship-turn-content`: the `--content=cloud` alternative to reading
- * transcripts on this machine.
+ * shipped by `ship-turn-content`: the judge's only source of turn text.
  */
 export async function turnsFromCloud(dates: ReadonlySet<string>, env: NodeJS.ProcessEnv = process.env): Promise<Turn[]> {
   const { fromMs, toMs } = dateScopeBounds(dates);

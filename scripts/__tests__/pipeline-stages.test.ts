@@ -242,6 +242,8 @@ describe('rejectRemovedFlags', () => {
     ['--derive-source=local', /--derive-source was removed/],
     ['--judge-source=local', /--judge-source was removed/],
     ['--skip-upload', /--skip-upload was removed: populate has no upload stage/],
+    ['--content=local', /--content was removed: the judge reads turn text from the cloud only/],
+    ['--content=cloud', /--content was removed/],
   ])('refuses %s instead of running the stage without it', (flag, message) => {
     expect(() => rejectRemovedFlags(['--limit', '5', flag])).toThrow(message);
   });

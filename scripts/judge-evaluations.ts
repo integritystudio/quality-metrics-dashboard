@@ -2,14 +2,14 @@
 /**
  * LLM-as-Judge Evaluation Generator
  *
- * Discovers session transcripts, extracts user/assistant turns, and evaluates
- * them using the LLM-as-Judge library (relevance, coherence, hallucination)
+ * Reads the redacted turns ship-turn-content posted and evaluates them using the LLM-as-Judge library (relevance, coherence, hallucination)
  * via the Anthropic API (Claude Haiku).
  *
  * Discovery takes the sessions, each turn's account and the already-judged set
  * from obtool-api (judge-cloud-source.ts) over the last `JUDGE_DEFAULT_DAYS`
  * unless `--date=`/`--days=` says otherwise, the same window populate passes.
- * Turn text is read from the local transcripts. Judged, withheld and
+ * Turn text is read from the cloud (`GET /v1/turns`); a turn no stamped span
+ * anchors was never shipped, so it is not judged. Judged, withheld and
  * held-for-key turns are dropped before `--limit` (judge-selection.ts).
  *
  * Results are posted straight to ingest (post-evaluations.ts). Each record
@@ -43,8 +43,8 @@ import { TIME_MS } from '../../src/lib/core/units.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import {
-  JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_CONTENT_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG,
-  JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags, turnContentSourceArg, DEFAULT_TURN_CONTENT_SOURCE, type TurnContentSource,
+  JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG,
+  JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags,
 } from './pipeline-stages.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import {
@@ -93,7 +93,6 @@ import {
 import { turnJudgedKey } from './judge-dedup.js';
 import {
   anchorTurns,
-  extractTurns,
   fitContextForJudge,
   turnSourceFields,
   type Turn,
@@ -377,15 +376,11 @@ export type TurnDiscovery = {
 /**
  * Find the turns a run may judge: the sessions, each turn's account and the
  * already-judged set come from obtool-api (judge-cloud-source.ts) over
- * `dateScope`. Turn text comes from the transcripts here (`local`), or from
- * the redacted turns ship-turn-content posted (`cloud`).
+ * `dateScope`. Turn text is the redacted turns ship-turn-content posted.
  */
-export async function discoverTurns(dateScope: ReadonlySet<string>, content: TurnContentSource = DEFAULT_TURN_CONTENT_SOURCE): Promise<TurnDiscovery> {
+export async function discoverTurns(dateScope: ReadonlySet<string>): Promise<TurnDiscovery> {
   const cloud = await discoverFromCloud(dateScope);
-
-  const extracted = content === 'cloud'
-    ? await turnsFromCloud(dateScope)
-    : (await pLimit(CONCURRENCY).map(cloud.transcripts, async info => extractTurns(info))).flat();
+  const extracted = await turnsFromCloud(dateScope);
   // Anchored before the scope and the limit cut, so each turn's window is
   // bounded by the real next turn rather than by whichever turns survived.
   anchorTurns(extracted, cloud.accounts);
@@ -633,19 +628,18 @@ async function judgeTurns(
 
 /** Flags judge-evaluations reads itself; --days=/--date= are read by derive's resolvers. */
 const JUDGE_CLI: CliSpec = {
-  values: [JUDGE_LIMIT_FLAG, JUDGE_CONTENT_FLAG],
+  values: [JUDGE_LIMIT_FLAG],
   switches: [DRY_RUN_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
 };
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const { cli, requestedLimit, content } = exitOnCliArgError('Error:', () => {
+  const { cli, requestedLimit } = exitOnCliArgError('Error:', () => {
     rejectRemovedFlags(args);
     const parsed = parseCli(args, JUDGE_CLI);
     return {
       cli: parsed,
       requestedLimit: positiveIntArg(JUDGE_LIMIT_FLAG, parsed.value(JUDGE_LIMIT_FLAG)),
-      content: turnContentSourceArg(parsed.value(JUDGE_CONTENT_FLAG)),
     };
   });
   const dryRun = cli.has(DRY_RUN_FLAG);
@@ -657,7 +651,7 @@ async function main(): Promise<void> {
   const dateScope = readScope(resolveDateScope(args), JUDGE_DEFAULT_DAYS);
   let discovery: TurnDiscovery;
   try {
-    discovery = await discoverTurns(dateScope, content);
+    discovery = await discoverTurns(dateScope);
   } catch (err) {
     // Nothing is spent before this point, so populate carries on without the judge.
     console.error(`[judge] discovery failed: ${describeUnknown(err)}`);

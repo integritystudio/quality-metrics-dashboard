@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { startRecordingServer, inOrder, type RecordingServer } from './support/recording-server.js';
 import { planShipment, sendPlan, toTurnContentRecord, type ShipmentPlan } from '../ship-turn-content.js';
 import { turnFromRecord, turnsFromCloudRows } from '../judge-cloud-source.js';
-import { turnContentSourceArg, DEFAULT_TURN_CONTENT_SOURCE } from '../pipeline-stages.js';
 import { turnKey, type Turn } from '../judge-turns.js';
-import { CliArgError } from '../cli-args.js';
 import {
   TURNS_PATH,
   TURN_CONTENT_MAX_BATCH_SIZE,
@@ -169,13 +167,5 @@ describe('turnsFromCloudRows', () => {
       userText: shipped.userText, assistantText: shipped.assistantText, toolResults: shipped.toolContext, responseId: 'msg_1',
     });
     expect(withoutContent).toBe(1);
-  });
-});
-
-describe('turnContentSourceArg', () => {
-  it('defaults to local and refuses an unknown source', () => {
-    expect(turnContentSourceArg(undefined)).toBe(DEFAULT_TURN_CONTENT_SOURCE);
-    expect(turnContentSourceArg('cloud')).toBe('cloud');
-    expect(() => turnContentSourceArg('s3')).toThrow(CliArgError);
   });
 });
