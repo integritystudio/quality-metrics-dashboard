@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Trace coverage: local `traces-*.jsonl` vs the cloud `/v1/traces` (Phase 0 of
- * docs/roadmap/dashboard-cloud-read-migration.md). Read-only, and a debugging
+ * docs/archive/dashboard-cloud-read-migration.md). Read-only, and a debugging
  * and internal-observability check: no pipeline stage depends on its output.
  *
  * Every later phase moves a producer from the local files to the cloud, so it

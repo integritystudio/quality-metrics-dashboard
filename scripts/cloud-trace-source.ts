@@ -1,6 +1,6 @@
 /**
  * Cloud trace source for `derive-evaluations` (Phase 1 of
- * docs/roadmap/dashboard-cloud-read-migration.md).
+ * docs/archive/dashboard-cloud-read-migration.md).
  *
  * Reads `/v1/traces` once per identity-map account and converts each span to
  * the local HRT shape derive already scores, so the derivation code runs

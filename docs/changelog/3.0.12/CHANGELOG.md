@@ -74,7 +74,7 @@ and a sibling non-overlap test uses the exported node width.
 
 ## Tooling and config
 
-**PHASE6-LOCAL-RETIREMENT.** Removed: `--source`, `--judge-source` and `--derive-source` (all now fail), derive's `loadLocalSpans`, the judge's local discovery and `_loadExistingKeys`, `derive-parity.ts`, `judge-parity.ts`, their tests and the two `:parity` npm scripts. Kept: `trace-coverage.ts` (decided: it measures shipper loss, not the rollback), `account-stamps.ts` (upload's account join and `anchorTurns` still use it) and `_discoverTranscripts` (judge-agreement and judge-quality-eval read it). The gate notes below are the record of what was checked. Original scope: The cloud-read roadmap (`../../docs/roadmap/dashboard-cloud-read-migration.md:166`) keeps
+**PHASE6-LOCAL-RETIREMENT.** Removed: `--source`, `--judge-source` and `--derive-source` (all now fail), derive's `loadLocalSpans`, the judge's local discovery and `_loadExistingKeys`, `derive-parity.ts`, `judge-parity.ts`, their tests and the two `:parity` npm scripts. Kept: `trace-coverage.ts` (decided: it measures shipper loss, not the rollback), `account-stamps.ts` (upload's account join and `anchorTurns` still use it) and `_discoverTranscripts` (judge-agreement and judge-quality-eval read it). The gate notes below are the record of what was checked. Original scope: The cloud-read roadmap (`../../docs/archive/dashboard-cloud-read-migration.md:166`) keeps
 `--source=local` for one release after the 2026-10-04 default flip, then deletes it. That release removes ~900 lines:
 `derive-parity.ts`, `judge-parity.ts`, `trace-coverage.ts` (or keep it as a shipper-health check — decide),
 `account-stamps.ts` (apart from what judge option A needs), derive's `loadLocalSpans`, and the judge's local discovery and
