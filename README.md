@@ -138,7 +138,6 @@ Requires parent `dist/` for the sync step — run `npm run build` in the parent 
 | `npm run derive` | Run one pipeline stage |
 | `npm run trace-coverage` | Trace coverage report |
 | `npm run dev:worker` | `wrangler dev` (local Worker) |
-| `npm run filetree` | Regenerate the Project Structure section below |
 | `npm run repomix` | Regenerate the repomix packs in `docs/repomix/` (gitignored) |
 
 ## Scheduling
