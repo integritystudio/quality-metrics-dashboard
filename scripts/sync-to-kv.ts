@@ -41,7 +41,7 @@ import {
   type OrgComputation,
   type OrgReadBackend,
 } from '../src/api/aggregates/org-kv-entries.js';
-import { toKVValue, type KVEntry } from '../src/api/aggregates/kv-entry.js';
+import { isWorkflowOwnedKey, toKVValue, type KVEntry } from '../src/api/aggregates/kv-entry.js';
 import { TRACE_EVALS_KEY_PREFIX, TRACE_KEY_PREFIX } from '../src/api/aggregates/trace-entries.js';
 export { buildCalibrationEntry, QUERY_LIMIT } from '../src/api/aggregates/org-kv-entries.js';
 export { addRecentSession } from '../src/api/aggregates/session-entries.js';
@@ -336,6 +336,20 @@ function coveragePercent(part: number, whole: number): number {
 
 function entryHash(entry: KVEntry): string {
   return createHash('sha256').update(entry.hashBasis ?? entry.value).digest('hex').slice(0, HASH_PREFIX_CHARS);
+}
+
+/** The entries this script still writes: every family the Workflow has not taken. */
+export function cliOwnedEntries(entries: KVEntry[]): KVEntry[] {
+  return entries.filter(e => !isWorkflowOwnedKey(stripOrgPrefix(e.key)));
+}
+
+/**
+ * Drops the Workflow's keys from the local state without deleting them from KV.
+ * Left in, `pruneStaleKeys` would read a handed-over key as no longer computed
+ * and delete the value the Workflow now writes.
+ */
+export function forgetWorkflowOwnedKeys(state: SyncState): SyncState {
+  return new Map([...state].filter(([key]) => !isWorkflowOwnedKey(stripOrgPrefix(key))));
 }
 
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
@@ -835,10 +849,11 @@ async function main(): Promise<void> {
 
   const now = new Date();
   const computation = await computeAllOrgs(now);
-  const { allEntries, evalsByTrace, referencedTraceIds, hitCap, perOrgSummaries } = computation;
+  const { evalsByTrace, referencedTraceIds, hitCap, perOrgSummaries } = computation;
+  const allEntries = cliOwnedEntries(computation.allEntries);
   const traceIds = computation.homeComputation?.traceIds ?? [];
 
-  const prevState = loadSyncState();
+  const prevState = forgetWorkflowOwnedKeys(loadSyncState());
   const changed = filterChanged(allEntries, prevState);
   const metaEntries = buildMetaEntries(now, computation.orgIds);
 

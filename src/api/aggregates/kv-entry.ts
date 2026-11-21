@@ -15,6 +15,20 @@ const LOG_PREFIX = '[kv-entry]';
 export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
 
 /**
+ * The key families the Workflow writes and the CLI no longer does, as each
+ * logical key's prefix (no `org:<id>:`). Both writers read this one list, so a
+ * family has exactly one writer: adding a prefix here hands it over on the
+ * CLI's next run, and the Workflow takes it at its next deploy. Deploy the
+ * Workflow after the CLI picks the change up, never before, or both write it.
+ */
+export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:'];
+
+/** Whether the Workflow is the writer of this logical key (org prefix already stripped). */
+export function isWorkflowOwnedKey(logicalKey: string, families: readonly string[] = WORKFLOW_OWNED_FAMILIES): boolean {
+  return families.some(prefix => logicalKey.startsWith(prefix));
+}
+
+/**
  * TTL for per-trace and per-session KV entries (seconds).
  * Must exceed the longest `--days` query window so entries are not prematurely expired.
  * 90 days is 3x the default 30-day window and prevents unbounded key accumulation.

@@ -5,6 +5,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildCalibrationEntry,
   buildTraceEntries,
+  cliOwnedEntries,
+  forgetWorkflowOwnedKeys,
   loadCalibrationEntry,
   orgPrefixedKey,
   ORG_KEY_PREFIX_RE,
@@ -17,6 +19,7 @@ import {
 import { saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
+import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
@@ -325,5 +328,32 @@ describe('loadCalibrationEntry', () => {
     const entry = loadFromDefaultDir();
 
     expect(JSON.parse(entry?.value ?? '{}')).toMatchObject({ lastCalibrated: DEFAULT_DIR_CALIBRATED_AT });
+  });
+});
+
+describe('families handed over to the Workflow', () => {
+  const ORG_ID = '11111111-1111-4111-8111-111111111111';
+  const handedOver = WORKFLOW_OWNED_FAMILIES.map(prefix => `${prefix}7d`);
+  const KEPT_KEYS = ['dashboard:7d', 'metric:relevance:7d', 'trace:abc', 'meta:lastSync'];
+
+  it('hands over at least one family, so these cases compare something', () => {
+    expect(handedOver.length).toBeGreaterThan(0);
+  });
+
+  it('writes none of the Workflow\'s keys, bare or under an org, and keeps the rest', () => {
+    const keys = [...handedOver, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
+
+    const kept = cliOwnedEntries(keys.map(key => ({ key, value: '{}' }))).map(entry => entry.key);
+
+    expect(kept).toEqual(KEPT_KEYS.flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]));
+  });
+
+  it('drops the Workflow\'s keys from the local state, so the prune step cannot delete them from KV', () => {
+    const keys = [...handedOver, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
+    const state = new Map(keys.map(key => [key, { hash: 'h' }]));
+
+    const remaining = [...forgetWorkflowOwnedKeys(state).keys()];
+
+    expect(remaining).toEqual(KEPT_KEYS.flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]));
   });
 });
