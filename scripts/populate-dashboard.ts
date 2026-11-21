@@ -3,15 +3,21 @@
  * Single-command pipeline to populate all 7 dashboard metrics.
  *
  * Steps:
+ *   0. hook-gap-check      → flags background sessions whose turns ran without hooks
+ *                            (local transcripts, read-only; runs with the judge,
+ *                            `--skip-hook-gap-check` skips it)
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
  *                            over the cloud's last 7 days of spans, the last 2 days
  *                            POSTed to ingest (`--days=7 --post-days=2`)
- *   2. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
+ *   2. ship-turn-content   → redacted turn text from this machine's transcripts,
+ *                            POSTed to ingest per account over the judge's scope
+ *                            (runs with the judge; `--skip-ship-turns` skips it)
+ *   3. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
  *                            (`--days=7`), POSTed to ingest
- *   3. sync-to-kv          → aggregate + upload to Cloudflare KV
+ *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
  *
- * Step 3 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
+ * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
  * `'table'`). Steps 1-2 post their own records, and the hooks' records reach it
  * as log events through the span shipper.
  *
@@ -30,7 +36,7 @@
  *
  * Exit codes (read by the launchd wrapper, which logs FAILED for anything non-zero):
  *   0     every stage succeeded
- *   3-12  a stage's soft failure, forwarded after the remaining stages still
+ *   3-15  a stage's soft failure, forwarded after the remaining stages still
  *         ran; each code is documented on its constant in pipeline-stages.ts
  *   1     any other stage failure, and the pipeline stops there. Also: no judge
  *         key and no --skip-judge given, so nothing runs
@@ -71,12 +77,14 @@ const STDERR_CAPTURE_MAX_BYTES = 16 * BYTES.MB;
 const SKIP_DERIVE_FLAG = '--skip-derive';
 const SKIP_JUDGE_FLAG = '--skip-judge';
 const SKIP_SYNC_FLAG = '--skip-sync';
+const SKIP_SHIP_TURNS_FLAG = '--skip-ship-turns';
+const SKIP_HOOK_GAP_CHECK_FLAG = '--skip-hook-gap-check';
 /** Forwarded to sync-to-kv as `--budget=<n>`; unset leaves sync's own default. */
 const SYNC_BUDGET_ARG = '--sync-budget';
 const POPULATE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG, SYNC_BUDGET_ARG],
   switches: [
-    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_SYNC_FLAG, DRY_RUN_FLAG,
+    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_SYNC_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
     JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
@@ -89,6 +97,8 @@ const POPULATE_CLI: CliSpec = {
 type PopulateArgs = {
   skipDerive: boolean;
   skipJudge: boolean;
+  skipShipTurns: boolean;
+  skipHookGapCheck: boolean;
   skipSync: boolean;
   dryRun: boolean;
   batch: boolean;
@@ -106,6 +116,8 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   return {
     skipDerive: cli.has(SKIP_DERIVE_FLAG),
     skipJudge: cli.has(SKIP_JUDGE_FLAG),
+    skipShipTurns: cli.has(SKIP_SHIP_TURNS_FLAG),
+    skipHookGapCheck: cli.has(SKIP_HOOK_GAP_CHECK_FLAG),
     skipSync: cli.has(SKIP_SYNC_FLAG),
     dryRun: cli.has(DRY_RUN_FLAG),
     batch: cli.has(JUDGE_BATCH_FLAG),
@@ -117,7 +129,7 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   };
 }
 
-const { skipDerive, skipJudge, skipSync, dryRun, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
+const { skipDerive, skipJudge, skipShipTurns, skipHookGapCheck, skipSync, dryRun, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key: never fall back to
@@ -230,6 +242,32 @@ async function runDerive(): Promise<void> {
 }
 
 /**
+ * Read-only, local and quick, so it runs first; a gap it finds is reported
+ * through the pipeline's exit code and the rest of the run carries on.
+ */
+const HOOK_GAP_STAGE = 'hook-gap-check';
+function runHookGapCheck(): void {
+  const check = runStep(HOOK_GAP_STAGE, `${HOOK_GAP_STAGE}.ts`, [...judgeScope]);
+  if (check.ok) return;
+  continueOrAbort(HOOK_GAP_STAGE, HOOK_GAP_STAGE, check,
+    status => `[populate] ${HOOK_GAP_STAGE} exited ${status}; continuing, then exiting ${status}`);
+}
+
+/**
+ * Ship redacted turns before the judge, over the judge's scope, so the cloud
+ * holds the text the judge is about to read. Losing it costs nothing the next
+ * run cannot redo, so a soft failure carries on to the judge.
+ */
+async function runShipTurns(): Promise<void> {
+  const shipArgs: string[] = [...judgeScope];
+  if (dryRun) shipArgs.push(DRY_RUN_FLAG);
+  const ship = await runWithNetworkRetry('ship-turn-content', 'ship-turn-content.ts', shipArgs);
+  if (ship.ok) return;
+  continueOrAbort('ship-turns', 'ship-turn-content', ship,
+    status => `[populate] ship-turn-content exited ${status}; continuing to judge + sync, then exiting ${status}`);
+}
+
+/**
  * The judge says on its own stderr why it produced nothing. The rule-based
  * evaluations from derive still deserve to reach the cloud, so a soft failure
  * keeps going — and carries the code to the exit, so the launchd wrapper logs FAILED.
@@ -255,7 +293,9 @@ async function runSync(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (!skipJudge && !skipHookGapCheck) runHookGapCheck();
   if (!dryRun && !skipDerive) await runDerive();
+  if (!skipJudge && !skipShipTurns) await runShipTurns();
   if (!skipJudge) runJudge();
   if (!skipSync) await runSync();
 

@@ -64,6 +64,26 @@ export const DERIVE_EXIT_READ_FAILED = 9;
 export const DERIVE_EXIT_INPUT_DRIFT = 10;
 
 /**
+ * ship-turn-content exit: discovering turns or reading what the cloud holds
+ * failed, so nothing was sent. The next run covers the same window.
+ */
+export const SHIP_TURNS_EXIT_DISCOVERY_FAILED = 13;
+/**
+ * ship-turn-content exit: a POST /v1/turns batch failed (or no ingest URL is
+ * set). Re-running is safe: ingest keeps the first copy of each turn key.
+ */
+export const SHIP_TURNS_EXIT_POST_FAILED = 14;
+
+/**
+ * hook-gap-check exit: a background session closed turns without running its
+ * hooks, so their telemetry was never written (seen on CLI 2.1.330 for
+ * background sessions launched from `~`). Soft: nothing in this run is wrong,
+ * but the launchd wrapper should log it.
+ */
+export const HOOK_GAP_EXIT_FOUND = 15;
+export const HOOK_GAP_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([HOOK_GAP_EXIT_FOUND]);
+
+/**
  * Judge exits populate-dashboard.ts forwards to its own exit instead of
  * aborting: the judge already said why, and the rule-based evaluations from
  * derive still deserve to reach the cloud.
@@ -80,8 +100,11 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
 export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]);
 
+/** Shipping exits populate forwards: the judge still runs, on the turns already in the cloud or the transcripts. */
+export const SHIP_TURNS_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([SHIP_TURNS_EXIT_DISCOVERY_FAILED, SHIP_TURNS_EXIT_POST_FAILED]);
+
 /** Stage name used in `nextStepAfter`. */
-export type PipelineStage = 'derive' | 'judge';
+export type PipelineStage = 'hook-gap-check' | 'derive' | 'ship-turns' | 'judge';
 
 /**
  * Returns true when the pipeline should continue to the next step after
@@ -90,7 +113,9 @@ export type PipelineStage = 'derive' | 'judge';
  */
 export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
   switch (stage) {
+    case 'hook-gap-check': return HOOK_GAP_SOFT_FAILURE_EXITS.has(exitCode);
     case 'derive': return DERIVE_SOFT_FAILURE_EXITS.has(exitCode);
+    case 'ship-turns': return SHIP_TURNS_SOFT_FAILURE_EXITS.has(exitCode);
     case 'judge': return JUDGE_SOFT_FAILURE_EXITS.has(exitCode);
   }
 }
@@ -210,6 +235,26 @@ export const JUDGE_BATCH_FLAG = '--batch';
  * kept for comparison runs and as the way back if the default regresses.
  */
 export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
+/**
+ * judge-evaluations flag: where turn text comes from. `local` reads the
+ * transcripts on this machine; `cloud` reads the redacted turns
+ * ship-turn-content posted (`GET /v1/turns`), so the judge can run where no
+ * transcript is. `cloud` is the default: a turn no stamped span anchors is
+ * never shipped, so only `local` judges it.
+ */
+export const JUDGE_CONTENT_FLAG = '--content=';
+export const TURN_CONTENT_SOURCES = ['local', 'cloud'] as const;
+export type TurnContentSource = typeof TURN_CONTENT_SOURCES[number];
+export const DEFAULT_TURN_CONTENT_SOURCE: TurnContentSource = 'cloud';
+
+/** The judge's turn-text source from `--content=`; throws on any other value. */
+export function turnContentSourceArg(raw: string | undefined): TurnContentSource {
+  if (raw === undefined) return DEFAULT_TURN_CONTENT_SOURCE;
+  const source = TURN_CONTENT_SOURCES.find((s) => s === raw);
+  if (source === undefined) throw new CliArgError(`${JUDGE_CONTENT_FLAG} must be one of ${TURN_CONTENT_SOURCES.join(', ')}, got "${raw}"`);
+  return source;
+}
+
 /** judge-evaluations flag populate forwards: a cap on turns judged. */
 export const JUDGE_LIMIT_FLAG = '--limit';
 /** Every stage's preview switch: compute and report, write nothing. */

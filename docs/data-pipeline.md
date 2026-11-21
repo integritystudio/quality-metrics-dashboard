@@ -1,6 +1,6 @@
 # Dashboard data pipeline: stage reference
 
-Long-form notes for `npm run populate` (derive → judge → sync-to-kv), moved verbatim from `CLAUDE.md` on 2026-10-06. `CLAUDE.md` § Data Pipeline keeps the rules; this file keeps the reasons and history.
+Long-form notes for `npm run populate` (hook-gap-check → derive → ship-turn-content → judge → sync-to-kv), moved verbatim from `CLAUDE.md` on 2026-10-06. `CLAUDE.md` § Data Pipeline keeps the rules; this file keeps the reasons and history.
 
 ## Stages
 
