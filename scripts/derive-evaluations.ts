@@ -128,7 +128,7 @@ function attrString(value: unknown, fallback = ''): string {
 const MIN_PLAUSIBLE_EPOCH_SECONDS = 1_000_000_000;
 
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
-const MAX_RAW_SCORES_PER_METRIC = 500;
+export const MAX_RAW_SCORES_PER_METRIC = 500;
 
 /** Upper bound on stored rule rows read per account for calibration; 30 days hold ~45,000. */
 const CALIBRATION_ROW_LIMIT = 500_000;
@@ -767,6 +767,15 @@ async function loadCalibrationScores(nowMs: number, env: NodeJS.ProcessEnv = pro
   return calibrationScores(perAccount.flatMap(({ rows }) => rows));
 }
 
+/**
+ * Each metric's latest `MAX_RAW_SCORES_PER_METRIC` scores: what the state file
+ * keeps, and so what a later run's PSI must be measured on. Comparing the
+ * stored tail with a whole window would read the window's age mix as drift.
+ */
+export function recentScores(scoresByMetric: Record<string, number[]>): Record<string, number[]> {
+  return Object.fromEntries(Object.entries(scoresByMetric).map(([metric, scores]) => [metric, scores.slice(-MAX_RAW_SCORES_PER_METRIC)]));
+}
+
 /** One line per check: each metric's measured PSI, or that it had too few samples for one. */
 export function formatCalibrationCheck(
   previousScores: Record<string, number[]>,
@@ -802,7 +811,8 @@ async function updateCalibration(dryRun: boolean, nowMs: number = Date.now()): P
   }
 
   const previousState = loadCalibrationState(CALIBRATION_STATE_DIR);
-  const { shouldWrite, psiValues, unmeasured } = shouldRecalibrate(previousState, scoresByMetric);
+  const rawScores = recentScores(scoresByMetric);
+  const { shouldWrite, psiValues, unmeasured } = shouldRecalibrate(previousState, rawScores);
   console.log(`${CALIBRATION_LOG_PREFIX} ${formatCalibrationCheck(previousState?.rawScores ?? {}, scoresByMetric, psiValues, unmeasured)}`);
   // psiValues reflects PSI at the time of last write, not from every check:
   // a run that finds nothing to rewrite leaves the file alone.
@@ -824,9 +834,7 @@ async function updateCalibration(dryRun: boolean, nowMs: number = Date.now()): P
     lastCalibrated: new Date().toISOString(),
     distributions,
     psiValues,
-    rawScores: Object.fromEntries(
-      Object.entries(scoresByMetric).map(([k, v]) => [k, v.slice(-MAX_RAW_SCORES_PER_METRIC)])
-    ),
+    rawScores,
   });
 }
 

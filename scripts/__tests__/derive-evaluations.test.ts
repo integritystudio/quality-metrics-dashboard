@@ -16,6 +16,8 @@ import {
   postFloorMs,
   carryForwardDistributions,
   calibrationScores,
+  recentScores,
+  MAX_RAW_SCORES_PER_METRIC,
   formatCalibrationCheck,
   DERIVE_NO_REPOST_BEFORE_MS,
   DRIFT_MIN_TOOL_SPANS,
@@ -258,6 +260,19 @@ describe('calibrationScores', () => {
     ]);
 
     expect(scores).toEqual({ task_completion: [SCORE.early] });
+  });
+});
+
+describe('recentScores', () => {
+  it('keeps the latest scores up to the stored cap, and a shorter metric whole', () => {
+    const OVERFLOW = 3;
+    const long = Array.from({ length: MAX_RAW_SCORES_PER_METRIC + OVERFLOW }, (_, i) => i);
+    const short = [1, 0];
+
+    const recent = recentScores({ tool_correctness: long, handoff_correctness: short });
+
+    expect(recent.tool_correctness).toEqual(long.slice(OVERFLOW));
+    expect(recent.handoff_correctness).toEqual(short);
   });
 });
 
