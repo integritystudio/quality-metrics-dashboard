@@ -15,6 +15,8 @@ import {
   splitAtRepostFloor,
   postFloorMs,
   carryForwardDistributions,
+  calibrationScores,
+  formatCalibrationCheck,
   DERIVE_NO_REPOST_BEFORE_MS,
   DRIFT_MIN_TOOL_SPANS,
   type TraceSpan,
@@ -228,6 +230,48 @@ describe('carryForwardDistributions', () => {
     const fresh = { tool_correctness: entry(P50.fresh, SEPTEMBER) };
 
     expect(carryForwardDistributions(undefined, fresh)).toEqual(fresh);
+  });
+});
+
+describe('calibrationScores', () => {
+  const SCORE = { early: 0.4, late: 0.9, other: 1 };
+  const AT = { first: 1n, second: 2n, third: 3n };
+  const row = (evaluationName: string, scoreValue: number | undefined, timestamp: bigint, evaluationId?: string) =>
+    ({ evaluationName, scoreValue, timestamp, ...(evaluationId !== undefined && { evaluationId }) });
+
+  it('groups scores by metric, oldest first', () => {
+    const scores = calibrationScores([
+      row('task_completion', SCORE.late, AT.third),
+      row('tool_correctness', SCORE.other, AT.second),
+      row('task_completion', SCORE.early, AT.first),
+    ]);
+
+    expect(scores).toEqual({ task_completion: [SCORE.early, SCORE.late], tool_correctness: [SCORE.other] });
+  });
+
+  it('counts a row two accounts both returned once, and skips a row with no finite score', () => {
+    const scores = calibrationScores([
+      row('task_completion', SCORE.early, AT.first, 'eval-1'),
+      row('task_completion', SCORE.early, AT.first, 'eval-1'),
+      row('task_completion', undefined, AT.second, 'eval-2'),
+      row('task_completion', Number.NaN, AT.third, 'eval-3'),
+    ]);
+
+    expect(scores).toEqual({ task_completion: [SCORE.early] });
+  });
+});
+
+describe('formatCalibrationCheck', () => {
+  it('reports a measured PSI or too few samples for every metric', () => {
+    const MEASURED_PSI = 0.0008;
+    const line = formatCalibrationCheck(
+      { handoff_correctness: [MEASURED_PSI] },
+      { tool_correctness: [], handoff_correctness: [] },
+      { tool_correctness: MEASURED_PSI },
+      ['handoff_correctness'],
+    );
+
+    expect(line).toBe(`psi tool_correctness=${MEASURED_PSI}; too few samples: handoff_correctness (1 stored, 0 now)`);
   });
 });
 

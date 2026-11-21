@@ -264,8 +264,8 @@ const RECOMMENDED_MIN_BUDGET = MIN_TRACE_BUDGET + HIGH_PRIORITY_HEADROOM;
 /**
  * The home org's `meta:calibration` entry, from the state derive writes (`CALIBRATION_STATE_DIR`).
  * A missing file is reported loudly: a silent miss leaves the dashboard on stale percentiles
- * (CALIBRATION-READ-WRONG-DIR). An old `lastCalibrated` is not an error — derive rewrites the file only when the
- * score distribution drifts (PSI), so a stable corpus keeps its date — so it is logged, not judged.
+ * (CALIBRATION-READ-WRONG-DIR). `lastCalibrated` is logged, not judged: derive rewrites the file on drift (PSI) and
+ * otherwise once it is `CALIBRATION_MAX_AGE_DAYS` old, so a date older than that means derive is not running.
  */
 export function loadCalibrationEntry(dir: string = CALIBRATION_STATE_DIR): KVEntry | null {
   const state = loadCalibrationState(dir);

@@ -24,6 +24,7 @@ import { ascending, mean, rollup } from 'd3-array';
 import pLimit from 'p-limit';
 import {
   computeCalibrationDistributions,
+  isCalibrationStale,
   loadCalibrationState,
   saveCalibrationState,
   shouldRecalibrate,
@@ -47,10 +48,12 @@ import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import type { AccountRef } from './account-index.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
-import { loadCloudSpans, type LoadedSpans } from './cloud-trace-source.js';
+import { loadCloudSpans, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
+import type { EvaluationResult } from '../../src/backends/index.js';
+import { CALIBRATION_WINDOW_DAYS } from '../../src/lib/quality/quality-constants.js';
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
 import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
-import { hrtToISO, hrtToSeconds } from './hrt.js';
+import { hrtToISO, hrtToSeconds, msToNs } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
 import { knownLabelSchema } from '../../src/lib/quality/qfe-label-ordinals.js';
@@ -126,6 +129,11 @@ const MIN_PLAUSIBLE_EPOCH_SECONDS = 1_000_000_000;
 
 /** Maximum raw scores to persist per metric in calibration state (bounds file size) */
 const MAX_RAW_SCORES_PER_METRIC = 500;
+
+/** Upper bound on stored rule rows read per account for calibration; 30 days hold ~45,000. */
+const CALIBRATION_ROW_LIMIT = 500_000;
+
+const CALIBRATION_LOG_PREFIX = '[derive] calibration:';
 
 /** Transcripts parsed at once by `deriveAgentHeuristics`. */
 const TRANSCRIPT_READ_CONCURRENCY = 8;
@@ -709,8 +717,8 @@ export function splitAtRepostFloor(records: readonly EvalRecord[]): { toPost: Ev
 
 /**
  * Keep a metric's previous calibration when this run could not recompute it. A metric under
- * `MIN_QUANTILE_SAMPLE_SIZE` samples gets no distribution, and derive calibrates over its 7-day
- * read, so a sparse metric (task_completion, handoff_correctness) would otherwise drop out of
+ * `MIN_QUANTILE_SAMPLE_SIZE` samples gets no distribution, so a metric still sparse over the
+ * `CALIBRATION_WINDOW_DAYS` read (handoff_correctness) would otherwise drop out of
  * `meta:calibration` at every rewrite. A carried entry keeps its own windowStart/windowEnd, so its
  * age stays visible; a freshly computed one always replaces it.
  */
@@ -721,26 +729,87 @@ export function carryForwardDistributions(
   return { ...previous, ...fresh };
 }
 
+type CalibrationRow = Pick<EvaluationResult, 'timestamp' | 'evaluationId' | 'evaluationName' | 'scoreValue'>;
+
 /**
- * Compute per-metric percentile distributions from `allEvals` and persist them
- * to `.calibration-state.json`, which sync-to-kv serves as `meta:calibration`.
- * Rewritten only when the distribution drifts (PSI); a dry run says so instead.
+ * Each metric's scores from stored rows, oldest first so a tail slice keeps the
+ * latest. A row two account keys both read is counted once.
  */
-function updateCalibration(allEvals: readonly EvalRecord[], dryRun: boolean): void {
-  const scoresByMetric: Record<string, number[]> = Object.fromEntries(rollup(
-    allEvals,
-    evs => evs.map(ev => ev.scoreValue).filter(score => Number.isFinite(score)),
-    ev => ev.evaluationName,
-  ));
+export function calibrationScores(rows: Iterable<CalibrationRow>): Record<string, number[]> {
+  const seenIds = new Set<string>();
+  const scored: Array<CalibrationRow & { scoreValue: number }> = [];
+  for (const row of rows) {
+    const { scoreValue, evaluationId } = row;
+    if (typeof scoreValue !== 'number' || !Number.isFinite(scoreValue)) continue;
+    if (evaluationId !== undefined) {
+      if (seenIds.has(evaluationId)) continue;
+      seenIds.add(evaluationId);
+    }
+    scored.push({ ...row, scoreValue });
+  }
+  scored.sort((a, b) => Number(a.timestamp - b.timestamp));
+  return Object.fromEntries(rollup(scored, group => group.map(row => row.scoreValue), row => row.evaluationName));
+}
+
+/**
+ * The rule scores every account's org stored over the last
+ * `CALIBRATION_WINDOW_DAYS`. Derive's own read is 7 days, in which most
+ * metrics never reach `MIN_QUANTILE_SAMPLE_SIZE`; the stored rows are what
+ * derive posted over the whole window, so nothing is re-scored.
+ */
+async function loadCalibrationScores(nowMs: number, env: NodeJS.ProcessEnv = process.env): Promise<Record<string, number[]>> {
+  const startDate = msToNs(nowMs - CALIBRATION_WINDOW_DAYS * TIME_MS.DAY);
+  const perAccount = await queryEachAccount(
+    env,
+    { limit: CALIBRATION_ROW_LIMIT, rows: 'stored rule rows', truncates: 'the calibration window', logPrefix: CALIBRATION_LOG_PREFIX },
+    async (backend) => backend.queryEvaluations({ source: 'table', evaluator: RULE_EVALUATOR_TYPE, startDate, limit: CALIBRATION_ROW_LIMIT }),
+  );
+  return calibrationScores(perAccount.flatMap(({ rows }) => rows));
+}
+
+/** One line per check: each metric's measured PSI, or that it had too few samples for one. */
+export function formatCalibrationCheck(
+  previousScores: Record<string, number[]>,
+  scoresByMetric: Record<string, number[]>,
+  psiValues: Record<string, number>,
+  unmeasured: readonly string[],
+): string {
+  const measured = Object.entries(psiValues).toSorted(([a], [b]) => ascending(a, b)).map(([metric, psi]) => `${metric}=${psi}`);
+  const sparse = unmeasured.toSorted(ascending).map(metric => `${metric} (${previousScores[metric]?.length ?? 0} stored, ${scoresByMetric[metric]?.length ?? 0} now)`);
+  return `psi ${measured.join(' ') || 'none'}; too few samples: ${sparse.join(', ') || 'none'}`;
+}
+
+/**
+ * Compute per-metric percentile distributions over the calibration window and
+ * persist them to `.calibration-state.json`, which sync-to-kv serves as
+ * `meta:calibration`. Rewritten when a distribution drifts (PSI), a metric
+ * first reaches the sample floor, or the state is past its maximum age; a dry
+ * run says so instead. A failed read leaves the state as it was.
+ */
+async function updateCalibration(dryRun: boolean, nowMs: number = Date.now()): Promise<void> {
+  let scoresByMetric: Record<string, number[]>;
+  try {
+    scoresByMetric = await loadCalibrationScores(nowMs);
+  } catch (err) {
+    console.error(`${CALIBRATION_LOG_PREFIX} read failed, state left unchanged:`, err);
+    return;
+  }
 
   const newDistributions = computeCalibrationDistributions(scoresByMetric);
-  if (Object.keys(newDistributions).length === 0) return;
+  if (Object.keys(newDistributions).length === 0) {
+    console.log(`${CALIBRATION_LOG_PREFIX} no metric has enough samples; state left unchanged`);
+    return;
+  }
 
   const previousState = loadCalibrationState(CALIBRATION_STATE_DIR);
-  const { shouldWrite, psiValues } = shouldRecalibrate(previousState, scoresByMetric);
-  // psiValues reflects PSI at the time of last write (when shouldWrite: true),
-  // not from every check — stable runs don't update the file.
-  if (!shouldWrite) return;
+  const { shouldWrite, psiValues, unmeasured } = shouldRecalibrate(previousState, scoresByMetric);
+  console.log(`${CALIBRATION_LOG_PREFIX} ${formatCalibrationCheck(previousState?.rawScores ?? {}, scoresByMetric, psiValues, unmeasured)}`);
+  // psiValues reflects PSI at the time of last write, not from every check:
+  // a run that finds nothing to rewrite leaves the file alone.
+  if (previousState !== null && !shouldWrite && !isCalibrationStale(previousState, nowMs)) {
+    console.log(`${CALIBRATION_LOG_PREFIX} unchanged, lastCalibrated=${previousState.lastCalibrated}`);
+    return;
+  }
   if (dryRun) {
     console.log('[dry-run] would update .calibration-state.json');
     return;
@@ -808,7 +877,7 @@ async function main(): Promise<void> {
     process.exitCode = DERIVE_EXIT_POST_FAILED;
   }
 
-  updateCalibration(allEvals, dryRun);
+  await updateCalibration(dryRun);
 
   const byName = rollup(inScope, evs => evs.length, ev => ev.evaluationName);
   const counts = [...byName].toSorted(([a], [b]) => ascending(a, b)).map(([name, n]) => `${name}=${n}`);
