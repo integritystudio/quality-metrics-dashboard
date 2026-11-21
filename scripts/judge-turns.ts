@@ -221,6 +221,18 @@ export function extractToolResults(content: unknown): string[] {
 type TranscriptMessage = NonNullable<TranscriptEntry['message']>;
 type PendingUser = { text: string; timestamp: string };
 
+/**
+ * The hook record a forked session writes before its own first turn. A fork
+ * copies the parent's history into the new transcript ahead of this record,
+ * re-stamped with the new session id; those turns are the parent's, which
+ * anchors and judges them under its own id.
+ */
+export const FORK_SESSION_START_HOOK = 'SessionStart:fork';
+
+function isForkStart(entry: TranscriptEntry): boolean {
+  return entry.type === 'attachment' && entry.attachment?.hookName === FORK_SESSION_START_HOOK;
+}
+
 /** Entry types that carry no message to read. */
 const NON_MESSAGE_ENTRY_TYPES = new Set(['progress', 'file-history-snapshot']);
 
@@ -279,6 +291,13 @@ export async function extractTurns(info: TranscriptInfo): Promise<Turn[]> {
   const accumulatedToolResults: string[] = [];
 
   for await (const entry of streamJsonlWithValidation(info.path, transcriptEntrySchema)) {
+    if (isForkStart(entry)) {
+      // Everything so far was copied from the parent session: keep only this fork's own turns.
+      turns.length = 0;
+      pendingUser = null;
+      accumulatedToolResults.length = 0;
+      continue;
+    }
     const message = evaluableMessage(entry);
     if (!message) continue;
 

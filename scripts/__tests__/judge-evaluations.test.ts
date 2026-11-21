@@ -9,6 +9,7 @@ import {
   extractToolResults,
   extractTurns,
   fitContextForJudge,
+  FORK_SESSION_START_HOOK,
   CONTEXT_TRUNCATION_MARKER,
   MAX_TOOL_CONTEXT_ITEMS,
   MAX_TOOL_RESULTS_PER_TURN,
@@ -208,6 +209,27 @@ describe('extractTurns', () => {
     const [turn] = await extract(...outputs.map(output => toolResult(output)), user('Question'), assistant('Answer'));
 
     expect(defined(turn).toolResults).toEqual(outputs.slice(1));
+  });
+
+  it('keeps only a forked session\'s own turns, dropping the history copied from its parent', async () => {
+    const forkStart = { type: 'attachment', attachment: { type: 'hook_success', hookName: FORK_SESSION_START_HOOK } };
+
+    const turns = await extract(
+      user('Copied question'), assistant('Copied answer'),
+      toolResult('copied tool output'),
+      forkStart,
+      user('Fork question'), assistant('Fork answer'),
+    );
+
+    expect(turns.map(t => [t.userText, t.toolResults])).toEqual([['Fork question', []]]);
+  });
+
+  it('ignores attachment entries that are not the fork marker', async () => {
+    const otherHook = { type: 'attachment', attachment: { type: 'hook_success', hookName: 'SessionStart:resume' } };
+
+    const turns = await extract(user('First'), assistant('One'), otherHook, user('Second'), assistant('Two'));
+
+    expect(turns.map(t => t.userText)).toEqual(['First', 'Second']);
   });
 
   it('skips progress and file-history-snapshot entries', async () => {
