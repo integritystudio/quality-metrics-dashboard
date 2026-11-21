@@ -311,6 +311,17 @@ describe('evaluateTurnConsolidated', () => {
     })));
   });
 
+  it('stamps records with the run\'s judge model, so they dedup under the key selection checked', async () => {
+    const turn = makeTurn();
+    const criteria = { judgeModel: OTHER_JUDGE_MODEL };
+
+    const records = await evaluateTurnConsolidated(createFakeProvider({}), turn, new Set(), { criteria });
+
+    expect(records.map(r => r.judgeModel)).toEqual(PLAIN_CRITERIA.map(() => OTHER_JUDGE_MODEL));
+    const judged = new Set(records.map(r => defined(r.stableEvaluationKey)));
+    expect(selectCriteria(turn, judged, criteria).recordNames).toEqual([]);
+  });
+
   it('posts a turn judged again under the same evaluation ids, so ingest keeps the first scores', async () => {
     const turn = toolTurn();
     const postedIds = (records: EvalRecord[]): string[] =>

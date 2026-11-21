@@ -226,12 +226,17 @@ function toolGroundedCriteria(
   return { criteria, recordNames };
 }
 
+/** The model a run's dedup keys and records name: the option, else Haiku. */
+function judgeModelOf(options: ConsolidatedCriteriaOptions): string {
+  return options.judgeModel ?? HAIKU_MODEL;
+}
+
 export function selectCriteria(
   turn: Turn,
   existingKeys: Set<string>,
   options: ConsolidatedCriteriaOptions = {},
 ): ConsolidatedSelection {
-  const judgeModel = options.judgeModel ?? HAIKU_MODEL;
+  const judgeModel = judgeModelOf(options);
   const missing = (name: string): boolean => !existingKeys.has(turnJudgedKey(turn, name, judgeModel));
   const criteria: GEvalConfig[] = [];
   const recordNames: string[] = [];
@@ -414,7 +419,9 @@ export function toFivePointScale(normalized: number): number {
   return G_EVAL_MIN_SCORE + normalized * G_EVAL_SCORE_RANGE;
 }
 
-function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, explanation: string): EvalRecord {
+type ScoredCriterion = { evaluationName: string; scoreValue: number; explanation: string };
+
+function buildRecord(turn: Turn, judgeModel: string, { evaluationName, scoreValue, explanation }: ScoredCriterion): EvalRecord {
   return {
     timestamp: turn.timestamp,
     evaluationName,
@@ -425,8 +432,8 @@ function buildRecord(turn: Turn, evaluationName: string, scoreValue: number, exp
     ...legacyEvaluatorTypeField(LLM_EVALUATOR_KIND),
     evaluatorKind: LLM_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
-    judgeModel: HAIKU_MODEL,
-    stableEvaluationKey: turnJudgedKey(turn, evaluationName, HAIKU_MODEL),
+    judgeModel,
+    stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
     ...turnSourceFields(turn),
@@ -476,7 +483,7 @@ function recordsFromVerdicts(
   turn: Turn,
   wanted: readonly string[],
   parsed: ParsedConsolidatedResponse,
-  ctx: { sessionPreview: string },
+  ctx: { sessionPreview: string; judgeModel: string },
 ): EvalRecord[] {
   const records: EvalRecord[] = [];
   for (const name of wanted) {
@@ -490,7 +497,7 @@ function recordsFromVerdicts(
     const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
     const explanation = verdict.reasoning.trim()
       || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${ctx.sessionPreview}`;
-    records.push(buildRecord(turn, name, score, explanation));
+    records.push(buildRecord(turn, ctx.judgeModel, { evaluationName: name, scoreValue: score, explanation }));
   }
   return records;
 }
@@ -526,7 +533,7 @@ export async function evaluateTurnConsolidated(
     return [];
   }
 
-  return recordsFromVerdicts(turn, wanted, parsed, { sessionPreview });
+  return recordsFromVerdicts(turn, wanted, parsed, { sessionPreview, judgeModel: judgeModelOf(options) });
 }
 
 /** One criterion's normalized (0–1) score; throws the parse failure when the verdict is missing. */
