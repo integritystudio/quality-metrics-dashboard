@@ -17,6 +17,7 @@ const OTEL_STATUS_OK_CODE = 1;
 const THRESHOLD = 0.7;
 const BELOW_THRESHOLD = 0.6;
 const ABOVE_THRESHOLD = 0.8;
+const AGENT_INVOCATIONS = 100;
 
 afterEach(cleanup);
 
@@ -36,8 +37,8 @@ function compoundAlert(overrides: Partial<TriggeredAlert>): TriggeredAlert {
 function agentWithErrorRate(errorRate: number): AgentStat {
   return {
     agentName: 'alpha',
-    invocations: 10,
-    errors: 0,
+    invocations: AGENT_INVOCATIONS,
+    errors: Math.round(errorRate * AGENT_INVOCATIONS),
     errorRate,
     rateLimitCount: 0,
     avgOutputSize: 0,
