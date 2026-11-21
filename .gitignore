@@ -9,7 +9,6 @@ repomix-output.xml
 docs/repomix/
 
 .kv-sync-state.json
-scripts/.kv-sync-coverage.json
 scripts/.degradation-incidents.json
 scripts/.degradation-state.json
 worker-configuration.d.ts

@@ -27,9 +27,7 @@ import type { EvaluationResult } from '../../src/backends/index.js';
 import { loadDegradationState, saveDegradationState } from '../../src/lib/quality/qfe-backtest.js';
 import {
   kvSyncStateSchema,
-  coverageHeatmapSchema,
   type KvSyncEntry,
-  type CoverageHeatmap,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import {
   computeOrgKvEntries,
@@ -47,11 +45,10 @@ export type { KVEntry } from '../src/api/aggregates/kv-entry.js';
 export type { OrgComputation, OrgReadBackend } from '../src/api/aggregates/org-kv-entries.js';
 import {
   loadJsonWithValidationSafe,
-  loadJsonWithValidation,
   importMetaDirname,
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS } from '../src/lib/constants.js';
-import { BYTES, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
+import { BYTES, TIME_MS } from '../../src/lib/core/units.js';
 import { timestampToMs, extractFiniteScores } from '../src/api/api-constants.js';
 import { max, min } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
@@ -100,12 +97,8 @@ const { dryRun, maxDays, WRITE_BUDGET, MAX_WRITES_PER_RUN } = exitOnCliArgError(
 const MAX_DAYS_MS = maxDays * TIME_MS.DAY;
 
 const META_LAST_SYNC_KEY = 'meta:lastSync';
-const META_SYNC_COVERAGE_KEY = 'meta:syncCoverage';
 /** Hex chars of the sha256 kept as the delta-sync content hash. */
 const HASH_PREFIX_CHARS = 16;
-/** Coverage percentages keep two decimals. */
-const COVERAGE_PERCENT_FACTOR = 100;
-const COVERAGE_ROUND_SCALE = PERCENT_MULTIPLIER * COVERAGE_PERCENT_FACTOR;
 /** Score assigned to traces with no evaluations, so they sort last. */
 const UNEVALUATED_TRACE_SCORE = 1;
 /** Global (never org-prefixed) heartbeat for the session-less /api/health route (P4/P5). */
@@ -142,8 +135,6 @@ export const KV_BATCH_MAX_BYTES = 8 * BYTES.MB;
 /** Undefined under runners that don't provide import.meta.dirname (e.g. vitest transforms). */
 const SCRIPT_DIR = importMetaDirname(import.meta);
 const STATE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-state.json');
-/** Stores last computed coverage object so early-return path can refresh lastChecked. */
-const COVERAGE_FILE = join(SCRIPT_DIR ?? '.', '.kv-sync-coverage.json');
 /** Minimum budget reserved for trace writes regardless of higher-priority entries */
 export const MIN_TRACE_BUDGET = 100;
 /** Budget headroom above MIN_TRACE_BUDGET for meta and dashboard entries before a warning. */
@@ -186,25 +177,6 @@ function loadSyncState(): SyncState {
 
 function saveSyncState(state: SyncState): void {
   writeFileSync(STATE_FILE, JSON.stringify(Object.fromEntries(state)));
-}
-
-function loadLastCoverage(): CoverageHeatmap | null {
-  try {
-    return loadJsonWithValidation(COVERAGE_FILE, coverageHeatmapSchema);
-  } catch {
-    return null;
-  }
-}
-
-function saveLastCoverage(coverage: CoverageHeatmap): void {
-  writeFileSync(COVERAGE_FILE, JSON.stringify(coverage));
-}
-
-/** `part / whole` as a two-decimal percentage; an empty `whole` is full coverage. */
-function coveragePercent(part: number, whole: number): number {
-  return whole > 0
-    ? Math.round(part / whole * COVERAGE_ROUND_SCALE) / COVERAGE_PERCENT_FACTOR
-    : PERCENT_MULTIPLIER;
 }
 
 function entryHash(entry: KVEntry): string {
@@ -579,22 +551,12 @@ function buildMetaEntries(now: Date, orgIds: ReadonlyArray<string | null>): KVEn
   return metaEntries;
 }
 
-/**
- * Nothing changed: refresh the heartbeat keys (legacy, per-org and global system)
- * and the local sidecar's lastChecked, so it reflects this run.
- *
- * Updating meta:syncCoverage in KV here would burn 1 write per no-op run without
- * changing stable data; KV consumers read meta:lastSync to see when sync last ran.
- */
-async function refreshHeartbeatOnly(prevState: SyncState, metaEntries: KVEntry[], now: Date): Promise<void> {
+/** Nothing changed: refresh the heartbeat keys (legacy, per-org and global system), so they reflect this run. */
+async function refreshHeartbeatOnly(prevState: SyncState, metaEntries: KVEntry[]): Promise<void> {
   const staleMeta = filterChanged(metaEntries, prevState);
   if (staleMeta.length > 0) {
     recordWritten(prevState, staleMeta, await kvBulkPut(staleMeta));
     if (!dryRun) saveSyncState(prevState);
-  }
-  const prevCoverage = loadLastCoverage();
-  if (prevCoverage && !dryRun) {
-    saveLastCoverage({ ...prevCoverage, lastChecked: now.toISOString() });
   }
 }
 
@@ -611,62 +573,6 @@ async function pruneStaleKeys(newState: SyncState, computedKeys: ReadonlySet<str
   for (const key of staleKeys) {
     if (!failedDeletes.has(key)) newState.delete(key);
   }
-}
-
-/** Additional runs after this one needed to drain the trace backlog. */
-function runsRemaining(traceChangedCount: number, traceBudget: number): number | null {
-  if (traceBudget > 0) return Math.ceil(Math.max(0, traceChangedCount - traceBudget) / traceBudget);
-  return traceChangedCount > 0 ? null : 0;
-}
-
-/**
- * Write meta:syncCoverage, then persist it locally so the no-change path can
- * refresh lastChecked without recomputing.
- *
- * syncedTraces reflects best-known state from the local state file, not a
- * confirmed live KV scan: it may over-count if a prior write failed silently.
- */
-async function writeCoverage(args: {
-  newState: SyncState;
-  now: Date;
-  traceIds: readonly string[];
-  referencedTraceIds: ReadonlySet<string>;
-  traceChangedCount: number;
-  traceBudget: number;
-  deferred: number;
-}): Promise<void> {
-  const { newState, now, traceIds, referencedTraceIds, traceChangedCount, traceBudget, deferred } = args;
-  const syncedTraceKeys = [...newState.keys()].filter(k => k.startsWith(TRACE_KEY_PREFIX));
-  const syncedReferencedCount = syncedTraceKeys
-    .filter(k => referencedTraceIds.has(k.slice(TRACE_KEY_PREFIX.length))).length;
-  const coverage = {
-    totalTraces: traceIds.length,
-    syncedTraces: syncedTraceKeys.length,
-    coveragePercent: coveragePercent(syncedTraceKeys.length, traceIds.length),
-    referencedCoverage: coveragePercent(syncedReferencedCount, referencedTraceIds.size),
-    runsRemaining: runsRemaining(traceChangedCount, traceBudget),
-    /** Entries computed this run that were not written because they exceed the KV budget. */
-    deferred,
-    // timestamp: when stable coverage numbers were last computed/changed (not updated on no-op runs)
-    timestamp: now.toISOString(),
-    // lastChecked: when sync last ran regardless of whether data changed (refreshed even on no-op runs)
-    lastChecked: now.toISOString(),
-  };
-  // Exclude lastChecked (and timestamp) from the change-detection hash so a new timestamp alone
-  // does not burn a KV write every run. `deferred` is intentionally included — a change in the
-  // backlog size triggers a write so the latest count is always visible.
-  const { lastChecked: _lc, timestamp: _ts, ...stableCoverage } = coverage;
-  const coverageEntry: KVEntry = {
-    key: META_SYNC_COVERAGE_KEY,
-    value: toKVValue(coverage),
-    hashBasis: JSON.stringify(stableCoverage),
-  };
-  if (filterChanged([coverageEntry], newState).length > 0) {
-    const coverageWrittenKeys = await kvBulkPut([coverageEntry]);
-    recordWritten(newState, [coverageEntry], coverageWrittenKeys);
-    if (coverageWrittenKeys.has(coverageEntry.key) && !dryRun) saveSyncState(newState);
-  }
-  if (!dryRun) saveLastCoverage(coverage);
 }
 
 /**
@@ -720,7 +626,7 @@ async function main(): Promise<void> {
 
   if (changed.length === 0) {
     console.log(`[sync-to-kv] No-op: computed=${allEntries.length} unchanged=${allEntries.length} changed=0 written=0 deferred=0`);
-    await refreshHeartbeatOnly(prevState, metaEntries, now);
+    await refreshHeartbeatOnly(prevState, metaEntries);
     return;
   }
 
@@ -744,28 +650,14 @@ async function main(): Promise<void> {
   recordWritten(newState, toWrite, writtenKeys);
   const computedKeys = new Set(allEntries.map(e => e.key));
   for (const e of metaEntries) computedKeys.add(e.key);
-  computedKeys.add(META_SYNC_COVERAGE_KEY);
 
   await pruneStaleKeys(newState, computedKeys);
 
   if (!dryRun) saveSyncState(newState);
 
-  // Compute the final deferred count here — before coverage — so it can be
-  // surfaced in meta:syncCoverage where the dashboard or an alert can read it
-  // (KV-SYNC-DEFERRED-BACKLOG).
   const metaKeySet = new Set(metaEntries.map(e => e.key));
   const limitDeferred = toWrite.filter(e => !metaKeySet.has(e.key) && !writtenKeys.has(e.key)).length;
   const actualDeferred = deferred + limitDeferred;
-
-  await writeCoverage({
-    newState,
-    now,
-    traceIds,
-    referencedTraceIds,
-    traceChangedCount: traceChanged.length,
-    traceBudget,
-    deferred: actualDeferred,
-  });
 
   const writeCounter = writeScopeCounter(writtenKeys);
 

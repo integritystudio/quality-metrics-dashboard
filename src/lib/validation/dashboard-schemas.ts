@@ -29,7 +29,6 @@ export {
   kvSyncEntrySchema,
   kvSyncStateSchema,
   metricDetailValueSchema,
-  coverageHeatmapSchema,
 } from '@parent/lib/validation/dashboard-schemas.js';
 
 export type {
@@ -42,7 +41,6 @@ export type {
   KvSyncEntry,
   KvSyncState,
   MetricDetailValue,
-  CoverageHeatmap,
 } from '@parent/lib/validation/dashboard-schemas.js';
 
 // ---------- Dashboard-only schemas ----------
