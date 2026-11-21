@@ -137,7 +137,7 @@ function isValidId(id: string | undefined): id is string {
   return !!id && id.length <= MAX_PARAM_LEN && PARAM_RE.test(id);
 }
 
-// Reads a KV entry and unwraps the { v, data } version envelope written by sync-to-kv.ts.
+// Reads a KV entry and unwraps the { v, data } version envelope every KV writer uses (sync-to-kv.ts, derive's calibration publish, the parent's KV sync Workflow).
 // - Versioned entries (v === KV_SCHEMA_VERSION): returns data field.
 // - Version mismatch: logs a warning and returns null (stale cache treated as missing).
 // - Legacy entries (no envelope): passes through as-is for backwards compatibility.
@@ -696,7 +696,7 @@ app.get('/api/metrics/:name/evaluations', requirePermission(PERMISSION.read), va
   return c.json({ rows: page, total, limit, offset, hasMore: offset + limit < total });
 });
 
-// Written by scripts/sync-to-kv.ts (METRIC_DETAIL_KEY_PREFIX in src/api/aggregates/metric-detail.ts).
+// Written by the parent's KV sync Workflow (METRIC_DETAIL_KEY_PREFIX in src/api/aggregates/metric-detail.ts).
 // The Worker cannot import that module, so the prefix is restated here.
 const METRIC_DETAIL_KEY_PREFIX = 'metric:';
 
@@ -721,7 +721,7 @@ app.get('/api/metrics/:name', requirePermission(PERMISSION.read), validQuery(z.o
   return c.json(data);
 });
 
-// Written by scripts/sync-to-kv.ts (TREND_KEY_PREFIX in src/api/aggregates/trend.ts), restated as above.
+// Written by the parent's KV sync Workflow (TREND_KEY_PREFIX in src/api/aggregates/trend.ts), restated as above.
 const TREND_KEY_PREFIX = 'trend:';
 
 app.get('/api/trends/:name', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
@@ -910,7 +910,7 @@ app.get('/api/quality/live', requirePermission(PERMISSION.read), async (c) => {
 app.get('/api/calibration', requirePermission(PERMISSION.read), async (c) => {
   const raw = await getSessionKv<unknown>(c, 'meta:calibration');
   if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, HttpStatus.NotFound);
-  // KV can still hold a payload written by an older sync-to-kv; parse rather
+  // KV can still hold a payload written by an older derive publish; parse rather
   // than pass through, so drift surfaces here instead of in the frontend.
   const result = calibrationResponseSchema.safeParse(raw);
   if (!result.success) {

@@ -261,6 +261,31 @@ describe('POST /api/admin/keys/:keyId/rotate', () => {
     expect(JSON.parse(capturedFnInit?.body as string)).toEqual({ keyId: VALID_KEY_UUID, userId: MOCK_APP_USER_ID });
   });
 
+  it('audits the rotation with the key id under metadata.key_id, not role_id', async () => {
+    let auditBody: Record<string, unknown> | undefined;
+    fetchMock.mockImplementation(withOrgAdminAuth((url, init) => {
+      if (url.includes('/rest/v1/api_keys') && url.includes('id=eq.')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: VALID_KEY_UUID }]), { status: HttpStatus.Ok }));
+      }
+      if (url.includes('/functions/v1/api-keys-rotate')) {
+        return Promise.resolve(new Response(JSON.stringify({ token: 'obtk_x' }), { status: HttpStatus.Created }));
+      }
+      if (url.includes('/rest/v1/audit_log')) {
+        auditBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+        return Promise.resolve(new Response(null, { status: HttpStatus.Created }));
+      }
+      return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
+    }));
+    const pending: Array<Promise<unknown>> = [];
+    const ctx = { ...makeCtx(), waitUntil: (p: Promise<unknown>) => { pending.push(p); } } as ExecutionContext;
+
+    await app.request(`/api/admin/keys/${VALID_KEY_UUID}/rotate`, { method: 'POST', headers: authHeaders() }, makeEnv(), ctx);
+    await Promise.all(pending);
+
+    expect(auditBody).toMatchObject({ action: 'key.rotate', organization_id: MOCK_ORG_ID, metadata: { key_id: VALID_KEY_UUID } });
+    expect(auditBody?.metadata).not.toHaveProperty('role_id');
+  });
+
   it('returns 500 when the Supabase function fails', async () => {
     fetchMock.mockImplementation(withOrgAdminAuth((url) => {
       if (url.includes('/rest/v1/api_keys') && url.includes('id=eq.')) {

@@ -29,7 +29,7 @@ export type Bindings = {
   // Never set this in production wrangler.toml — leave absent.
   ALLOW_TEST_BYPASS?: string;
   // --- Org-scoped multi-tenancy (P5) ---
-  // Gates org resolution + getKv prefixing. Deployed 'false' until the P7 cutover.
+  // Gates org resolution + getKv prefixing. 'true' on all three workers (wrangler.toml).
   ORG_SCOPING_ENABLED?: string;
   // Org owning all pre-tenancy data. Non-empty on both production workers,
   // deliberately '' on quality-metrics-api-dev (must fail loudly, never resolve

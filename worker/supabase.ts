@@ -53,24 +53,28 @@ async function insertAndForget(env: SupabaseEnv, table: string, row: Record<stri
 
 export type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'member.remove' | 'key.rotate';
 
-type AuditDetails = { roleId?: string; organizationId?: string };
+type AuditDetails = { roleId?: string; keyId?: string; organizationId?: string };
 
 // Fire-and-forget: logs a sensitive admin mutation by the session user to audit_log without
 // blocking the response. No-ops without an app user; callers fire it only on success.
 // organizationId (P6): org-admin mutations always record session.activeOrgId, so an
 // audit row can never claim a scope the mutation did not have. organization_id exists
 // since 20260320020000_create_phase2_ledger_tables.sql.
-export function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: string, { roleId, organizationId }: AuditDetails = {}): void {
+export function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: string, { roleId, keyId, organizationId }: AuditDetails = {}): void {
   const actorUserId = c.get('session').appUserId;
   if (!actorUserId) return;
+  const metadata = {
+    ...(roleId !== undefined && { role_id: roleId }),
+    ...(keyId !== undefined && { key_id: keyId }),
+  };
   c.executionCtx.waitUntil(insertAndForget(c.env, 'audit_log', {
     actor_user_id: actorUserId,
     action,
-    // target_type and target_id are NOT NULL columns; role_id is not a column —
-    // carry it in metadata for role.assign / role.revoke actions.
+    // target_type and target_id are NOT NULL columns; role_id and key_id are not
+    // columns, so they ride in metadata.
     target_type: 'user',
     target_id: targetUserId,
-    ...(roleId !== undefined && { metadata: { role_id: roleId } }),
+    ...(Object.keys(metadata).length > 0 && { metadata }),
     ...(organizationId !== undefined && { organization_id: organizationId }),
   }));
 }

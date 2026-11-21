@@ -327,7 +327,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     }
 
     const result: unknown = await fnRes.json().catch(() => null);
-    logAuditEvent(c, 'key.rotate', appUserId, { roleId: keyId, organizationId: orgId });
+    logAuditEvent(c, 'key.rotate', appUserId, { keyId, organizationId: orgId });
     // Return the function's response verbatim. Cache-Control: private, no-store
     // is already set by the /api/* middleware; the token must not be logged.
     return c.json(result, HttpStatus.Ok);
