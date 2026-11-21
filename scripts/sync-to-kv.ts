@@ -35,7 +35,7 @@ import {
   type OrgComputation,
   type OrgReadBackend,
 } from '../src/api/aggregates/org-kv-entries.js';
-import { isWorkflowOwnedKey, toKVValue, type KVEntry } from '../src/api/aggregates/kv-entry.js';
+import { DEGRADATION_KV_KEY, isWorkflowOwnedKey, toKVValue, type KVEntry } from '../src/api/aggregates/kv-entry.js';
 import { TRACE_EVALS_KEY_PREFIX, TRACE_KEY_PREFIX } from '../src/api/aggregates/trace-entries.js';
 export { buildCalibrationEntry, QUERY_LIMIT } from '../src/api/aggregates/org-kv-entries.js';
 export { addRecentSession } from '../src/api/aggregates/session-entries.js';
@@ -458,11 +458,11 @@ async function discoverOrgIds(now: Date): Promise<string[]> {
 
 /**
  * One org's entries with the owner-local inputs this script holds: derive's
- * calibration state and the degradation breach history beside the script,
- * both read, and the latter written, for the home org alone.
+ * degradation breach history beside the script, read and written for the
+ * home org alone, and only while the CLI writes the signals.
  */
 export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
-  const stateDir = isHome ? (SCRIPT_DIR ?? '') : '';
+  const stateDir = isHome && !isWorkflowOwnedKey(`${DEGRADATION_KV_KEY}:`) ? (SCRIPT_DIR ?? '') : '';
   const degradationState = stateDir ? loadDegradationState(stateDir) : undefined;
   const result = await computeOrgKvEntries(backend, now, {
     maxDays,

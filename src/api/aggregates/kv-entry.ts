@@ -14,6 +14,9 @@ const LOG_PREFIX = '[kv-entry]';
 /** `hashBasis`, when set, is what change detection hashes instead of `value`. */
 export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
 
+/** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
+export const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
+
 /**
  * The key families the Workflow writes and the CLI no longer does, as each
  * logical key's prefix (no `org:<id>:`). Both writers read this one list, so a
@@ -21,7 +24,7 @@ export type KVEntry = { key: string; value: string; expirationTtl?: number; hash
  * CLI's next run, and the Workflow takes it at its next deploy. Deploy the
  * Workflow after the CLI picks the change up, never before, or both write it.
  */
-export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:', 'dashboard:', 'metric:', 'trend:'];
+export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:', 'dashboard:', 'metric:', 'trend:', `${DEGRADATION_KV_KEY}:`];
 
 /** Whether the Workflow is the writer of this logical key (org prefix already stripped). */
 export function isWorkflowOwnedKey(logicalKey: string, families: readonly string[] = WORKFLOW_OWNED_FAMILIES): boolean {

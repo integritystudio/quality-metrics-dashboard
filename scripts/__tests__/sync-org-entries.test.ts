@@ -17,8 +17,8 @@ import {
 } from '../sync-to-kv.js';
 import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
+import { CODE_QUALITY_KV_KEY } from '../../src/api/code-quality-summary.js';
 import { computeOrgKvEntries } from '../../src/api/aggregates/org-kv-entries.js';
-import { DEGRADATION_KV_KEY } from '../../src/api/aggregates/evaluation-entries.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -430,7 +430,7 @@ describe('computeOrgEntries families handed over to the Workflow', () => {
     const result = await computeOrgEntries(fakeBackend([evaluation('recent', '2026-10-08T00:00:00.000Z')]), NOW, false);
 
     const keys = result.allEntries.map(entry => entry.key);
-    expect(keys).toContain(`${DEGRADATION_KV_KEY}:24h`);
+    expect(keys).toContain(CODE_QUALITY_KV_KEY);
     expect(keys.filter(key => WORKFLOW_OWNED_FAMILIES.some(prefix => key.startsWith(prefix)))).toEqual([]);
   });
 });

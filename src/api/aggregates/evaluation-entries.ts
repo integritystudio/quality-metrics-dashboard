@@ -15,7 +15,7 @@ import { computeCorrelations } from './correlations.js';
 import { computeCoverage, type CoverageRow } from './coverage.js';
 import type { DashboardEntries } from './dashboard-summary.js';
 import { projectEvaluationRow } from './evaluation-rows.js';
-import { dashboardEntry, toKVValue, type KVEntry } from './kv-entry.js';
+import { DEGRADATION_KV_KEY, dashboardEntry, toKVValue, type KVEntry } from './kv-entry.js';
 import { computeMetricDetailFromBaseline, metricDetailKey, type QualityMetricConfig } from './metric-detail.js';
 import { computeTrend, trendKey } from './trend.js';
 
@@ -122,9 +122,6 @@ export function trendEntry(
   const { view, buckets } = computeTrend(name, evaluations, config, { period, bucketCount: DEFAULT_TREND_BUCKETS, now });
   return { entry: { key: trendKey(name, period), value: toKVValue(view) }, degradation: prepareDegradationInput(name, buckets) };
 }
-
-/** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
-export const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
 
 /** One period's prepared degradation inputs, in metric order. */
 export type PeriodDegradation = { period: Period; prepared: PreparedDegradation[] };
