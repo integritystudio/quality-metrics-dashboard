@@ -68,8 +68,11 @@ const AdminCustomerUsagePage = lazyWithReload(async () => import('./pages/admin-
 const AdminCustomerQuotaPage = lazyWithReload(async () => import('./pages/admin-customer/AdminCustomerQuotaPage.js').then(m => ({ default: m.AdminCustomerQuotaPage })));
 const AdminCustomerEntitlementsPage = lazyWithReload(async () => import('./pages/admin-customer/AdminCustomerEntitlementsPage.js').then(m => ({ default: m.AdminCustomerEntitlementsPage })));
 
-function ChartSkeleton() {
-  return <div className="skeleton skeleton-chart" />;
+type SkeletonSize = 'chart' | 'md' | 'xl';
+
+/** Loading placeholder; `card` gives it a card's frame when nothing encloses it. */
+function Skeleton({ size, card = false }: { size: SkeletonSize; card?: boolean }) {
+  return <div className={`${card ? 'card ' : ''}skeleton skeleton-${size}`} />;
 }
 
 const VALID_ROLES: readonly RoleViewType[] = ROLES;
@@ -191,7 +194,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
     return (
       <div>
         <Link href="/" className="back-link inline-flex-center">&larr; Back to dashboard</Link>
-        <div className="card skeleton skeleton-md" />
+        <Skeleton card size="md" />
       </div>
     );
   }
@@ -247,7 +250,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
 
       <ViewSection title="Trend">
         <div className="card">
-          <Suspense fallback={<ChartSkeleton />}>
+          <Suspense fallback={<Skeleton size="chart" />}>
             <TrendChart
               trend={detail.trend}
               dynamics={(detail as MetricDetailResult & { dynamics?: MetricDynamics }).dynamics}
@@ -267,7 +270,7 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           )}
         </>}>
           <div className="card">
-            <Suspense fallback={<ChartSkeleton />}>
+            <Suspense fallback={<Skeleton size="chart" />}>
               <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
             </Suspense>
           </div>
@@ -319,7 +322,7 @@ function StaffRoute({ children }: { children: ReactNode }) {
   return (
     <RouteBoundary>
       <StaffGuard>
-        <Suspense fallback={<div className="card skeleton skeleton-md" />}>{children}</Suspense>
+        <Suspense fallback={<Skeleton card size="md" />}>{children}</Suspense>
       </StaffGuard>
     </RouteBoundary>
   );
@@ -486,7 +489,7 @@ export function App() {
                           </Route>
                           <Route path="/correlations">
                             <RouteBoundary>
-                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                              <Suspense fallback={<Skeleton card size="md" />}>
                                 <CorrelationsPage period={period} />
                               </Suspense>
                             </RouteBoundary>
@@ -540,7 +543,7 @@ export function App() {
                           <Route path="/workflows/:sessionId">
                             {(params) => (
                               <RouteBoundary>
-                                <Suspense fallback={<div className="card skeleton skeleton-xl" />}>
+                                <Suspense fallback={<Skeleton card size="xl" />}>
                                   <WorkflowPage sessionId={params.sessionId} />
                                 </Suspense>
                               </RouteBoundary>
