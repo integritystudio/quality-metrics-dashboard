@@ -1,6 +1,7 @@
 /**
- * Components whose colour comes from their own `data-status`: theme.css maps
- * the attribute to `--s-fg`, so the attribute value is the rendered colour.
+ * Components coloured by a status. Most carry their own `data-status`, which
+ * theme.css maps to `--s-fg`; AgentActivitySummary renders a `text-<status>`
+ * class through StatDisplay instead.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
@@ -93,15 +94,15 @@ describe('AgentActivityPanel error rate', () => {
 
 describe('AgentActivitySummary error rate', () => {
   it.each([
-    { name: 'no errors', errorRate: 0, toneClass: 'text-healthy' },
-    { name: 'a rate under the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD / 2, toneClass: 'text-warning' },
-    { name: 'a rate on the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD, toneClass: 'text-critical' },
-    { name: 'a rate over the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD * 2, toneClass: 'text-critical' },
-  ])('tones $name as $toneClass', ({ errorRate, toneClass }) => {
+    { name: 'no errors', errorRate: 0, status: 'healthy' },
+    { name: 'a rate under the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD / 2, status: 'warning' },
+    { name: 'a rate on the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD, status: 'critical' },
+    { name: 'a rate over the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD * 2, status: 'critical' },
+  ])('tones $name as $status', ({ errorRate, status }) => {
     render(<AgentActivitySummary agents={[agentWithErrorRate(errorRate)]} />);
 
     const value = screen.getByText('Error Rate').parentElement?.querySelector('.value');
-    expect(value).toHaveClass(toneClass);
+    expect(value).toHaveClass(`text-${status}`);
   });
 });
 
