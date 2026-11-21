@@ -20,6 +20,8 @@
  */
 
 import type { EvaluationResult } from '../../src/backends/index.js';
+import type { CloudTurn } from '../../src/backends/cloud.js';
+import type { TurnContentRecord } from '../../src/lib/validation/api-schemas.js';
 import { IDENTITY_KEY_REF_FIELD, indexSpanRecords, type AccountIndex } from './account-index.js';
 import { dateScopeBounds, loadCloudSpans, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
 import { msToNs, nsToMs } from './hrt.js';
@@ -27,10 +29,13 @@ import { toDateOnly } from '../src/api/api-constants.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
 import { turnKeyOf, addJudgedKey } from './judge-dedup.js';
-import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo } from './judge-turns.js';
+import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo, type Turn } from './judge-turns.js';
 
 /** Every producer the judge has written under: per-criterion and consolidated. */
 const JUDGE_PRODUCERS = [PRODUCER, CONSOLIDATED_PRODUCER] as const;
+
+/** Upper bound on shipped turns read per account; a week holds ~2,000. */
+const CLOUD_TURN_LIMIT = 50_000;
 
 /** Upper bound on evaluation rows held per account and producer; a run writes ~500. */
 const CLOUD_EVALUATION_LIMIT = 200_000;
@@ -149,4 +154,48 @@ export async function discoverFromCloud(
   const existingKeys = judgedKeys(await loadJudgedRows(dateScopeBounds(dates).fromMs, env));
   console.log(`${CLI_PREFIX} sessions=${accounts.sessionSpans.size} withTranscript=${transcripts.length} withoutTranscript=${missing} judgedKeys=${existingKeys.size}`);
   return { transcripts, accounts, existingKeys, sessionsWithoutTranscript: missing };
+}
+
+/**
+ * A shipped turn as the judge reads it. Account and span are left for
+ * `anchorTurns`, exactly as for a turn read from a transcript.
+ */
+export function turnFromRecord(record: TurnContentRecord): Turn {
+  return {
+    sessionId: record.sessionId,
+    traceId: record.traceId ?? '',
+    timestamp: record.timestamp,
+    userText: record.userText,
+    assistantText: record.assistantText,
+    toolResults: record.toolContext,
+    ...(record.responseId && { responseId: record.responseId }),
+  };
+}
+
+/** Turns from shipped rows, one per turn key, and how many rows had lost their text. */
+export function turnsFromCloudRows(rows: Iterable<CloudTurn>): { turns: Turn[]; withoutContent: number } {
+  const byKey = new Map<string, Turn>();
+  let withoutContent = 0;
+  for (const row of rows) {
+    if (row.content === null) { withoutContent++; continue; }
+    if (!byKey.has(row.turnKey)) byKey.set(row.turnKey, turnFromRecord(row.content));
+  }
+  return { turns: [...byKey.values()], withoutContent };
+}
+
+/**
+ * The redacted turns every account's org holds for `dates` (`GET /v1/turns`),
+ * shipped by `ship-turn-content`: the `--content=cloud` alternative to reading
+ * transcripts on this machine.
+ */
+export async function turnsFromCloud(dates: ReadonlySet<string>, env: NodeJS.ProcessEnv = process.env): Promise<Turn[]> {
+  const { fromMs, toMs } = dateScopeBounds(dates);
+  const perAccount = await queryEachAccount(
+    env,
+    { limit: CLOUD_TURN_LIMIT, rows: 'shipped turns', truncates: 'the turn set', logPrefix: CLI_PREFIX },
+    async (backend) => backend.queryTurns({ startDate: msToNs(fromMs), endDate: msToNs(toMs), limit: CLOUD_TURN_LIMIT }),
+  );
+  const { turns, withoutContent } = turnsFromCloudRows(perAccount.flatMap(({ rows }) => rows));
+  console.log(`${CLI_PREFIX} shippedTurns=${turns.length} withoutContent=${withoutContent}`);
+  return turns;
 }

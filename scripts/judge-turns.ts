@@ -11,6 +11,7 @@ import { streamJsonlWithValidation } from '../src/lib/dashboard-file-utils.js';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-index.js';
 import type { EvalRecord } from './eval-record.js';
+import { turnContentKey } from '../../src/lib/validation/api-schemas.js';
 import { HOME } from './evaluation-constants.js';
 
 
@@ -64,7 +65,7 @@ export function turnSourceFields(turn: Turn): Pick<EvalRecord, 'identityKeyRef' 
 }
 
 export function turnKey(turn: { sessionId: string; timestamp: string }): string {
-  return `${turn.sessionId}|${turn.timestamp}`;
+  return turnContentKey(turn.sessionId, turn.timestamp);
 }
 
 /**
