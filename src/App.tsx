@@ -18,11 +18,8 @@ import { ScoreHistogram } from './components/ScoreHistogram.js';
 import { EvaluationDetail } from './components/EvaluationDetail.js';
 import type { EvalRow } from './components/EvaluationTable.js';
 import { StatusBadge, TrendIndicator, ConfidenceBadge } from './components/Indicators.js';
-import { TrendChart } from './components/TrendChart.js';
-import { TrendSeries } from './components/TrendSeries.js';
 import { ConfidencePanel } from './components/ConfidencePanel.js';
 import { ViewSection } from './components/Section.js';
-import { CorrelationsPage } from './pages/CorrelationsPage.js';
 import { CoveragePage } from './pages/CoveragePage.js';
 import { PipelinePage } from './pages/PipelinePage.js';
 import { QualityLivePage } from './pages/QualityLivePage.js';
@@ -57,6 +54,11 @@ import type {
   MetricDynamics,
 } from './types.js';
 
+// recharts is the entry chunk's largest dependency, so everything that draws a chart loads on demand.
+const TrendChart = lazyWithReload(async () => import('./components/TrendChart.js').then(m => ({ default: m.TrendChart })));
+const TrendSeries = lazyWithReload(async () => import('./components/TrendSeries.js').then(m => ({ default: m.TrendSeries })));
+const CorrelationsPage = lazyWithReload(async () => import('./pages/CorrelationsPage.js').then(m => ({ default: m.CorrelationsPage })));
+
 const WorkflowPage = lazyWithReload(async () => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 
 // The admin customer view is staff-only, so its five screens load on demand.
@@ -65,6 +67,10 @@ const AdminCustomerBillingPage = lazyWithReload(async () => import('./pages/admi
 const AdminCustomerUsagePage = lazyWithReload(async () => import('./pages/admin-customer/AdminCustomerUsagePage.js').then(m => ({ default: m.AdminCustomerUsagePage })));
 const AdminCustomerQuotaPage = lazyWithReload(async () => import('./pages/admin-customer/AdminCustomerQuotaPage.js').then(m => ({ default: m.AdminCustomerQuotaPage })));
 const AdminCustomerEntitlementsPage = lazyWithReload(async () => import('./pages/admin-customer/AdminCustomerEntitlementsPage.js').then(m => ({ default: m.AdminCustomerEntitlementsPage })));
+
+function ChartSkeleton() {
+  return <div className="skeleton skeleton-md" />;
+}
 
 const VALID_ROLES: readonly RoleViewType[] = ROLES;
 
@@ -241,13 +247,15 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
 
       <ViewSection title="Trend">
         <div className="card">
-          <TrendChart
-            trend={detail.trend}
-            dynamics={(detail as MetricDetailResult & { dynamics?: MetricDynamics }).dynamics}
-            warningThreshold={detail.alerts.find(a => a.severity === 'warning')?.threshold}
-            criticalThreshold={detail.alerts.find(a => a.severity === 'critical')?.threshold}
-            metricName={detail.displayName}
-          />
+          <Suspense fallback={<ChartSkeleton />}>
+            <TrendChart
+              trend={detail.trend}
+              dynamics={(detail as MetricDetailResult & { dynamics?: MetricDynamics }).dynamics}
+              warningThreshold={detail.alerts.find(a => a.severity === 'warning')?.threshold}
+              criticalThreshold={detail.alerts.find(a => a.severity === 'critical')?.threshold}
+              metricName={detail.displayName}
+            />
+          </Suspense>
         </div>
       </ViewSection>
 
@@ -259,7 +267,9 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           )}
         </>}>
           <div className="card">
-            <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
+            <Suspense fallback={<ChartSkeleton />}>
+              <TrendSeries data={trendData.trendData} metricName={detail.displayName} />
+            </Suspense>
           </div>
         </ViewSection>
       )}
@@ -476,7 +486,9 @@ export function App() {
                           </Route>
                           <Route path="/correlations">
                             <RouteBoundary>
-                              <CorrelationsPage period={period} />
+                              <Suspense fallback={<div className="card skeleton skeleton-md" />}>
+                                <CorrelationsPage period={period} />
+                              </Suspense>
                             </RouteBoundary>
                           </Route>
                           <Route path="/coverage">
