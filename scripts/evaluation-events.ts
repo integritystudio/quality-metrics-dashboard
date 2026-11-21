@@ -32,7 +32,7 @@ import { EVALUATION_SERVICE_NAME } from './evaluation-delivery.js';
 
 type HrTime = [seconds: number, nanoseconds: number];
 
-/** The hooks' `ExportedLog` fields this writer sets (`hooks/lib/otel/otel.ts`). */
+/** The hooks' `ExportedLog` fields this writer sets (`hooks/lib/otel/file-exporters.ts`). */
 export type EvaluationEventLine = {
   timestamp: HrTime;
   observedTimestamp: HrTime;
