@@ -58,7 +58,7 @@ function PipelineFunnelInner({ stages, dropoffs, overallConversionPercent }: Pip
               {showDropoff && (
                 <div
                   className="text-xs funnel-dropoff"
-                  data-warn={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT || undefined}
+                  data-status={dropoff.dropoffPercent > FUNNEL_DROPOFF_WARN_PCT ? 'warning' : 'info'}
                 >
                   {'\u2193'} -{dropoff.dropped.toLocaleString()} ({formatPercent(dropoff.dropoffPercent)} drop)
                 </div>

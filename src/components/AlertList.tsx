@@ -39,7 +39,7 @@ function ThresholdBar({ actual, threshold, direction }: {
     <div className="threshold-bar" aria-label={`Actual: ${formatScore(actual)}, Threshold: ${formatScore(threshold)}`}>
       <div
         className="threshold-bar-fill"
-        data-violating={isViolating || undefined}
+        data-status={isViolating ? 'critical' : 'healthy'}
         style={{ '--bar-fill-width': `${actualPct}%` } as CSSProperties}
       />
       <div

@@ -21,6 +21,12 @@ type ConfidencePanelProps = {
   evaluatorScores?: EvaluatorScore[];
 }
 
+const LEVEL_STATUS: Record<ConfidenceIndicator['level'], 'healthy' | 'warning' | 'critical'> = {
+  high: 'healthy',
+  medium: 'warning',
+  low: 'critical',
+};
+
 function levelShape(level: string): string {
   if (level === 'high') return '\u25CF'; // ●
   if (level === 'medium') return '\u25D0'; // ◐
@@ -84,7 +90,7 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
   return (
     <div className="text-xs">
       <div className="confidence-header flex-center">
-        <span className="text-base confidence-level-indicator" data-level={level}>
+        <span className="text-base confidence-level-indicator" data-status={LEVEL_STATUS[level]}>
           {levelShape(level)} {level}
         </span>
         <span className="confidence-method">({method})</span>

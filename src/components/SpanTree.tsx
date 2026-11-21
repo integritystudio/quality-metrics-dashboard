@@ -81,14 +81,14 @@ function SpanRow({ node, depth, maxDuration }: { node: SpanNode; depth: number; 
         className="flex-center gap-2 border-b span-row"
         style={{ '--span-row-indent': `${depth * SPAN_TREE_INDENT + SPAN_TREE_BASE_PADDING}px` } as CSSProperties}
       >
-        <span className="text-base span-status-icon" data-error={isError || undefined}>
+        <span className="text-base span-status-icon" data-status={isError ? 'critical' : undefined}>
           {STATUS_ICONS[statusCode]}
         </span>
         <div className="flex-1">
           <div className="text-xs font-medium">{node.name}</div>
           <div className="flex-center gap-2">
             <div className="flex-1 bar-track">
-              <div className="span-bar" data-error={isError || undefined} style={barStyle} />
+              <div className="span-bar" data-status={isError ? 'critical' : 'healthy'} style={barStyle} />
             </div>
             {node.durationMs != null && (
               <span className="mono-xs text-secondary nowrap">

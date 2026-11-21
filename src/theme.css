@@ -311,6 +311,15 @@ body {
 [data-status="no_data"]  { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--status-no-data); }
 [data-status="info"]     { --s-bg: var(--bg-elevated);         --s-border: var(--border);                  --s-fg: var(--text-secondary); }
 
+/* Elements coloured by their own data-status */
+.agent-err-rate,
+.sla-gap-cell,
+.confidence-level-indicator,
+.funnel-dropoff,
+.span-status-icon[data-status] { color: var(--s-fg); }
+.span-bar,
+.threshold-bar-fill { background: var(--s-fg); }
+
 /* Score band color tokens — applied via data-band attribute */
 [data-band="excellent"] { --band-fg: var(--score-excellent); }
 [data-band="good"]      { --band-fg: var(--score-good); }
@@ -431,8 +440,6 @@ body {
 .sla-table th,
 .sla-table td { padding: var(--space-2) var(--space-3); }
 .sla-table .col-agent { width: 30%; }
-.sla-gap-cell { color: var(--status-healthy); }
-.sla-gap-cell[data-noncompliant] { color: var(--status-critical); }
 
 /* Pipeline T2 sampling stage notice */
 .t2-stage-notice {
@@ -913,16 +920,13 @@ details[open] > .cot-summary::before {
   padding-left: var(--span-row-indent, 0);
 }
 .span-status-icon { color: var(--text-primary); }
-.span-status-icon[data-error] { color: var(--status-critical); }
 .span-bar {
   height: var(--space-1);
   width: var(--span-bar-width);
   min-width: var(--span-bar-min-width, 0);
-  background: var(--status-healthy);
   border-radius: var(--radius-xs);
   margin-top: var(--space-1);
 }
-.span-bar[data-error] { background: var(--status-critical); }
 .quality-live-bar {
   flex-wrap: wrap;
   padding: var(--space-1-5) var(--space-3);
@@ -980,9 +984,6 @@ details[open] > .cot-summary::before {
 }
 .agent-inv-count { min-width: var(--space-8); }
 .agent-dot { background: var(--agent-color, var(--border)); }
-.agent-err-rate { color: var(--status-critical); }
-.agent-err-rate[data-err-status="ok"] { color: var(--status-healthy); }
-.agent-err-rate[data-err-status="warn"] { color: var(--status-warning); }
 .score-band { color: var(--band-fg); }
 
 /* Minimum width for inline score value labels */
@@ -1035,10 +1036,8 @@ details[open] > .cot-summary::before {
   height: 100%;
   width: var(--bar-fill-width);
   border-radius: var(--radius-bar);
-  background: var(--status-healthy);
   transition: var(--transition-bar);
 }
-.threshold-bar-fill[data-violating] { background: var(--status-critical); }
 .threshold-bar-marker {
   position: absolute;
   top: -3px;
@@ -1072,14 +1071,10 @@ details[open] > .cot-summary::before {
   min-width: 40px;
   height: 32px;
 }
-/* Funnel drop-off indicator — color driven by data-warn attribute */
+/* Funnel drop-off indicator */
 .funnel-dropoff {
   padding-left: var(--space-2-5);
   margin: var(--space-0-5) 0;
-  color: var(--text-secondary);
-}
-.funnel-dropoff[data-warn] {
-  color: var(--status-warning);
 }
 
 /* Worst explanation preview on MetricCard */
@@ -1133,9 +1128,6 @@ details[open] > .cot-summary::before {
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.confidence-level-indicator { color: var(--score-failing); }
-.confidence-level-indicator[data-level="high"] { color: var(--score-excellent); }
-.confidence-level-indicator[data-level="medium"] { color: var(--score-adequate); }
 .agreement-value { color: var(--band-fg, var(--score-failing)); }
 .agreement-grid .ag-header {
   color: var(--text-muted);

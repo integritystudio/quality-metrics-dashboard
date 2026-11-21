@@ -26,7 +26,7 @@ export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
             <td className="mono">
               {formatScore(sla.actualValue)}
             </td>
-            <td className="mono sla-gap-cell" data-noncompliant={(sla.gap !== null && !sla.compliant) || undefined}>
+            <td className="mono sla-gap-cell" data-status={sla.gap !== null && !sla.compliant ? 'critical' : 'healthy'}>
               {sla.gap !== null ? (sla.gap >= 0 ? '+' : '') + formatScore(sla.gap) : '-'}
             </td>
             <td><StatusBadge status={sla.status} /></td>

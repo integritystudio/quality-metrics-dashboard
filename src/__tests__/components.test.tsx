@@ -266,10 +266,10 @@ describe('SLATable', () => {
     expect(screen.getByText('N/A')).toBeInTheDocument();
   });
 
-  it('renders non-compliant gap with data-noncompliant attribute', () => {
+  it('marks a non-compliant gap as critical', () => {
     const slas = [makeSLA({ compliant: false, gap: -0.1, status: 'non_compliant' })];
     render(<SLATable slas={slas} />);
     const gapCell = screen.getByText('-0.1000');
-    expect(gapCell.closest('td')).toHaveAttribute('data-noncompliant');
+    expect(gapCell.closest('td')).toHaveAttribute('data-status', 'critical');
   });
 });

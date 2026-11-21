@@ -84,12 +84,6 @@ function errorRateTone(rate: number): StatTone {
   return 'critical';
 }
 
-/** Error-rate band behind the cell's `data-err-status`. */
-function errorStatus(rate: number): 'ok' | 'warn' | 'critical' {
-  if (rate === 0) return 'ok';
-  return rate < ERROR_RATE_WARNING_THRESHOLD ? 'warn' : 'critical';
-}
-
 /** The source type that accounts for the most invocations, if the agent records any. */
 function topSourceType(sourceTypes: AgentStat['sourceTypes']): string | undefined {
   return greatest(Object.entries(sourceTypes), ([, count]) => count)?.[0];
@@ -151,7 +145,7 @@ function AgentActivityRow({ agent, color, maxInvocations, isExpanded, onToggle }
   isExpanded: boolean;
   onToggle: (agentName: string) => void;
 }): ReactNode {
-  const errStatus = errorStatus(agent.errorRate);
+  const errStatus = errorRateTone(agent.errorRate);
   const invPct = percentOf(agent.invocations, maxInvocations);
   const topSource = topSourceType(agent.sourceTypes);
   const hasLinks = agent.sessionIds.length > 0 || agent.traceIds.length > 0;
@@ -189,7 +183,7 @@ function AgentActivityRow({ agent, color, maxInvocations, isExpanded, onToggle }
 
         <td>
           <div className="flex-center gap-1-5">
-            <span className="mono-xs agent-err-rate" data-err-status={errStatus}>
+            <span className="mono-xs agent-err-rate" data-status={errStatus}>
               {agent.errors > 0 ? formatPercent(agent.errorRate * PERCENT_MULTIPLIER) : '\u2014'}
             </span>
             {agent.errors > 0 && (
