@@ -121,6 +121,8 @@
   --workflow-legend-inset: 120px;
   --split-pane-min-height: 300px;
   --skeleton-md-height: 300px;
+  /* Matches CHART_HEIGHT in src/lib/constants.ts */
+  --chart-height: 200px;
 
   /* Status tints (bg + border pairs) */
   --bg-status-healthy: #0d1f12;
@@ -1747,6 +1749,9 @@ summary.section-rail {
 }
 .skeleton-md {
   height: var(--skeleton-md-height);
+}
+.skeleton-chart {
+  height: var(--chart-height);
 }
 .skeleton-xl {
   height: 600px;

@@ -69,7 +69,7 @@ const AdminCustomerQuotaPage = lazyWithReload(async () => import('./pages/admin-
 const AdminCustomerEntitlementsPage = lazyWithReload(async () => import('./pages/admin-customer/AdminCustomerEntitlementsPage.js').then(m => ({ default: m.AdminCustomerEntitlementsPage })));
 
 function ChartSkeleton() {
-  return <div className="skeleton skeleton-md" />;
+  return <div className="skeleton skeleton-chart" />;
 }
 
 const VALID_ROLES: readonly RoleViewType[] = ROLES;
