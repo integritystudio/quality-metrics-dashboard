@@ -5,7 +5,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { AlertList } from '../components/AlertList.js';
-import { AgentActivityPanel } from '../components/AgentActivityPanel.js';
+import { AgentActivityPanel, AgentActivitySummary } from '../components/AgentActivityPanel.js';
 import { ConfidencePanel } from '../components/ConfidencePanel.js';
 import { PipelineFunnel } from '../components/PipelineFunnel.js';
 import { SpanTree } from '../components/SpanTree.js';
@@ -88,6 +88,20 @@ describe('AgentActivityPanel error rate', () => {
     const { container } = render(<AgentActivityPanel agents={[agentWithErrorRate(errorRate)]} />);
 
     expect(container.querySelector('.agent-err-rate')).toHaveAttribute('data-status', status);
+  });
+});
+
+describe('AgentActivitySummary error rate', () => {
+  it.each([
+    { name: 'no errors', errorRate: 0, toneClass: 'text-healthy' },
+    { name: 'a rate under the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD / 2, toneClass: 'text-warning' },
+    { name: 'a rate on the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD, toneClass: 'text-critical' },
+    { name: 'a rate over the warning threshold', errorRate: ERROR_RATE_WARNING_THRESHOLD * 2, toneClass: 'text-critical' },
+  ])('tones $name as $toneClass', ({ errorRate, toneClass }) => {
+    render(<AgentActivitySummary agents={[agentWithErrorRate(errorRate)]} />);
+
+    const value = screen.getByText('Error Rate').parentElement?.querySelector('.value');
+    expect(value).toHaveClass(toneClass);
   });
 });
 
