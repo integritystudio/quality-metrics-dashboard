@@ -6,8 +6,7 @@ import {
   buildCalibrationEntry,
   buildTraceEntries,
   cliOwnedEntries,
-  forgetWorkflowOwnedKeys,
-  loadCalibrationEntry,
+  forgetHandedOverKeys,
   orgPrefixedKey,
   ORG_KEY_PREFIX_RE,
   KV_ENTRY_TTL_DAYS,
@@ -16,6 +15,8 @@ import {
   toKVValue,
   KV_ENTRY_TTL_SECONDS,
 } from '../sync-to-kv.js';
+import { calibrationEntries, loadCalibrationEntry } from '../publish-calibration.js';
+import { META_CALIBRATION_KEY } from '../../src/api/aggregates/org-kv-entries.js';
 import { saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
@@ -319,7 +320,7 @@ describe('loadCalibrationEntry', () => {
     vi.stubEnv('TELEMETRY_DIR', dir);
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.resetModules();
-    const { loadCalibrationEntry: loadFromDefaultDir } = await import('../sync-to-kv.js');
+    const { loadCalibrationEntry: loadFromDefaultDir } = await import('../publish-calibration.js');
     const { CALIBRATION_STATE_DIR: deriveDir } = await import('../evaluation-constants.js');
     expect(deriveDir.startsWith(dir)).toBe(true);
     mkdirSync(deriveDir, { recursive: true });
@@ -333,15 +334,17 @@ describe('loadCalibrationEntry', () => {
 
 describe('families handed over to the Workflow', () => {
   const ORG_ID = '11111111-1111-4111-8111-111111111111';
-  const handedOver = WORKFLOW_OWNED_FAMILIES.map(prefix => `${prefix}7d`);
+  const workflowOwned = WORKFLOW_OWNED_FAMILIES.map(prefix => `${prefix}7d`);
   const KEPT_KEYS = ['dashboard:7d', 'metric:relevance:7d', 'trace:abc', 'meta:lastSync'];
+  /** derive publishes it now, so the sync treats it as it does the Workflow's families. */
+  const DERIVE_OWNED_KEY = META_CALIBRATION_KEY;
 
   it('hands over at least one family, so these cases compare something', () => {
-    expect(handedOver.length).toBeGreaterThan(0);
+    expect(workflowOwned.length).toBeGreaterThan(0);
   });
 
   it('writes none of the Workflow\'s keys, bare or under an org, and keeps the rest', () => {
-    const keys = [...handedOver, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
+    const keys = [...workflowOwned, DERIVE_OWNED_KEY, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
 
     const kept = cliOwnedEntries(keys.map(key => ({ key, value: '{}' }))).map(entry => entry.key);
 
@@ -349,11 +352,24 @@ describe('families handed over to the Workflow', () => {
   });
 
   it('drops the Workflow\'s keys from the local state, so the prune step cannot delete them from KV', () => {
-    const keys = [...handedOver, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
+    const keys = [...workflowOwned, DERIVE_OWNED_KEY, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
     const state = new Map(keys.map(key => [key, { hash: 'h' }]));
 
-    const remaining = [...forgetWorkflowOwnedKeys(state).keys()];
+    const remaining = [...forgetHandedOverKeys(state).keys()];
 
     expect(remaining).toEqual(KEPT_KEYS.flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]));
+  });
+});
+
+describe('calibrationEntries', () => {
+  const ORG_ID = '11111111-1111-4111-8111-111111111111';
+  const entry = { key: META_CALIBRATION_KEY, value: '{}' };
+
+  it('publishes under the home org and under the bare key the dashboard falls back to', () => {
+    expect(calibrationEntries(entry, ORG_ID).map(({ key }) => key)).toEqual([orgPrefixedKey(ORG_ID, META_CALIBRATION_KEY), META_CALIBRATION_KEY]);
+  });
+
+  it('publishes the bare key alone when no home org is set', () => {
+    expect(calibrationEntries(entry, '')).toEqual([entry]);
   });
 });

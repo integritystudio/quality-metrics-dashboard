@@ -1,8 +1,8 @@
 /**
  * Every KV entry one org's dashboard is served from, computed from that org's
  * cloud rows. The CLI sync (`scripts/sync-to-kv.ts`) calls this and owns the
- * delta state, the Cloudflare writes and the two owner-local inputs it passes
- * in (`calibrationEntry`, `degradationState`); the Workflow port
+ * delta state, the Cloudflare writes and the owner-local input it passes in
+ * (`degradationState`); the Workflow port
  * (`services/kv-sync-workflow`, `docs/roadmap/kv-sync-in-worker.md`) is meant
  * to call the same functions, so nothing here reads a file, the environment
  * or `process.argv`.
@@ -57,7 +57,7 @@ import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 const LOG_PREFIX = '[org-kv-entries]';
 
-const META_CALIBRATION_KEY = 'meta:calibration';
+export const META_CALIBRATION_KEY = 'meta:calibration';
 
 export const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
@@ -308,8 +308,6 @@ function computeSessionAndAgentEntries(
 export type OrgKvOptions = {
   /** The query window in days; periods longer than it are skipped. */
   maxDays: number;
-  /** The owner's `meta:calibration`, from derive's local state; omitted for every other org. */
-  calibrationEntry?: KVEntry | null;
   /**
    * Breach history for the degradation signals, updated in place. Omitted,
    * the signals are computed statelessly (no cross-run breach continuity).
@@ -350,7 +348,6 @@ export async function computeOrgKvEntries(backend: OrgReadBackend, now: Date, op
   entries.push(...trends.entries);
   entries.push(...degradationEntries(trends.degradation, options.degradationState ?? statelessDegradation(), now));
 
-  if (options.calibrationEntry) entries.push(options.calibrationEntry);
 
   const queryWindowStartMs = nowMs - maxDaysMs;
   const allEvals = orgEvals.between(queryWindowStartMs);

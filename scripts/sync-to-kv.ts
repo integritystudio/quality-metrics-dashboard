@@ -14,21 +14,17 @@
  * Usage: tsx scripts/sync-to-kv.ts [--days=30] [--dry-run] [--budget=3000]
  */
 
-import Cloudflare, {
-  type ClientOptions as CloudflareClientOptions,
+import {
   APIError as CloudflareAPIError,
   APIConnectionError as CloudflareAPIConnectionError,
 } from 'cloudflare';
-import { parse as parseToml } from 'smol-toml';
 import { createHash } from 'node:crypto';
-import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CloudBackend, ALL_ORGS_SCOPE } from '../../src/backends/cloud.js';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { EvaluationResult } from '../../src/backends/index.js';
 import { loadDegradationState, saveDegradationState } from '../../src/lib/quality/qfe-backtest.js';
-import { loadCalibrationState } from '../../src/lib/quality/qfe-percentiles.js';
-import { CALIBRATION_STATE_FILE } from '../../src/lib/quality/quality-constants.js';
 import {
   kvSyncStateSchema,
   coverageHeatmapSchema,
@@ -36,8 +32,8 @@ import {
   type CoverageHeatmap,
 } from '../../src/lib/validation/dashboard-schemas.js';
 import {
-  buildCalibrationEntry,
   computeOrgKvEntries,
+  META_CALIBRATION_KEY,
   type OrgComputation,
   type OrgReadBackend,
 } from '../src/api/aggregates/org-kv-entries.js';
@@ -56,128 +52,25 @@ import {
 } from '../src/lib/dashboard-file-utils.js';
 import { PERIOD_MS } from '../src/lib/constants.js';
 import { BYTES, PERCENT_MULTIPLIER, TIME_MS } from '../../src/lib/core/units.js';
-import { KV_SCHEMA_VERSION, timestampToMs, extractFiniteScores } from '../src/api/api-constants.js';
-import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
+import { timestampToMs, extractFiniteScores } from '../src/api/api-constants.js';
 import { max, min } from 'd3-array';
 import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
 import { DRY_RUN_FLAG, SYNC_BUDGET_FLAG } from './pipeline-stages.js';
 import { incrementIn, pushTo } from './collections.js';
 import { msToNs } from './hrt.js';
 import { describeFetchError, describeUnknown } from '../../src/lib/core/describe-unknown.js';
-import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
+import { HttpStatus } from '../src/lib/http-constants.js';
+import {
+  envelope,
+  getCloudflareClient,
+  getCloudflareConfig,
+  KV_DAILY_WRITE_LIMIT_CODE,
+  KV_ORIGINAL_STATUS_HEADER,
+  orgPrefixedKey,
+  type EnvelopedKVPair,
+} from './kv-client.js';
 
-type CloudflareConfig = {
-  accountId: string;
-  namespaceId: string;
-}
-
-/** `account_id` and the first `[[kv_namespaces]]` id in wrangler.toml, where it has them. */
-function wranglerIds(tomlPath: string): { accountId: string | undefined; namespaceId: string | undefined } {
-  const raw = readFileSync(tomlPath, 'utf8');
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = parseToml(raw);
-  } catch (err) {
-    throw new Error(`Failed to parse ${tomlPath}: ${describeUnknown(err)}`, { cause: err });
-  }
-  const kvNamespaces = Array.isArray(parsed.kv_namespaces) ? parsed.kv_namespaces : [];
-  const firstNs = kvNamespaces[0] as Record<string, unknown> | undefined;
-  return {
-    accountId: typeof parsed.account_id === 'string' ? parsed.account_id : undefined,
-    namespaceId: typeof firstNs?.id === 'string' ? firstNs.id : undefined,
-  };
-}
-
-function resolveCloudflareConfig(): CloudflareConfig {
-  const envNamespaceId = process.env.KV_NAMESPACE_ID;
-  const envAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (envNamespaceId && envAccountId) return { namespaceId: envNamespaceId, accountId: envAccountId };
-
-  const tomlPath = join(import.meta.dirname, '..', 'wrangler.toml');
-  if (existsSync(tomlPath)) {
-    const fromToml = wranglerIds(tomlPath);
-    const accountId = envAccountId ?? fromToml.accountId;
-    const namespaceId = envNamespaceId ?? fromToml.namespaceId;
-    if (accountId && namespaceId) return { accountId, namespaceId };
-  }
-
-  const missing: string[] = [];
-  if (!process.env.KV_NAMESPACE_ID) missing.push('KV_NAMESPACE_ID');
-  if (!process.env.CLOUDFLARE_ACCOUNT_ID) missing.push('CLOUDFLARE_ACCOUNT_ID');
-  throw new Error(
-    `Could not resolve Cloudflare config. Set ${missing.join(' and ')} or ensure wrangler.toml has account_id and [[kv_namespaces]] with id.`,
-  );
-}
-
-let cfConfig: CloudflareConfig | undefined;
-/** Resolved on first KV call, so importing this module or a dry run needs no config. */
-function getCloudflareConfig(): CloudflareConfig {
-  return cfConfig ??= resolveCloudflareConfig();
-}
-
-/** The fetch the Cloudflare client accepts as its `fetch` option. */
-type SdkFetch = NonNullable<CloudflareClientOptions['fetch']>;
-
-/** Cloudflare API error code for the KV daily write limit (free tier only). */
-const KV_DAILY_WRITE_LIMIT_CODE = 10048;
-/** The SDK obeys this header over its own retry rules. */
-const SDK_SHOULD_RETRY_HEADER = 'x-should-retry';
-const NULL_RESULT_BODY = '{"result":null}';
-/** Set on a response kvSdkFetch rewrote from a 204, so a caller can tell it from a 200 with a null result. */
-export const KV_ORIGINAL_STATUS_HEADER = 'x-kv-original-status';
-
-async function isDailyWriteLimit(response: Response): Promise<boolean> {
-  try {
-    const body = await response.json() as { errors?: Array<{ code?: unknown }> };
-    return body.errors?.some(e => e.code === KV_DAILY_WRITE_LIMIT_CODE) ?? false;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Fetch wrapper passed to the Cloudflare SDK.
- *
- * - An HTTP 204 (no body) becomes a 200 with `{"result":null}`, so the SDK's
- *   `_thenUnwrap((obj) => obj.result)` receives null rather than throwing
- *   `TypeError: Cannot read properties of null (reading 'result')`. The
- *   `result == null` guard in kvBulkPut then credits all batch keys. The original
- *   headers are kept, plus `KV_ORIGINAL_STATUS_HEADER`.
- * - The daily-write-limit 429 gets `x-should-retry: false`: it cannot succeed until
- *   the next day, so the SDK's retries would only add backoff. Connection failures
- *   and other 429s keep the SDK's retries.
- *
- * All other responses are forwarded unchanged.
- *
- * Exported for unit-testing the wrapper in isolation.
- */
-export const kvSdkFetch: SdkFetch = async (url, init) => {
-  const response = await http1Fetch(url, init);
-  if (response.status === HttpStatus.NoContent) {
-    const headers = new Headers(response.headers);
-    headers.delete('content-length');
-    headers.set(CONTENT_TYPE_HEADER, ContentType.Json);
-    headers.set(KV_ORIGINAL_STATUS_HEADER, String(HttpStatus.NoContent));
-    return new Response(NULL_RESULT_BODY, { status: HttpStatus.Ok, headers });
-  }
-  if (response.status === HttpStatus.TooManyRequests && await isDailyWriteLimit(response.clone())) {
-    const headers = new Headers(response.headers);
-    // undici has already decoded the body, so the encoded length and encoding no longer describe it.
-    headers.delete('content-length');
-    headers.delete('content-encoding');
-    headers.set(SDK_SHOULD_RETRY_HEADER, 'false');
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-  }
-  return response;
-};
-
-let cfClient: Cloudflare | undefined;
-function getCloudflareClient(): Cloudflare {
-  // HTTP/1.1: under Node 26's default HTTP/2 fetch a destroyed session fails the
-  // SDK's own retries too (ERR_HTTP2_INVALID_SESSION; NODE-FETCH-HTTP2-DEAD-SESSION).
-  // kvSdkFetch rewrites 204s and the daily-limit 429 before the SDK sees them.
-  return cfClient ??= new Cloudflare({ fetch: kvSdkFetch });
-}
+export { orgPrefixedKey } from './kv-client.js';
 
 const DEFAULT_DAYS = 30;
 /**
@@ -227,12 +120,8 @@ export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
  * keeps working unchanged until the env lands.
  */
 const HOME_ORG_ID = process.env.HOME_ORG_ID ?? '';
-const ORG_KEY_PREFIX = 'org:';
 export const ORG_KEY_PREFIX_RE = /^org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
 
-export function orgPrefixedKey(orgId: string, key: string): string {
-  return `${ORG_KEY_PREFIX}${orgId}:${key}`;
-}
 
 /** Write-counter scopes for keys that carry no `org:<uuid>:` prefix. */
 const WRITE_SCOPE = { SYSTEM: 'system', LEGACY: 'legacy' } as const;
@@ -260,22 +149,6 @@ export const MIN_TRACE_BUDGET = 100;
 /** Budget headroom above MIN_TRACE_BUDGET for meta and dashboard entries before a warning. */
 const HIGH_PRIORITY_HEADROOM = 10;
 const RECOMMENDED_MIN_BUDGET = MIN_TRACE_BUDGET + HIGH_PRIORITY_HEADROOM;
-
-/**
- * The home org's `meta:calibration` entry, from the state derive writes (`CALIBRATION_STATE_DIR`).
- * A missing file is reported loudly: a silent miss leaves the dashboard on stale percentiles
- * (CALIBRATION-READ-WRONG-DIR). `lastCalibrated` is logged, not judged: derive rewrites the file on drift (PSI) and
- * otherwise once it is `CALIBRATION_MAX_AGE_DAYS` old, so a date older than that means derive is not running.
- */
-export function loadCalibrationEntry(dir: string = CALIBRATION_STATE_DIR): KVEntry | null {
-  const state = loadCalibrationState(dir);
-  if (!state) {
-    console.warn(`[sync-to-kv] calibration: no ${CALIBRATION_STATE_FILE} in ${dir}; meta:calibration not written`);
-    return null;
-  }
-  console.log(`[sync-to-kv] calibration: lastCalibrated=${state.lastCalibrated} (${dir})`);
-  return buildCalibrationEntry(state);
-}
 
 const TRACE_PRIORITY_WEIGHTS = {
   worstScore: 0.5,   // lower score = higher priority
@@ -338,18 +211,24 @@ function entryHash(entry: KVEntry): string {
   return createHash('sha256').update(entry.hashBasis ?? entry.value).digest('hex').slice(0, HASH_PREFIX_CHARS);
 }
 
-/** The entries this script still writes: every family the Workflow has not taken. */
+/** Whether another writer has this key: the Workflow its families, derive `meta:calibration`. */
+function isHandedOverKey(key: string): boolean {
+  const logicalKey = stripOrgPrefix(key);
+  return logicalKey === META_CALIBRATION_KEY || isWorkflowOwnedKey(logicalKey);
+}
+
+/** The entries this script still writes: every key no other writer has taken. */
 export function cliOwnedEntries(entries: KVEntry[]): KVEntry[] {
-  return entries.filter(e => !isWorkflowOwnedKey(stripOrgPrefix(e.key)));
+  return entries.filter(e => !isHandedOverKey(e.key));
 }
 
 /**
- * Drops the Workflow's keys from the local state without deleting them from KV.
- * Left in, `pruneStaleKeys` would read a handed-over key as no longer computed
- * and delete the value the Workflow now writes.
+ * Drops the handed-over keys from the local state without deleting them from KV.
+ * Left in, `pruneStaleKeys` would read one as no longer computed and delete the
+ * value its new writer keeps there.
  */
-export function forgetWorkflowOwnedKeys(state: SyncState): SyncState {
-  return new Map([...state].filter(([key]) => !isWorkflowOwnedKey(stripOrgPrefix(key))));
+export function forgetHandedOverKeys(state: SyncState): SyncState {
+  return new Map([...state].filter(([key]) => !isHandedOverKey(key)));
 }
 
 function filterChanged(entries: KVEntry[], state: SyncState): KVEntry[] {
@@ -369,22 +248,6 @@ const FAILED_KEY_PREVIEW_COUNT = 5;
 function previewKeys(keys: string[]): string {
   const shown = keys.slice(0, FAILED_KEY_PREVIEW_COUNT).join(', ');
   return keys.length > FAILED_KEY_PREVIEW_COUNT ? `${shown}…` : shown;
-}
-
-type EnvelopedKVPair = {
-  key: string;
-  value: string;
-  expiration_ttl?: number;
-}
-
-function envelope(e: KVEntry): EnvelopedKVPair {
-  return {
-    key: e.key,
-    // `e.value` is already JSON (toKVValue), so the version envelope is spliced
-    // around it as text; parsing and re-serializing gave the same bytes.
-    value: `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${e.value}}`,
-    ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
-  };
 }
 
 /**
@@ -631,7 +494,6 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
   const degradationState = stateDir ? loadDegradationState(stateDir) : undefined;
   const result = await computeOrgKvEntries(backend, now, {
     maxDays,
-    calibrationEntry: isHome ? loadCalibrationEntry() : null,
     ...(degradationState ? { degradationState } : {}),
   });
   if (degradationState && !dryRun) saveDegradationState(stateDir, degradationState);
@@ -852,7 +714,7 @@ async function main(): Promise<void> {
   const { allEntries, evalsByTrace, referencedTraceIds, hitCap, perOrgSummaries } = computation;
   const traceIds = computation.homeComputation?.traceIds ?? [];
 
-  const prevState = forgetWorkflowOwnedKeys(loadSyncState());
+  const prevState = forgetHandedOverKeys(loadSyncState());
   const changed = filterChanged(allEntries, prevState);
   const metaEntries = buildMetaEntries(now, computation.orgIds);
 

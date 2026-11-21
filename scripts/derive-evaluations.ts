@@ -44,6 +44,7 @@ import {
   type EvalRecord,
 } from './eval-record.js';
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
+import { publishCalibration } from './publish-calibration.js';
 import { TOOL_CORRECTNESS_CRITERIA } from './judge-criteria.js';
 import { toDateOnly, OTEL_STATUS_ERROR_CODE, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import type { AccountRef } from './account-index.js';
@@ -790,8 +791,8 @@ export function formatCalibrationCheck(
 
 /**
  * Compute per-metric percentile distributions over the calibration window and
- * persist them to `.calibration-state.json`, which sync-to-kv serves as
- * `meta:calibration`. Rewritten when a distribution drifts (PSI), a metric
+ * persist them to `.calibration-state.json`, which `publishCalibration` puts
+ * in KV as `meta:calibration`. Rewritten when a distribution drifts (PSI), a metric
  * first reaches the sample floor, or the state is past its maximum age; a dry
  * run says so instead. A failed read leaves the state as it was.
  */
@@ -886,6 +887,7 @@ async function main(): Promise<void> {
   }
 
   await updateCalibration(dryRun);
+  await publishCalibration(dryRun);
 
   const byName = rollup(inScope, evs => evs.length, ev => ev.evaluationName);
   const counts = [...byName].toSorted(([a], [b]) => ascending(a, b)).map(([name, n]) => `${name}=${n}`);

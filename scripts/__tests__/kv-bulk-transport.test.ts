@@ -1,5 +1,5 @@
 /**
- * Transport-layer tests for kvSdkFetch (sync-to-kv.ts).
+ * Transport-layer tests for kvSdkFetch (kv-client.ts).
  *
  * These tests send the requests production sends (`PUT …/bulk` and
  * `POST …/bulk/delete`, with bodies) through the real kvSdkFetch wrapper to a
@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
-import { kvSdkFetch, KV_ORIGINAL_STATUS_HEADER } from '../sync-to-kv.js';
+import { kvSdkFetch, KV_ORIGINAL_STATUS_HEADER } from '../kv-client.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 
 const KV_DAILY_WRITE_LIMIT_CODE = 10048;
