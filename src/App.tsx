@@ -44,7 +44,7 @@ import { useTrend } from './hooks/useTrend.js';
 import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './contexts/CalibrationContext.js';
 import { ROLES, INITIAL_PERIOD } from './lib/constants.js';
-import { lazyWithReload } from './lib/lazy-with-reload.js';
+import { lazyWithReload, retryFailedLazyLoads } from './lib/lazy-with-reload.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -311,7 +311,7 @@ function RouteErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
 /** Per-route error boundary; resets when the location changes. */
 function RouteBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  return <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]}>{children}</ErrorBoundary>;
+  return <ErrorBoundary FallbackComponent={RouteErrorFallback} resetKeys={[location]} onReset={retryFailedLazyLoads}>{children}</ErrorBoundary>;
 }
 
 /** The admin customer screens: staff only, loaded on demand. */

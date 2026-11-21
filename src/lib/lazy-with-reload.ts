@@ -10,9 +10,15 @@
  * This wraps the loader rather than listening for `vite:preloadError`: that
  * event comes from Vite's build-time preload helper only, while a rejected
  * `import()` is caught here in dev, in tests and in production alike.
+ *
+ * `React.lazy` caches a rejection for the life of the component, so an error
+ * boundary's reset would rethrow it. A rejected load is swapped for a fresh one
+ * only by `retryFailedLazyLoads()`, which the boundary calls from `onReset`;
+ * swapping on rejection itself would let React's own render retry re-import in
+ * a loop.
  */
 
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+import { createElement, lazy, type ComponentProps, type ComponentType, type LazyExoticComponent } from 'react';
 
 /** sessionStorage key set while a stale-chunk reload is in flight; cleared by the next successful load. */
 export const CHUNK_RELOAD_KEY = 'obs.chunkReloadPending';
@@ -73,11 +79,29 @@ export async function importWithReload<T>(load: () => Promise<T>, env: ChunkRelo
   );
 }
 
-/** `React.lazy` with the same signature, generic over the component as React's is, plus an injectable env. */
+const failedLoadRenewers = new Set<() => void>();
+
+/** Gives every lazy component whose import was rejected a fresh import for its next render. */
+export function retryFailedLazyLoads(): void {
+  for (const renew of failedLoadRenewers) renew();
+  failedLoadRenewers.clear();
+}
+
+/** `React.lazy` with the same loader signature, generic over the component as React's is, plus an injectable env. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- React.lazy's own constraint; a narrower props type fails inference at every call site
 export function lazyWithReload<T extends ComponentType<any>>(
   load: () => Promise<{ default: T }>,
   env?: ChunkReloadEnv,
-): LazyExoticComponent<T> {
-  return lazy(async () => importWithReload(load, env));
+): ComponentType<ComponentProps<T>> {
+  const createAttempt = (): LazyExoticComponent<T> => lazy(async () => importWithReload(load, env).catch((error: unknown) => {
+    failedLoadRenewers.add(renew);
+    throw error;
+  }));
+  const renew = (): void => {
+    currentAttempt = createAttempt();
+  };
+  let currentAttempt = createAttempt();
+  return function LazyWithReload(props: ComponentProps<T>) {
+    return createElement(currentAttempt, props);
+  };
 }

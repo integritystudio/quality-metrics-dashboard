@@ -9,12 +9,13 @@
 
 import { Suspense } from 'react';
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { CHUNK_RELOAD_KEY, lazyWithReload, type ChunkReloadEnv } from '../lib/lazy-with-reload.js';
+import { CHUNK_RELOAD_KEY, lazyWithReload, retryFailedLazyLoads, type ChunkReloadEnv } from '../lib/lazy-with-reload.js';
 
 const STALE_CHUNK = 'Failed to fetch dynamically imported module';
 const PAGE_TEXT = 'Workflow page';
+const RETRY_TEXT = 'Try again';
 
 function memoryStorage(): NonNullable<ChunkReloadEnv['storage']> {
   const items = new Map<string, string>();
@@ -72,6 +73,28 @@ describe('lazyWithReload', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(STALE_CHUNK);
     expect(env.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('imports again when the error boundary is reset after a failed load', async () => {
+    const env = { storage: memoryStorage(), reload: vi.fn() };
+    env.storage.setItem(CHUNK_RELOAD_KEY, '1');
+    const load = vi.fn<() => Promise<{ default: typeof Page }>>()
+      .mockImplementationOnce(rejectStale)
+      .mockImplementation(resolvePage);
+    const LazyPage = lazyWithReload(load, env);
+    render(
+      <ErrorBoundary onReset={retryFailedLazyLoads} fallbackRender={({ resetErrorBoundary }) => <button onClick={resetErrorBoundary}>{RETRY_TEXT}</button>}>
+        <Suspense fallback={<p>Loading</p>}>
+          <LazyPage />
+        </Suspense>
+      </ErrorBoundary>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: RETRY_TEXT }));
+
+    expect(await screen.findByText(PAGE_TEXT)).toBeInTheDocument();
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(env.reload).not.toHaveBeenCalled();
   });
 
   it('renders the page, and clears the guard so a later deploy can reload again', async () => {
