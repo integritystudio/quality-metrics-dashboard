@@ -2,14 +2,16 @@
 /**
  * Sync pre-computed dashboard data to Cloudflare Workers KV.
  *
- * Reads local JSONL evaluations, runs quality-metrics computations,
- * and uploads results via the Cloudflare SDK's KV bulk endpoints
- * (requires `CLOUDFLARE_API_TOKEN` in env).
+ * Reads evaluations and spans from the cloud API (`CloudBackend`), runs
+ * quality-metrics computations, and writes the key families no other writer
+ * owns via the Cloudflare SDK's KV bulk endpoints (requires
+ * `CLOUDFLARE_API_TOKEN` in env). The Workflow's families
+ * (`WORKFLOW_OWNED_FAMILIES`) and derive's `meta:calibration` are skipped.
  *
  * Uses content-hash delta sync to skip unchanged entries and a per-run
  * write budget (default 3,000; the account is on Workers Paid, 1M KV
  * writes/month) with priority ordering:
- *   meta/dashboard/agent > metrics > trends > traces
+ *   every non-trace key > traces (ranked by worst score, recency, card links)
  *
  * Usage: tsx scripts/sync-to-kv.ts [--days=30] [--dry-run] [--budget=3000]
  */
@@ -457,9 +459,9 @@ async function discoverOrgIds(now: Date): Promise<string[]> {
 }
 
 /**
- * One org's entries with the owner-local inputs this script holds: derive's
- * degradation breach history beside the script, read and written for the
- * home org alone, and only while the CLI writes the signals.
+ * One org's entries, minus the keys another writer owns. The degradation
+ * breach history is read only while the CLI writes the signals; the Workflow
+ * owns them now and keeps that history in KV, so `stateDir` stays empty.
  */
 export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHome: boolean): Promise<OrgComputation> {
   const stateDir = isHome && !isWorkflowOwnedKey(`${DEGRADATION_KV_KEY}:`) ? (SCRIPT_DIR ?? '') : '';

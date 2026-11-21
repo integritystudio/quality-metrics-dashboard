@@ -24,8 +24,9 @@ export const JUDGE_EXIT_NO_SCORES = 3;
 export const JUDGE_EXIT_HIGH_FAILURE_RATE = 5;
 /**
  * judge-evaluations exit: turns were scored, but ingest refused the post. The
- * records are in the judge's evaluations file, so nothing is lost; re-sending
- * that file is safe, because ingest drops an evaluationId it already holds.
+ * records are kept in `.judge-pending.jsonl` and sent first on the next run, so
+ * nothing is lost; re-sending is safe, because ingest drops an evaluationId it
+ * already holds.
  */
 export const JUDGE_EXIT_POST_FAILED = 6;
 /**
@@ -100,7 +101,7 @@ export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
 /** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
 export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]);
 
-/** Shipping exits populate forwards: the judge still runs, on the turns already in the cloud or the transcripts. */
+/** Shipping exits populate forwards: the judge still runs, on the turns already in the cloud. */
 export const SHIP_TURNS_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([SHIP_TURNS_EXIT_DISCOVERY_FAILED, SHIP_TURNS_EXIT_POST_FAILED]);
 
 /** Stage name used in `nextStepAfter`. */

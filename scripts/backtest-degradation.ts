@@ -2,8 +2,8 @@
 /**
  * Backtest orchestration script for degradation detector parameter sweep.
  *
- * Loads labeled incidents from .degradation-incidents.json, reads local evaluation
- * JSONL files, builds daily time-series snapshots per metric, and runs the full
+ * Loads labeled incidents from .degradation-incidents.json, reads evaluations from
+ * the cloud API (`CloudBackend`), builds daily time-series snapshots per metric, and runs the full
  * 2500-config sweepDegradationParams sweep. Writes results to JSON and prints an
  * ASCII summary table.
  *
@@ -229,7 +229,7 @@ function printSummaryTable(metricName: string, result: BacktestSweepResult, eval
   if (f1Gain >= F1_GRADUATION_THRESHOLD) {
     console.log('');
     console.log(`GRADUATION RECOMMENDED: best config outperforms production by +${f1Gain.toFixed(F1_DISPLAY_PRECISION)} F1`);
-    console.log('  Update CURRENT_PRODUCTION_CONFIG in src/lib/quality/quality-feature-engineering.ts:');
+    console.log('  Update CURRENT_PRODUCTION_CONFIG in src/lib/quality/qfe-backtest.ts:');
     console.log(`    varianceThreshold:        ${bestByF1.config.varianceThreshold}`);
     console.log(`    coverageDropoutThreshold: ${bestByF1.config.coverageDropoutThreshold}`);
     if (bestByF1.config.ewmaLambda !== undefined) {

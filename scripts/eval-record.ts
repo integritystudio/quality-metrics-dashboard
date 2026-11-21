@@ -54,9 +54,9 @@ export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
 /**
  * On-disk attribute keys. **Every key the hooks also write must stay identical
  * to their `EVALUATION_ATTRS` (`hooks/lib/evaluation-attrs.ts`, re-exported by
- * `quality-signals.ts`)** — both writers append to the same
- * `evaluations-YYYY-MM-DD.jsonl` files, so a divergence splits the corpus into
- * two shapes that no single reader handles.
+ * `quality-signals.ts`)** — both writers' records land in the same D1
+ * `evaluations` table, so a divergence splits the corpus into two shapes that
+ * no single reader handles.
  *
  * Two optional keys here have no hooks counterpart, on purpose:
  * - `SCORE_UNIT`: the hooks dropped theirs (OBP20) because all their scores are
@@ -134,7 +134,7 @@ export type EvalRecord = {
    * Account of the span or turn this scores, copied from its hook stamp (TKR8
    * Phase 1): a secret name, `null` for an unmapped account, absent when the
    * source carried none. Written as a record field, never an attribute, so it
-   * routes the upload and is never shipped.
+   * routes the post and is never shipped.
    */
   identityKeyRef?: AccountRef;
   /**
@@ -179,15 +179,13 @@ export function toOTelRecord(ev: EvalRecord): object {
     // Omit rather than emit '' — TraceIdSchema is optional but rejects an
     // empty string, so a written '' is silently dropped on read.
     ...(ev.traceId && { traceId: ev.traceId }),
-    // Org-scoping P4: local derive/judge read the owner's own telemetry JSONL,
-    // which carries no org dimension — everything they emit is by definition
-    // the home org's data, so stamp the constant rather than "group by org"
+    // Org-scoping P4: stamp the home org constant rather than "group by org"
     // (docs/roadmap/org-scoped-multi-tenancy.md, Phase 4). Omitted when the
     // env is unset so pre-tenancy behavior is byte-identical.
     ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
-    // `spanId` then the stamp, last and in this order, so upload's fingerprint
-    // can drop both and recover the exact line this record serialized to
-    // before either existed (derive rewrites its records every run).
+    // Field order is part of the record's identity: evaluationId() hashes the
+    // serialized record when it has no stableEvaluationKey, so moving a field
+    // changes every such id and ingest stores re-posts as new rows.
     ...(ev.spanId && { spanId: ev.spanId }),
     ...(ev.identityKeyRef !== undefined && { [IDENTITY_KEY_REF_FIELD]: ev.identityKeyRef }),
     // Routing field only; not shipped to ingest. evaluationId() hashes this

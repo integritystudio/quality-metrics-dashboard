@@ -1,12 +1,13 @@
 #!/usr/bin/env tsx
 /**
- * Single-command pipeline to populate all 7 dashboard metrics.
+ * Single-command pipeline: derive and judge evaluations, then sync KV.
  *
  * Steps:
  *   0. hook-gap-check      → flags background sessions whose turns ran without hooks
  *                            (local transcripts, read-only; runs with the judge,
  *                            `--skip-hook-gap-check` skips it)
- *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion)
+ *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion,
+ *                            handoff_correctness) plus the five agent heuristics from local transcripts
  *                            over the cloud's last 7 days of spans, the last 2 days
  *                            POSTed to ingest (`--days=7 --post-days=2`)
  *   2. ship-turn-content   → redacted turn text from this machine's transcripts,
@@ -15,10 +16,10 @@
  *   3. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
  *                            (`--days=7`), POSTed to ingest
- *   4. sync-to-kv          → aggregate + upload to Cloudflare KV
+ *   4. sync-to-kv          → aggregate + write the families the KV sync Workflow does not own
  *
  * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
- * `'table'`). Steps 1-2 post their own records, and the hooks' records reach it
+ * `'table'`). Steps 1 and 3 post their own records, and the hooks' records reach it
  * as log events through the span shipper.
  *
  * Usage:
@@ -41,7 +42,7 @@
  *   1     any other stage failure, and the pipeline stops there. Also: no judge
  *         key and no --skip-judge given, so nothing runs
  *
- * derive-evaluations and sync-to-kv are retried on transient
+ * derive-evaluations, ship-turn-content and sync-to-kv are retried on transient
  * network failures with the bounded schedule in pipeline-stages.ts.
  */
 

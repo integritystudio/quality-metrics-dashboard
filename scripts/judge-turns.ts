@@ -53,7 +53,7 @@ export type Turn = {
  * (Phase 1).
  *
  * Spread, not assigned: an unstamped turn must yield a record with no
- * `identityKeyRef` key at all, which upload reads as "fall back to the join";
+ * `identityKeyRef` key at all, which routing reads as "use the span's stamp, else the webhook";
  * `null` is a real stamp (unmapped account, withheld). The response id follows
  * the semconv rule literally — it is set only "when span id is not available".
  */

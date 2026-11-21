@@ -161,7 +161,7 @@ export function undeliveredCount(total: number, summary: PostSummary): number {
   return total - summary.sent - skipped - summary.withheld;
 }
 
-/** One log line in the same `k=v` shape as upload's summary. */
+/** One `k=v` log line summarising a post. */
 export function formatPostSummary(summary: PostSummary): string {
   return `sent=${summary.sent} byDestination[${formatCounts(summary.byDestination)}] skipped[${formatCounts(summary.skipped)}]`
     + ` withheld=${summary.withheld} routedBy[${formatCounts(summary.routedBy)}]${

@@ -14,9 +14,8 @@ export const HOME = process.env.HOME ?? '';
 // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- an empty TELEMETRY_DIR must fall back to the default, not resolve paths against cwd
 export const TELEMETRY_DIR = process.env.TELEMETRY_DIR || join(HOME, '.claude-history', 'telemetry');
 /**
- * Where `.calibration-state.json` lives: derive writes it, and sync-to-kv reads it to build
- * `meta:calibration`. One constant for both, because they disagreed: from 231e91d (2026-04-19)
- * to 2026-10-05 sync read `dashboard/scripts/`, found nothing, wrote nothing, and the
- * dashboard served the percentiles from 2026-03-23 (CALIBRATION-READ-WRONG-DIR).
+ * Where `.calibration-state.json` lives: derive writes it, and publish-calibration.ts reads it
+ * to build `meta:calibration`. One constant for both: when the reader and writer used different
+ * directories, the reader found nothing and the dashboard served stale percentiles.
  */
 export const CALIBRATION_STATE_DIR = TELEMETRY_DIR;

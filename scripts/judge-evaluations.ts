@@ -2,7 +2,7 @@
 /**
  * LLM-as-Judge Evaluation Generator
  *
- * Reads the redacted turns ship-turn-content posted and evaluates them using the LLM-as-Judge library (relevance, coherence, hallucination)
+ * Reads the redacted turns ship-turn-content posted and evaluates them using the LLM-as-Judge library (relevance, coherence, faithfulness, hallucination and the tool-correctness family)
  * via the Anthropic API (Claude Haiku).
  *
  * Discovery takes the sessions, each turn's account and the already-judged set
@@ -620,7 +620,7 @@ async function judgeTurns(
   if (summary.attempted > 0) writeRunState(summary.succeeded, summary.attempted);
   if (summary.exitCode !== 0) {
     // Set rather than exit: main's finally must still release the lock,
-    // and populate-dashboard.ts reads this code to keep upload + sync running.
+    // and populate-dashboard.ts reads this code to keep sync running.
     process.exitCode = summary.exitCode;
   }
   return flatEvals;

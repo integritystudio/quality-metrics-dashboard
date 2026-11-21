@@ -24,8 +24,8 @@ export const TRACE_FILE_PATTERN = /^traces-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 export function fileInWindow(file: string, pattern: RegExp, windowDays: number, nowMs: number): boolean {
   const date = pattern.exec(file)?.[1];
   if (date === undefined) return false;
-  // Compare on the date in the name, never mtime: derive rewrites evaluation
-  // files wholesale, so mtime says nothing about which day's records are inside.
+  // Compare on the date in the name, never mtime: a file can be rewritten or
+  // copied after its day, so mtime says nothing about which day's records are inside.
   return Date.parse(`${date}T23:59:59.999Z`) >= nowMs - windowDays * TIME_MS.DAY;
 }
 
