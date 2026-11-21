@@ -272,4 +272,16 @@ describe('SLATable', () => {
     const gapCell = screen.getByText('-0.1000');
     expect(gapCell.closest('td')).toHaveAttribute('data-status', 'critical');
   });
+
+  it('marks a compliant gap as healthy', () => {
+    const slas = [makeSLA({ compliant: true, gap: 0.05, status: 'compliant' })];
+    render(<SLATable slas={slas} />);
+    expect(screen.getByText('+0.0500').closest('td')).toHaveAttribute('data-status', 'healthy');
+  });
+
+  it('leaves a gap with no value healthy even when non-compliant', () => {
+    const slas = [makeSLA({ actualValue: null, gap: null, status: 'no_data', compliant: false })];
+    const { container } = render(<SLATable slas={slas} />);
+    expect(container.querySelector('.sla-gap-cell')).toHaveAttribute('data-status', 'healthy');
+  });
 });

@@ -78,7 +78,7 @@ function IdListColumn({ label, ids, totalCount, isTruncated, routeFn }: IdListCo
   );
 }
 
-function errorRateTone(rate: number): StatTone {
+function errorRateTone(rate: number): Exclude<StatTone, 'secondary'> {
   if (rate === 0) return 'healthy';
   if (rate < ERROR_RATE_WARNING_THRESHOLD) return 'warning';
   return 'critical';
