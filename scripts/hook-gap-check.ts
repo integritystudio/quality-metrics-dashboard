@@ -14,12 +14,16 @@
  * no work.
  *
  * Reads only the transcripts on this machine. Exits `HOOK_GAP_EXIT_FOUND` when
- * any session has a gap in the window, so the launchd wrapper logs it.
+ * a session not yet acknowledged has a gap in the window, so the launchd
+ * wrapper logs it. Acknowledged sessions are listed, each with its reason, in
+ * `hook-gap-known.json` beside this script; they are still printed, as known,
+ * but no longer fail the run. A file that does not parse acknowledges nothing.
  *
  * Usage: tsx hook-gap-check.ts [--days=N | --date=YYYY-MM-DD]
  */
 
-import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { z } from 'zod';
 import { createInterface } from 'node:readline';
 import { basename, join } from 'node:path';
 import { TIME_MS } from '../../src/lib/core/units.js';
@@ -31,6 +35,12 @@ import { HOOK_GAP_EXIT_FOUND, JUDGE_DEFAULT_DAYS, rejectRemovedFlags } from './p
 import { exitOnCliArgError, runIfMain } from './cli-args.js';
 
 const CLI_PREFIX = '[hook-gap]';
+/** Sessions whose gaps are already acknowledged; see the module comment. */
+export const KNOWN_HOOK_GAPS_FILE = join(import.meta.dirname, 'hook-gap-known.json');
+
+const knownHookGapsSchema = z.object({
+  sessions: z.array(z.object({ sessionId: z.string().min(1), reason: z.string().min(1) })),
+});
 /** Turns shorter than this are system notices, not work; see the module comment. */
 // eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
 export const MIN_GAP_TURN_MS = 5 * TIME_MS.SECOND;
@@ -147,6 +157,34 @@ export async function scanHookGaps(dirs: readonly string[], fromMs: number, toMs
   return withGaps;
 }
 
+/**
+ * The acknowledged session ids in `path`: none when the file is absent, and
+ * none (logged) when it does not parse, so a broken file never hides a gap.
+ */
+export function readKnownHookGaps(path: string = KNOWN_HOOK_GAPS_FILE): Set<string> {
+  if (!existsSync(path)) return new Set();
+  try {
+    const parsed = knownHookGapsSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')));
+    if (parsed.success) return new Set(parsed.data.sessions.map((s) => s.sessionId));
+    console.error(`${CLI_PREFIX} ${path} does not match its schema; no session counts as known`);
+  } catch (err) {
+    console.error(`${CLI_PREFIX} ${path} is unreadable (${describeUnknown(err)}); no session counts as known`);
+  }
+  return new Set();
+}
+
+/** Split `found` into sessions already acknowledged and sessions that should fail the run. */
+export function partitionKnown(found: readonly SessionHookGaps[], known: ReadonlySet<string>): { known: SessionHookGaps[]; unknown: SessionHookGaps[] } {
+  return {
+    known: found.filter((s) => known.has(s.sessionId)),
+    unknown: found.filter((s) => !known.has(s.sessionId)),
+  };
+}
+
+function describeGaps(s: SessionHookGaps): string {
+  return `${s.sessionId} cwd=${s.cwd ?? '?'} ${s.gapTurns.length}/${s.turns} turns without hooks, first ${s.gapTurns[0] ?? '?'}, last ${s.gapTurns.at(-1) ?? '?'}`;
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const dates = exitOnCliArgError(`${CLI_PREFIX} Error:`, () => {
@@ -166,10 +204,14 @@ async function main(): Promise<void> {
     console.log(`${CLI_PREFIX} no background session ran a turn without hooks`);
     return;
   }
-  for (const s of found) {
-    console.error(`${CLI_PREFIX} ${s.sessionId} cwd=${s.cwd ?? '?'} ${s.gapTurns.length}/${s.turns} turns without hooks, first ${s.gapTurns[0] ?? '?'}, last ${s.gapTurns.at(-1) ?? '?'}`);
+  const { known, unknown } = partitionKnown(found, readKnownHookGaps());
+  for (const s of known) console.log(`${CLI_PREFIX} known: ${describeGaps(s)}`);
+  if (unknown.length === 0) {
+    console.log(`${CLI_PREFIX} no new background session ran a turn without hooks (${known.length} known)`);
+    return;
   }
-  console.error(`${CLI_PREFIX} ${found.length} background sessions lost telemetry: their hooks did not run`);
+  for (const s of unknown) console.error(`${CLI_PREFIX} ${describeGaps(s)}`);
+  console.error(`${CLI_PREFIX} ${unknown.length} background sessions lost telemetry: their hooks did not run. Acknowledge one in ${KNOWN_HOOK_GAPS_FILE}`);
   process.exitCode = HOOK_GAP_EXIT_FOUND;
 }
 

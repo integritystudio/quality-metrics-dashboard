@@ -1,0 +1,20 @@
+{
+  "sessions": [
+    {
+      "sessionId": "07b8582d-309f-4668-ae6f-3061abf8aa80",
+      "reason": "CLI 2.1.330 background session relaunched from ~ ran no hooks after 2026-11-20T23:12Z; reported upstream 2026-11-21 (feedback eee591f6)"
+    },
+    {
+      "sessionId": "c70a24f2-2e7e-4398-824c-9c207c1af0ba",
+      "reason": "CLI 2.1.330 background session launched from ~ ran no hooks; reported upstream 2026-11-21 (feedback eee591f6)"
+    },
+    {
+      "sessionId": "270d2287-dced-4166-a007-7db6b6d70bb9",
+      "reason": "CLI 2.1.330 background session launched from ~ ran no hooks; reported upstream 2026-11-21 (feedback eee591f6)"
+    },
+    {
+      "sessionId": "16bdcf0c-a10d-4b32-a0cf-ee2c4aedc32c",
+      "reason": "CLI 2.1.330 background session launched from ~ ran no hooks; reported upstream 2026-11-21 (feedback eee591f6)"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { useTempDir } from './support/temp-dir.js';
-import { findHookGaps, MIN_GAP_TURN_MS, recentTranscripts, scanHookGaps } from '../hook-gap-check.js';
+import { findHookGaps, KNOWN_HOOK_GAPS_FILE, MIN_GAP_TURN_MS, partitionKnown, readKnownHookGaps, recentTranscripts, scanHookGaps, type SessionHookGaps } from '../hook-gap-check.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 
 const SESSION_ID = '07b8582d-309f-4668-ae6f-3061abf8aa80';
@@ -75,5 +75,34 @@ describe('scanHookGaps', () => {
     utimesSync(path, staleSeconds, staleSeconds);
 
     expect(recentTranscripts([dir()], FROM_MS)).toEqual([]);
+  });
+});
+
+describe('known hook gaps', () => {
+  const dir = useTempDir('hook-gap-known-');
+  const gaps = (sessionId: string): SessionHookGaps => ({ sessionId, cwd: HOME, turns: 1, gapTurns: ['2026-11-20T23:13:24.000Z'] });
+  const knownFile = (body: string): string => {
+    const path = join(dir(), 'known.json');
+    writeFileSync(path, body);
+    return path;
+  };
+
+  it('fails the run only for sessions not acknowledged', () => {
+    const known = readKnownHookGaps(knownFile(JSON.stringify({ sessions: [{ sessionId: SESSION_ID, reason: 'reported upstream' }] })));
+
+    const split = partitionKnown([gaps(SESSION_ID), gaps(OTHER_SESSION_ID)], known);
+
+    expect(split.known.map((s) => s.sessionId)).toEqual([SESSION_ID]);
+    expect(split.unknown.map((s) => s.sessionId)).toEqual([OTHER_SESSION_ID]);
+  });
+
+  it('acknowledges nothing when the file is absent, malformed, or missing a reason', () => {
+    expect(readKnownHookGaps(join(dir(), 'absent.json'))).toEqual(new Set());
+    expect(readKnownHookGaps(knownFile('{not json'))).toEqual(new Set());
+    expect(readKnownHookGaps(knownFile(JSON.stringify({ sessions: [{ sessionId: SESSION_ID }] })))).toEqual(new Set());
+  });
+
+  it('parses the committed list', () => {
+    expect(readKnownHookGaps(KNOWN_HOOK_GAPS_FILE).size).toBeGreaterThan(0);
   });
 });
