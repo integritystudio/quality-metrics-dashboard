@@ -59,24 +59,20 @@ const isInlineFixtureValue = (node, ancestors) => {
   for (let i = ancestors.length - 1; i >= 0; i -= 1) {
     const ancestor = ancestors[i];
 
-    if (FIXTURE_STRUCTURE_TYPES.has(ancestor.type)) {
-      insideCollection = insideCollection || isObjectOrArray(ancestor);
-      child = ancestor;
-      continue;
-    }
-
     if (isCallArgument(ancestor, child)) {
       insideCollection = false;
-      child = ancestor;
-      continue;
+    } else if (FIXTURE_STRUCTURE_TYPES.has(ancestor.type)) {
+      insideCollection = insideCollection || isObjectOrArray(ancestor);
+    } else {
+      return (
+        insideCollection &&
+        ancestor.type === 'VariableDeclarator' &&
+        ancestor.init === child &&
+        ancestor.parent?.kind === 'const'
+      );
     }
 
-    return (
-      insideCollection &&
-      ancestor.type === 'VariableDeclarator' &&
-      ancestor.init === child &&
-      ancestor.parent?.kind === 'const'
-    );
+    child = ancestor;
   }
 
   return false;
@@ -93,7 +89,6 @@ const makeNoMagicNumbersRule = ({ allowInlineFixtures }) => ({
       }
       const ancestors = context.sourceCode.getAncestors(node);
       return (
-        isBitwiseNode(node) ||
         ancestors.some(isBitwiseNode) ||
         (allowInlineFixtures && isInlineFixtureValue(node, ancestors))
       );
