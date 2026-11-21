@@ -21,7 +21,7 @@ export type KVEntry = { key: string; value: string; expirationTtl?: number; hash
  * CLI's next run, and the Workflow takes it at its next deploy. Deploy the
  * Workflow after the CLI picks the change up, never before, or both write it.
  */
-export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:'];
+export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:', 'dashboard:', 'metric:', 'trend:'];
 
 /** Whether the Workflow is the writer of this logical key (org prefix already stripped). */
 export function isWorkflowOwnedKey(logicalKey: string, families: readonly string[] = WORKFLOW_OWNED_FAMILIES): boolean {

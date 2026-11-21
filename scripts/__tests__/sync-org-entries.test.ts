@@ -18,6 +18,7 @@ import {
 import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
 import { computeOrgKvEntries } from '../../src/api/aggregates/org-kv-entries.js';
+import { DEGRADATION_KV_KEY } from '../../src/api/aggregates/evaluation-entries.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -53,9 +54,15 @@ function fakeBackend(evaluations: EvaluationResult[], spans: TraceSpan[] = []): 
   };
 }
 
-/** Non-home org: no degradation or calibration sidecar is read or written. */
+const LONGEST_PERIOD_DAYS = 30;
+
+/**
+ * The builder both writers share, as a non-home org (no degradation state). The
+ * CLI's `computeOrgEntries` wraps it and drops the families the Workflow writes,
+ * so the entries themselves are checked here.
+ */
 function compute(evaluations: EvaluationResult[], spans: TraceSpan[] = []): Promise<OrgComputation> {
-  return computeOrgEntries(fakeBackend(evaluations, spans), NOW, false);
+  return computeOrgKvEntries(fakeBackend(evaluations, spans), NOW, { maxDays: LONGEST_PERIOD_DAYS });
 }
 
 function entryValue<T>(result: OrgComputation, key: string): T | undefined {
@@ -175,9 +182,9 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
   beforeAll(async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(NOW);
-    first = await computeOrgEntries(fakeBackend(rows), NOW, false);
+    first = await computeOrgKvEntries(fakeBackend(rows), NOW, { maxDays: LONGEST_PERIOD_DAYS });
     vi.setSystemTime(LATER);
-    second = await computeOrgEntries(fakeBackend(rows), LATER, false);
+    second = await computeOrgKvEntries(fakeBackend(rows), LATER, { maxDays: LONGEST_PERIOD_DAYS });
   });
 
   afterEach(() => {
@@ -207,10 +214,10 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
   });
 
   it('changes the hash when the data changes', async () => {
-    const changed = await computeOrgEntries(
+    const changed = await computeOrgKvEntries(
       fakeBackend([...rows, evaluation('new', '2026-10-07T13:00:00.000Z', { scoreValue: 0.9 })]),
       LATER,
-      false,
+      { maxDays: LONGEST_PERIOD_DAYS },
     );
     const hashOf = (r: OrgComputation) => r.allEntries.find(e => e.key === 'dashboard:7d')?.hashBasis;
 
@@ -387,13 +394,9 @@ describe('addRecentSession', () => {
 describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
   /** Rule evals on trace-rule, LLM judge eval on trace-llm — only trace-llm should appear in the matrix. */
   const RECENT = '2026-10-07T12:00:00.000Z';
-  const LONGEST_PERIOD_DAYS = 30;
-  /** The builder both writers share: the Workflow writes `coverage:`, so the CLI's wrapper no longer returns it. */
-  const computeShared = (evaluations: EvaluationResult[]): Promise<OrgComputation> =>
-    computeOrgKvEntries(fakeBackend(evaluations), NOW, { maxDays: LONGEST_PERIOD_DAYS });
 
   it('excludes rule-based evaluations and their inputs from the coverage matrix', async () => {
-    const result = await computeShared([
+    const result = await compute([
       evaluation('rule eval', RECENT, { evaluationName: 'tool_correctness', traceId: 'trace-rule', evaluatorType: RULE_EVALUATOR_TYPE }),
       evaluation('llm eval', RECENT, { evaluationName: FIXTURE_METRIC, traceId: 'trace-llm', evaluatorType: 'llm' }),
     ]);
@@ -409,7 +412,7 @@ describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
   });
 
   it('produces an empty matrix when all evaluations are rule-based', async () => {
-    const result = await computeShared([
+    const result = await compute([
       evaluation('rule only', RECENT, { evaluationName: 'tool_correctness', traceId: 'trace-rule', evaluatorType: RULE_EVALUATOR_TYPE }),
     ]);
 
@@ -424,10 +427,10 @@ describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
 
 describe('computeOrgEntries families handed over to the Workflow', () => {
   it('returns no entry in a family the Workflow writes, and still returns the others', async () => {
-    const result = await compute([evaluation('recent', '2026-10-08T00:00:00.000Z')]);
+    const result = await computeOrgEntries(fakeBackend([evaluation('recent', '2026-10-08T00:00:00.000Z')]), NOW, false);
 
     const keys = result.allEntries.map(entry => entry.key);
-    expect(keys).toContain('dashboard:24h');
+    expect(keys).toContain(`${DEGRADATION_KV_KEY}:24h`);
     expect(keys.filter(key => WORKFLOW_OWNED_FAMILIES.some(prefix => key.startsWith(prefix)))).toEqual([]);
   });
 });
