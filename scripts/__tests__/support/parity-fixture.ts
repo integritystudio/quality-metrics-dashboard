@@ -8,13 +8,17 @@ import {
   type FixtureServer,
   type TraceWireRow,
 } from '../../../src/__tests__/support/fixture-server.js';
-import { computeOrgEntries, type OrgComputation } from '../../sync-to-kv.js';
+import { computeOrgKvEntries, type OrgComputation } from '../../../src/api/aggregates/org-kv-entries.js';
 
 /** The `evaluator_type` of a row with no kind: it reads back with neither a kind nor a legacy type. */
 const NO_EVALUATOR_TYPE = '';
 
-/** The sync reads the fixture as a non-home org: no local calibration or degradation state. */
-const IS_HOME_ORG = false;
+/**
+ * Both writers' default window. The fixture goes through the builder they share,
+ * as a non-home org (no calibration or degradation state): the CLI's wrapper
+ * drops the families it has handed to the Workflow.
+ */
+const SYNC_WINDOW_DAYS = 30;
 
 /**
  * An evaluation as the `/v1/evaluations` row that CloudBackend reads back to it.
@@ -95,7 +99,7 @@ export function syncEachTest(fixture: ParityFixture, now: Date): () => OrgComput
 
   beforeEach(async () => {
     vi.useFakeTimers({ now, toFake: ['Date'] });
-    synced = await computeOrgEntries(fixture.syncBackend(), now, IS_HOME_ORG);
+    synced = await computeOrgKvEntries(fixture.syncBackend(), now, { maxDays: SYNC_WINDOW_DAYS });
   });
 
   afterEach(() => {

@@ -635,7 +635,7 @@ export async function computeOrgEntries(backend: OrgReadBackend, now: Date, isHo
     ...(degradationState ? { degradationState } : {}),
   });
   if (degradationState && !dryRun) saveDegradationState(stateDir, degradationState);
-  return result;
+  return { ...result, allEntries: cliOwnedEntries(result.allEntries) };
 }
 
 /** Everything one run's orgs contribute, merged. */
@@ -849,8 +849,7 @@ async function main(): Promise<void> {
 
   const now = new Date();
   const computation = await computeAllOrgs(now);
-  const { evalsByTrace, referencedTraceIds, hitCap, perOrgSummaries } = computation;
-  const allEntries = cliOwnedEntries(computation.allEntries);
+  const { allEntries, evalsByTrace, referencedTraceIds, hitCap, perOrgSummaries } = computation;
   const traceIds = computation.homeComputation?.traceIds ?? [];
 
   const prevState = forgetWorkflowOwnedKeys(loadSyncState());
