@@ -9,14 +9,15 @@
 
 import type { EvaluationResult, PipelineResult } from '../../types.js';
 import { BYTES } from '../parent/units.js';
-import { PERCENT_MULTIPLIER, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, type Period } from '../../lib/constants.js';
+import { finishDegradationSignals, prepareDegradationInput, type DegradationState, type PreparedDegradation } from '../parent/qfe-backtest.js';
+import { PERCENT_MULTIPLIER, DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_TREND_BUCKETS, PERIOD_MS, type Period } from '../../lib/constants.js';
 import { computeCorrelations } from './correlations.js';
 import { computeCoverage, type CoverageRow } from './coverage.js';
 import type { DashboardEntries } from './dashboard-summary.js';
 import { projectEvaluationRow } from './evaluation-rows.js';
 import { dashboardEntry, toKVValue, type KVEntry } from './kv-entry.js';
 import { computeMetricDetailFromBaseline, metricDetailKey, type QualityMetricConfig } from './metric-detail.js';
-import { computeTrend, trendKey, type ScoredBucket } from './trend.js';
+import { computeTrend, trendKey } from './trend.js';
 
 const LOG_PREFIX = '[evaluation-entries]';
 
@@ -107,13 +108,45 @@ export function evaluationRowsEntry({ name, period }: MetricPartition, evaluatio
   return { key: `metric:evaluations:${name}:${period}`, value: toKVValue({ rows }) };
 }
 
-/** `trend:<name>:<period>`, plus the scored buckets the degradation signals read. */
+/**
+ * `trend:<name>:<period>`, plus the metric's degradation input prepared from
+ * the same buckets (null when too few are scored), so the signals narrow with
+ * the chart.
+ */
 export function trendEntry(
   { name, period }: MetricPartition,
   evaluations: EvaluationResult[],
   config: QualityMetricConfig,
   now: Date,
-): { entry: KVEntry; buckets: ScoredBucket[] } {
+): { entry: KVEntry; degradation: PreparedDegradation | null } {
   const { view, buckets } = computeTrend(name, evaluations, config, { period, bucketCount: DEFAULT_TREND_BUCKETS, now });
-  return { entry: { key: trendKey(name, period), value: toKVValue(view) }, buckets };
+  return { entry: { key: trendKey(name, period), value: toKVValue(view) }, degradation: prepareDegradationInput(name, buckets) };
+}
+
+/** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
+export const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
+
+/** One period's prepared degradation inputs, in metric order. */
+export type PeriodDegradation = { period: Period; prepared: PreparedDegradation[] };
+
+/** A degradation state with no history: every breach count starts at zero. */
+export function statelessDegradation(): DegradationState {
+  return { lastRun: '', breaches: {} };
+}
+
+/**
+ * `meta/dashboard/degradation-signals:<period>` for each period, in the order
+ * given. `state` is updated in place: each period reads the breach counts the
+ * one before it left, so the latest period's win, and `lastRun` becomes `now`.
+ * The caller owns persistence.
+ */
+export function degradationEntries(periods: PeriodDegradation[], state: DegradationState, now: Date): KVEntry[] {
+  const entries = periods.map(({ period, prepared }): KVEntry => {
+    const window = { startDate: new Date(now.getTime() - PERIOD_MS[period]).toISOString(), endDate: now.toISOString() };
+    const reports = finishDegradationSignals(prepared, state, window);
+    for (const r of reports) state.breaches[r.metricName] = r.signal.consecutiveBreaches;
+    return { key: `${DEGRADATION_KV_KEY}:${period}`, value: toKVValue({ period, reports, computedAt: now.toISOString() }) };
+  });
+  state.lastRun = now.toISOString();
+  return entries;
 }

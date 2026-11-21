@@ -11,7 +11,7 @@
 import { group } from 'd3-array';
 import { queriedDateWindow, type CloudBackend } from '../parent/backends.js';
 import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js';
-import { computeRollingDegradationSignals, type DegradationState } from '../parent/qfe-backtest.js';
+import type { DegradationState, PreparedDegradation } from '../parent/qfe-backtest.js';
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
@@ -31,12 +31,14 @@ import { agentStatsWindow, isAgentFinalizeSpan } from './agent-stats.js';
 import { computePipeline } from './pipeline.js';
 import { computeAllDashboardEntries } from './dashboard-summary.js';
 import { previousWindow } from './metric-detail.js';
-import type { ScoredBucket } from './trend.js';
 import { toKVValue, type KVEntry } from './kv-entry.js';
 import {
   correlationsEntry,
   coverageEntries,
   dashboardEntries,
+  degradationEntries,
+  statelessDegradation,
+  type PeriodDegradation,
   evaluationRowsEntry,
   metricDetailEntry,
   pipelineEntry,
@@ -55,8 +57,6 @@ import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 const LOG_PREFIX = '[org-kv-entries]';
 
-/** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
-const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
 const META_CALIBRATION_KEY = 'meta:calibration';
 
 export const QUERY_LIMIT = 200_000;
@@ -239,67 +239,28 @@ function computeEvaluationRowEntries(
 }
 
 /**
- * `trend:<name>:<period>` from the projection the dev route serves, plus the
- * scored buckets per period × metric that the degradation signals are computed
- * from. Those buckets follow the series, so they narrow to concentrated data as
- * the chart does.
+ * `trend:<name>:<period>` from the projection the dev route serves, plus each
+ * period's degradation inputs, prepared from the same buckets in metric order.
  */
 function computeTrendEntries(
   groupedByPeriod: Map<Period, EvaluationsByName>,
   metricNames: string[],
   now: Date,
-): { entries: KVEntry[]; degradationBuckets: Map<Period, Record<string, ScoredBucket[]>> } {
+): { entries: KVEntry[]; degradation: PeriodDegradation[] } {
   const entries: KVEntry[] = [];
-  const degradationBuckets = new Map<Period, Record<string, ScoredBucket[]>>();
+  const degradation: PeriodDegradation[] = [];
   for (const [period, cached] of groupedByPeriod) {
-    const periodBuckets: Record<string, ScoredBucket[]> = {};
-    degradationBuckets.set(period, periodBuckets);
-
+    const prepared: PreparedDegradation[] = [];
     for (const name of metricNames) {
       const config = getQualityMetric(name);
       if (!config) continue;
-      const { entry, buckets } = trendEntry({ name, period }, cached.get(name) ?? [], config, now);
-      periodBuckets[name] = buckets;
-      entries.push(entry);
+      const trend = trendEntry({ name, period }, cached.get(name) ?? [], config, now);
+      if (trend.degradation) prepared.push(trend.degradation);
+      entries.push(trend.entry);
     }
+    degradation.push({ period, prepared });
   }
-  return { entries, degradationBuckets };
-}
-
-/** A degradation state with no history: every breach count starts at zero. */
-export function statelessDegradation(): DegradationState {
-  return { lastRun: '', breaches: {} };
-}
-
-/**
- * `degradation:<period>` from the trend buckets. `degradationState` is updated in
- * place: the latest period's breach counts win, and `lastRun` is set to `now`.
- * The caller owns persistence; a fresh `statelessDegradation()` gives signals
- * with no cross-run breach continuity.
- */
-function computeDegradationEntries(
-  degradationBuckets: Map<Period, Record<string, ScoredBucket[]>>,
-  metricNames: string[],
-  now: Date,
-  degradationState: DegradationState,
-): KVEntry[] {
-  const entries: KVEntry[] = [];
-  for (const [period, metricBuckets] of degradationBuckets) {
-    const ms = PERIOD_MS[period];
-    const windowStart = new Date(now.getTime() - ms);
-    const window = { startDate: windowStart.toISOString(), endDate: now.toISOString() };
-    const reports = computeRollingDegradationSignals(metricBuckets, metricNames, degradationState, window);
-    // latest period wins
-    for (const r of reports) {
-      degradationState.breaches[r.metricName] = r.signal.consecutiveBreaches;
-    }
-    entries.push({
-      key: `${DEGRADATION_KV_KEY}:${period}`,
-      value: toKVValue({ period, reports, computedAt: now.toISOString() }),
-    });
-  }
-  degradationState.lastRun = now.toISOString();
-  return entries;
+  return { entries, degradation };
 }
 
 /** `meta:agents:<period>` from the agent-finalize spans of the span read and each period's rows. */
@@ -387,9 +348,7 @@ export async function computeOrgKvEntries(backend: OrgReadBackend, now: Date, op
 
   const trends = computeTrendEntries(groupedByPeriod, metricNames, now);
   entries.push(...trends.entries);
-  entries.push(...computeDegradationEntries(
-    trends.degradationBuckets, metricNames, now, options.degradationState ?? statelessDegradation(),
-  ));
+  entries.push(...degradationEntries(trends.degradation, options.degradationState ?? statelessDegradation(), now));
 
   if (options.calibrationEntry) entries.push(options.calibrationEntry);
 
