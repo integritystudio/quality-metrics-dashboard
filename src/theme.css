@@ -123,6 +123,8 @@
   --skeleton-md-height: 300px;
   /* Matches CHART_HEIGHT in src/lib/constants.ts */
   --chart-height: 200px;
+  /* Matches WORKFLOW_GRAPH_HEIGHT in src/lib/constants.ts */
+  --workflow-graph-default-height: 600px;
 
   /* Status tints (bg + border pairs) */
   --bg-status-healthy: #0d1f12;
@@ -137,7 +139,6 @@
   --accent-alpha-20: rgba(59, 130, 246, 0.2);
 
   /* Status glow alpha */
-  --healthy-alpha-15: rgba(38, 217, 127, 0.15);
   --warning-alpha-15: rgba(229, 160, 13, 0.15);
   --critical-alpha-20: rgba(240, 68, 56, 0.2);
   --critical-alpha-40: rgba(240, 68, 56, 0.4);
@@ -191,7 +192,6 @@
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-glow-healthy: 0 0 12px var(--healthy-alpha-15);
   --shadow-glow-warning: 0 0 12px var(--warning-alpha-15);
   --shadow-glow-critical: 0 0 12px var(--critical-alpha-20);
 
@@ -280,19 +280,29 @@ body {
   gap: var(--space-4);
 }
 
+/* Shared thin subtle border */
+.card,
+.metric-card-compact,
+.agent-stat-card,
+.session-detail-header,
+.session-vitals-strip,
+.chip-badge {
+  border: var(--border-width-thin) solid var(--border-subtle);
+}
+
 .card {
   background: var(--bg-card);
-  border: var(--border-width-thin) solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
   box-shadow: var(--shadow-sm);
 }
 
-.card-link {
+.card-link,
+.link-plain {
   text-decoration: none;
   color: inherit;
-  display: block;
 }
+.card-link { display: block; }
 
 /* Status color tokens — applied via data-status attribute */
 [data-status="healthy"]  { --s-bg: var(--bg-status-healthy);  --s-border: var(--border-status-healthy);  --s-fg: var(--status-healthy); }
@@ -324,11 +334,15 @@ body {
   font-family: var(--font-mono);
 }
 /* Status badges */
+.status-badge,
+.customer-pill,
+.alert-metric-link {
+  padding: var(--space-px) var(--space-2);
+  border-radius: var(--radius-pill);
+}
 .status-badge {
   gap: var(--space-1-5);
   font-weight: var(--light-bold);
-  padding: var(--space-px) var(--space-2);
-  border-radius: var(--radius-pill);
 }
 .status-badge[data-status] { color: var(--s-fg); background: var(--s-bg); }
 
@@ -384,12 +398,15 @@ body {
 .alert-list {
   list-style: none;
 }
+.alert-item,
+.issue-callout {
+  border-left: var(--border-width-rail) solid;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
 .alert-item {
   padding: var(--space-3) var(--space-4);
-  border-left: var(--border-width-rail) solid;
   background: var(--bg-card);
   margin-bottom: var(--space-2);
-  border-radius: 0 var(--radius) var(--radius) 0;
 }
 .alert-item[data-status] { border-left-color: var(--s-fg); }
 .alert-item .alert-meta,
@@ -441,7 +458,7 @@ body {
 }
 .turn-card-agent { color: var(--turn-color, var(--text-secondary)); }
 /* Turn timeline: turns of the agent named by ?agent= (a workflow graph node click) */
-.turn-card[data-focused] { box-shadow: 0 0 0 3px var(--accent); }
+.turn-card[data-focused] { box-shadow: 0 0 0 var(--border-width-rail) var(--accent); }
 
 /* Admin: a rotated key's new token, held above the key table until dismissed */
 .card.new-key-panel,
@@ -548,11 +565,8 @@ body {
   border-bottom: var(--border-width-thin) solid var(--border);
 }
 .tab-btn {
-  padding: var(--space-2) var(--space-4);
   font-size: var(--font-size-base);
-  border-bottom: var(--border-width-thick) solid transparent;
   margin-bottom: -1px;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 .tab-btn:hover {
   color: var(--text-primary);
@@ -689,9 +703,8 @@ body {
 .ls-id { letter-spacing: var(--letter-spacing-id); }
 /* Issue callout — uses data-status="warning|critical" to drive colors via --s-* variables */
 .issue-callout {
-  border-left: var(--border-width-rail) solid var(--s-fg);
+  border-left-color: var(--s-fg);
   background: var(--s-bg);
-  border-radius: 0 var(--radius) var(--radius) 0;
   padding: var(--space-2-5) var(--space-3-5);
 }
 .issue-callout .callout-title { color: var(--s-fg); }
@@ -726,7 +739,6 @@ body {
 }
 .agent-stat-card {
   background: var(--bg-elevated);
-  border: var(--border-width-thin) solid var(--border-subtle);
   border-radius: var(--radius);
   padding: var(--space-2-5) var(--space-3-5);
 }
@@ -735,25 +747,17 @@ body {
 }
 .session-detail-header {
   background: var(--bg-card);
-  border: var(--border-width-thin) solid var(--border-subtle);
   border-bottom: none;
   padding: var(--space-5) var(--space-6) var(--space-4);
   margin-bottom: 0;
 }
 .session-vitals-strip {
   background: var(--bg-elevated);
-  border: var(--border-width-thin) solid var(--border-subtle);
   border-bottom: var(--border-width-thin) solid var(--border);
   padding: var(--space-3-5) var(--space-6);
   row-gap: var(--space-3);
   margin-bottom: var(--space-0-5);
 }
-.stat-item {
-  flex: 1 1 100px;
-  min-width: 80px;
-  text-align: center;
-}
-
 .stat-value {
   font-size: var(--font-size-stat);
   line-height: 1.1;
@@ -903,10 +907,6 @@ details[open] > .cot-summary::before {
 .eval-summary-card.card:hover {
   border-color: var(--accent);
 }
-.link-plain {
-  text-decoration: none;
-  color: inherit;
-}
 .span-row {
   padding-top: var(--space-2);
   padding-bottom: var(--space-2);
@@ -968,7 +968,6 @@ details[open] > .cot-summary::before {
 /* Compact metric card used in agent eval summary and similar inline panels */
 .metric-card-compact {
   background: var(--bg-card);
-  border: var(--border-width-thin) solid var(--border-subtle);
   border-radius: var(--radius);
   padding: var(--space-2) var(--space-2-5);
   min-width: 140px;
@@ -986,13 +985,6 @@ details[open] > .cot-summary::before {
 .agent-err-rate[data-err-status="warn"] { color: var(--status-warning); }
 .score-band { color: var(--band-fg); }
 
-/* Two-column equal grid */
-.grid-two-col,
-.agent-expanded-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
 /* Minimum width for inline score value labels */
 .score-label-width {
   min-width: var(--space-8);
@@ -1000,6 +992,8 @@ details[open] > .cot-summary::before {
 
 /* Agent expanded panel: sessions + traces two-column grid */
 .agent-expanded-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
   padding: var(--space-3) 0 var(--space-1);
 }
@@ -1016,8 +1010,6 @@ details[open] > .cot-summary::before {
 }
 .alert-metric-link {
   font-family: var(--font-mono);
-  padding: var(--space-px) var(--space-2);
-  border-radius: var(--radius-pill);
   background: var(--accent-alpha-10);
 }
 .alert-metric-link:hover {
@@ -1039,15 +1031,14 @@ details[open] > .cot-summary::before {
   margin-top: var(--space-2);
   overflow: visible;
 }
-/* Shared animated bar fill */
-.threshold-bar-fill,
-.variance-bar-fill {
+.threshold-bar-fill {
   height: 100%;
+  width: var(--bar-fill-width);
+  border-radius: var(--radius-bar);
+  background: var(--status-healthy);
   transition: var(--transition-bar);
 }
-.threshold-bar-fill { width: var(--bar-fill-width); border-radius: var(--radius-bar); background: var(--status-healthy); }
 .threshold-bar-fill[data-violating] { background: var(--status-critical); }
-.variance-bar-fill  { border-radius: var(--radius-xs); }
 .threshold-bar-marker {
   position: absolute;
   top: -3px;
@@ -1162,15 +1153,12 @@ details[open] > .cot-summary::before {
 }
 /* Reusable bar track (progress / duration / mini bars) */
 .bar-track,
-.variance-bar-track,
 .mini-bar {
   height: var(--bar-h, var(--space-1));
   background: var(--bar-track-color, var(--bg-surface));
   border-radius: var(--radius-xs);
 }
-.variance-bar-track,
 .mini-bar { overflow: hidden; }
-.variance-bar-track { flex: 1; }
 
 /* Mini progress bar fill */
 .mini-bar-fill {
@@ -1190,13 +1178,13 @@ details[open] > .cot-summary::before {
 
 /* Monospace utilities */
 .mono      { font-family: var(--font-mono); }
-.mono-2xs  { font-family: var(--font-mono); font-size: var(--font-size-2xs); }
 .mono-xs   { font-family: var(--font-mono); font-size: var(--font-size-xs); }
 /* Muted mono caption: the utility plus the components that share it */
 .mono-xs-muted,
 .histogram-labels,
 .stat-label,
-.confidence-method {
+.confidence-method,
+.customer-view__org {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   color: var(--text-muted);
@@ -1204,11 +1192,7 @@ details[open] > .cot-summary::before {
 .metric-values,
 .provenance-grid,
 .agreement-grid { font-family: var(--font-mono); font-size: var(--font-size-xs); }
-.mono-base { font-family: var(--font-mono); font-size: var(--font-size-base); }
-.mono-md   { font-family: var(--font-mono); font-size: var(--font-size-md); }
-.mono-lg   { font-family: var(--font-mono); font-size: var(--font-size-lg); }
 .mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
-.mono-2xl  { font-family: var(--font-mono); font-size: var(--font-size-2xl); }
 
 /* Font size */
 .text-2xs  { font-size: var(--font-size-2xs); }
@@ -1216,8 +1200,6 @@ details[open] > .cot-summary::before {
 .text-base { font-size: var(--font-size-base); }
 .text-md   { font-size: var(--font-size-md); }
 .text-lg   { font-size: var(--font-size-lg); }
-.text-xl   { font-size: var(--font-size-xl); }
-.text-2xl  { font-size: var(--font-size-2xl); }
 
 /* Text color utilities */
 .text-secondary    { color: var(--text-secondary); }
@@ -1235,7 +1217,6 @@ details[open] > .cot-summary::before {
 .flex-center    { display: flex; align-items: center; }
 .flex-center-gap-3,
 .customer-card__actions { display: flex; align-items: center; gap: var(--space-3); }
-.flex-between-gap-3,
 .tooltip-row,
 .customer-card__header { display: flex; justify-content: space-between; gap: var(--space-3); }
 .align-start    { align-items: flex-start; }
@@ -1245,7 +1226,8 @@ details[open] > .cot-summary::before {
 .font-semibold { font-weight: var(--bold); }
 
 /* Chip / pill */
-.chip { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
+.chip,
+.badge-warning { padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-pill); }
 .chip-colored {
   color: var(--chip-color);
   background-color: color-mix(in srgb, var(--chip-color) var(--chip-tint), transparent);
@@ -1261,10 +1243,8 @@ details[open] > .cot-summary::before {
 .gap-2-5  { gap: var(--space-2-5); }
 .gap-3    { gap: var(--space-3); }
 .gap-4    { gap: var(--space-4); }
-.gap-5    { gap: var(--space-5); }
 .gap-6    { gap: var(--space-6); }
 .gap-8    { gap: var(--space-8); }
-.gap-16   { gap: var(--space-16); }
 
 /* Width */
 .w-full   { width: 100%; }
@@ -1406,10 +1386,7 @@ details[open] > .cot-summary::before {
 .border-t        { border-top: var(--border-width-thin) solid var(--border); }
 
 /* Compound: chip with elevated bg + subtle border */
-.chip-badge {
-  background: var(--bg-elevated);
-  border: var(--border-width-thin) solid var(--border-subtle);
-}
+.chip-badge { background: var(--bg-elevated); }
 
 /* Compound: chip with accent tint bg */
 .chip-accent {
@@ -1434,15 +1411,13 @@ details[open] > .cot-summary::before {
   display: inline-block;
   flex-shrink: 0;
 }
-.dot-sm { width: 8px; height: 8px; }
-.dot-xs { width: 6px; height: 6px; }
+.dot-sm { width: var(--space-2); height: var(--space-2); }
+.dot-xs { width: var(--space-1-5); height: var(--space-1-5); }
 
 /* Compound: warning badge pill */
 .badge-warning {
   color: var(--status-warning);
   background: var(--bg-status-warning);
-  padding: var(--space-px) var(--space-1-5);
-  border-radius: var(--radius-pill);
 }
 
 /* Compound: section rail panel (bg-card + left border rail) */
@@ -1465,22 +1440,28 @@ summary.section-rail {
 /* ─── Workflow components ──────────────────────────────────────────────────── */
 
 /* WorkflowGraph: outer container — height set via --workflow-graph-height CSS variable */
-.workflow-graph-container { height: var(--workflow-graph-height, 600px); }
+.workflow-graph-container { height: var(--workflow-graph-height, var(--workflow-graph-default-height)); }
+
+/* WorkflowGraph: shared node card shape */
+.workflow-node,
+.workflow-cluster-node {
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  font-size: var(--font-size-xs);
+}
 
 /* WorkflowGraph: agent node card */
 .workflow-node {
   width: 220px;
   height: var(--workflow-node-height);
   border: var(--border-width-thick) solid var(--wf-node-border);
-  border-radius: var(--radius-lg);
   background: var(--wf-node-bg);
-  padding: var(--space-3);
-  font-size: var(--font-size-xs);
 }
 .workflow-node--score-high .workflow-node__score { color: var(--wf-score-high-text); }
 .workflow-node--score-mid  .workflow-node__score { color: var(--wf-score-mid-text); }
 .workflow-node--score-low  .workflow-node__score { color: var(--wf-score-low-text); }
-.workflow-node__label {
+.workflow-node__label,
+.workflow-cluster-node__label {
   font-weight: var(--bold);
   margin-bottom: var(--space-1);
 }
@@ -1502,7 +1483,7 @@ summary.section-rail {
 }
 .workflow-node:focus-visible,
 .workflow-cluster-node:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: var(--border-width-rail) solid var(--accent);
   outline-offset: var(--space-0-5);
 }
 
@@ -1514,7 +1495,7 @@ summary.section-rail {
 
 /* WorkflowGraph: highlighted node on the critical path */
 .workflow-node--critical {
-  box-shadow: 0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 var(--border-width-rail) var(--accent);
   z-index: 1;
 }
 
@@ -1523,23 +1504,16 @@ summary.section-rail {
   width: 240px;
   height: 90px;
   border: var(--border-width-thick) dashed var(--wf-cluster-accent);
-  border-radius: var(--radius-lg);
   background: var(--wf-cluster-bg);
-  padding: var(--space-3);
-  font-size: var(--font-size-xs);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
-.workflow-node--score-high, .workflow-cluster-node--score-high { border-color: var(--wf-score-high-border); background: var(--wf-score-high-bg); }
-.workflow-node--score-mid,  .workflow-cluster-node--score-mid  { border-color: var(--wf-score-mid-border); background: var(--wf-score-mid-bg); }
-.workflow-node--score-low,  .workflow-cluster-node--score-low  { border-color: var(--wf-score-low-border); background: var(--wf-score-low-bg); }
+.workflow-node--score-high { border-color: var(--wf-score-high-border); background: var(--wf-score-high-bg); }
+.workflow-node--score-mid  { border-color: var(--wf-score-mid-border); background: var(--wf-score-mid-bg); }
+.workflow-node--score-low  { border-color: var(--wf-score-low-border); background: var(--wf-score-low-bg); }
 .workflow-cluster-node--error { border-color: var(--status-critical); }
-.workflow-cluster-node__label {
-  font-weight: var(--bold);
-  margin-bottom: var(--space-1);
-  color: var(--wf-cluster-accent-strong);
-}
+.workflow-cluster-node__label { color: var(--wf-cluster-accent-strong); }
 
 /* WorkflowGraph / AgentWorkflowView: control & divider bars */
 .workflow-cluster-controls,
@@ -1649,15 +1623,19 @@ summary.section-rail {
   margin-left: auto;
 }
 
-/* AgentWorkflowView: tab button — active and inactive states via data attribute */
+/* Shared tab shape — must follow .btn-reset, which .workflow-tab is combined with */
+.tab-btn,
 .workflow-tab {
   padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-width-thick) solid transparent;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+/* AgentWorkflowView: tab button — active and inactive states via data attribute */
+.workflow-tab {
   font-size: var(--font-size-xs);
   font-weight: var(--bold);
   cursor: pointer;
-  border-bottom: var(--border-width-thick) solid transparent;
   color: var(--text-muted);
-  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 .workflow-tab[aria-selected='true'] {
   border-bottom-color: var(--accent);
@@ -1754,7 +1732,7 @@ summary.section-rail {
   height: var(--chart-height);
 }
 .skeleton-xl {
-  height: 600px;
+  height: var(--workflow-graph-default-height);
 }
 .metric-grid .skeleton {
   height: 180px;
@@ -1792,9 +1770,6 @@ summary.section-rail {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
 }
 .customer-view__org-name { color: var(--text-secondary); }
 
@@ -1843,8 +1818,6 @@ summary.section-rail {
 .customer-pill {
   display: inline-flex;
   align-items: center;
-  padding: var(--space-px) var(--space-2);
-  border-radius: var(--radius-pill);
   font-size: var(--font-size-xs);
   font-weight: var(--light-bold);
   background: var(--bg-elevated);
