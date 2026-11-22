@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { FRONTEND_ACTIVITY_EVENTS } from '../../types/activity.js';
+import { PERMISSION } from '../org-rbac.js';
 import { RoleSchema } from '../roles.js';
 import { UUID_PATTERN } from '../worker-contract.js';
-import type { DashboardPermission } from '../../types/auth.js';
 
 /**
  * Every Supabase id in these schemas — user, role, org. Built from the same
@@ -53,22 +53,10 @@ export type OwnUserRow = z.infer<typeof OwnUserRowSchema>;
 // ---------------------------------------------------------------------------
 
 export const OrgMembershipRoleSchema = z.enum(['owner', 'admin', 'member', 'billing_admin', 'viewer']);
-export type OrgMembershipRoleValue = z.infer<typeof OrgMembershipRoleSchema>;
 
 export const DashboardRoleSchema = z.enum(['owner', 'admin', 'read', 'e2e-dashboard-reader']);
 
-export const DashboardPermissionSchema = z.enum([
-  'dashboard.read',
-  'dashboard.executive',
-  'dashboard.operator',
-  'dashboard.auditor',
-  'dashboard.traces.read',
-  'dashboard.sessions.read',
-  'dashboard.agents.read',
-  'dashboard.pipeline.read',
-  'dashboard.compliance.read',
-  'dashboard.admin',
-] as const satisfies readonly DashboardPermission[]);
+export const DashboardPermissionSchema = z.enum(PERMISSION);
 
 /** organization_memberships row joined with organizations — worker auth fetch. */
 export const OrgMembershipRowSchema = z.object({

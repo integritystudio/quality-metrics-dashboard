@@ -18,23 +18,15 @@ import { randomUUID } from 'node:crypto';
 import type { PostgrestClient } from '@supabase/postgrest-js';
 import { serviceClient } from './supabase-service.js';
 import { CONTENT_TYPE_HEADER, ContentType } from '../../src/lib/http-constants.js';
+import { PERMISSIONS_BY_DASHBOARD_ROLE } from '../../src/lib/org-rbac.js';
+import type { DashboardRole } from '../../src/types/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const E2E_ROLE_NAME = 'e2e-dashboard-reader';
-const E2E_PERMISSIONS = [
-  'dashboard.read',
-  'dashboard.executive',
-  'dashboard.operator',
-  'dashboard.auditor',
-  'dashboard.traces.read',
-  'dashboard.sessions.read',
-  'dashboard.agents.read',
-  'dashboard.pipeline.read',
-  'dashboard.compliance.read',
-];
+const E2E_ROLE_NAME = 'e2e-dashboard-reader' satisfies DashboardRole;
+const E2E_PERMISSIONS = [...PERMISSIONS_BY_DASHBOARD_ROLE[E2E_ROLE_NAME]];
 
 interface Auth0TokenResponse {
   access_token?: string;

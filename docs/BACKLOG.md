@@ -125,7 +125,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-PERMISSION-LITERALS-FOUR-COPIES | Derive the permission and role types from one list | P4 | The same literals are spelled in `types/auth.ts`, `auth-schemas.ts`, `org-rbac.ts` and `e2e/integration/setup.ts`. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-PERMISSION-LITERALS-FOUR-COPIES | Derive the permission and role types from one list | Done | The same literals are spelled in `types/auth.ts`, `auth-schemas.ts`, `org-rbac.ts` and `e2e/integration/setup.ts`. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | P4 | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | P4 | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
@@ -147,6 +147,11 @@ likewise restate the enums and schema beside them in `auth-schemas.ts`.
 
 Acceptance: one list per concept with the types derived by `z.infer` (or from `PERMISSION`), `setup.ts`
 importing the role's permissions, and typecheck green.
+**Done (2026-11-21).** `PERMISSION` (`org-rbac.ts`) is the one permission list and
+`DashboardPermissionSchema` is `z.enum(PERMISSION)`; `DashboardPermission`, `OrgMembershipRole`,
+`DashboardRole` and `OrgMembershipSummary` are `z.infer` of the schemas, imported type-only.
+`OrgMembershipRoleValue` is gone in favour of `OrgMembershipRole`. `setup.ts` takes the role's
+permissions from `PERMISSIONS_BY_DASHBOARD_ROLE`.
 
 **DASH-API-ROUTER-SCAFFOLDING.** Every file under `src/api/routes/` opens with
 `export const xRoutes = new Hono(); xRoutes.onError(handleRouteError);`, and `src/api/server.ts`

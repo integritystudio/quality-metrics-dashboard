@@ -41,7 +41,7 @@ export const PERMISSION = {
   pipeline: 'dashboard.pipeline.read',
   compliance: 'dashboard.compliance.read',
   admin: 'dashboard.admin',
-} as const satisfies Record<string, DashboardPermission>;
+} as const;
 
 /** The permission that grants each view. */
 const VIEW_PERMISSIONS: ReadonlyArray<readonly [DashboardPermission, DashboardView]> = [

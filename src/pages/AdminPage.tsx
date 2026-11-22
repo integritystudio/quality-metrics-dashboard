@@ -9,7 +9,8 @@ import { DetailPageHeader } from '../components/DetailPageHeader.js';
 import { PageShell } from '../components/PageShell.js';
 import { MonoTableHead } from '../components/MonoTableHead.js';
 import { SKELETON_HEIGHT_MD } from '../lib/constants.js';
-import { RotateKeyResponseSchema, type AdminUser, type AdminRole, type AdminMember, type OrgMembershipRoleValue, type ApiKey } from '../lib/validation/auth-schemas.js';
+import { RotateKeyResponseSchema, type AdminUser, type AdminRole, type AdminMember, type ApiKey } from '../lib/validation/auth-schemas.js';
+import type { OrgMembershipRole } from '../types/auth.js';
 import { CONTENT_TYPE_HEADER, ContentType } from '../lib/http-constants.js';
 
 // The key was rotated, so the old one no longer works, but the response carried no token to show.
@@ -39,7 +40,7 @@ const MEMBER_TABLE_COLUMNS = [
   { label: 'Actions', align: 'right' as const },
 ];
 
-const MEMBERSHIP_ROLES: OrgMembershipRoleValue[] = ['owner', 'admin', 'billing_admin', 'member', 'viewer'];
+const MEMBERSHIP_ROLES: OrgMembershipRole[] = ['owner', 'admin', 'billing_admin', 'member', 'viewer'];
 
 /** One key per list, so a reload after a mutation refetches in place (see useRowMutation). */
 const USERS_QUERY_KEY = ['admin', 'users'] as const;
@@ -231,7 +232,7 @@ function MemberRow({
   member: AdminMember;
   canTouchOwner: boolean;
 }) {
-  const [selectedRole, setSelectedRole] = useState<OrgMembershipRoleValue>(member.membershipRole);
+  const [selectedRole, setSelectedRole] = useState<OrgMembershipRole>(member.membershipRole);
   const { busy, error, run } = useRowMutation();
 
   const ownerLocked = (member.membershipRole === 'owner' || selectedRole === 'owner') && !canTouchOwner;
@@ -261,7 +262,7 @@ function MemberRow({
         <select
           className="text-xs form-select"
           value={selectedRole}
-          onChange={(e) => setSelectedRole(e.target.value as OrgMembershipRoleValue)}
+          onChange={(e) => setSelectedRole(e.target.value as OrgMembershipRole)}
           disabled={busy || (member.membershipRole === 'owner' && !canTouchOwner)}
           aria-label={`Membership role for ${member.email ?? member.userId}`}
         >

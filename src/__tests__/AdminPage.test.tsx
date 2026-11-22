@@ -14,8 +14,8 @@ import { onlineManager } from '@tanstack/react-query';
 import { AdminPage } from '../pages/AdminPage.js';
 import { OrgProvider } from '../contexts/OrgContext.js';
 import { ORG_ID_HEADER } from '../lib/worker-contract.js';
-import type { AdminMember, AdminRole, AdminUser, ApiKey, OrgMembershipRoleValue } from '../lib/validation/auth-schemas.js';
-import type { AppSession, DashboardRole } from '../types/auth.js';
+import type { AdminMember, AdminRole, AdminUser, ApiKey } from '../lib/validation/auth-schemas.js';
+import type { AppSession, DashboardRole, OrgMembershipRole } from '../types/auth.js';
 import { TEST_ACCESS_TOKEN, headersOf, makeQueryWrapper } from './support/query-harness.js';
 import { defined } from './support/defined.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../lib/http-constants.js';
@@ -140,7 +140,7 @@ function startFakeWorker(initial: { users?: AdminUser[]; members?: AdminMember[]
       pattern: /^\/api\/admin\/members\/([^/]+)\/role$/,
       handle: ([userId], body) => {
         defined(state.members.find((m) => m.userId === userId)).membershipRole =
-          (body as { membershipRole: OrgMembershipRoleValue }).membershipRole;
+          (body as { membershipRole: OrgMembershipRole }).membershipRole;
       },
     },
     {
@@ -189,7 +189,7 @@ function assignRole(roleId: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Assign' }));
 }
 
-function changeMembershipRole(role: OrgMembershipRoleValue) {
+function changeMembershipRole(role: OrgMembershipRole) {
   fireEvent.change(screen.getByLabelText(`Membership role for ${BOB.email}`), { target: { value: role } });
   fireEvent.click(screen.getByRole('button', { name: 'Update' }));
 }

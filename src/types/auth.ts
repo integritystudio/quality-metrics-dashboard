@@ -1,16 +1,13 @@
+import type { z } from 'zod';
 import type { RoleViewType } from '../types.js';
+import type {
+  DashboardPermissionSchema,
+  DashboardRoleSchema,
+  OrgMembershipRoleSchema,
+  OrgMembershipSummarySchema,
+} from '../lib/validation/auth-schemas.js';
 
-export type DashboardPermission =
-  | 'dashboard.read'
-  | 'dashboard.executive'
-  | 'dashboard.operator'
-  | 'dashboard.auditor'
-  | 'dashboard.traces.read'
-  | 'dashboard.sessions.read'
-  | 'dashboard.agents.read'
-  | 'dashboard.pipeline.read'
-  | 'dashboard.compliance.read'
-  | 'dashboard.admin';
+export type DashboardPermission = z.infer<typeof DashboardPermissionSchema>;
 
 /** Type alias for RoleViewType — avoids duplicating the union in auth-specific code. */
 export type DashboardView = RoleViewType;
@@ -20,18 +17,12 @@ export type DashboardView = RoleViewType;
  * The runtime source of dashboard permissions under org scoping (P5);
  * legacy user_roles names play no part in the mapping.
  */
-export type OrgMembershipRole = 'owner' | 'admin' | 'member' | 'billing_admin' | 'viewer';
+export type OrgMembershipRole = z.infer<typeof OrgMembershipRoleSchema>;
 
 /** The four dashboard roles derived from a membership role (org-rbac.ts). */
-export type DashboardRole = 'owner' | 'admin' | 'read' | 'e2e-dashboard-reader';
+export type DashboardRole = z.infer<typeof DashboardRoleSchema>;
 
-export type OrgMembershipSummary = {
-  orgId: string;
-  slug: string;
-  name: string;
-  membershipRole: OrgMembershipRole;
-  dashboardRole: DashboardRole;
-}
+export type OrgMembershipSummary = z.infer<typeof OrgMembershipSummarySchema>;
 
 export type AppSession = {
   /** Server-side only. Not populated on the client — /api/me never returns internal IDs. */
