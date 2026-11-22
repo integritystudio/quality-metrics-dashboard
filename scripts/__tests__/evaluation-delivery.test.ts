@@ -194,6 +194,23 @@ describe('evaluationId', () => {
     attributes: { [GENAI_EVALUATION_ATTRIBUTES.NAME]: 'tool_correctness', [GENAI_EVALUATION_ATTRIBUTES.SCORE_VALUE]: 1 },
   };
 
+  it('does not depend on the environment the record is built in, so a Worker and the CLI agree on it', () => {
+    const ruleRecord = { timestamp: base.timestamp, evaluationName: 'tool_correctness', scoreValue: 1, explanation: 'ok', evaluator: 'rule', evaluatorKind: 'rule' as const, cohort: 'normal' as const, traceId: 'trace-1', sessionId: 'sess-1' };
+    const idUnder = (homeOrgId: string | undefined): string => {
+      const previous = process.env.HOME_ORG_ID;
+      if (homeOrgId === undefined) delete process.env.HOME_ORG_ID;
+      else process.env.HOME_ORG_ID = homeOrgId;
+      try {
+        return evaluationId({ ...toOTelRecord(ruleRecord) });
+      } finally {
+        if (previous === undefined) delete process.env.HOME_ORG_ID;
+        else process.env.HOME_ORG_ID = previous;
+      }
+    };
+
+    expect(idUnder('org-a')).toBe(idUnder(undefined));
+  });
+
   it('is the same whether or not the record carries an account stamp', () => {
     // A cloud-sourced derive stamps records a local one could not; both are one evaluation.
     expect(evaluationId({ ...base, identityKeyRef: 'OBTOOL_API_KEY' })).toBe(evaluationId(base));

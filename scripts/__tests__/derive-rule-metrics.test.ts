@@ -9,8 +9,8 @@ import { TIME_MS } from '../../../src/lib/core/units.js';
 
 const SECONDS_PER_DAY = TIME_MS.DAY / TIME_MS.SECOND;
 /** After `DERIVE_NO_REPOST_BEFORE_MS`, so no record here is held back. */
-const DAY_ONE = '2026-11-01';
-const DAY_TWO = '2026-11-02';
+const DAY_ONE = '2026-12-01';
+const DAY_TWO = '2026-12-02';
 const DAY_ONE_START_SEC = Date.parse(`${DAY_ONE}T12:00:00.000Z`) / TIME_MS.SECOND;
 const ACCOUNT = 'OBTOOL_API_KEY';
 const UNREAD_ATTRIBUTE = 'integritystudio.tool.input_bytes';

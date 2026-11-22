@@ -170,8 +170,6 @@ export function toOTelRecord(ev: EvalRecord): object {
     // Omit rather than emit '' — TraceIdSchema is optional but rejects an
     // empty string, so a written '' is silently dropped on read.
     ...(ev.traceId && { traceId: ev.traceId }),
-    // Omitted when the env is unset.
-    ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
     // Field order is part of the record's identity: evaluationId() hashes the
     // serialized record when it has no stableEvaluationKey, so moving a field
     // changes every such id and ingest stores re-posts as new rows.

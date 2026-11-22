@@ -460,7 +460,7 @@ async function main(): Promise<void> {
   const accounts = emptyAccountIndex();
   const { inScope, toPost, heldBack } = recordsToPost(allEvals, scope, floorMs);
   if (heldBack.length > 0) {
-    console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies without an evaluationId, so a re-post would duplicate them`);
+    console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies under ids this run cannot reproduce, so a re-post would duplicate them`);
   }
   const posted = await postEvaluationRecords(toPost.map(ev => toOTelRecord(ev)), { dryRun, accounts });
   console.log(`[derive]${dryRun ? ' dry-run:' : ''} posted ${formatPostSummary(posted)}`);

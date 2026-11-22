@@ -483,11 +483,15 @@ export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDa
 
 /**
  * Derive never posts a record dated before this instant, however it is scoped:
- * D1's derive rows before it were shipped without an `evaluation_id` (before
- * migration 0015), so ingest cannot drop a re-post and would duplicate them.
- * Every derive row from this date on has an id (counted 2026-10-04).
+ * a re-post of an older record would not match the id D1 holds for it, so
+ * ingest would store it again. Rows up to this instant were posted with the
+ * run's `HOME_ORG_ID` written into the record as `org_id` and so hashed into
+ * `evaluationId`; the field was dropped here, at the last run that wrote it
+ * (the scheduled one of 2026-11-22T01:00Z), which changed every such id. Rows
+ * before 2026-09-28 have no `evaluation_id` at all (before migration 0015).
+ * A backfill of a date before this instant therefore duplicates, and is refused.
  */
-export const DERIVE_NO_REPOST_BEFORE_MS = Date.parse('2026-09-28T00:00:00.000Z');
+export const DERIVE_NO_REPOST_BEFORE_MS = Date.parse('2026-11-22T01:01:00.000Z');
 
 /** The records derive may post, and those dated before `DERIVE_NO_REPOST_BEFORE_MS`. */
 export function splitAtRepostFloor(records: readonly EvalRecord[]): { toPost: EvalRecord[]; heldBack: EvalRecord[] } {
