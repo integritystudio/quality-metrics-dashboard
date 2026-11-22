@@ -1,6 +1,6 @@
 /**
  * Turns: their shape, their key, anchoring to spans and fitting to the judge's input caps.
- * Imports no Node built-in itself, and loads under workerd (the parent's `dashboard-pipeline-loads.workers.test.ts`);
+ * Imports no Node built-in itself, and loads under workerd (the parent's `pipeline-loads.workers.test.ts`);
  * reading turns out of transcripts is `transcript-turns.ts`.
  */
 
