@@ -48,6 +48,10 @@ import {
   attrString,
   byStartThenSpanId,
   deriveAll,
+  DERIVE_NO_REPOST_BEFORE_MS,
+  lastUtcDays,
+  postFloorMs,
+  recordsToPost,
   isToolSpan,
   ruleRecord,
   toolSuccessOf,
@@ -56,7 +60,7 @@ import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './p
 import { loadCloudSpans, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
 import type { EvaluationResult } from '../../src/backends/index.js';
 import { CALIBRATION_WINDOW_DAYS } from '../../src/lib/quality/quality-constants.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
 import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds, msToNs } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
@@ -203,17 +207,6 @@ const DATE_ARG = '--date=';
 /** Every flag derive reads; judge-evaluations reuses the readers below. */
 const DERIVE_CLI: CliSpec = { values: [DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_FLAG] };
 
-/** The last `days` UTC dates, today included. */
-function lastUtcDays(days: number, now: Date = new Date()): Set<string> {
-  const dates = new Set<string>();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(now);
-    d.setUTCDate(d.getUTCDate() - i);
-    dates.add(toDateOnly(d));
-  }
-  return dates;
-}
-
 /**
  * The dates a run reads: the caller's `--date=`/`--days=`, else the last
  * `defaultDays`. The cloud read needs a bound because an unbounded read has no
@@ -247,19 +240,6 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
 /** `--post-days=N` as a day count; `null` when absent. */
 export function resolvePostDays(args: string[]): number | null {
   return positiveIntArg(POST_DAYS_ARG, parseCli(args, DERIVE_CLI).value(POST_DAYS_ARG)) ?? null;
-}
-
-/**
- * Earliest event time a run posts. Every run re-derives its whole read scope,
- * so without a floor each run would re-post all of it — dropped by ingest, but
- * sent. `--post-days=` sets the floor outright; otherwise an unscoped run gets
- * `DERIVE_POST_WINDOW_DAYS`, and an explicit `--date=`/`--days=` posts its
- * whole scope, which is how a backfill is done. `DERIVE_NO_REPOST_BEFORE_MS`
- * applies on top, whatever the floor.
- */
-export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDays: number | null = null): number {
-  if (postDays !== null) return nowMs - postDays * TIME_MS.DAY;
-  return dateScope ? Number.NEGATIVE_INFINITY : nowMs - DERIVE_POST_WINDOW_DAYS * TIME_MS.DAY;
 }
 
 /**
@@ -321,22 +301,6 @@ export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: Re
     }
   }
   return warnings;
-}
-
-/**
- * Derive never posts a record dated before this instant, however it is scoped:
- * D1's derive rows before it were shipped without an `evaluation_id` (before
- * migration 0015), so ingest cannot drop a re-post and would duplicate them.
- * Every derive row from this date on has an id (counted 2026-10-04).
- */
-export const DERIVE_NO_REPOST_BEFORE_MS = Date.parse('2026-09-28T00:00:00.000Z');
-
-/** The records derive may post, and those dated before `DERIVE_NO_REPOST_BEFORE_MS`. */
-export function splitAtRepostFloor(records: readonly EvalRecord[]): { toPost: EvalRecord[]; heldBack: EvalRecord[] } {
-  const toPost: EvalRecord[] = [];
-  const heldBack: EvalRecord[] = [];
-  for (const r of records) (Date.parse(r.timestamp) >= DERIVE_NO_REPOST_BEFORE_MS ? toPost : heldBack).push(r);
-  return { toPost, heldBack };
 }
 
 /**
@@ -490,14 +454,11 @@ async function main(): Promise<void> {
     Math.max(floorMs, DERIVE_NO_REPOST_BEFORE_MS),
     new Map(scanTranscriptDirs().map(t => [t.sessionId, t.path])),
   ));
-  // A span can carry a timestamp outside the dates read; never post a date the
-  // run did not read.
-  const inScope = allEvals.filter(ev => scope.has(toDateOnly(ev.timestamp)));
 
   // Every cloud span is stamped with the org that shipped it, so no record
   // needs the local account join.
   const accounts = emptyAccountIndex();
-  const { toPost, heldBack } = splitAtRepostFloor(inScope.filter(ev => Date.parse(ev.timestamp) >= floorMs));
+  const { inScope, toPost, heldBack } = recordsToPost(allEvals, scope, floorMs);
   if (heldBack.length > 0) {
     console.log(`[derive] held back ${heldBack.length} records dated before ${new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()}: D1 holds copies without an evaluationId, so a re-post would duplicate them`);
   }
