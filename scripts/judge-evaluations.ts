@@ -46,7 +46,8 @@ import {
   JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags,
 } from './pipeline-stages.js';
-import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
+import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import {
   createBatchProvider,
   BATCH_CANCEL_GRACE_MS,

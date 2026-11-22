@@ -32,7 +32,8 @@ import { asString, readSpanRecord, type AccountRef } from './account-index.js';
 import { TRACE_FILE_PATTERN, fileInWindow, traceFileRecords } from './telemetry-files.js';
 import { CLOUD_SPAN_LIMIT, accountBackend, queryAccountTraces } from './cloud-trace-source.js';
 import { toDateOnly } from '../src/api/api-constants.js';
-import { CHECK_EXIT, nonNegativeNumberArg, parseCli, runIfMain, type CliSpec } from './cli-args.js';
+import { CHECK_EXIT, nonNegativeNumberArg, parseCli, type CliSpec } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 
 const DEFAULT_WINDOW_DAYS = 7;
 const DEFAULT_SETTLE_MINUTES = 60;

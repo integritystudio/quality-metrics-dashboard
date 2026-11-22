@@ -43,7 +43,8 @@ import {
   toFivePointScale,
   type EvaluationStepsCache,
 } from './judge-consolidated.js';
-import { CliArgError, positiveIntArg, runIfMain } from './cli-args.js';
+import { CliArgError, positiveIntArg } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import { increment } from './collections.js';
 import {
   DOCS_DIR,

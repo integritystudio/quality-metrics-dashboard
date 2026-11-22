@@ -62,7 +62,7 @@ import {
   type CriterionAgreement,
 } from './judge-agreement.js';
 import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, jsonSchemaFormat, responseText } from './judge-anthropic-client.js';
-import { runIfMain } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import { getOrThrow, incrementIn } from './collections.js';
 import {
   DOCS_DIR,

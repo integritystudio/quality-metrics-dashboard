@@ -1,17 +1,18 @@
 /**
  * The one place judge scripts construct an Anthropic client. Every client gets
- * the parent's HTTP/1.1 `http1Fetch` (NODE-FETCH-HTTP2-DEAD-SESSION). The SDK
+ * `scriptFetch()`, HTTP/1.1 under a CLI (NODE-FETCH-HTTP2-DEAD-SESSION), unless
+ * the caller passes its own `fetch`. The SDK
  * import is dynamic so that a `--dry-run` never loads it.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ClientOptions } from '@anthropic-ai/sdk';
-import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { JUDGE_EFFORT } from './judge-criteria.js';
+import { scriptFetch } from './script-fetch.js';
 
 export async function createJudgeAnthropicClient(options: ClientOptions = {}): Promise<Anthropic> {
   const { default: AnthropicClient } = await import('@anthropic-ai/sdk');
-  return new AnthropicClient({ ...options, fetch: http1Fetch });
+  return new AnthropicClient({ ...options, fetch: options.fetch ?? scriptFetch() });
 }
 
 export const MAX_TOKENS_STOP_REASON = 'max_tokens';

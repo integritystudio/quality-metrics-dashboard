@@ -34,7 +34,8 @@ import { TRANSCRIPT_DIRS, UUID_PREFIX_REGEX } from './transcript-turns.js';
 import { dateScopeBounds } from './cloud-trace-source.js';
 import { readScope, resolveDateScope } from './derive-evaluations.js';
 import { HOOK_GAP_EXIT_FOUND, JUDGE_DEFAULT_DAYS, rejectRemovedFlags } from './pipeline-stages.js';
-import { exitOnCliArgError, runIfMain } from './cli-args.js';
+import { exitOnCliArgError } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 
 const CLI_PREFIX = '[hook-gap]';
 /** Gaps already acknowledged; see the module comment. */

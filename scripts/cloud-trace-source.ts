@@ -12,7 +12,6 @@
 
 import { ascending, extent } from 'd3-array';
 import { CloudBackend } from '../../src/backends/cloud.js';
-import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import type { TraceSpan } from '../../src/backends/index.js';
 import { statusCodeSchema } from '../../src/lib/otel/constants-otel.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
@@ -20,6 +19,7 @@ import { msToNs, nanosToHrt, nsToMs } from './hrt.js';
 import { toDateOnly } from '../src/api/api-constants.js';
 import { localTraceSpanSchema, type LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 import { IDENTITY_KEY_REF_PATTERN, asString, type AccountRef } from './account-index.js';
+import { scriptFetch } from './script-fetch.js';
 
 /** Upper bound on cloud rows held in memory per account; ~10k spans/day locally. */
 export const CLOUD_SPAN_LIMIT = 500_000;
@@ -65,9 +65,9 @@ export function accountRefsFromEnv(env: NodeJS.ProcessEnv): string[] {
   return Object.keys(env).filter((name) => IDENTITY_KEY_REF_PATTERN.test(name) && asString(env[name])).toSorted();
 }
 
-/** HTTP/1.1, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
+/** Over `scriptFetch()`: HTTP/1.1 under a CLI, as every script client is (NODE-FETCH-HTTP2-DEAD-SESSION). */
 export function accountBackend(apiKey: string): CloudBackend {
-  return new CloudBackend({ apiKey, fetch: http1Fetch });
+  return new CloudBackend({ apiKey, fetch: scriptFetch() });
 }
 
 export async function queryAccountTraces(

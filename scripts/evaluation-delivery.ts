@@ -30,8 +30,8 @@ import {
   type AccountRef,
 } from './account-index.js';
 import { runWithRetry } from './pipeline-stages.js';
+import { scriptFetch } from './script-fetch.js';
 import { describeFetchError } from '../../src/lib/core/describe-unknown.js';
-import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import {
   WEBHOOK_MAX_BATCH_SIZE,
   WEBHOOK_MAX_EXPLANATION_LENGTH,
@@ -406,13 +406,18 @@ export function deliveryFor(route: Route, env: NodeJS.ProcessEnv = process.env):
   return { kind: 'send', destination: destinationFor(route) };
 }
 
+export type SendConfig = {
+  baseUrl: string | undefined;
+  secret: string | undefined;
+  /** The transport, when not `scriptFetch()`. */
+  fetch?: typeof globalThis.fetch;
+};
+
 /**
  * Resolve the ingest base URL and HMAC secret from the environment. `asString`,
  * not `??`: an empty OBTOOL_INGEST_URL must read as unset, and `??` would keep
  * the empty string and POST to `/v1/...`.
  */
-export type SendConfig = { baseUrl: string | undefined; secret: string | undefined };
-
 export function resolveSendConfig(env: NodeJS.ProcessEnv = process.env): SendConfig {
   return {
     baseUrl: asString(env[INGEST_URL_ENV]),
@@ -424,11 +429,9 @@ export function resolveSendConfig(env: NodeJS.ProcessEnv = process.env): SendCon
  * One POST attempt. Never throws: a transport failure is returned as a
  * retryable result, so the caller's batch loop decides what happens next.
  */
-async function postBatchOnce(request: SendRequest): Promise<SendResult> {
+async function postBatchOnce(request: SendRequest, transport: typeof globalThis.fetch | undefined): Promise<SendResult> {
   try {
-    // HTTP/1.1: over the built-in fetch's HTTP/2 session, one destroyed
-    // session failed every later send (NODE-FETCH-HTTP2-DEAD-SESSION).
-    const response = await http1Fetch(request.url, {
+    const response = await (transport ?? scriptFetch())(request.url, {
       method: 'POST',
       headers: request.headers,
       body: request.body,
@@ -460,23 +463,23 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
 export async function sendBatch(
   destination: string,
   payloads: EvaluationPayload[],
-  { baseUrl, secret }: SendConfig,
+  { baseUrl, secret, fetch: transport }: SendConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<SendResult> {
   if (baseUrl === undefined) throw new Error(INGEST_URL_NOT_SET_MESSAGE);
   if (destination === WEBHOOK_DESTINATION) {
     if (secret === undefined) throw new Error('The webhook destination needs INJECT_HMAC_SECRET');
-    return postBatch(webhookRequest(baseUrl, payloads, secret));
+    return postBatch(webhookRequest(baseUrl, payloads, secret), transport);
   }
   const apiKey = env[destination];
   if (apiKey === undefined) throw new Error(`${destination} is not set; check held-for-key before sending`);
-  return postBatch(keyedRequest(baseUrl, payloads, apiKey));
+  return postBatch(keyedRequest(baseUrl, payloads, apiKey), transport);
 }
 
 /** Retry transient failures with exponential backoff; log once on exhaustion. */
-export async function postBatch(request: SendRequest): Promise<SendResult> {
+export async function postBatch(request: SendRequest, transport?: typeof globalThis.fetch): Promise<SendResult> {
   const last = await runWithRetry<SendResult>({
-    attempt: async () => postBatchOnce(request),
+    attempt: async () => postBatchOnce(request, transport),
     shouldRetry: (result) => !result.ok && result.retryable,
     delaysMs: SEND_RETRY_DELAYS_MS,
     onRetry: (waitMs, failedAttempt, totalAttempts, result) => {

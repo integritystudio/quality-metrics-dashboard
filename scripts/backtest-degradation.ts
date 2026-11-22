@@ -32,7 +32,8 @@ import { QUALITY_METRICS } from '../../src/lib/quality/quality-metrics.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { msToNs, nsToMs } from './hrt.js';
 import { importMetaDirname } from '../src/lib/dashboard-file-utils.js';
-import { exitOnCliArgError, parseCli, positiveIntArg, runIfMain } from './cli-args.js';
+import { exitOnCliArgError, parseCli, positiveIntArg } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 
 const INCIDENTS_FILE = join(import.meta.dirname, '.degradation-incidents.json');

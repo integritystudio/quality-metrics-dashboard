@@ -42,7 +42,8 @@ import { anchorTurns, fitContextForJudge, turnKey, type Turn } from './judge-tur
 import { extractTurns } from './transcript-turns.js';
 import { msToNs } from './hrt.js';
 import { DRY_RUN_FLAG, JUDGE_DEFAULT_DAYS, SHIP_TURNS_EXIT_DISCOVERY_FAILED, SHIP_TURNS_EXIT_POST_FAILED, rejectRemovedFlags } from './pipeline-stages.js';
-import { exitOnCliArgError, parseCli, runIfMain } from './cli-args.js';
+import { exitOnCliArgError, parseCli } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import { increment } from './collections.js';
 import { sleep } from './sleep.js';
 

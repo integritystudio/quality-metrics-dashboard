@@ -1,4 +1,4 @@
-import type { TraceSpan } from '../../derive-evaluations.js';
+import type { LocalTraceSpan as TraceSpan } from '../../../../src/lib/validation/dashboard-schemas.js';
 import { SESSION_ATTRIBUTES } from '../../../../src/lib/otel/constants-otel.js';
 import { GENAI_TOOL_ATTRIBUTES } from '../../../../src/lib/otel/genai-attributes.js';
 import { TASK_ATTRIBUTES } from '../../../src/lib/hook-attributes.js';

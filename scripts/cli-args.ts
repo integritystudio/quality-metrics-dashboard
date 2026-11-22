@@ -7,7 +7,6 @@
  */
 
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
-import { pathToFileURL } from 'node:url';
 
 const FLAG_PREFIX = '--';
 const INLINE_VALUE_SEPARATOR = '=';
@@ -167,29 +166,4 @@ export function nonNegativeNumberArg(label: string, raw: string | undefined): nu
   return value;
 }
 
-const FATAL_EXIT_CODE = 1;
-
 export const CHECK_EXIT = { PASS: 0, FAIL: 1, ERROR: 2 } as const;
-
-export type RunIfMainOptions = {
-  fatalExitCode?: number;
-}
-
-/**
- * Run `main()` only when this module is the entry point. Sets `process.exitCode`
- * rather than calling `process.exit`, so buffered stdout and stderr are flushed.
- */
-export function runIfMain(
-  moduleUrl: string,
-  main: () => Promise<unknown>,
-  logPrefix: string,
-  { fatalExitCode = FATAL_EXIT_CODE }: RunIfMainOptions = {},
-): void {
-  if (!process.argv[1] || moduleUrl !== pathToFileURL(process.argv[1]).href) return;
-  main()
-    .then(code => { if (typeof code === 'number') process.exitCode = code; })
-    .catch((err: unknown) => {
-      console.error(`${logPrefix} fatal:`, err);
-      process.exitCode = fatalExitCode;
-    });
-}

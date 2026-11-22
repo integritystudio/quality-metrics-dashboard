@@ -59,7 +59,8 @@ import { CALIBRATION_WINDOW_DAYS } from '../../src/lib/quality/quality-constants
 import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_POST_WINDOW_DAYS, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
 import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
 import { hrtToISO, hrtToSeconds, msToNs } from './hrt.js';
-import { CliArgError, parseCli, positiveIntArg, runIfMain, type CliSpec } from './cli-args.js';
+import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
 import { knownLabelSchema } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';

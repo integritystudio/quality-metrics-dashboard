@@ -62,7 +62,7 @@ import {
   type QualityTurn,
   type ReferenceSummary,
 } from './judge-quality-eval.js';
-import { runIfMain } from './cli-args.js';
+import { runIfMain } from './cli-main.js';
 import { getOrThrow } from './collections.js';
 import {
   DOCS_DIR,
