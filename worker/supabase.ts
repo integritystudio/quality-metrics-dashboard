@@ -55,11 +55,8 @@ export type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' |
 
 type AuditDetails = { roleId?: string; keyId?: string; organizationId?: string };
 
-// Fire-and-forget: logs a sensitive admin mutation by the session user to audit_log without
-// blocking the response. No-ops without an app user; callers fire it only on success.
-// organizationId (P6): org-admin mutations always record session.activeOrgId, so an
-// audit row can never claim a scope the mutation did not have. organization_id exists
-// since 20260320020000_create_phase2_ledger_tables.sql.
+// Callers fire it only on success. Org-admin mutations pass session.activeOrgId as
+// organizationId, so an audit row can never claim a scope the mutation did not have.
 export function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: string, { roleId, keyId, organizationId }: AuditDetails = {}): void {
   const actorUserId = c.get('session').appUserId;
   if (!actorUserId) return;
@@ -79,8 +76,6 @@ export function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: 
   }));
 }
 
-// Fire-and-forget: logs the session user's activity to user_activity without blocking the response.
-// Auth: uses service role key (Auth0 JWTs are not valid Supabase session tokens for RLS).
 // waitUntil keeps the Worker runtime from cancelling the in-flight write after the response is sent.
 export function logActivity(c: AppContext, activityType: UserActivityEvent): void {
   const appUserId = c.get('session').appUserId;

@@ -17,22 +17,18 @@ export type Bindings = {
   DASHBOARD: KVNamespace;
   ASSETS: Fetcher;
   SUPABASE_URL: string;
-  // Service role key for all Supabase DB calls (Auth0 JWTs cannot satisfy Supabase RLS).
-  // Set via: wrangler secret put SUPABASE_SERVICE_ROLE_KEY
   SUPABASE_SERVICE_ROLE_KEY: string;
-  AUTH0_DOMAIN: string;    // e.g. "integritystudio.us.auth0.com"
-  // Custom domain the same tenant also serves logins on, e.g. "auth.integritystudio.ai"
-  // (landing CR70). A token obtained through it carries that host as `iss`, signed by the
-  // same key set, so it is accepted as a second issuer against AUTH0_DOMAIN's JWKS.
-  // Unset on the dev worker: the dev tenant has no custom domain.
+  // Bare hostname, no scheme.
+  AUTH0_DOMAIN: string;
+  // The tenant's custom login domain: a second accepted `iss`, verified against
+  // AUTH0_DOMAIN's JWKS. Unset on the dev worker, whose tenant has none.
   AUTH0_CUSTOM_DOMAIN?: string;
-  AUTH0_AUDIENCE: string;  // e.g. "https://api.integritystudio.dev"
-  // Must be explicitly set to 'true' to enable the test-token bypass.
-  // Never set this in production wrangler.toml — leave absent.
+  AUTH0_AUDIENCE: string;
+  // 'true' enables the test-token bypass. Never set it in production.
   ALLOW_TEST_BYPASS?: string;
   // Org owning all pre-tenancy data. The auth middleware refuses to serve when it is empty.
   HOME_ORG_ID?: string;
-  // JSON array of app user UUIDs — the explicit staff allowlist (decision Q2).
+  // JSON array of app user UUIDs: the explicit staff allowlist.
   STAFF_USER_IDS?: string;
   // Set 'true' to switch off the home-org bare-key dual-read fallback.
   ORG_KV_FALLBACK_DISABLED?: string;

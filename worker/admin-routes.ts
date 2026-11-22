@@ -52,12 +52,10 @@ import {
   NO_RESPONSE_STATUS,
 } from './error-messages.js';
 
-// ---------------------------------------------------------------------------
-// Org-scoped admin — every route is bound to session.activeOrgId, never a
-// client parameter, so an org admin can only ever mutate their own org.
-// ---------------------------------------------------------------------------
-
-/** Org-admin gate: dashboard.admin + an org-scoped session; binds the route to that org. */
+/**
+ * Org-admin gate: dashboard.admin + an org-scoped session. Binds the route to
+ * session.activeOrgId, never a client parameter, so an org admin can only mutate their own org.
+ */
 const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   if (!hasPermission(session, PERMISSION.admin) || !session.activeOrgId) {
@@ -97,21 +95,6 @@ const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
   return next();
 });
 
-// ---------------------------------------------------------------------------
-// API key management (org-scoped admin, P6)
-// ---------------------------------------------------------------------------
-// These routes require dashboard.admin + an active org. The key list and rotation
-// are scoped to session.activeOrgId — an admin can only see and rotate keys that
-// belong to their active org, never another org's keys.
-//
-// Rotation proxies to the Supabase Edge Function api-keys-rotate, server to server.
-// This worker has already verified the user's Auth0 token, so it calls the function
-// with its own service key and names the user in the body. The user's token is never
-// forwarded: the function accepts only a service-level key (verify_jwt = false), and
-// the access token this worker verifies is not a Supabase credential anyway — Supabase
-// Third-Party Auth (CR62) accepts the SPA's Auth0 ID token for direct reads, nothing more.
-// ---------------------------------------------------------------------------
-
 /** The caller's active keys in their active org — the only keys these routes may touch. */
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- a PostgrestFilterBuilder whose six type arguments restate postgrest-js internals; derive from the builder instead
 function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns: string) {
@@ -122,14 +105,8 @@ function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns:
     .eq('status', 'active');
 }
 
-// Admin error handling policy:
-// All admin routes (/api/admin/*) return generic error messages on Supabase REST failures,
-// e.g. "Failed to fetch users" instead of the raw Supabase error body. This is intentional:
-// - The service role key is used, so Supabase error bodies may contain table/column metadata.
-// - Generic messages prevent internal schema details from leaking to admin clients.
-// - HTTP status is always 500 on upstream failure; 400 for input validation.
-// - Supabase errors are swallowed; failures are surfaced only via status code + generic message.
-// This policy aligns with sanitizeErrorForResponse used in API routes.
+// A Supabase failure answers a generic message and a 500, never the upstream body: under the
+// service role key it can carry table and column metadata.
 
 export function registerAdminRoutes(app: Hono<AppEnv>): void {
   app.get('/api/admin/members', requireOrgAdmin, async (c) => {
@@ -295,15 +272,16 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
 
     const keyId = c.req.param('keyId');
 
-    // Verify the key belongs to the caller and to their active org before forwarding.
     const verify = await activeOrgKeys(c.env, appUserId, orgId, 'id')
       .eq('id', keyId)
       .limit(1);
     if (verify.error) return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
     if (!safeArray(verify.data).length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, HttpStatus.Forbidden);
 
-    // Call the function as a service, naming the user this worker verified. The
-    // function rechecks that the key is this user's and still active.
+    // Called with this worker's service key, naming the user it verified; the function
+    // rechecks that the key is this user's and still active. The user's token is never
+    // forwarded: the function accepts only a service-level key (verify_jwt = false), and an
+    // Auth0 access token is not a Supabase credential.
     const fnRes = await fetch(
       `${c.env.SUPABASE_URL}/functions/v1/api-keys-rotate`,
       {
