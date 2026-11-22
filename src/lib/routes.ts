@@ -1,5 +1,6 @@
 const ADMIN_PATH = '/admin';
 const ADMIN_CUSTOMERS_PATH = `${ADMIN_PATH}/customers` as const;
+const ADMIN_JUDGE_PATH = `${ADMIN_PATH}/judge` as const;
 /** The hub's query key for the org to reselect on return (Flutter's `DashboardArgs.initialOrgId`). */
 export const ADMIN_CUSTOMERS_ORG_PARAM = 'org';
 /** The agent session page's query key for the agent to focus (a workflow graph node click). */
@@ -21,6 +22,7 @@ export const ROUTE_PATHS = {
   codeQuality: '/code-quality',
   admin: ADMIN_PATH,
   adminCustomers: ADMIN_CUSTOMERS_PATH,
+  adminJudge: ADMIN_JUDGE_PATH,
 } as const;
 
 /** Route patterns whose parameters the `routes` builders below fill in. */
@@ -53,6 +55,7 @@ export const routes = {
   trace: (traceId: string) => `/traces/${traceId}`,
   workflow: (sessionId: string) => `/workflows/${encodeURIComponent(sessionId)}`,
   admin: () => ADMIN_PATH,
+  adminJudge: () => ADMIN_JUDGE_PATH,
   /** The admin customer hub; with an org id, the hub selects that org once the directory loads. */
   adminCustomers: (orgId?: string) =>
     orgId

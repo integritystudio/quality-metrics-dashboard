@@ -61,6 +61,8 @@ const TrendChart = lazyWithReload(async () => import('./components/TrendChart.js
 const TrendSeries = lazyWithReload(async () => import('./components/TrendSeries.js').then(m => ({ default: m.TrendSeries })));
 const CorrelationsPage = lazyWithReload(async () => import('./pages/CorrelationsPage.js').then(m => ({ default: m.CorrelationsPage })));
 
+const JudgeSettingsPage = lazyWithReload(async () => import('./pages/JudgeSettingsPage.js').then(m => ({ default: m.JudgeSettingsPage })));
+
 const WorkflowPage = lazyWithReload(async () => import('./pages/WorkflowPage.js').then(m => ({ default: m.WorkflowPage })));
 
 // The admin customer view is staff-only, so its five screens load on demand.
@@ -417,6 +419,7 @@ const APP_ROUTES = [
   appRoute(ROUTE_PATHS.degradationSignals, (_params, period) => <DegradationSignalsPage period={period} />),
   appRoute(ROUTE_PATHS.codeQuality, () => <AgentCodeQualityPage />),
   appRoute(ROUTE_PATHS.admin, () => <AdminGuard><AdminPage /></AdminGuard>),
+  appRoute(ROUTE_PATHS.adminJudge, () => <AdminGuard><JudgeSettingsPage /></AdminGuard>, { lazy: 'md' }),
   appRoute(ROUTE_PATHS.adminCustomers, () => <AdminCustomerHubPage />, { Frame: StaffRoute }),
   appRoute(ROUTE_PATTERNS.adminCustomerBilling, (params) => <AdminCustomerBillingPage orgId={params.orgId} />, { Frame: StaffRoute }),
   appRoute(ROUTE_PATTERNS.adminCustomerUsage, (params) => <AdminCustomerUsagePage orgId={params.orgId} />, { Frame: StaffRoute }),

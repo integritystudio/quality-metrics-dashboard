@@ -57,7 +57,7 @@ import { requireParam } from '../src/lib/query-validator.js';
  * Org-admin gate: dashboard.admin + an org-scoped session. Binds the route to
  * session.activeOrgId, never a client parameter, so an org admin can only mutate their own org.
  */
-const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
+export const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   if (!hasPermission(session, PERMISSION.admin)) return forbidden(c);
   c.set('orgId', session.activeOrgId);

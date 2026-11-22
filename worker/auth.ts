@@ -134,7 +134,7 @@ function parseMemberships(raw: unknown): OrgMembershipSummary[] {
 const AUTH_TIMEOUT_MS = 5000;
 
 /** The bearer token on the request, or null when there is none to verify. */
-function bearerToken(c: AppContext): string | null {
+export function bearerToken(c: AppContext): string | null {
   const authHeader = c.req.header('Authorization');
   return authHeader?.startsWith(BEARER_PREFIX) ? authHeader.slice(BEARER_PREFIX.length) : null;
 }

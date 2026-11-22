@@ -33,6 +33,10 @@ export const ERR_REVOKE_ROLE = 'Failed to revoke role';
 export const ERR_FETCH_KEYS = 'Failed to fetch keys';
 export const ERR_KEY_NOT_FOUND_IN_ORG = 'Key not found in active org';
 export const ERR_ROTATION_FAILED = 'Key rotation failed';
+export const ERR_FETCH_JUDGE_CONFIG = 'Failed to fetch judge settings';
+export const ERR_JUDGE_CONFIG_FAILED = 'Judge settings change failed';
+export const ERR_JUDGE_CONFIG_UNAVAILABLE = 'Judge key storage is not configured';
+export const ERR_JUDGE_CONFIG_OWNER_OR_ADMIN = 'Only an org owner or admin may change the judge';
 
 /** Stands in for the status in a log line when `fetch` produced no response at all. */
 export const NO_RESPONSE_STATUS = 'network error';

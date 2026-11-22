@@ -32,6 +32,12 @@ export type Bindings = {
   STAFF_USER_IDS?: string;
   // Set 'true' to switch off the home-org bare-key dual-read fallback.
   ORG_KV_FALLBACK_DISABLED?: string;
+  // The parent's api-provisioning-receiver, which stores an org's judge key in AI Gateway.
+  // Its base URL (a plaintext var), the key id it knows this worker's secret by, and that
+  // secret. Unset, /api/admin/judge saves and removals answer 503.
+  PROVISIONING_RECEIVER_URL?: string;
+  PROVISIONING_SIGNING_KEY_ID?: string;
+  PROVISIONING_SIGNING_SECRET?: string;
 };
 
 /** The client's `AppSession` leaves the ids and org fields optional; the auth middleware sets them all. */

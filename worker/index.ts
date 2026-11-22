@@ -50,6 +50,7 @@ import {
 import { db, logActivity } from './supabase.js';
 import { authenticate, canEnterOrg, orgGrant } from './auth.js';
 import { registerAdminRoutes } from './admin-routes.js';
+import { registerJudgeConfigRoutes } from './judge-config-routes.js';
 import {
   ERR_CALIBRATION_MALFORMED,
   ERR_INTERNAL,
@@ -475,6 +476,7 @@ app.get('/api/routing-telemetry', canRead, validQuery(PeriodQuery), async (c) =>
 });
 
 registerAdminRoutes(app);
+registerJudgeConfigRoutes(app);
 
 // SPA fallback: serve static assets / index.html for non-API routes
 app.get('*', async (c) => {

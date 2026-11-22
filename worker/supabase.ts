@@ -51,7 +51,7 @@ async function insertAndForget(env: SupabaseEnv, table: string, row: Record<stri
   }
 }
 
-export type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'member.remove' | 'key.rotate';
+export type AuditAction = 'role.assign' | 'role.revoke' | 'member.role_change' | 'member.remove' | 'key.rotate' | 'judge_config.set' | 'judge_config.clear';
 
 type AuditDetails = { roleId?: string; keyId?: string; organizationId?: string };
 
