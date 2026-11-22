@@ -14,11 +14,11 @@ import type {
   DashboardResponse,
   ErrorResponse,
   HealthResponse,
-  QualityLiveResponse,
   RoleViewResponse,
 } from './support/api-responses.js';
 import { EVAL_NANOS, makeEvaluation, recentEvalNanos } from './support/fixtures.js';
 import { HttpStatus } from '../lib/http-constants.js';
+import type { QualityLiveData } from '../types.js';
 
 let fixture: FixtureServer;
 
@@ -164,7 +164,7 @@ describe('GET /quality/live', () => {
   it('returns 200 with metrics, sessionCount, lastUpdated', async () => {
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json<QualityLiveResponse>();
+    const body = await res.json<QualityLiveData>();
     expect(body).toHaveProperty('metrics');
     expect(body).toHaveProperty('sessionCount');
     expect(body).toHaveProperty('lastUpdated');
@@ -172,14 +172,14 @@ describe('GET /quality/live', () => {
 
   it('returns metrics sorted by name', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json<QualityLiveResponse>();
+    const body = await res.json<QualityLiveData>();
     const names = body.metrics.map((m) => m.name);
     expect(names).toEqual(names.toSorted());
   });
 
   it('each metric has name, score, evaluatorType, timestamp', async () => {
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json<QualityLiveResponse>();
+    const body = await res.json<QualityLiveData>();
     for (const m of body.metrics) {
       expect(m).toHaveProperty('name');
       expect(m).toHaveProperty('score');
@@ -191,7 +191,7 @@ describe('GET /quality/live', () => {
   it('reports the newest evaluation time as ISO 8601', async () => {
     const NS_PER_MS = 1_000_000n;
     const res = await qualityRoutes.request('/quality/live');
-    const body = await res.json<QualityLiveResponse>();
+    const body = await res.json<QualityLiveData>();
     expect(body.lastUpdated).toBe(new Date(Number((EVAL_NANOS + ONE_HOUR_NANOS) / NS_PER_MS)).toISOString());
   });
 
@@ -199,7 +199,7 @@ describe('GET /quality/live', () => {
     fixture.reset(); // empty evals
     const res = await qualityRoutes.request('/quality/live');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json<QualityLiveResponse>();
+    const body = await res.json<QualityLiveData>();
     expect(body.metrics).toHaveLength(0);
   });
 

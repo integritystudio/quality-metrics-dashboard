@@ -6,15 +6,11 @@ import { PageShell } from '../components/PageShell.js';
 import { ViewSection } from '../components/Section.js';
 import { useApiQuery } from '../hooks/useApiQuery.js';
 import { SKELETON_HEIGHT_LG, STALE_TIME } from '../lib/constants.js';
-import type { CorrelationFeature, Period } from '../types.js';
-
-type CorrelationsResponse = {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-}
+import type { Period } from '../types.js';
+import type { CorrelationsResult } from '../api/aggregates/correlations.js';
 
 export function CorrelationsPage({ period = '30d' }: { period?: Period }) {
-  const { data, isLoading, error } = useApiQuery<CorrelationsResponse>(
+  const { data, isLoading, error } = useApiQuery<CorrelationsResult>(
     ['correlations', period],
     () => `/api/correlations?period=${period}`,
     { staleTime: STALE_TIME.AGGREGATE },

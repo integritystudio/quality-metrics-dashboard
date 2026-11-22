@@ -1,39 +1,12 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import type { Period, MetricTrend, MetricDynamics } from '../types.js';
+import type { Period } from '../types.js';
+import type { TrendView } from '../api/aggregates/trend.js';
 import { DEFAULT_TREND_BUCKETS } from '../lib/constants.js';
 import { useApiQuery } from './useApiQuery.js';
 
-export type PercentileSnapshot = {
-  p10: number;
-  p25: number;
-  p50: number;
-  p75: number;
-  p90: number;
-}
-
-export type TrendBucket = {
-  startTime: string;
-  endTime: string;
-  count: number;
-  avg: number | null;
-  percentiles: PercentileSnapshot | null;
-  trend: MetricTrend | null;
-  dynamics: MetricDynamics | null;
-}
-
-export type TrendResponse = {
-  metric: string;
-  period: string;
-  bucketCount: number;
-  totalEvaluations: number;
-  overallPercentiles: PercentileSnapshot | null;
-  trendData: TrendBucket[];
-  narrowed?: boolean;
-}
-
 /** The Worker serves the synced `trend:<name>:<period>` key, which holds DEFAULT_TREND_BUCKETS buckets whatever `buckets` says. */
-export function useTrend(metricName: string, period: Period, buckets: number = DEFAULT_TREND_BUCKETS): UseQueryResult<TrendResponse> {
-  return useApiQuery<TrendResponse>(
+export function useTrend(metricName: string, period: Period, buckets: number = DEFAULT_TREND_BUCKETS): UseQueryResult<TrendView> {
+  return useApiQuery<TrendView>(
     ['trend', metricName, period, buckets],
     () => `/api/trends/${encodeURIComponent(metricName)}?${new URLSearchParams({ period, buckets: String(buckets) })}`,
     { enabled: !!metricName },

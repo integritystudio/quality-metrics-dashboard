@@ -16,7 +16,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createFixtureServer, evalToWire, spanToWire, type FixtureServer } from './support/fixture-server.js';
 
 import { agentRoutes } from '../api/routes/agents.js';
-import type { AgentDetailResponse, AgentGraphResponse, AgentListResponse, ErrorResponse } from './support/api-responses.js';
+import type { AgentDetailResponse, AgentGraphResponse, ErrorResponse } from './support/api-responses.js';
+import type { AgentStatsResponse } from '../api/aggregates/agent-stats.js';
 import { makeEvaluation, EVAL_NANOS } from './support/fixtures.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../lib/otel-attributes.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
@@ -85,7 +86,7 @@ describe('GET /agents', () => {
   it('returns 200 with empty agents array when no spans', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
     expect(res.status).toBe(HttpStatus.Ok);
-    const body = await res.json<AgentListResponse>();
+    const body = await res.json<AgentStatsResponse>();
     expect(Array.isArray(body.agents)).toBe(true);
     expect(body.agents).toHaveLength(0);
     expect(body.period).toBe('7d');
@@ -93,7 +94,7 @@ describe('GET /agents', () => {
 
   it('returns period, startDate, endDate in response', async () => {
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json<AgentListResponse>();
+    const body = await res.json<AgentStatsResponse>();
     expect(body).toHaveProperty('period', '7d');
     expect(body).toHaveProperty('startDate');
     expect(body).toHaveProperty('endDate');
@@ -115,7 +116,7 @@ describe('GET /agents', () => {
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json<AgentListResponse>();
+    const body = await res.json<AgentStatsResponse>();
     expect(body.agents).toHaveLength(1);
     expect(defined(body.agents[0]).agentName).toBe('general-purpose');
     expect(defined(body.agents[0]).invocations).toBe(2);
@@ -128,7 +129,7 @@ describe('GET /agents', () => {
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json<AgentListResponse>();
+    const body = await res.json<AgentStatsResponse>();
     const oneOfTwoErrored = 1 / 2;
     expect(defined(body.agents[0]).errorRate).toBeCloseTo(oneOfTwoErrored, CLOSE_TO_DIGITS);
   });
@@ -137,7 +138,7 @@ describe('GET /agents', () => {
     fixture.setTraces([makeAgentSpanWire()]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json<AgentListResponse>();
+    const body = await res.json<AgentStatsResponse>();
     const agent = body.agents[0];
     expect(agent).toHaveProperty('agentName');
     expect(agent).toHaveProperty('invocations');
@@ -157,7 +158,7 @@ describe('GET /agents', () => {
     ]);
 
     const res = await agentRoutes.request('/agents?period=7d');
-    const body = await res.json<AgentListResponse>();
+    const body = await res.json<AgentStatsResponse>();
     expect(defined(body.agents[0]).agentName).toBe('busy-agent');
     expect(defined(body.agents[0]).invocations).toBe(2);
     expect(defined(body.agents[1]).invocations).toBe(1);

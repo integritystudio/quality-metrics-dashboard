@@ -11,7 +11,7 @@ import { AuditorView } from '../components/views/AuditorView.js';
 import { ExecutiveView } from '../components/views/ExecutiveView.js';
 import { OperatorView } from '../components/views/OperatorView.js';
 import type { MetricTrend, MetricDynamics, ExecutiveView as ExecutiveViewType } from '../types.js';
-import type { TrendBucket } from '../hooks/useTrend.js';
+import type { TrendBucket } from '../api/aggregates/trend.js';
 import type { ErrorResponse, TrendDetailResponse } from './support/api-responses.js';
 import { createFixtureServer, type FixtureServer } from './support/fixture-server.js';
 import { defined } from './support/defined.js';
@@ -256,8 +256,8 @@ describe('TrendSeries', () => {
 
   it('renders "no scored evaluations" when all avg values are null', () => {
     const buckets: TrendBucket[] = [
-      makeTrendBucket({ avg: null, percentiles: null }),
-      makeTrendBucket({ avg: null, percentiles: null }),
+      makeTrendBucket({ avg: null, percentiles: undefined }),
+      makeTrendBucket({ avg: null, percentiles: undefined }),
     ];
     render(<TrendSeries data={buckets} metricName="relevance" />);
     expect(screen.getByText('No scored evaluations in period')).toBeInTheDocument();

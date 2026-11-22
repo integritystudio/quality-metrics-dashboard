@@ -17,18 +17,18 @@
  */
 
 import type { JsonSafe } from '../../api/api-constants.js';
+import type { EvaluationRow } from '../../api/aggregates/evaluation-rows.js';
+import type { TrendView } from '../../api/aggregates/trend.js';
+import type { checkHealth } from '../../api/data-loader.js';
 import type { WorkflowGraph } from '../../types/workflow-graph.js';
 import type {
   CompositeQualityIndex,
-  CorrelationFeature,
   CoverageMatrix,
   EvaluationResult,
   HumanVerificationEvent,
   MetricDetailResult,
   MetricDynamics,
-  MetricTrend,
   MultiAgentEvaluation,
-  PercentileDistribution,
   QualityDashboardSummary,
   RoleView,
   SLAComplianceResult,
@@ -60,44 +60,15 @@ export type DashboardResponse = JsonSafe<QualityDashboardSummary> & DashboardExt
 /** `GET /dashboard?role=…` — `{ ...view, sparklines }` (plus `cqi` for executive). */
 export type RoleViewResponse = JsonSafe<RoleView> & DashboardExtras;
 
-/** `GET /health` — mirrors `checkHealth()` in data-loader. */
-export type HealthResponse = {
-  status: string;
-  hasData: boolean;
-}
-
-/** `GET /quality/live` — `lastUpdated` and each metric's `timestamp` are ISO 8601. */
-export type QualityLiveResponse = {
-  metrics: Array<{ name: string; score: number; evaluatorType: string; timestamp: string }>;
-  sessionCount: number;
-  lastUpdated: string;
-}
+/** `GET /health`. */
+export type HealthResponse = Awaited<ReturnType<typeof checkHealth>>;
 
 /** `GET /metrics/:name` — `{ ...detail, dynamics }`; `dynamics` is omitted for short periods. */
 export type MetricDetailResponse = JsonSafe<MetricDetailResult> & {
   dynamics?: JsonSafe<MetricDynamics>;
 };
 
-/** One row of `GET /metrics/:name/evaluations`, projected from `EvaluationResult`. */
-type MetricEvaluationRowRaw = {
-  score: number;
-  explanation: EvaluationResult['explanation'];
-  traceId: EvaluationResult['traceId'];
-  timestamp: EvaluationResult['timestamp'];
-  evaluator: EvaluationResult['evaluator'];
-  label: EvaluationResult['scoreLabel'];
-  /** True when `label` is the dashboard's derivation from the score, not the producer's. */
-  labelDerived: boolean;
-  evaluatorType: EvaluationResult['evaluatorType'];
-  spanId: EvaluationResult['spanId'];
-  sessionId: EvaluationResult['sessionId'];
-  agentName: EvaluationResult['agentName'];
-  trajectoryLength: EvaluationResult['trajectoryLength'];
-  stepScores: EvaluationResult['stepScores'];
-  toolVerifications: EvaluationResult['toolVerifications'];
-}
-
-export type MetricEvaluationRow = JsonSafe<MetricEvaluationRowRaw>;
+export type MetricEvaluationRow = JsonSafe<EvaluationRow>;
 
 /** `GET /metrics/:name/evaluations`. */
 export type MetricEvaluationsResponse = {
@@ -108,27 +79,8 @@ export type MetricEvaluationsResponse = {
   hasMore: boolean;
 }
 
-/** One `GET /trends/:name` bucket — mirrors the route's `trendData` entries. */
-export type TrendBucket = {
-  startTime: string;
-  endTime: string;
-  count: number;
-  avg: number | null;
-  percentiles: JsonSafe<PercentileDistribution> | null | undefined;
-  trend: JsonSafe<MetricTrend> | null;
-  dynamics: JsonSafe<MetricDynamics> | null;
-}
-
 /** `GET /trends/:name`. */
-export type TrendDetailResponse = {
-  metric: string;
-  period: string;
-  bucketCount: number;
-  totalEvaluations: number;
-  overallPercentiles: JsonSafe<PercentileDistribution> | null | undefined;
-  trendData: TrendBucket[];
-  narrowed: boolean;
-}
+export type TrendDetailResponse = JsonSafe<TrendView>;
 
 /** A span as it appears on the wire: `bigint` nanos encoded to decimal strings. */
 export type WireSpan = {
@@ -147,33 +99,6 @@ export type TraceDetailResponse = {
   traceId: string;
   spans: WireSpan[];
   evaluations: WireEvaluation[];
-}
-
-/** One entry of `GET /agents`. */
-export type AgentSummary = {
-  agentName: string;
-  invocations: number;
-  errors: number;
-  errorRate: number;
-  rateLimitCount: number;
-  avgOutputSize: number;
-  sessionCount: number;
-  sessionIds: string[];
-  sessionIdsTruncated: boolean;
-  traceIdsTotal: number;
-  traceIds: string[];
-  traceIdsTruncated: boolean;
-  sourceTypes: Record<string, number>;
-  dailyCounts: Record<string, number>;
-  evalSummary: Record<string, { avg: number; min: number; max: number; count: number }>;
-}
-
-/** `GET /agents`. */
-export type AgentListResponse = {
-  period: string;
-  startDate: string;
-  endDate: string;
-  agents: AgentSummary[];
 }
 
 /** `GET /agents/:sessionId`. */
@@ -220,16 +145,10 @@ export type VerificationsResponse = {
 /** `GET /coverage` — `{ period, ...heatmap }`. */
 export type CoverageResponse = JsonSafe<CoverageMatrix> & { period: string };
 
-/** `GET /correlations`. */
-export type CorrelationsResponse = {
-  correlations: CorrelationFeature[];
-  metrics: string[];
-}
-
 /*
  * `GET /api/calibration` (worker route, served from KV) — `CalibrationResponse`
- * in `src/lib/kv-contracts.ts`. Deliberately not re-exported here: the worker
+ * in `src/lib/validation/dashboard-schemas.ts`. Deliberately not re-exported here: the worker
  * serves the `meta:calibration` value byte-for-byte, so the producer and the
  * route share one declaration, and a second import path for it is exactly the
- * drift this file's rules exist to prevent. Import it from `kv-contracts`.
+ * drift this file's rules exist to prevent. Import it from there.
  */
