@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Ship redacted judge turns to the cloud (Phase 5 option B,
- * docs/roadmap/judge-turn-content-cloud.md in the parent repo).
+ * docs/archive/judge-turn-content-cloud.md in the parent repo).
  *
  * Runs where the transcripts are, between derive and the judge in `populate`:
  *   1. discover the sessions the cloud's spans name over the judge's scope,

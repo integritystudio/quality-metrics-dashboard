@@ -30,7 +30,7 @@ parity tests' `it.each` period lists do not cover `90d`.
   30 s only while the 90d page itself is open.
 - **The Workflow's limits are the blocker, not the flag.** Raising `LONGEST_PERIOD_DAYS` triples each
   evaluation partition's read; a step gets 128 MB and its output 1 MiB (parent
-  `docs/roadmap/kv-sync-in-worker.md`). Measure a 90-day run against the dev Workflow before raising
+  `docs/archive/kv-sync-in-worker.md`). Measure a 90-day run against the dev Workflow before raising
   the cap. The prune step's `config.maxDays < LONGEST_PERIOD_DAYS` guard moves with it.
 
 Acceptance: the scheduled Workflow writes the `:90d` entries, the `it.each` period lists in the parity tests
