@@ -325,7 +325,7 @@ describe('the environment is a parameter, so a Worker can pass its bindings', ()
     await new Promise<void>(listening => { server.listen(0, '127.0.0.1', listening); });
     try {
       const { port } = server.address() as AddressInfo;
-      const result = await sendBatch(ACCOUNT_REF, [PAYLOAD], `http://127.0.0.1:${port}`, undefined, { [ACCOUNT_REF]: BOUND_KEY });
+      const result = await sendBatch(ACCOUNT_REF, [PAYLOAD], { baseUrl: `http://127.0.0.1:${port}`, secret: undefined }, { [ACCOUNT_REF]: BOUND_KEY });
       expect(result.ok).toBe(true);
       expect(received.map(headers => headers.authorization)).toEqual([`Bearer ${BOUND_KEY}`]);
     } finally {
@@ -334,6 +334,6 @@ describe('the environment is a parameter, so a Worker can pass its bindings', ()
   });
 
   it('refuses a keyed batch whose key the given env does not hold', async () => {
-    await expect(sendBatch(ACCOUNT_REF, [PAYLOAD], 'http://127.0.0.1:1', undefined, {})).rejects.toThrow(`${ACCOUNT_REF} is not set`);
+    await expect(sendBatch(ACCOUNT_REF, [PAYLOAD], { baseUrl: 'http://127.0.0.1:1', secret: undefined }, {})).rejects.toThrow(`${ACCOUNT_REF} is not set`);
   });
 });

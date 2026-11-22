@@ -411,7 +411,9 @@ export function deliveryFor(route: Route, env: NodeJS.ProcessEnv = process.env):
  * not `??`: an empty OBTOOL_INGEST_URL must read as unset, and `??` would keep
  * the empty string and POST to `/v1/...`.
  */
-export function resolveSendConfig(env: NodeJS.ProcessEnv = process.env): { baseUrl: string | undefined; secret: string | undefined } {
+export type SendConfig = { baseUrl: string | undefined; secret: string | undefined };
+
+export function resolveSendConfig(env: NodeJS.ProcessEnv = process.env): SendConfig {
   return {
     baseUrl: asString(env[INGEST_URL_ENV]),
     secret: asString(env.INJECT_HMAC_SECRET),
@@ -458,8 +460,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
 export async function sendBatch(
   destination: string,
   payloads: EvaluationPayload[],
-  baseUrl: string | undefined,
-  secret: string | undefined,
+  { baseUrl, secret }: SendConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<SendResult> {
   if (baseUrl === undefined) throw new Error(INGEST_URL_NOT_SET_MESSAGE);

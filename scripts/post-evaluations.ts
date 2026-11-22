@@ -121,7 +121,8 @@ export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun:
   };
   const batches = batchRecords(routed, summary);
 
-  const { baseUrl, secret } = resolveSendConfig();
+  const sendConfig = resolveSendConfig();
+  const { baseUrl, secret } = sendConfig;
   if (!dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {
     summary.failure = 'INJECT_HMAC_SECRET is not set, so unstamped records cannot be signed';
     return summary;
@@ -136,7 +137,7 @@ export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun:
       const chunk = payloads.slice(i, i + MAX_BATCH_SIZE);
       if (!dryRun) {
         // eslint-disable-next-line no-await-in-loop -- batches are paced below and abort on the first failure
-        const res = await sendBatch(destination, chunk, baseUrl, secret);
+        const res = await sendBatch(destination, chunk, sendConfig);
         if (!res.ok) {
           summary.failure = `POST to ${destination} failed: ${res.detail}`;
           return summary;
