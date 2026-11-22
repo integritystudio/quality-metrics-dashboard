@@ -46,6 +46,16 @@ describe('useTrace', () => {
     expect(result.current.error?.message).toBe('API error: 500 – "boom"');
   });
 
+  it('does not retry a 401', async () => {
+    const fetchSpy = stubFetch({ error: 'unauthorized' }, { status: HttpStatus.Unauthorized });
+    const { wrapper } = makeQueryWrapper();
+
+    const { result } = renderHook(() => useTrace(TRACE_ID), { wrapper });
+    await waitFor(() => { expect(result.current.isError).toBe(true); });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('sends no request without a trace id', () => {
     const fetchSpy = stubFetch({});
     const { wrapper } = makeQueryWrapper();
