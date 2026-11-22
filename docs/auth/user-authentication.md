@@ -1,4 +1,4 @@
-## Status: Done (Auth0 migration 2026-03-26; org scoping P5/P6 live, `ORG_SCOPING_ENABLED = "true"`)
+## Status: Done (Auth0 migration 2026-03-26; org scoping P5/P6 live and unconditional: the `ORG_SCOPING_ENABLED` flag was removed 2026-11-21)
 
 Auth0 Universal Login is the canonical identity provider. Supabase stores user records, org memberships and RBAC; all DB access via service role key (Auth0 JWTs cannot satisfy Supabase RLS).
 
@@ -19,7 +19,7 @@ Org-scoping design and phases: parent [`docs/roadmap/org-scoped-multi-tenancy.md
 
 ### Session Resolution
 
-With `ORG_SCOPING_ENABLED = "true"` the worker refuses to serve (500) if `HOME_ORG_ID` is empty.
+The worker refuses to serve (500) if `HOME_ORG_ID` is empty.
 
 1. **Active org** — first match wins:
    - `X-Org-Id` header (must be a UUID the user is a member of, or the user is staff; otherwise 403)
