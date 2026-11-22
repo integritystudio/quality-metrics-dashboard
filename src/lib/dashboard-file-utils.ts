@@ -60,72 +60,6 @@ export async function* streamJsonlWithValidation<T>(
 }
 
 /**
- * Read entire JSONL file with validation, collecting into array.
- * Skips invalid lines silently.
- *
- * @param filePath - Path to JSONL file
- * @param schema - Zod schema for validation
- * @param limit - Maximum records to return
- * @returns Array of validated entries
- */
-export async function readJsonlWithValidation<T>(
-  filePath: string,
-  schema: ParseableSchema<T>,
-  limit?: number
-): Promise<T[]> {
-  const results: T[] = [];
-
-  for await (const entry of streamJsonlWithValidation(filePath, schema)) {
-    results.push(entry);
-    if (limit && results.length >= limit) break;
-  }
-
-  return results;
-}
-
-/**
- * Read lines from file synchronously with validation.
- * Useful for small files where async is not needed.
- *
- * @param filePath - Path to JSONL file
- * @param schema - Zod schema for validation
- * @param limit - Maximum records to return
- * @returns Array of validated entries
- */
-export function readJsonlWithValidationSync<T>(
-  filePath: string,
-  schema: ParseableSchema<T>,
-  limit?: number
-): T[] {
-  const results: T[] = [];
-
-  if (!existsSync(filePath)) return results;
-
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split('\n');
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      try {
-        const parsed = JSON.parse(line) as unknown;
-        const result = schema.safeParse(parsed);
-        if (!result.success) continue;
-        results.push(result.data);
-        if (limit && results.length >= limit) break;
-      } catch {
-        // Silently skip invalid lines
-      }
-    }
-  } catch {
-    // Return partial results if file read fails
-  }
-
-  return results;
-}
-
-/**
  * Load and validate a JSON file.
  *
  * @param filePath - Path to JSON file
@@ -133,7 +67,7 @@ export function readJsonlWithValidationSync<T>(
  * @returns Validated object, or null if not found
  * @throws If validation fails
  */
-export function loadJsonWithValidation<T>(
+function loadJsonWithValidation<T>(
   filePath: string,
   schema: ParseableSchema<T>
 ): T | null {

@@ -50,7 +50,6 @@ export const PublicUserSchema = z.object({
   default_organization_id: UuidSchema.nullable().optional(),
 });
 
-export type PublicUser = z.infer<typeof PublicUserSchema>;
 
 /**
  * The caller's own `public.users` row as the browser reads it through PostgREST with its
@@ -78,7 +77,6 @@ export const OrgMembershipRoleSchema = z.enum(['owner', 'admin', 'member', 'bill
 export type OrgMembershipRoleValue = z.infer<typeof OrgMembershipRoleSchema>;
 
 export const DashboardRoleSchema = z.enum(['owner', 'admin', 'read', 'e2e-dashboard-reader']);
-export type DashboardRoleValue = z.infer<typeof DashboardRoleSchema>;
 
 export const DashboardPermissionSchema = z.enum([
   'dashboard.read',
@@ -103,7 +101,6 @@ export const OrgMembershipRowSchema = z.object({
     name: z.string(),
   }).nullable(),
 });
-export type OrgMembershipRow = z.infer<typeof OrgMembershipRowSchema>;
 
 /** Session/me-payload membership summary. */
 export const OrgMembershipSummarySchema = z.object({
@@ -118,7 +115,6 @@ export const OrgMembershipSummarySchema = z.object({
 export const OrgSwitchRequestSchema = z.object({
   orgId: UuidSchema,
 });
-export type OrgSwitchRequest = z.infer<typeof OrgSwitchRequestSchema>;
 
 /** organization_memberships row joined with users — GET /api/admin/members fetch. */
 export const AdminMemberRowSchema = z.object({
@@ -129,7 +125,6 @@ export const AdminMemberRowSchema = z.object({
     email: z.email().optional().nullable(),
   }).nullable(),
 });
-export type AdminMemberRow = z.infer<typeof AdminMemberRowSchema>;
 
 /** Member list item returned by GET /api/admin/members. */
 export const AdminMemberSchema = z.object({
@@ -144,7 +139,6 @@ export type AdminMember = z.infer<typeof AdminMemberSchema>;
 export const UpdateMemberRoleRequestSchema = z.object({
   membershipRole: OrgMembershipRoleSchema,
 });
-export type UpdateMemberRoleRequest = z.infer<typeof UpdateMemberRoleRequestSchema>;
 
 /**
  * user_roles joined with roles — returns role metadata and permissions
@@ -156,7 +150,6 @@ export const UserRoleRowSchema = z.object({
   }).nullable(),
 });
 
-export type UserRoleRow = z.infer<typeof UserRoleRowSchema>;
 
 /**
  * POST /api/activity request body — frontend-initiated audit events
@@ -189,7 +182,6 @@ export const AdminUserRoleRowSchema = z.object({
   }).nullable(),
 });
 
-export type AdminUserRoleRow = z.infer<typeof AdminUserRoleRowSchema>;
 
 /**
  * User list item returned by GET /api/admin/users
@@ -211,7 +203,6 @@ export const AssignRoleRequestSchema = z.object({
   role_id: UuidSchema,
 });
 
-export type AssignRoleRequest = z.infer<typeof AssignRoleRequestSchema>;
 
 /**
  * API /api/me response
@@ -229,7 +220,6 @@ export const MeResponseSchema = z.object({
   isStaff: z.boolean().optional(),
 });
 
-export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // API key management

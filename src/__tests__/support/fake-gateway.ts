@@ -26,7 +26,6 @@ export type GatewayRequest = {
 type Responders = Partial<Record<GatewayRoute, (orgId: string) => unknown>>;
 
 const SWITCH_PATH = '/api/org/switch';
-const ADMIN_ORGS = '/v1/admin/orgs';
 
 const ROUTE_PATTERNS: Array<[GatewayRoute, RegExp]> = [
   ['directory', /^\/v1\/admin\/orgs$/],
@@ -95,5 +94,3 @@ export function startFakeGateway(responders: Responders) {
     switchRequests: () => requests.filter((r) => r.path === SWITCH_PATH),
   };
 }
-
-export { ADMIN_ORGS as FAKE_GATEWAY_DIRECTORY_PATH };

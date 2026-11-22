@@ -1,6 +1,5 @@
 export type {
   TriggeredAlert,
-  AlertSeverity,
 } from '@parent/lib/quality/quality-alert-schemas.js';
 export type {
   SLAComplianceResult,
@@ -11,16 +10,12 @@ export type {
   QualityMetricConfig,
   ConfidenceIndicator,
   WorstExplanation,
-  TrendDirection,
 } from '@parent/lib/quality/quality-result-schemas.js';
 export type { MetricTrend } from '@parent/lib/quality/quality-constants.js';
 export type {
   PipelineResult,
   PipelineStage,
   PipelineDropoff,
-  CoverageHeatmap,
-  CoverageCell,
-  CoverageGap,
   CoverageStatus,
   CoverageMatrix,
   CoverageGapSummary,
@@ -45,11 +40,8 @@ export type { CompositeQualityIndex, CQIContribution } from '@parent/lib/quality
 export type { CorrelationFeature } from '@parent/lib/quality/qfe-correlation.js';
 export type { HandoffEvaluation, TurnLevelResult, MultiAgentEvaluation } from '@parent/lib/quality/quality-multi-agent.js';
 export type { HumanVerificationEvent } from '@parent/lib/audit/verification-events.js';
-export type { SLAEvaluationResult } from '@parent/lib/quality/quality-sla.js';
 
 export type { Period } from './lib/constants.js';
-
-export type OverallStatus = 'healthy' | 'warning' | 'critical' | 'no_data';
 
 export type LiveMetric = {
   name: string;

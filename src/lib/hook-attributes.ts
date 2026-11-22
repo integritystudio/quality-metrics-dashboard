@@ -78,11 +78,6 @@ export const ALERT_ATTRIBUTES = {
   TRIGGERED_COUNT: 'integritystudio.alerts.triggered_count',
 } as const;
 
-/** The session transcript. An agent's own transcript is `AGENT_ATTRIBUTES.TRANSCRIPT_PATH`. */
-export const TRANSCRIPT_ATTRIBUTES = {
-  PATH: 'integritystudio.transcript.path',
-} as const;
-
 export const CODE_ATTRIBUTES = {
   EVENT: 'integritystudio.code.event',
   CONTENT_KIND: 'integritystudio.code.content_kind',

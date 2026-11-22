@@ -85,8 +85,6 @@ export const routingTelemetryKvSchema = z.object({
   groups: z.array(routingTelemetryGroupSchema).default([]),
 });
 
-export type RoutingTelemetryKvData = z.infer<typeof routingTelemetryKvSchema>;
-
 // ---------- Calibration KV contract ----------
 
 /**

@@ -228,14 +228,6 @@ async function queryLogsWithDefaultRange(
   return sharedCloudRead(cloudReadKey('logs', query), async () => (await queryLogs(query, { backend: getBackend() })).logs);
 }
 
-export async function loadLogsByTraceId(
-  traceId: string,
-  startDate?: string,
-  endDate?: string,
-): Promise<Awaited<ReturnType<typeof queryLogs>>['logs']> {
-  return queryLogsWithDefaultRange({ traceId }, startDate, endDate);
-}
-
 export async function loadVerifications(opts: {
   startDate?: string;
   endDate?: string;

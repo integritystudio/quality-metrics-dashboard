@@ -12,8 +12,6 @@ import { computeCoverageMatrix, type CoverageInput } from '../parent/quality-vis
 import { RULE_EVALUATOR_TYPE } from '../api-constants.js';
 import type { EvaluationResult } from '../../types.js';
 
-export { RULE_EVALUATOR_TYPE };
-
 /** What the coverage matrix reads from a row; a full `EvaluationResult` qualifies. */
 export type CoverageRow = CoverageInput & Pick<EvaluationResult, 'evaluatorType'>;
 
