@@ -2,10 +2,8 @@
  * The session and agent KV entries, one builder per partition: `session:<id>`
  * from one session's spans and evaluations, `agent:<name>` folded one session
  * at a time into bounded accumulators, and `meta:agents:<period>` from a
- * period's agent-finalize spans. The CLI (`org-kv-entries.ts`) loops these over
- * a whole org held in memory; the Workflow (`services/kv-sync-workflow`) calls
- * them one session or period per step, so the two write byte-identical values
- * for the parity gate in `docs/roadmap/kv-sync-in-worker.md`.
+ * period's agent-finalize spans. The parent's KV sync Workflow
+ * (`services/kv-sync-workflow`) calls them one session or period per step.
  */
 
 import { descending, minIndex, quantile } from 'd3-array';

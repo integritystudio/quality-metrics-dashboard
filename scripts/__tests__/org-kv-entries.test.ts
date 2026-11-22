@@ -9,7 +9,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import { dashboardEntry } from '../../src/api/aggregates/kv-entry.js';
-import { computeOrgKvEntries, QUERY_LIMIT, type OrgComputation, type OrgReadBackend } from '../../src/api/aggregates/org-kv-entries.js';
+import { computeOrgKvEntries, QUERY_LIMIT, type OrgComputation, type OrgReadBackend } from './support/whole-org-kv-entries.js';
 import { addRecentSession } from '../../src/api/aggregates/session-entries.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';

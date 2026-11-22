@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { orgPrefixedKey } from '../kv-client.js';
 import { calibrationEntries, loadCalibrationEntry } from '../publish-calibration.js';
-import { buildCalibrationEntry, META_CALIBRATION_KEY } from '../../src/api/aggregates/org-kv-entries.js';
+import { buildCalibrationEntry, META_CALIBRATION_KEY } from '../../src/api/aggregates/calibration-entry.js';
 import { buildTraceEntries } from '../../src/api/aggregates/trace-entries.js';
 import { saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';

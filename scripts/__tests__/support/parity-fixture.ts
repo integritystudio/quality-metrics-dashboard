@@ -8,16 +8,12 @@ import {
   type FixtureServer,
   type TraceWireRow,
 } from '../../../src/__tests__/support/fixture-server.js';
-import { computeOrgKvEntries, type OrgComputation } from '../../../src/api/aggregates/org-kv-entries.js';
+import { computeOrgKvEntries, type OrgComputation } from './whole-org-kv-entries.js';
 
 /** The `evaluator_type` of a row with no kind: it reads back with neither a kind nor a legacy type. */
 const NO_EVALUATOR_TYPE = '';
 
-/**
- * Both writers' default window. The fixture goes through the builder they share,
- * as a non-home org (no calibration or degradation state): the CLI's wrapper
- * drops the families it has handed to the Workflow.
- */
+/** The sync's window. The fixture computes as a non-home org (no degradation state). */
 const SYNC_WINDOW_DAYS = 30;
 
 /**

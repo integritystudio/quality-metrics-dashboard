@@ -1,10 +1,8 @@
 /**
  * The evaluation-family KV entries, one builder per partition: a period's
  * cross-metric entries from every row's facets, and a metric's entries from
- * that metric's rows. `org-kv-entries.ts` (the CLI sync) loops these over a
- * whole org held in memory; the Workflow (`services/kv-sync-workflow`) calls
- * the same builders one partition per step, so the two write byte-identical
- * values for the parity gate in `docs/roadmap/kv-sync-in-worker.md`.
+ * that metric's rows. The parent's KV sync Workflow
+ * (`services/kv-sync-workflow`) calls them one partition per step.
  */
 
 import type { EvaluationResult, PipelineResult } from '../../types.js';

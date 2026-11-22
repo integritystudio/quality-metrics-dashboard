@@ -1,9 +1,7 @@
 /**
- * The per-trace KV entries, one builder per trace: the CLI (`org-kv-entries.ts`)
- * loops it over every trace a whole org's evaluations name, the Workflow
- * (`services/kv-sync-workflow`) over one batch of trace ids per step. The two
- * write byte-identical values for the parity gate in
- * `docs/roadmap/kv-sync-in-worker.md`.
+ * The per-trace KV entries, one builder per trace. The parent's KV sync
+ * Workflow (`services/kv-sync-workflow`) calls it over one batch of trace ids
+ * per step.
  */
 
 import type { EvaluationResult, TraceSpan } from '../../types.js';
@@ -32,7 +30,7 @@ export function traceEntries(traceId: string, evaluations: EvaluationResult[], s
   ];
 }
 
-/** The pair for every trace in `traceIds`, in that order, from the whole-org maps the CLI holds. */
+/** The pair for every trace in `traceIds`, in that order, from maps of a whole org's evaluations and spans. */
 export function buildTraceEntries(
   traceIds: string[],
   evalsByTrace: Map<string, EvaluationResult[]>,

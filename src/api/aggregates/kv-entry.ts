@@ -1,9 +1,8 @@
 /**
  * A KV entry as the sync writers hand it to Cloudflare: the serialised value and,
  * when the value carries run-time fields, the basis change detection hashes
- * instead. Shared by the parity gate's reference build and the Workflow
- * (`services/kv-sync-workflow`), which must hash a given view identically for
- * the parity gate in `docs/roadmap/kv-sync-in-worker.md`.
+ * instead. The parent's KV sync Workflow
+ * (`services/kv-sync-workflow`) writes these.
  */
 
 import { bigintReplacer } from '../api-constants.js';
@@ -18,11 +17,8 @@ export type KVEntry = { key: string; value: string; expirationTtl?: number; hash
 export const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
 
 /**
- * The key families the Workflow writes and the CLI no longer does, as each
- * logical key's prefix (no `org:<id>:`). Both writers read this one list, so a
- * family has exactly one writer: adding a prefix here hands it over on the
- * CLI's next run, and the Workflow takes it at its next deploy. Deploy the
- * Workflow after the CLI picks the change up, never before, or both write it.
+ * The key families and whole keys the parent's KV sync Workflow writes, as each
+ * logical key's prefix (no `org:<id>:`). It takes a change here at its next deploy.
  */
 export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:', 'dashboard:', 'metric:', 'trend:', `${DEGRADATION_KV_KEY}:`, 'session:', 'trace:', 'evaluations:trace:', 'agent:', 'meta:agents:', 'meta:lastSync', 'system:lastSync'];
 

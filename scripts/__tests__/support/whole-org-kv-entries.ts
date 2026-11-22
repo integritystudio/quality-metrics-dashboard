@@ -1,23 +1,19 @@
 /**
- * Every KV entry one org's dashboard is served from, computed from that org's
- * cloud rows, a whole org at a time. It is the reference the parent's KV sync
- * Workflow (`services/kv-sync-workflow`) must stay hash-equal to: the parity
- * gate and the Workflow's parity tests run it beside the Workflow, which calls
- * the same builders one partition per step. Nothing here reads a file, the
- * environment or `process.argv`.
+ * Every KV entry one org's dashboard is served from, computed a whole org at a
+ * time from that org's cloud rows, through the single-partition builders the
+ * parent's KV sync Workflow calls one partition per step. Test support only:
+ * the route parity tests take the KV side of each comparison from it.
  */
 
 import { group } from 'd3-array';
-import { queriedDateWindow, type CloudBackend } from '../parent/backends.js';
-import { getQualityMetric, QUALITY_METRICS } from '../parent/quality-metrics.js';
-import type { DegradationState, PreparedDegradation } from '../parent/qfe-backtest.js';
-import type { CalibrationState } from '../parent/qfe-percentiles.js';
-import type { EvaluationResult, TraceSpan } from '../../types.js';
-import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { PERIOD_MS, TIME_MS, type Period } from '../../lib/constants.js';
-import { PERIOD_KEYS } from '../../lib/periods.js';
-import { pushTo } from '../../lib/collections.js';
-import { extractFiniteScores, msToNs } from '../api-constants.js';
+import { queriedDateWindow, type CloudBackend } from '../../../src/api/parent/backends.js';
+import { getQualityMetric, QUALITY_METRICS } from '../../../src/api/parent/quality-metrics.js';
+import type { DegradationState, PreparedDegradation } from '../../../src/api/parent/qfe-backtest.js';
+import type { EvaluationResult, TraceSpan } from '../../../src/types.js';
+import { PERIOD_MS, TIME_MS, type Period } from '../../../src/lib/constants.js';
+import { PERIOD_KEYS } from '../../../src/lib/periods.js';
+import { pushTo } from '../../../src/lib/collections.js';
+import { extractFiniteScores, msToNs } from '../../../src/api/api-constants.js';
 import {
   CODE_EVENT,
   CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
@@ -25,12 +21,12 @@ import {
   CODE_QUALITY_LOOKBACK_DAYS,
   summarizeCodeQuality,
   type CodeQualityResponse,
-} from '../code-quality-summary.js';
-import { agentStatsWindow, isAgentFinalizeSpan } from './agent-stats.js';
-import { computePipeline } from './pipeline.js';
-import { computeAllDashboardEntries } from './dashboard-summary.js';
-import { previousWindow } from './metric-detail.js';
-import { toKVValue, type KVEntry } from './kv-entry.js';
+} from '../../../src/api/code-quality-summary.js';
+import { agentStatsWindow, isAgentFinalizeSpan } from '../../../src/api/aggregates/agent-stats.js';
+import { computePipeline } from '../../../src/api/aggregates/pipeline.js';
+import { computeAllDashboardEntries } from '../../../src/api/aggregates/dashboard-summary.js';
+import { previousWindow } from '../../../src/api/aggregates/metric-detail.js';
+import { toKVValue, type KVEntry } from '../../../src/api/aggregates/kv-entry.js';
 import {
   correlationsEntry,
   coverageEntries,
@@ -42,7 +38,7 @@ import {
   metricDetailEntry,
   pipelineEntry,
   trendEntry,
-} from './evaluation-entries.js';
+} from '../../../src/api/aggregates/evaluation-entries.js';
 import {
   accumulateSessionAgents,
   agentEntries as buildAgentEntries,
@@ -50,14 +46,12 @@ import {
   sessionEntry,
   spanSessionId,
   type AgentAccumulator,
-} from './session-entries.js';
-import { buildTraceEntries } from './trace-entries.js';
-import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
-import { CODE_QUALITY_KV_KEY } from '../../lib/worker-contract.js';
+} from '../../../src/api/aggregates/session-entries.js';
+import { buildTraceEntries } from '../../../src/api/aggregates/trace-entries.js';
+import { CODE_ATTRIBUTES } from '../../../src/lib/hook-attributes.js';
+import { CODE_QUALITY_KV_KEY } from '../../../src/lib/worker-contract.js';
 
-const LOG_PREFIX = '[org-kv-entries]';
-
-export const META_CALIBRATION_KEY = 'meta:calibration';
+const LOG_PREFIX = '[whole-org-kv-entries]';
 
 export const QUERY_LIMIT = 200_000;
 /** Span queries need a higher limit than evaluation queries to capture all sessions. */
@@ -65,28 +59,6 @@ const SPAN_QUERY_LIMIT = 1_000_000;
 
 /** Metric detail baselines each period against the one before it, so the read spans two of the longest. */
 const METRIC_DETAIL_WINDOWS = 2;
-
-export function buildCalibrationEntry(
-  state: CalibrationState | null,
-): KVEntry | null {
-  if (!state?.distributions || Object.keys(state.distributions).length === 0) {
-    return null;
-  }
-  const distributions: CalibrationResponse['distributions'] = {};
-  const sampleCounts: CalibrationResponse['sampleCounts'] = {};
-  for (const [metric, entry] of Object.entries(state.distributions)) {
-    distributions[metric] = entry.distribution;
-    sampleCounts[metric] = entry.sampleSize;
-  }
-  // Typed as the shared contract so a drift between what this writes and what
-  // `useCalibration` reads is a typecheck failure, not a runtime surprise.
-  const payload: CalibrationResponse = {
-    distributions,
-    sampleCounts,
-    lastCalibrated: state.lastCalibrated,
-  };
-  return { key: META_CALIBRATION_KEY, value: toKVValue(payload) };
-}
 
 /** Groups by metric, the input every aggregate is built from. */
 function groupByMetric(evals: EvaluationResult[]): EvaluationsByName {

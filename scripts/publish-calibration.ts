@@ -6,7 +6,7 @@
 import { loadCalibrationState } from '../../src/lib/quality/qfe-percentiles.js';
 import { CALIBRATION_STATE_FILE } from '../../src/lib/quality/quality-constants.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
-import { buildCalibrationEntry, META_CALIBRATION_KEY } from '../src/api/aggregates/org-kv-entries.js';
+import { buildCalibrationEntry, META_CALIBRATION_KEY } from '../src/api/aggregates/calibration-entry.js';
 import type { KVEntry } from '../src/api/aggregates/kv-entry.js';
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
 import { orgPrefixedKey, putKvEntries } from './kv-client.js';
