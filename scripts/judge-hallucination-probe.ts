@@ -5,6 +5,8 @@
  *
  * - `isolated`: HALLUCINATION_CRITERIA through scoreCriterion, the path the eval's
  *   reference uses, so only the model differs from the reference.
+ * - `consolidated`: the production call with `directHallucination`, every criterion
+ *   in one call, so the scheduled run's own hallucination score is what is compared.
  * - `claims`: two calls per turn. One lists the claims the output presents as
  *   observed; one labels each against the tool output as supported, contradicted
  *   or absent. A turn is flagged when any claim is contradicted or absent, and its
@@ -14,7 +16,7 @@
  * for `isolated` only: a `claims` score is a share of claims, not a grade.
  *
  * Usage:
- *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-hallucination-probe.ts --method isolated|claims [--labels <run.json>]
+ *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-hallucination-probe.ts --method isolated|consolidated|claims [--thinking disabled|adaptive] [--effort low|medium|high|xhigh|max] [--labels <run.json>]
  */
 
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -25,8 +27,13 @@ import { sanitizeContextArray, sanitizeForPrompt, safeJSONParse } from '../../sr
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { CliArgError, exitOnCliArgError, parseCli } from './cli-args.js';
 import { runIfMain } from './cli-main.js';
-import { createConsolidatedProvider, scoreCriterion, type ConsolidatedProvider, type JsonSchemaObject } from './judge-consolidated.js';
+import {
+  createConsolidatedProvider, evaluateTurnConsolidated, scoreCriterion,
+  type ConsolidatedCriteriaOptions, type ConsolidatedProvider, type JsonSchemaObject,
+} from './judge-consolidated.js';
+import { JUDGE_EFFORT_LEVELS, JUDGE_THINKING_MODES, type JudgeReasoningSettings } from './judge-anthropic-client.js';
 import { resolveJudgeApiKey } from './judge-credentials.js';
+import { HAIKU_MODEL } from './judge-criteria.js';
 import { fitContextForJudge, turnKey, type Turn } from './judge-turns.js';
 import { FROZEN_TURNS_PATH } from './judge-quality-eval.js';
 import { addCallUsage, createCallUsageTotals, judgePricing, tokenUsageCostUsd } from './judge-usage.js';
@@ -37,12 +44,17 @@ import type { HallucinationTurn } from './judge-hallucination-eval.js';
 
 export const METHOD_FLAG = '--method';
 export const LABELS_FLAG = '--labels';
-export const PROBE_METHODS = ['isolated', 'claims'] as const;
+export const THINKING_FLAG = '--thinking';
+export const EFFORT_FLAG = '--effort';
+export const PROBE_METHODS = ['isolated', 'consolidated', 'claims'] as const;
 export type ProbeMethod = typeof PROBE_METHODS[number];
 
 export const CLAIM_LABELS = ['supported', 'contradicted', 'absent'] as const;
 export type ClaimLabel = typeof CLAIM_LABELS[number];
 const FABRICATED_LABELS: ReadonlySet<ClaimLabel> = new Set(['contradicted', 'absent']);
+const DIRECT_OPTIONS: ConsolidatedCriteriaOptions = { directHallucination: true };
+/** Methods whose score is a 1-5 grade, so MAE against the labels means something. */
+const GRADED_METHODS: ReadonlySet<ProbeMethod> = new Set(['isolated', 'consolidated']);
 
 const RESULTS_DIR = join(DOCS_DIR, 'hallucination-probes');
 const PROBE_CONCURRENCY = 4;
@@ -55,17 +67,30 @@ const LOG_PREFIX = '[hallucination-probe]';
 // Arguments
 // ---------------------------------------------------------------------------
 
-export type ProbeArgs = { method: ProbeMethod; labelsPath: string };
+export type ProbeArgs = { method: ProbeMethod; labelsPath: string; reasoning: JudgeReasoningSettings };
 
 const isProbeMethod = (value: string): value is ProbeMethod => (PROBE_METHODS as readonly string[]).includes(value);
 
 export function parseProbeArgs(argv: readonly string[]): ProbeArgs {
-  const cli = parseCli(argv, { values: [METHOD_FLAG, LABELS_FLAG] }, { allowUnknown: false });
+  const cli = parseCli(argv, { values: [METHOD_FLAG, LABELS_FLAG, THINKING_FLAG, EFFORT_FLAG] }, { allowUnknown: false });
   const method = cli.value(METHOD_FLAG);
   if (method === undefined || !isProbeMethod(method)) {
     throw new CliArgError(`${METHOD_FLAG} must be one of ${PROBE_METHODS.join(', ')}`);
   }
-  return { method, labelsPath: cli.value(LABELS_FLAG) ?? DEFAULT_LABELS_PATH };
+  const thinking = oneOf(THINKING_FLAG, cli.value(THINKING_FLAG), JUDGE_THINKING_MODES);
+  const effort = oneOf(EFFORT_FLAG, cli.value(EFFORT_FLAG), JUDGE_EFFORT_LEVELS);
+  return {
+    method,
+    labelsPath: cli.value(LABELS_FLAG) ?? DEFAULT_LABELS_PATH,
+    reasoning: { ...(thinking && { thinking }), ...(effort && { effort }) },
+  };
+}
+
+function oneOf<T extends string>(flag: string, value: string | undefined, allowed: readonly T[]): T | undefined {
+  if (value === undefined) return undefined;
+  const match = allowed.find(candidate => candidate === value);
+  if (match === undefined) throw new CliArgError(`${flag} must be one of ${allowed.join(', ')}`);
+  return match;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +185,7 @@ function formatComparison(c: ConfigurationComparison, withMae: boolean): string 
 }
 
 async function main(): Promise<void> {
-  const { method, labelsPath } = exitOnCliArgError(LOG_PREFIX, () => parseProbeArgs(process.argv.slice(2)));
+  const { method, labelsPath, reasoning } = exitOnCliArgError(LOG_PREFIX, () => parseProbeArgs(process.argv.slice(2)));
   const credential = resolveJudgeApiKey();
   if (!credential) throw new Error('no judge API key');
   console.log(`${LOG_PREFIX} ${method}, key from ${credential.source}, labels ${labelsPath}`);
@@ -171,7 +196,7 @@ async function main(): Promise<void> {
   console.log(`${LOG_PREFIX} ${turns.length} tool turns`);
 
   const totals = createCallUsageTotals();
-  const provider = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addCallUsage(totals, u) });
+  const provider = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addCallUsage(totals, u), reasoning });
   const stepsCache = new Map<string, Promise<string>>();
   const scores = new Map<string, number>();
   const details: Record<string, unknown> = {};
@@ -182,6 +207,11 @@ async function main(): Promise<void> {
     try {
       if (method === 'isolated') {
         scores.set(key, 1 - await scoreCriterion(provider, turn, HALLUCINATION_CRITERIA, stepsCache));
+      } else if (method === 'consolidated') {
+        const records = await evaluateTurnConsolidated(provider, turn, new Set(), { stepsCache, criteria: DIRECT_OPTIONS });
+        const record = records.find(r => r.evaluationName === HALLUCINATION_EVAL_NAME);
+        if (!record) throw new Error('the consolidated call returned no hallucination verdict');
+        scores.set(key, record.scoreValue);
       } else {
         const { score, verdicts } = await scoreClaims(provider, turn);
         scores.set(key, score);
@@ -197,11 +227,11 @@ async function main(): Promise<void> {
   await mkdir(RESULTS_DIR, { recursive: true });
   const outPath = join(RESULTS_DIR, `${method}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   await writeFile(outPath, `${JSON.stringify({
-    method, labelsPath, usd, comparison, failures,
+    method, judgeModel: HAIKU_MODEL, reasoning, tokens: totals, labelsPath, usd, comparison, failures,
     scores: Object.fromEntries(scores), details, criterion: HALLUCINATION_EVAL_NAME,
   }, null, JSON_INDENT)}\n`);
 
-  console.log(`${LOG_PREFIX} ${formatComparison(comparison, method === 'isolated')}`);
+  console.log(`${LOG_PREFIX} ${formatComparison(comparison, GRADED_METHODS.has(method))}`);
   console.log(`${LOG_PREFIX} failures ${failures.length}, spent $${usd.toFixed(USD_DIGITS)}; results: ${outPath}`);
 }
 

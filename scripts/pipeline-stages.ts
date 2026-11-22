@@ -253,6 +253,13 @@ export const JUDGE_BATCH_FLAG = '--batch';
  * kept for comparison runs and as the way back if the default regresses.
  */
 export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
+/**
+ * judge-evaluations flag: the consolidated call also judges `hallucination`, as a
+ * criterion of its own. Passed by the scheduled pipeline and forwarded by
+ * populate-dashboard.ts; without it the consolidated path records no hallucination.
+ * Ignored under --per-criterion, whose QAG sweep always scores it.
+ */
+export const JUDGE_DIRECT_HALLUCINATION_FLAG = '--direct-hallucination';
 /** judge-evaluations flag populate forwards: a cap on turns judged. */
 export const JUDGE_LIMIT_FLAG = '--limit';
 /** Every stage's preview switch: compute and report, write nothing. */

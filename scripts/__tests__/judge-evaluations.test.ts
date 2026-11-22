@@ -41,6 +41,7 @@ import {
   FAITHFULNESS_EVAL_NAME,
   HAIKU_MODEL,
   JUDGE_EFFORT,
+  JUDGE_THINKING,
   JUDGE_MAX_TOKENS,
   RELEVANCE_EVAL_NAME,
 } from '../judge-criteria.js';
@@ -764,7 +765,7 @@ describe('anthropicProviderFor', () => {
 
     expect(calls).toEqual([expect.objectContaining({
       output_config: { effort: JUDGE_EFFORT, format: { type: 'json_schema', schema: SCORE_SCHEMA } },
-      thinking: { type: 'disabled' },
+      thinking: { type: JUDGE_THINKING },
       max_tokens: JUDGE_MAX_TOKENS,
     })]);
     expect(result).toEqual({ text: verdict });
@@ -776,7 +777,7 @@ describe('anthropicProviderFor', () => {
     await anthropicProviderFor(client).generate('rate it');
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ thinking: { type: 'disabled' }, output_config: { effort: JUDGE_EFFORT } });
+    expect(calls[0]).toMatchObject({ thinking: { type: JUDGE_THINKING }, output_config: { effort: JUDGE_EFFORT } });
     expect(calls[0]).not.toHaveProperty('temperature');
     expect(calls[0]).not.toHaveProperty('output_config.format');
   });

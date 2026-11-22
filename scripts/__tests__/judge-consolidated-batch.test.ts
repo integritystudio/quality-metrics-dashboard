@@ -93,6 +93,26 @@ beforeEach(() => {
   resetFailureTracking();
 });
 
+describe('evaluateTurnsConsolidatedBatched criteria options', () => {
+  const toolTurn = (): Turn => makeTurn({ toolResults: ['config.ts: export const PORT = 3001'] });
+  const recordedNames = async (criteria?: { directHallucination: boolean }): Promise<string[]> => {
+    const { client } = fakeClient();
+    const batch = await createBatchProvider({ ...BASE, client });
+    const [records] = await evaluateTurnsConsolidatedBatched(batch, [toolTurn()], new Set(), criteria);
+    return defined(records).map(record => record.evaluationName);
+  };
+
+  it('records hallucination for a tool turn under directHallucination', async () => {
+    expect(await recordedNames({ directHallucination: true })).toContain(HALLUCINATION_EVAL_NAME);
+  });
+
+  it('records none without it', async () => {
+    const names = await recordedNames();
+    expect(names).toContain(FAITHFULNESS_EVAL_NAME);
+    expect(names).not.toContain(HALLUCINATION_EVAL_NAME);
+  });
+});
+
 describe('adaptBatchProvider', () => {
   it('gives a schema call the consolidated budget and the schema as output_config', async () => {
     const { client, submitted } = fakeClient();

@@ -30,6 +30,7 @@
  *   npm run populate -- --limit 5             # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
+ *   npm run populate -- --direct-hallucination # the consolidated call also judges hallucination
  *   npm run populate -- --judge-days=30       # judge turns from the last 30 days instead of 7
  *   npm run populate -- --derive-days=14      # derive over the last 14 days instead of 7
  *
@@ -53,6 +54,7 @@ import {
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
+  JUDGE_DIRECT_HALLUCINATION_FLAG,
   rejectRemovedFlags,
   NETWORK_RETRY_DELAYS_MS,
   deriveScopeArgs,
@@ -82,7 +84,7 @@ const POPULATE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG],
   switches: [
     SKIP_DERIVE_FLAG, DERIVE_SKIP_RULES_FLAG, SKIP_JUDGE_FLAG, SKIP_JUDGE_SCORING_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
-    JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
+    JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG,
   ],
 };
 
@@ -101,6 +103,7 @@ type PopulateArgs = {
   dryRun: boolean;
   batch: boolean;
   perCriterion: boolean;
+  directHallucination: boolean;
   limit: string | undefined;
   deriveScope: string[];
   judgeScope: string[];
@@ -120,13 +123,14 @@ function readArgs(argv: readonly string[]): PopulateArgs {
     dryRun: cli.has(DRY_RUN_FLAG),
     batch: cli.has(JUDGE_BATCH_FLAG),
     perCriterion: cli.has(JUDGE_PER_CRITERION_FLAG),
+    directHallucination: cli.has(JUDGE_DIRECT_HALLUCINATION_FLAG),
     limit: limit === undefined ? undefined : String(limit),
     deriveScope: deriveScopeArgs(argv),
     judgeScope: judgeScopeArgs(argv),
   };
 }
 
-const { skipDerive, skipDeriveRules, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, limit, deriveScope, judgeScope } =
+const { skipDerive, skipDeriveRules, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, directHallucination, limit, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 const stagesRun: ReadonlySet<PipelineStage> = new Set(stagesToRun({ dryRun, skipDerive, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck }));
 
@@ -251,6 +255,7 @@ const STAGES: readonly StageSpec[] = [
       ...(limit ? [JUDGE_LIMIT_FLAG, limit] : []),
       ...(batch ? [JUDGE_BATCH_FLAG] : []),
       ...(perCriterion ? [JUDGE_PER_CRITERION_FLAG] : []),
+      ...(directHallucination ? [JUDGE_DIRECT_HALLUCINATION_FLAG] : []),
     ],
     networkRetry: false,
     continuation: '',

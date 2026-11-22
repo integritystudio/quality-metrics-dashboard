@@ -42,7 +42,7 @@ import { TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import {
   JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG,
-  JUDGE_PER_CRITERION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags,
+  JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags,
 } from './pipeline-stages.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 import { runIfMain } from './cli-main.js';
@@ -61,7 +61,7 @@ import { createJudgeAnthropicClient, judgeRequestSettings, responseText } from '
 import { sleep } from './sleep.js';
 import { incrementIn } from './collections.js';
 import { discoverFromCloud, turnsFromCloud } from './judge-cloud-source.js';
-import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched } from './judge-consolidated.js';
+import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched, type ConsolidatedCriteriaOptions } from './judge-consolidated.js';
 import { readScope, resolveDateScope } from './derive-evaluations.js';
 import { selectTurns, formatTurnSelection, type TurnSelection } from './judge-selection.js';
 import { formatPostSummary, postRoutedRecords, routeEvaluationRecords, undeliveredCount, type RoutedRecord } from './post-evaluations.js';
@@ -521,7 +521,7 @@ async function judgeTurns(
   allTurns: Turn[],
   existingKeys: Set<string>,
   judgeKey: JudgeApiKey,
-  { batch, consolidated }: { batch: boolean; consolidated: boolean },
+  { batch, consolidated, criteria }: { batch: boolean; consolidated: boolean; criteria: ConsolidatedCriteriaOptions },
 ): Promise<EvalRecord[]> {
   const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated).costUsd;
   const usage = createUsageTotals();
@@ -541,14 +541,14 @@ async function judgeTurns(
   let allEvals: EvalRecord[][];
   if (batchProvider) {
     allEvals = consolidated
-      ? await evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys)
+      ? await evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys, criteria)
       : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys);
   } else {
     const evaluate = consolidated
       ? await createConsolidatedTurnEvaluator(existingKeys, {
         apiKey: judgeKey.apiKey,
         onUsage: (u) => addUsage(usage, u),
-      })
+      }, criteria)
       : async (turn: Turn): Promise<EvalRecord[]> => evaluateTurn(judge, turn, existingKeys);
     allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
   }
@@ -577,7 +577,7 @@ async function judgeTurns(
 /** Flags judge-evaluations reads itself; --days=/--date= are read by derive's resolvers. */
 const JUDGE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG],
-  switches: [DRY_RUN_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG],
+  switches: [DRY_RUN_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG],
 };
 
 async function main(): Promise<void> {
@@ -594,6 +594,9 @@ async function main(): Promise<void> {
   const batch = cli.has(JUDGE_BATCH_FLAG);
   // Consolidated is the default (JCP4); --per-criterion opts out.
   const consolidated = !cli.has(JUDGE_PER_CRITERION_FLAG);
+  // Turn selection deliberately ignores this: a tool turn already judged without
+  // hallucination stays judged, so switching the flag on re-selects nothing.
+  const criteria: ConsolidatedCriteriaOptions = { directHallucination: cli.has(JUDGE_DIRECT_HALLUCINATION_FLAG) };
   const limit = requestedLimit === undefined ? Infinity : Math.min(requestedLimit, MAX_TURN_LIMIT);
 
   const dateScope = readScope(resolveDateScope(args), JUDGE_DEFAULT_DAYS);
@@ -637,7 +640,7 @@ async function main(): Promise<void> {
 
     resetFailureTracking();
 
-    const flatEvals = await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated });
+    const flatEvals = await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated, criteria });
     if (flatEvals.length > 0 || pending.length > 0) await deliverEvaluations(flatEvals, pending, accounts);
   } finally {
     releaseLock();

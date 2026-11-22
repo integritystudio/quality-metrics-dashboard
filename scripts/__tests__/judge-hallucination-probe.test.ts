@@ -5,6 +5,9 @@ import {
   buildVerdictsPrompt,
   METHOD_FLAG,
   LABELS_FLAG,
+  THINKING_FLAG,
+  EFFORT_FLAG,
+  PROBE_METHODS,
   type ClaimVerdict,
 } from '../judge-hallucination-probe.js';
 import { DEFAULT_LABELS_PATH } from '../judge-hallucination-compare.js';
@@ -17,8 +20,17 @@ function verdict(label: ClaimVerdict['label']): ClaimVerdict {
 const HALF = 0.5;
 
 describe('parseProbeArgs', () => {
-  it.each(['isolated', 'claims'] as const)('accepts --method %s and defaults the labels', (method) => {
-    expect(parseProbeArgs([METHOD_FLAG, method])).toEqual({ method, labelsPath: DEFAULT_LABELS_PATH });
+  it.each(PROBE_METHODS)('accepts --method %s, defaulting the labels and the production reasoning settings', (method) => {
+    expect(parseProbeArgs([METHOD_FLAG, method])).toEqual({ method, labelsPath: DEFAULT_LABELS_PATH, reasoning: {} });
+  });
+
+  it('takes thinking and effort overrides', () => {
+    const args = parseProbeArgs([METHOD_FLAG, 'isolated', THINKING_FLAG, 'adaptive', EFFORT_FLAG, 'medium']);
+    expect(args.reasoning).toEqual({ thinking: 'adaptive', effort: 'medium' });
+  });
+
+  it.each([[THINKING_FLAG, 'on'], [EFFORT_FLAG, 'extreme']])('rejects %s %s', (flag, value) => {
+    expect(() => parseProbeArgs([METHOD_FLAG, 'isolated', flag, value])).toThrow(CliArgError);
   });
 
   it('takes a labels file', () => {

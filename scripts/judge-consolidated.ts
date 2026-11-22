@@ -14,8 +14,8 @@
  * Where it differs from the per-criterion path:
  * - `faithfulness` is G-Eval on FAITHFULNESS_CRITERIA. By default it writes no
  *   `hallucination` record; the per-criterion path's QAG sweep does.
- *   `directHallucination` (opt-in, unset in production) judges it as a criterion
- *   of its own in the same call.
+ *   `directHallucination` (opt-in; the scheduled run sets it) judges it as a
+ *   criterion of its own in the same call.
  * - Evaluation steps are generated once per criterion per run
  *   (`EvaluationStepsCache`), since they depend only on the criteria text.
  * - The mode is recorded in `evaluator` (CONSOLIDATED_PRODUCER); `EvalRecord`
@@ -64,7 +64,9 @@ import {
 } from './judge-criteria.js';
 import { turnJudgedKey } from './judge-dedup.js';
 import { trackFailure } from './judge-failures.js';
-import { MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, judgeRequestSettings, responseText } from './judge-anthropic-client.js';
+import {
+  MAX_TOKENS_STOP_REASON, createJudgeAnthropicClient, judgeRequestSettings, responseText, type JudgeReasoningSettings,
+} from './judge-anthropic-client.js';
 import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ import { toJudgeTokenUsage, type JudgeTokenUsage } from './judge-usage.js';
 // ---------------------------------------------------------------------------
 
 /** Output budget for one consolidated verdict: up to seven criteria, each with reasoning. */
-export const CONSOLIDATED_MAX_TOKENS = 4096;
+export const CONSOLIDATED_MAX_TOKENS = 8192;
 export const REASONING_KEY = 'reasoning';
 export const SCORE_KEY = 'score';
 /**
@@ -157,8 +159,8 @@ export type ConsolidatedSelection = {
 }
 
 /**
- * Opt-in variants of the consolidated call. Production passes none, so its
- * records are unchanged; judge-hallucination-eval.ts scores the variant.
+ * Opt-in variants of the consolidated call. The scheduled run passes
+ * `directHallucination`; judge-hallucination-eval.ts scores that variant.
  */
 export type ConsolidatedCriteriaOptions = {
   /**
@@ -532,6 +534,8 @@ export type ConsolidatedProviderOptions = {
   apiKey?: string;
   /** Called with every response's usage — how judge-agreement.ts totals tokens. */
   onUsage?: (usage: JudgeTokenUsage) => void;
+  /** Thinking and effort for every call; unset is the production setting. */
+  reasoning?: JudgeReasoningSettings;
 }
 
 export async function createConsolidatedProvider(options: ConsolidatedProviderOptions = {}): Promise<ConsolidatedProvider> {
@@ -544,7 +548,7 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
         model: HAIKU_MODEL,
         max_tokens: schema ? CONSOLIDATED_MAX_TOKENS : JUDGE_MAX_TOKENS,
         messages: [{ role: 'user', content: prompt }],
-        ...judgeRequestSettings(schema),
+        ...judgeRequestSettings(schema, options.reasoning),
       });
 
       const usage = toJudgeTokenUsage(response.usage);
@@ -563,10 +567,11 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
 export async function createConsolidatedTurnEvaluator(
   existingKeys: Set<string>,
   options: ConsolidatedProviderOptions = {},
+  criteria: ConsolidatedCriteriaOptions = {},
 ): Promise<(turn: Turn) => Promise<EvalRecord[]>> {
   const provider = await createConsolidatedProvider(options);
   const stepsCache: EvaluationStepsCache = new Map();
-  return async (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache });
+  return async (turn: Turn) => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache, criteria });
 }
 
 // ---------------------------------------------------------------------------
@@ -602,8 +607,9 @@ export async function evaluateTurnsConsolidatedBatched(
   batch: BatchLLMProvider,
   turns: readonly Turn[],
   existingKeys: Set<string>,
+  criteria: ConsolidatedCriteriaOptions = {},
 ): Promise<EvalRecord[][]> {
   const provider = adaptBatchProvider(batch);
   const stepsCache: EvaluationStepsCache = new Map();
-  return settleBatchedTurns(batch, turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache })));
+  return settleBatchedTurns(batch, turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache, criteria })));
 }

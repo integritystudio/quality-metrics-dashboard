@@ -50,11 +50,15 @@ export const HAIKU_MODEL = 'claude-haiku-5-5';
 /** The judge of every stored row written before `judgeModel` was recorded. */
 export const LEGACY_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
-export const JUDGE_MAX_TOKENS = 1024;
+/** Thinking counts toward this cap, so it leaves room for both the thinking and the verdict. */
+export const JUDGE_MAX_TOKENS = 4096;
 
 /**
- * Haiku 5.5 rejects sampling parameters (`temperature`), so consistency comes
- * from the request shape instead: thinking off at low effort, which is also the
- * cheapest setting and the nearest to the non-thinking calls Haiku 4.5 made.
+ * Haiku 5.5 rejects sampling parameters (`temperature`), so the request shape is
+ * the only lever: adaptive thinking at medium effort. With thinking off at low
+ * effort the consolidated call flagged 5 of 13 fabricating tool turns; with this
+ * setting, 12 of 13 (docs/hallucination-probes/, 2026-11-22). Scores on either
+ * side of a change here are different series.
  */
-export const JUDGE_EFFORT = 'low';
+export const JUDGE_THINKING = 'adaptive';
+export const JUDGE_EFFORT = 'medium';

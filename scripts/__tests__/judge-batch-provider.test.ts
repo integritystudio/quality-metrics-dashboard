@@ -20,7 +20,7 @@ import {
 } from '../judge-failures.js';
 import { createUsageTotals } from '../judge-usage.js';
 import { evaluateTurnsBatched, BATCH_MODE_JUDGE_TIMEOUT_MS, BATCH_MODE_MAX_RETRIES } from '../judge-evaluations.js';
-import { COHERENCE_EVAL_NAME, JUDGE_EFFORT, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
+import { COHERENCE_EVAL_NAME, JUDGE_EFFORT, JUDGE_THINKING, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
 import { type Turn } from '../judge-turns.js';
 import { evaluateTurnsConsolidatedBatched } from '../judge-consolidated.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
@@ -146,7 +146,7 @@ describe('createBatchProvider', () => {
       model: MODEL,
       max_tokens: MAX_TOKENS,
       messages: [{ role: 'user', content: 'alpha' }],
-      thinking: { type: 'disabled' },
+      thinking: { type: JUDGE_THINKING },
       output_config: { effort: JUDGE_EFFORT },
     });
     expect(defined(requests[1]).params).not.toHaveProperty('temperature');
@@ -252,10 +252,10 @@ describe('createBatchProvider', () => {
   it('maps a jsonSchema option onto output_config beside the judge settings', async () => {
     const schema = { type: 'object', properties: { score: { type: 'number' } } };
     expect(toRequestSettings({ jsonSchema: schema })).toEqual({
-      thinking: { type: 'disabled' },
+      thinking: { type: JUDGE_THINKING },
       output_config: { effort: JUDGE_EFFORT, format: { type: 'json_schema', schema } },
     });
-    expect(toRequestSettings({ temperature: 0 })).toEqual({ thinking: { type: 'disabled' }, output_config: { effort: JUDGE_EFFORT } });
+    expect(toRequestSettings({ temperature: 0 })).toEqual({ thinking: { type: JUDGE_THINKING }, output_config: { effort: JUDGE_EFFORT } });
 
     const { client, submitted } = fakeClient({ results: echo });
     const provider = await createBatchProvider({ ...BASE, client });
