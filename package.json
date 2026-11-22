@@ -23,7 +23,6 @@
     "populate": "tsx scripts/populate-dashboard.ts",
     "derive": "tsx scripts/derive-evaluations.ts",
     "trace-coverage": "tsx scripts/trace-coverage.ts",
-    "sync": "tsx scripts/sync-to-kv.ts",
     "backtest": "tsx scripts/backtest-degradation.ts",
     "deploy:worker": "wrangler deploy",
     "deploy:secrets": "bash scripts/deploy-secrets.sh prd",
