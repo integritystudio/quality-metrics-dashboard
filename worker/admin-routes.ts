@@ -24,6 +24,7 @@ import {
   factory,
   forbidden,
   hasPermission,
+  internalError,
   parseRows,
   readJsonBody,
   requireParam,
@@ -83,7 +84,7 @@ async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId
     .eq('organization_id', c.get('orgId'))
     .eq('user_id', userId)
     .limit(1);
-  if (current.error) abort(c.json({ error: ERR_FETCH_MEMBER }, HttpStatus.InternalServerError));
+  if (current.error) abort(internalError(c, ERR_FETCH_MEMBER));
   const [row] = safeArray<{ role?: string }>(current.data);
   if (!row) abort(c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound));
   return row.role;
@@ -114,7 +115,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     const { data, error } = await db(c.env).from('organization_memberships')
       .select('user_id,role,users(id,email)')
       .eq('organization_id', c.get('orgId'));
-    if (error) return c.json({ error: ERR_FETCH_MEMBERS }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_FETCH_MEMBERS);
 
     return c.json(parseRows(AdminMemberRowSchema, data).map((row) => ({
       userId: row.user_id,
@@ -143,7 +144,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       .update({ role: newRole })
       .eq('organization_id', orgId)
       .eq('user_id', userId);
-    if (error) return c.json({ error: ERR_UPDATE_MEMBER_ROLE }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_UPDATE_MEMBER_ROLE);
     logAuditEvent(c, 'member.role_change', userId, { organizationId: orgId });
     return c.body(null, HttpStatus.NoContent);
   });
@@ -162,7 +163,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       .delete()
       .eq('organization_id', orgId)
       .eq('user_id', userId);
-    if (error) return c.json({ error: ERR_REMOVE_MEMBER }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_REMOVE_MEMBER);
     logAuditEvent(c, 'member.remove', userId, { organizationId: orgId });
     return c.body(null, HttpStatus.NoContent);
   });
@@ -174,8 +175,8 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       supabase.from('user_roles').select('user_id,role_id,roles(id,name)'),
     ]);
 
-    if (usersRes.error) return c.json({ error: ERR_FETCH_USERS }, HttpStatus.InternalServerError);
-    if (roleRowsRes.error) return c.json({ error: ERR_FETCH_ROLE_ASSIGNMENTS }, HttpStatus.InternalServerError);
+    if (usersRes.error) return internalError(c, ERR_FETCH_USERS);
+    if (roleRowsRes.error) return internalError(c, ERR_FETCH_ROLE_ASSIGNMENTS);
 
     const rolesByUser = new Map<string, AdminUser['roles']>();
     for (const { user_id, roles } of parseRows(AdminUserRoleRowSchema, roleRowsRes.data)) {
@@ -194,7 +195,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     const { data, error } = await db(c.env).from('roles')
       .select('id,name,permissions')
       .order('name', { ascending: true });
-    if (error) return c.json({ error: ERR_FETCH_ROLES }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_FETCH_ROLES);
 
     return c.json(parseRows(AdminRoleSchema, data));
   });
@@ -206,7 +207,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
 
     const { error } = await db(c.env).from('user_roles')
       .insert({ user_id: userId, role_id: body.role_id });
-    if (error) return c.json({ error: ERR_ASSIGN_ROLE }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_ASSIGN_ROLE);
     logAuditEvent(c, 'role.assign', userId, { roleId: body.role_id });
     return c.body(null, HttpStatus.NoContent);
   });
@@ -219,7 +220,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       .delete()
       .eq('user_id', userId)
       .eq('role_id', roleId);
-    if (error) return c.json({ error: ERR_REVOKE_ROLE }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_REVOKE_ROLE);
     logAuditEvent(c, 'role.revoke', userId, { roleId });
     return c.body(null, HttpStatus.NoContent);
   });
@@ -230,7 +231,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
 
     const { data, error } = await activeOrgKeys(c.env, appUserId, orgId, 'id,prefix,name,tier,status,created_at,last_used_at')
       .order('created_at', { ascending: false });
-    if (error) return c.json({ error: ERR_FETCH_KEYS }, HttpStatus.InternalServerError);
+    if (error) return internalError(c, ERR_FETCH_KEYS);
 
     return c.json(parseRows(ApiKeySchema, data));
   });
@@ -244,7 +245,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     const verify = await activeOrgKeys(c.env, appUserId, orgId, 'id')
       .eq('id', keyId)
       .limit(1);
-    if (verify.error) return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
+    if (verify.error) return internalError(c, ERR_ROTATION_FAILED);
     if (!safeArray(verify.data).length) return c.json({ error: ERR_KEY_NOT_FOUND_IN_ORG }, HttpStatus.Forbidden);
 
     // Called with this worker's service key, naming the user it verified; the function
@@ -264,7 +265,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     if (!fnRes?.ok) {
       const errText = fnRes ? await fnRes.text().catch(() => '') : '';
       console.error(`[keys/rotate] function returned ${fnRes?.status ?? NO_RESPONSE_STATUS}: ${errText}`);
-      return c.json({ error: ERR_ROTATION_FAILED }, HttpStatus.InternalServerError);
+      return internalError(c, ERR_ROTATION_FAILED);
     }
 
     const result: unknown = await fnRes.json().catch(() => null);

@@ -77,8 +77,8 @@ export function authUnavailable(c: AppContext): Response {
   return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
 }
 
-export function internalError(c: AppContext): Response {
-  return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
+export function internalError(c: AppContext, error: string = ERR_INTERNAL): Response {
+  return c.json({ error }, HttpStatus.InternalServerError);
 }
 
 /** Ends the request with `response` from any depth; the app's `onError` returns it unchanged. */

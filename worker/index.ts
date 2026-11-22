@@ -226,7 +226,7 @@ function parsedOrAbort<T extends z.ZodType>(c: AppContext, schema: T, raw: unkno
   const result = schema.safeParse(raw);
   if (result.success) return result.data;
   console.error(`[${c.req.path}] schema validation failed:`, result.error.issues);
-  return abort(c.json({ error }, HttpStatus.InternalServerError));
+  return abort(internalError(c, error));
 }
 
 // Built field by field so the internal ids (authUserId, appUserId) never leave the worker.

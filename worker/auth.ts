@@ -318,7 +318,7 @@ export const authenticate = factory.createMiddleware(async (c, next) => {
 
   if (rolesRes.error) {
     console.error('[auth] role fetch failed for user', user.appUserId, 'status:', rolesRes.status || NO_RESPONSE_STATUS);
-    return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, HttpStatus.InternalServerError);
+    return internalError(c, ERR_FAILED_LOAD_USER_ROLES);
   }
   orgScopedSession(c, { authUserId: auth0Id, user, roles: parseRoleNames(rolesRes.data), membershipsRes });
   return next();
