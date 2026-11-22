@@ -35,9 +35,9 @@ agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
   // single canonical-key query covers every row era.
   //
   // queryTraces types startDate/endDate as `string | bigint` but validates the
-  // string arm as a full ISO *datetime* — a date-only 'YYYY-MM-DD' type-checks
-  // and then fails Zod at runtime, which made this route a guaranteed 500.
-  // Pass the datetimes; the date-only values stay for the evaluations read.
+  // string arm as a full ISO *datetime*: a date-only 'YYYY-MM-DD' type-checks
+  // and then fails Zod at runtime. Pass the datetimes; the date-only values
+  // stay for the evaluations read.
   const agentSpans = await loadTracesByFilter(
     { [HOOK_ATTRIBUTES.NAME]: HOOK_NAME.AGENT_FINALIZE },
     windowStart.toISOString(),

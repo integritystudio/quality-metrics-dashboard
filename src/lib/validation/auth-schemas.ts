@@ -15,8 +15,8 @@ export const UuidSchema = z.string().regex(UUID_PATTERN);
 
 /**
  * A timestamptz as PostgREST serialises it, e.g. `2026-10-01T06:46:19.086694+00:00`. The offset
- * is always present, and a bare `z.iso.datetime()` rejects any offset, so every row parsed with
- * it was dropped: until 2026-10-05 that emptied the admin key and user lists in production.
+ * is always present, and a bare `z.iso.datetime()` rejects any offset, which drops every row
+ * parsed with it.
  */
 export const SupabaseTimestampSchema = z.iso.datetime({ offset: true });
 

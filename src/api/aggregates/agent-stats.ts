@@ -1,8 +1,6 @@
 /**
  * The agent activity list (`GET /api/agents`), built once for both the API
- * route (`routes/agents.ts`) and the KV sync (`scripts/sync-to-kv.ts`). The sync
- * once wrote its own summary list to `meta:agents`, which the page rejected as
- * missing `period` and `agents` (DASHBOARD-AGGREGATE-DUAL-IMPL).
+ * route (`routes/agents.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
  *
  * Callers load the spans and evaluations; this module only projects them, so
  * one fixture through both paths yields the same value.

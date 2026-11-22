@@ -12,9 +12,7 @@ export const LATENCY_DISPLAY_PRECISION = 1;
 
 export const RATE_DISPLAY_PRECISION = 4;
 
-/** OpenTelemetry status code representing an error.
- * Intentionally duplicated in lib/constants.ts — api-constants.ts serves the Node API server
- * which cannot import lib/constants.ts (Vite-specific import.meta.env). */
+/** OpenTelemetry status code representing an error. `lib/constants.ts` holds the frontend's copy. */
 export const OTEL_STATUS_ERROR_CODE = 2;
 
 export const FILE_ACCESS_TOP_N = 30;
@@ -87,22 +85,13 @@ function convert(value: unknown): unknown {
 
 /**
  * Recursively replace `bigint` with its decimal-string form so a response body
- * survives `JSON.stringify`.
+ * survives `JSON.stringify`, which throws on `bigint`. Span and evaluation
+ * timestamps are `bigint`, so any route returning them unconverted answers 500,
+ * including one that only embeds them (`/metrics/:name`).
  *
- * The backends decode OTLP `fixed64` timestamps to `bigint` — spans via the
- * parent `numericNanosToEpochNanos` codec (`startTimeUnixNano`,
- * `endTimeUnixNano`) and evaluations via `isoDatetimeToEpochNanos`
- * (`timestamp`), with `CloudBackend` building both with `BigInt(...)` directly.
- * `JSON.stringify` throws outright on `bigint`, so **any** route returning that
- * data unconverted 500s on real input — including routes that only embed it
- * indirectly, such as `/metrics/:name` spreading `computeMetricDetail`'s
- * `evaluations` and `worstEvaluations`.
- *
- * A decimal string is the on-the-wire OTLP-JSON representation these values were
- * decoded from, and `timestampToMs` already accepts it, so this restores the
- * wire shape rather than inventing one. Applied at the response boundary rather
- * than per field: the bigint-bearing types are nested at varying depth, and a
- * field-by-field helper silently misses each new one.
+ * A decimal string is the OTLP-JSON form these values were decoded from, and
+ * `timestampToMs` accepts it. Applied at the response boundary rather than per
+ * field: the bigint-bearing types nest at varying depth.
  */
 export function jsonSafe<T>(value: T): JsonSafe<T> {
   return convert(value) as JsonSafe<T>;
@@ -115,11 +104,8 @@ export const HOOK_NAME = {
   SESSION_START: 'session-start',
   TOKEN_METRICS: 'token-metrics-extraction',
   /**
-   * PreToolUse and PostToolUse on the Agent tool. Named `agent-pre-tool` and
-   * `agent-post-tool` until the hooks renamed them on 2026-08-13 (~/.claude
-   * ba8f3ce4), after which every reader of the old names found nothing
-   * (AGENT-POST-TOOL-READERS-DEAD). Only the new names are read: the old ones
-   * fall outside every period-scoped reader's 30-day window.
+   * PreToolUse and PostToolUse on the Agent tool. Spans before 2026-08-13 carry
+   * `agent-pre-tool` and `agent-post-tool`, which are not read.
    */
   AGENT_PREPARE: 'agent.operation.prepare',
   AGENT_FINALIZE: 'agent.operation.finalize',
@@ -162,7 +148,7 @@ export function toIsoWindowBound(value: string, bound: 'start' | 'end'): string 
 /**
  * An optional `startDate`/`endDate` query param: a date-only 'YYYY-MM-DD' (widened
  * by {@link toIsoWindowBound}) or the ISO datetime the parent's query tools accept.
- * Anything else used to reach `BigInt(NaN)` in the loaders and answer 500.
+ * Anything else would reach `BigInt(NaN)` in the loaders.
  */
 export const DateBoundParamSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).optional();
 

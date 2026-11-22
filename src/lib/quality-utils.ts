@@ -4,11 +4,9 @@
  * parent `dist/` directory — the parent's runtime values cannot reach frontend
  * code in any case (`src/api/parent/*` barrels are Node-only).
  *
- * Keep in sync with the parent when these definitions change. The parent module
- * that was the single source, `src/lib/quality/quality-feature-engineering.ts`,
- * no longer exists — it was split into `src/lib/quality/qfe-*.ts`, so the
- * counterparts (scoreColorBand, labelToOrdinal, ordinalToCategory) now live in
- * `qfe-label-ordinals.ts`.
+ * Keep in sync with the parent when these definitions change: the counterparts
+ * (scoreColorBand, labelToOrdinal, ordinalToCategory) live in the parent's
+ * `src/lib/quality/qfe-label-ordinals.ts`.
  * The exception is the SCORE_BAND_* thresholds, imported through `./score-bands.ts`
  * from the parent's import-free `score-bands.ts`.
  *

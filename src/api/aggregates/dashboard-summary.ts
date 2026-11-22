@@ -2,10 +2,6 @@
  * Full dashboard summary (`GET /api/dashboard`), built once for both the API
  * route (`routes/dashboard.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
  *
- * The sync once wrote `computeDashboardSummary(...)` directly to `dashboard:period`
- * without `cqi` or `sparklines`; the route computed both live. Every production
- * load was missing those two fields (DASHBOARD-AGGREGATE-DUAL-IMPL).
- *
  * Callers load the evaluations and provide the period dates; this module projects
  * them into the shape both the route and the Worker serve.
  */

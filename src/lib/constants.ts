@@ -26,16 +26,13 @@ export const enum ErrorMessage {
 export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
 export type InputKey = z.infer<typeof InputKeySchema>;
 export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-/** Zod schema for evaluation sort order param. */
 export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
 export type SortBy = z.infer<typeof SortBySchema>;
 export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
-/** Zod schema for role param. */
 // Roles live in the worker-safe `roles.ts` module (no `import.meta.env`), re-exported
 // here so frontend/API-server imports of `RoleSchema` from `constants.js` keep working.
 export { RoleSchema, ROLES, DEFAULT_ROLE } from './roles.js';
 export type { Role } from './roles.js';
-/** Recognized agent source type values. */
 export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 export const TIME_MS = {

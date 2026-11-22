@@ -24,12 +24,7 @@ export const PRODUCER = 'dashboard:judge-evaluations';
 
 export const RULE_EVALUATOR_TYPE = _RULE_EVALUATOR_TYPE;
 
-/**
- * A seeded score is a SHA-256 of the session and turn key mapped into
- * a range — deterministic and reproducible, with no model and no relationship
- * to the content being scored. That makes its *kind* `rule`; what marks it as
- * not-real-data is the cohort, never the kind (OBP16).
- */
+/** The kind of a score no model produced. What marks a record as not-real-data is its cohort, never its kind. */
 export const SYNTHETIC_EVALUATOR_KIND: EvaluatorKind = 'rule';
 
 export const LLM_EVALUATOR_KIND: EvaluatorKind = 'llm';

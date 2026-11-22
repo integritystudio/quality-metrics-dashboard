@@ -335,7 +335,7 @@ describe('loadCalibrationEntry', () => {
 describe('families handed over to the Workflow', () => {
   const ORG_ID = '11111111-1111-4111-8111-111111111111';
   const workflowOwned = WORKFLOW_OWNED_FAMILIES.map(prefix => `${prefix}7d`);
-  const KEPT_KEYS = ['session:abc', 'agent:abc', 'trace:abc', 'meta:lastSync'];
+  const KEPT_KEYS = ['agent:abc', 'meta:agents:7d', 'meta:lastSync'];
   /** derive publishes it now, so the sync treats it as it does the Workflow's families. */
   const DERIVE_OWNED_KEY = META_CALIBRATION_KEY;
 

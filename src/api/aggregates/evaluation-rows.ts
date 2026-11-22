@@ -1,9 +1,7 @@
 /**
  * Per-metric evaluation row projection (`GET /api/metrics/:name/evaluations`),
  * shared by the API route (`routes/metrics.ts`) and the KV sync
- * (`scripts/sync-to-kv.ts`). The sync's rows were missing `evaluatorKind` and
- * `cohort` in the route; the route's rows were missing them from the sync
- * (DASHBOARD-AGGREGATE-DUAL-IMPL).
+ * (`scripts/sync-to-kv.ts`).
  *
  * Callers sort and slice; this module only projects one evaluation record.
  */

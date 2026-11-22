@@ -19,17 +19,6 @@ type ParseableSchema<T> = {
 /**
  * Stream lines from a file with Zod schema validation.
  * Yields validated entries, silently skips invalid lines.
- *
- * Useful for processing large JSONL files without loading into memory.
- *
- * @param filePath - Path to JSONL file
- * @param schema - Zod schema for validation
- * @returns Async generator of validated entries
- *
- * @example
- * for await (const span of streamJsonlWithValidation(path, traceSpanSchema)) {
- *   console.log(span.traceId);
- * }
  */
 export async function* streamJsonlWithValidation<T>(
   filePath: string,
@@ -60,11 +49,7 @@ export async function* streamJsonlWithValidation<T>(
 }
 
 /**
- * Load and validate a JSON file.
- *
- * @param filePath - Path to JSON file
- * @param schema - Zod schema for validation
- * @returns Validated object, or null if not found
+ * Load and validate a JSON file; null when it does not exist.
  * @throws If validation fails
  */
 function loadJsonWithValidation<T>(
@@ -89,14 +74,7 @@ function loadJsonWithValidation<T>(
   }
 }
 
-/**
- * Load and validate a JSON file, returning fallback on error.
- *
- * @param filePath - Path to JSON file
- * @param schema - Zod schema for validation
- * @param fallback - Value to return if file not found or validation fails
- * @returns Validated object or fallback
- */
+/** Load and validate a JSON file, returning `fallback` when it is missing or invalid. */
 export function loadJsonWithValidationSafe<T>(
   filePath: string,
   schema: ParseableSchema<T>,

@@ -2,9 +2,6 @@
  * Coverage matrix (`GET /api/coverage`), built once for both the API route
  * (`routes/coverage.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
  *
- * The route once kept `filterJudgeEvaluations` inline; the sync kept
- * `filterRuleEvals` inline — two copies of the same filter (DASHBOARD-AGGREGATE-DUAL-IMPL).
- *
  * Callers load the evaluations; this module filters and projects them.
  */
 

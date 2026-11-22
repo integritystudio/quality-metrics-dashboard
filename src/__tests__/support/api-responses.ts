@@ -9,8 +9,7 @@
  *    change surfaces as a typecheck failure here rather than passing under `as any`.
  * 2. Wrap anything carrying `bigint` in `JsonSafe<…>`. Routes pass their payload
  *    through `jsonSafe()`, which encodes `bigint` to a decimal string — typing the
- *    body as the pre-serialization type would claim `bigint` survives JSON, which
- *    is the exact assumption that hid the BigInt 500s.
+ *    body as the pre-serialization type would claim `bigint` survives JSON.
  *
  * Type-only module: `src/types.ts` re-exports are erased at runtime, so this stays
  * safe when the parent `dist/` is stubbed in standalone CI.

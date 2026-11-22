@@ -6,11 +6,6 @@
  * standalone CI runs without a parent build). That makes the fixtures
  * drift-detecting: a parent shape change fails `npm run typecheck` here rather
  * than silently leaving a mock that models nothing.
- *
- * These replaced `as any` stubs that had drifted from the real shapes — the
- * dashboard summary's `metrics[]` carried `currentValue`/`threshold`/`direction`
- * (none of which exist on `QualityMetricResult`) and `computeCQI` was stubbed
- * with a bare number where the signature returns an object.
  */
 import type {
   CompositeQualityIndex,

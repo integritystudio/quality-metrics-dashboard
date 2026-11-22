@@ -1,8 +1,6 @@
 /**
  * Metric correlation matrix (`GET /api/correlations`), built once for both the API
  * route (`routes/correlations.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
- * The sync once computed the matrix inline in `computePeriodEntries`; the route
- * did the same independently (DASHBOARD-AGGREGATE-DUAL-IMPL).
  *
  * Callers load the evaluations; this module only projects them.
  */
