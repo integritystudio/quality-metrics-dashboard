@@ -22,7 +22,11 @@ const CLI_JUDGE_PROVIDERS: readonly JudgeProvider[] = ['anthropic'];
 /** Workers AI names every model under this prefix. */
 const WORKERS_AI_MODEL_PREFIX = '@cf/';
 
-/** `specified`: the org names the judge and runs it with its own key. `hosted` is Phase 3. */
+/**
+ * Who chose the model, not whose key pays. `hosted`: the toolkit's open-weight model on
+ * Workers AI. `specified`: a model the org named, run locally on its key or through the
+ * judge route on the route's own key.
+ */
 export const JUDGE_TIERS = ['hosted', 'specified'] as const;
 export type JudgeTier = typeof JUDGE_TIERS[number];
 
