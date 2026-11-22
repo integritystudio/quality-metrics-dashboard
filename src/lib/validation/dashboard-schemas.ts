@@ -26,8 +26,6 @@ export {
   otelLogEntrySchema,
   transcriptEntrySchema,
   otelEvaluationRecordSchema,
-  kvSyncEntrySchema,
-  kvSyncStateSchema,
   metricDetailValueSchema,
 } from '@parent/lib/validation/dashboard-schemas.js';
 
@@ -38,8 +36,6 @@ export type {
   OTelLogEntry,
   TranscriptEntry,
   OTelEvaluationRecord,
-  KvSyncEntry,
-  KvSyncState,
   MetricDetailValue,
 } from '@parent/lib/validation/dashboard-schemas.js';
 
