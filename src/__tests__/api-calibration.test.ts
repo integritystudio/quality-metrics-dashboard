@@ -10,6 +10,10 @@ import type { ErrorResponse } from './support/api-responses.js';
 import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js';
 import { defined } from './support/defined.js';
 import { HttpStatus } from '../lib/http-constants.js';
+import { BYPASS_ORG_ID } from '../../worker/__tests__/support/worker-env.js';
+
+/** Where the worker reads calibration for the bypass session's org. */
+const CALIBRATION_KEY = `org:${BYPASS_ORG_ID}:meta:calibration`;
 
 // KV mock helper
 
@@ -58,14 +62,14 @@ function requestCalibration(store: Record<string, unknown>) {
 describe('GET /api/calibration', () => {
   it('returns 200 with calibration state from KV key meta:calibration', async () => {
     const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const kv = makeKV({ [CALIBRATION_KEY]: calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     expect(res.status).toBe(HttpStatus.Ok);
   });
 
   it('returns distributions field in response body', async () => {
     const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const kv = makeKV({ [CALIBRATION_KEY]: calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json<CalibrationResponse>();
     expect(body).toHaveProperty('distributions');
@@ -73,7 +77,7 @@ describe('GET /api/calibration', () => {
 
   it('returns lastCalibrated field in response body', async () => {
     const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const kv = makeKV({ [CALIBRATION_KEY]: calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json<CalibrationResponse>();
     expect(body).toHaveProperty('lastCalibrated');
@@ -81,7 +85,7 @@ describe('GET /api/calibration', () => {
 
   it('returns distributions with per-metric percentile data', async () => {
     const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const kv = makeKV({ [CALIBRATION_KEY]: calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json<CalibrationResponse>();
     expect(body.distributions).toHaveProperty('relevance');
@@ -103,7 +107,7 @@ describe('GET /api/calibration', () => {
 
   it('returns exact lastCalibrated value from KV', async () => {
     const calibrationData = makeCalibrationData();
-    const kv = makeKV({ 'meta:calibration': calibrationData });
+    const kv = makeKV({ [CALIBRATION_KEY]: calibrationData });
     const res = await app.request('/api/calibration', { headers: { Authorization: 'Bearer test-token' } }, { DASHBOARD: kv, ALLOW_TEST_BYPASS: 'true' });
     const body = await res.json<CalibrationResponse>();
     expect(body.lastCalibrated).toBe('2026-03-10T06:00:00.000Z');
@@ -123,7 +127,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
     // accepted, and that empiricalCDF would have read as NaN downstream.
     const { p50: _p50, ...withoutP50 } = defined(data.distributions.relevance);
     const res = await requestCalibration({
-      'meta:calibration': { ...data, distributions: { relevance: withoutP50 } },
+      [CALIBRATION_KEY]: { ...data, distributions: { relevance: withoutP50 } },
     });
 
     expect(res.status).toBe(HttpStatus.InternalServerError);
@@ -132,7 +136,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
 
   it('returns 500 when sampleCounts is absent', async () => {
     const { sampleCounts: _counts, ...withoutCounts } = makeCalibrationData();
-    const res = await requestCalibration({ 'meta:calibration': withoutCounts });
+    const res = await requestCalibration({ [CALIBRATION_KEY]: withoutCounts });
 
     expect(res.status).toBe(HttpStatus.InternalServerError);
   });
@@ -140,7 +144,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
   it('returns 500 when a percentile is a string rather than a number', async () => {
     const data = makeCalibrationData();
     const res = await requestCalibration({
-      'meta:calibration': {
+      [CALIBRATION_KEY]: {
         ...data,
         distributions: { relevance: { ...data.distributions.relevance, p50: '0.67' } },
       },
@@ -154,7 +158,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
     // the schema would 500 a working route for any unbounded metric.
     const LATENCY_P90_MS = 1_500;
     const res = await requestCalibration({
-      'meta:calibration': {
+      [CALIBRATION_KEY]: {
         lastCalibrated: '2026-03-10T06:00:00.000Z',
         distributions: { evaluation_latency: { p10: 12, p25: 40, p50: 118, p75: 402, p90: LATENCY_P90_MS } },
         sampleCounts: { evaluation_latency: 88 },
@@ -168,7 +172,7 @@ describe('GET /api/calibration: malformed KV payload', () => {
 
   it('strips unknown keys instead of rejecting, so a newer producer cannot 500 an older worker', async () => {
     const res = await requestCalibration({
-      'meta:calibration': { ...makeCalibrationData(), futureField: { anything: true } },
+      [CALIBRATION_KEY]: { ...makeCalibrationData(), futureField: { anything: true } },
     });
 
     expect(res.status).toBe(HttpStatus.Ok);

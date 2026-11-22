@@ -4,7 +4,7 @@
  * so every handler here runs with a verified session.
  */
 
-import type { Hono } from 'hono';
+import type { Hono, MiddlewareHandler } from 'hono';
 import type { PostgrestClient } from '@supabase/postgrest-js';
 import type { AppSession } from '../src/types/auth.js';
 import {
@@ -20,10 +20,13 @@ import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSION } from '../src/lib/org-rbac.js
 import { UUID_PATTERN } from '../src/lib/worker-contract.js';
 import { HttpStatus } from '../src/lib/http-constants.js';
 import {
+  abort,
   factory,
+  forbidden,
   hasPermission,
-  isOrgScopingEnabled,
+  internalError,
   readJsonBody,
+  requireParam,
   safeArray,
   type AppContext,
   type AppEnv,
@@ -37,8 +40,6 @@ import {
   ERR_FETCH_ROLE_ASSIGNMENTS,
   ERR_FETCH_ROLES,
   ERR_FETCH_USERS,
-  ERR_FORBIDDEN,
-  ERR_INTERNAL,
   ERR_INVALID_KEY_ID,
   ERR_INVALID_REQUEST_BODY,
   ERR_INVALID_ROLE_ID,
@@ -52,16 +53,15 @@ import {
 } from './error-messages.js';
 
 // ---------------------------------------------------------------------------
-// Org-scoped admin (P6) — every route is bound to session.activeOrgId, never a
+// Org-scoped admin — every route is bound to session.activeOrgId, never a
 // client parameter, so an org admin can only ever mutate their own org.
-// Unavailable on legacy (non-org) sessions: those keep the global routes below.
 // ---------------------------------------------------------------------------
 
 /** Org-admin gate: dashboard.admin + an org-scoped session; binds the route to that org. */
 const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
   if (!hasPermission(session, PERMISSION.admin) || !session.activeOrgId) {
-    return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+    return forbidden(c);
   }
   c.set('orgId', session.activeOrgId);
   return next();
@@ -72,26 +72,28 @@ function canTouchOwnerRole(session: AppSession): boolean {
   return session.isStaff === true || session.role === 'owner';
 }
 
-/** The target's membership role in the active org, or the response that ends the request. */
-async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId: string): Promise<{ role: string | undefined } | Response> {
+function requireUuid(param: string, error: string): MiddlewareHandler<AppEnv> {
+  return requireParam(param, UUID_PATTERN, error);
+}
+const requireUserId = requireUuid('userId', ERR_INVALID_USER_ID);
+
+/** The target's membership role in the active org; a failed read is a 500, a non-member a 404. */
+async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId: string): Promise<string | undefined> {
   const current = await supabase.from('organization_memberships')
     .select('role')
     .eq('organization_id', c.get('orgId'))
     .eq('user_id', userId)
     .limit(1);
-  if (current.error) return c.json({ error: ERR_FETCH_MEMBER }, HttpStatus.InternalServerError);
+  if (current.error) abort(c.json({ error: ERR_FETCH_MEMBER }, HttpStatus.InternalServerError));
   const [row] = safeArray<{ role?: string }>(current.data);
-  if (!row) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound);
-  return { role: row.role };
+  if (!row) abort(c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound));
+  return row.role;
 }
 
-// Legacy GLOBAL admin routes: under org scoping these become staff-only —
-// dashboard.admin is now an org-scoped grant and must not reach cross-org
-// user_roles mutation. Flag OFF keeps today's dashboard.admin gate.
+// The global user/role routes are staff-only: dashboard.admin is an org-scoped grant and
+// must not reach cross-org user_roles mutation.
 const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
-  const session = c.get('session');
-  const allowed = isOrgScopingEnabled(c.env) ? session.isStaff === true : hasPermission(session, PERMISSION.admin);
-  if (!allowed) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+  if (c.get('session').isStaff !== true) return forbidden(c);
   return next();
 });
 
@@ -150,10 +152,9 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     return c.json(members);
   });
 
-  app.post('/api/admin/members/:userId/role', requireOrgAdmin, async (c) => {
+  app.post('/api/admin/members/:userId/role', requireOrgAdmin, requireUserId, async (c) => {
     const orgId = c.get('orgId');
     const userId = c.req.param('userId');
-    if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
 
     const body = await readJsonBody(c.req, UpdateMemberRoleRequestSchema);
     if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
@@ -162,10 +163,9 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     // Read the target's current role first — both granting owner and demoting an
     // existing owner are owner-only operations.
     const supabase = db(c.env);
-    const current = await targetMemberRole(c, supabase, userId);
-    if (current instanceof Response) return current;
-    if ((newRole === 'owner' || current.role === 'owner') && !canTouchOwnerRole(c.get('session'))) {
-      return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+    const currentRole = await targetMemberRole(c, supabase, userId);
+    if ((newRole === 'owner' || currentRole === 'owner') && !canTouchOwnerRole(c.get('session'))) {
+      return forbidden(c);
     }
 
     const { error } = await supabase.from('organization_memberships')
@@ -177,16 +177,14 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     return c.body(null, HttpStatus.NoContent);
   });
 
-  app.delete('/api/admin/members/:userId', requireOrgAdmin, async (c) => {
+  app.delete('/api/admin/members/:userId', requireOrgAdmin, requireUserId, async (c) => {
     const orgId = c.get('orgId');
     const userId = c.req.param('userId');
-    if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
 
     const supabase = db(c.env);
-    const current = await targetMemberRole(c, supabase, userId);
-    if (current instanceof Response) return current;
-    if (current.role === 'owner' && !canTouchOwnerRole(c.get('session'))) {
-      return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+    const currentRole = await targetMemberRole(c, supabase, userId);
+    if (currentRole === 'owner' && !canTouchOwnerRole(c.get('session'))) {
+      return forbidden(c);
     }
 
     const { error } = await supabase.from('organization_memberships')
@@ -248,9 +246,8 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     return c.json(roles);
   });
 
-  app.post('/api/admin/users/:userId/roles', requireGlobalAdmin, async (c) => {
+  app.post('/api/admin/users/:userId/roles', requireGlobalAdmin, requireUserId, async (c) => {
     const userId = c.req.param('userId');
-    if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
 
     const body = await readJsonBody(c.req, AssignRoleRequestSchema);
     if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
@@ -262,11 +259,9 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     return c.body(null, HttpStatus.NoContent);
   });
 
-  app.delete('/api/admin/users/:userId/roles/:roleId', requireGlobalAdmin, async (c) => {
+  app.delete('/api/admin/users/:userId/roles/:roleId', requireGlobalAdmin, requireUserId, requireUuid('roleId', ERR_INVALID_ROLE_ID), async (c) => {
     const userId = c.req.param('userId');
     const roleId = c.req.param('roleId');
-    if (!UUID_PATTERN.test(userId)) return c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.BadRequest);
-    if (!UUID_PATTERN.test(roleId)) return c.json({ error: ERR_INVALID_ROLE_ID }, HttpStatus.BadRequest);
 
     const { error } = await db(c.env).from('user_roles')
       .delete()
@@ -280,7 +275,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
   app.get('/api/admin/keys', requireOrgAdmin, async (c) => {
     const orgId = c.get('orgId');
     const appUserId = c.get('session').appUserId;
-    if (!appUserId) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
+    if (!appUserId) return internalError(c);
 
     const { data, error } = await activeOrgKeys(c.env, appUserId, orgId, 'id,prefix,name,tier,status,created_at,last_used_at')
       .order('created_at', { ascending: false });
@@ -293,13 +288,12 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     return c.json(keys);
   });
 
-  app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, async (c) => {
+  app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, requireUuid('keyId', ERR_INVALID_KEY_ID), async (c) => {
     const orgId = c.get('orgId');
     const appUserId = c.get('session').appUserId;
-    if (!appUserId) return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
+    if (!appUserId) return internalError(c);
 
     const keyId = c.req.param('keyId');
-    if (!UUID_PATTERN.test(keyId)) return c.json({ error: ERR_INVALID_KEY_ID }, HttpStatus.BadRequest);
 
     // Verify the key belongs to the caller and to their active org before forwarding.
     const verify = await activeOrgKeys(c.env, appUserId, orgId, 'id')

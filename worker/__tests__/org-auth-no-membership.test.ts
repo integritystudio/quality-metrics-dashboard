@@ -1,6 +1,6 @@
 /**
- * AUTH-NO-ORG-LEGACY-SESSION — under ORG_SCOPING_ENABLED, a signed-in user with
- * no org membership is refused, whatever their user_roles.
+ * AUTH-NO-ORG-LEGACY-SESSION — a signed-in user with no org membership is
+ * refused, whatever their user_roles.
  *
  * The on_user_created trigger gives every new public.users row the
  * provisioned-dashboard-viewer role, so a roles-based fallback reached every
@@ -89,7 +89,7 @@ function syncedKv(): MemoryKv {
 }
 
 function makeEnv(overrides?: Partial<Record<string, unknown>>) {
-  return makeWorkerEnv({ DASHBOARD: syncedKv(), ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS, ...overrides });
+  return makeWorkerEnv({ DASHBOARD: syncedKv(), HOME_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS, ...overrides });
 }
 
 function json(body: unknown): Promise<Response> {
@@ -160,16 +160,5 @@ describe('org scoping: sessions that keep access', () => {
 
     expect(res.status).toBe(HttpStatus.Ok);
     expect(await res.json()).toMatchObject({ activeOrg: HOME_ORG_ID, isStaff: true, role: 'owner' });
-  });
-});
-
-describe('org scoping off', () => {
-  it('a viewer-role user keeps the global path and reads the bare key', async () => {
-    stubSupabase([]);
-
-    const res = await request(DASHBOARD_PATH, makeEnv({ ORG_SCOPING_ENABLED: 'false' }));
-
-    expect(res.status).toBe(HttpStatus.Ok);
-    expect(await res.json()).toEqual(BARE_PAYLOAD);
   });
 });

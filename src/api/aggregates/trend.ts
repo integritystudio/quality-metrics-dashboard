@@ -17,11 +17,10 @@ import { buildEvenBucketBoundaries, getEvenBucketIndex } from '../parent/bucket-
 import { CONCENTRATION_THRESHOLD, SCORE_ROUND_FACTOR, extractFiniteScores, timestampToMs } from '../api-constants.js';
 import { PERIOD_MS, TIME_MS } from '../../lib/constants.js';
 import type { EvaluationResult, MetricDynamics, MetricTrend, Period } from '../../types.js';
+import { TREND_KEY_PREFIX } from '../../lib/worker-contract.js';
 import type { QualityMetricConfig } from './metric-detail.js';
 
-/** One KV key per metric and period; the Worker restates the prefix because it cannot import this module. */
-export const TREND_KEY_PREFIX = 'trend:';
-
+/** One KV key per metric and period. */
 export function trendKey(name: string, period: Period): string {
   return `${TREND_KEY_PREFIX}${name}:${period}`;
 }

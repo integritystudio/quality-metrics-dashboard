@@ -14,7 +14,7 @@ import { BYPASS_BINDINGS, BYPASS_HEADERS, BYPASS_ORG_ID, makeCtx, makeWorkerEnv 
 const OTHER_ORG = 'a0000000-0000-4000-8000-0000000000ff';
 
 function makeEnv(kv: MemoryKv) {
-  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS, ORG_SCOPING_ENABLED: 'true' });
+  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS });
 }
 
 function agentsPayload(period: string, invocations: number) {

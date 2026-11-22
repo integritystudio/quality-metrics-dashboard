@@ -8,10 +8,6 @@
  * - switchOrg: POST /api/org/switch (server persists default_organization_id),
  *   then removes every other org's cached queries so no stale prior-org data
  *   can render after a switch (Risk 10).
- *
- * Pre-cutover sessions (ORG_SCOPING_ENABLED=false) carry no org fields:
- * activeOrgId stays null, no X-Org-Id header is sent, and behavior is
- * identical to today.
  */
 
 import { createContext, use, useState, useCallback, useMemo, type ReactNode } from 'react';

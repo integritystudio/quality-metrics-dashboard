@@ -222,9 +222,7 @@ export const MeResponseSchema = z.object({
   roles: z.array(z.string()),
   permissions: z.array(DashboardPermissionSchema),
   allowedViews: z.array(RoleSchema),
-  // Org-scoping fields (P5) — optional: absent only when ORG_SCOPING_ENABLED is
-  // off (with it on, a session without an org is refused), so pre-cutover
-  // responses validate unchanged.
+  // Org-scoping fields: the worker sends all four on every response.
   activeOrg: UuidSchema.optional(),
   memberships: z.array(OrgMembershipSummarySchema).optional(),
   role: DashboardRoleSchema.optional(),

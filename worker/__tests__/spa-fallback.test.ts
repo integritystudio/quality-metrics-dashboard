@@ -12,7 +12,7 @@ import app from '../index.js';
 import { jsonResponse } from './support/http.js';
 import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, createTestIssuer, type TestIssuer } from './support/jwt.js';
-import { makeWorkerEnv } from './support/worker-env.js';
+import { ORG_BINDINGS, makeWorkerEnv, membershipRows } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 import { CONTENT_TYPE_HEADER, HttpStatus } from '../../src/lib/http-constants.js';
 
@@ -25,13 +25,13 @@ const mockAssets = {
 };
 
 function makeEnv(kv = new MemoryKv()) {
-  return makeWorkerEnv({ DASHBOARD: kv, ASSETS: mockAssets });
+  return makeWorkerEnv({ ...ORG_BINDINGS, DASHBOARD: kv, ASSETS: mockAssets });
 }
 
 let tenant: TestIssuer;
 let authHeaders: { Authorization: string };
 
-// Minimal auth stub for API route tests: the JWKS plus the 2 middleware Supabase reads.
+// Minimal auth stub for API route tests: the JWKS plus the middleware's Supabase reads.
 function stubAuthFetch(): void {
   vi.stubGlobal('fetch', tenant.serveJwks((url: string) => {
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
@@ -39,6 +39,9 @@ function stubAuthFetch(): void {
     }
     if (url.includes('/rest/v1/user_roles')) {
       return Promise.resolve(jsonResponse([{ roles: { name: 'admin', permissions: ['dashboard.admin'] } }]));
+    }
+    if (url.includes('/rest/v1/organization_memberships')) {
+      return Promise.resolve(jsonResponse(membershipRows('owner')));
     }
     return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
   }));
@@ -91,14 +94,14 @@ describe('SPA fallback: non-API routes serve index.html', () => {
 
 describe('API routes: unaffected by SPA fallback', () => {
   it('GET /api/health returns JSON (not HTML)', async () => {
-    const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'meta:lastSync': LAST_SYNC })));
+    const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'system:lastSync': LAST_SYNC })));
     expect(res.status).toBe(HttpStatus.Ok);
     const contentType = res.headers.get(CONTENT_TYPE_HEADER) ?? '';
     expect(contentType).toMatch(/application\/json/);
   });
 
   it('GET /api/health response body reports the last sync', async () => {
-    const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'meta:lastSync': LAST_SYNC })));
+    const res = await app.request('/api/health', {}, makeEnv(new MemoryKv({ 'system:lastSync': LAST_SYNC })));
     expect(await res.json()).toEqual({ status: 'ok', lastSync: LAST_SYNC });
   });
 

@@ -29,10 +29,9 @@ import {
 import { increment } from '../../lib/collections.js';
 import { GENAI_AGENT_ATTRIBUTES, SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
 import { AGENT_ATTRIBUTES, HOOK_ATTRIBUTES } from '../../lib/hook-attributes.js';
+import { AGENT_STATS_KEY_PREFIX } from '../../lib/worker-contract.js';
 
-/** One KV key per period; the Worker restates the prefix because it cannot import this module. */
-export const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
-
+/** One KV key per period. */
 export function agentStatsKey(period: Period): string {
   return `${AGENT_STATS_KEY_PREFIX}${period}`;
 }

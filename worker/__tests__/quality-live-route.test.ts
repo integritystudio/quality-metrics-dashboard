@@ -21,7 +21,7 @@ function nanos(iso: string): string {
 }
 
 function makeEnv(kv: MemoryKv) {
-  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS, ORG_SCOPING_ENABLED: 'true' });
+  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS });
 }
 
 function orgKey(key: string): string {

@@ -5,11 +5,13 @@
 
 import type { Context, HonoRequest, MiddlewareHandler } from 'hono';
 import { createFactory } from 'hono/factory';
+import { HTTPException } from 'hono/http-exception';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { z } from 'zod';
 import type { AppSession, DashboardPermission } from '../src/types/auth.js';
 import { PERMISSION } from '../src/lib/org-rbac.js';
 import { HttpStatus } from '../src/lib/http-constants.js';
-import { ERR_FORBIDDEN } from './error-messages.js';
+import { ERR_AUTH_UNAVAILABLE, ERR_FORBIDDEN, ERR_INTERNAL, ERR_UNAUTHORIZED } from './error-messages.js';
 
 export type Bindings = {
   DASHBOARD: KVNamespace;
@@ -28,16 +30,11 @@ export type Bindings = {
   // Must be explicitly set to 'true' to enable the test-token bypass.
   // Never set this in production wrangler.toml — leave absent.
   ALLOW_TEST_BYPASS?: string;
-  // --- Org-scoped multi-tenancy (P5) ---
-  // Gates org resolution + getKv prefixing. 'true' on all three workers (wrangler.toml).
-  ORG_SCOPING_ENABLED?: string;
-  // Org owning all pre-tenancy data. Non-empty on both production workers,
-  // deliberately '' on quality-metrics-api-dev (must fail loudly, never resolve
-  // a production org).
+  // Org owning all pre-tenancy data. The auth middleware refuses to serve when it is empty.
   HOME_ORG_ID?: string;
   // JSON array of app user UUIDs — the explicit staff allowlist (decision Q2).
   STAFF_USER_IDS?: string;
-  // Set 'true' at P8 to switch off the home-org bare-key dual-read fallback.
+  // Set 'true' to switch off the home-org bare-key dual-read fallback.
   ORG_KV_FALLBACK_DISABLED?: string;
 };
 
@@ -52,10 +49,6 @@ export type AppContext = Context<AppEnv>;
 
 export const factory = createFactory<AppEnv>();
 
-export function isOrgScopingEnabled(env: Pick<Bindings, 'ORG_SCOPING_ENABLED'>): boolean {
-  return env.ORG_SCOPING_ENABLED === 'true';
-}
-
 export function safeArray<T>(val: unknown): T[] {
   return Array.isArray(val) ? val as T[] : [];
 }
@@ -64,10 +57,40 @@ export function hasPermission(session: AppSession, permission: DashboardPermissi
   return session.permissions.includes(PERMISSION.admin) || session.permissions.includes(permission);
 }
 
+export function unauthorized(c: AppContext): Response {
+  return c.json({ error: ERR_UNAUTHORIZED }, HttpStatus.Unauthorized);
+}
+
+export function forbidden(c: AppContext): Response {
+  return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+}
+
+/** 503: the client retries it, as it never retries a 401. */
+export function authUnavailable(c: AppContext): Response {
+  return c.json({ error: ERR_AUTH_UNAVAILABLE }, HttpStatus.ServiceUnavailable);
+}
+
+export function internalError(c: AppContext): Response {
+  return c.json({ error: ERR_INTERNAL }, HttpStatus.InternalServerError);
+}
+
+/** Ends the request with `response` from any depth; the app's `onError` returns it unchanged. */
+export function abort(response: Response): never {
+  throw new HTTPException(response.status as ContentfulStatusCode, { res: response });
+}
+
 /** Route guard: 403 unless the session holds `permission` (or dashboard.admin). */
 export function requirePermission(permission: DashboardPermission): MiddlewareHandler<AppEnv> {
   return factory.createMiddleware(async (c, next) => {
-    if (!hasPermission(c.get('session'), permission)) return c.json({ error: ERR_FORBIDDEN }, HttpStatus.Forbidden);
+    if (!hasPermission(c.get('session'), permission)) return forbidden(c);
+    return next();
+  });
+}
+
+/** Route guard: 400 with `error` unless the path parameter `name` matches `pattern`. */
+export function requireParam(name: string, pattern: RegExp, error: string): MiddlewareHandler<AppEnv> {
+  return factory.createMiddleware(async (c, next) => {
+    if (!pattern.test(c.req.param(name) ?? '')) return c.json({ error }, HttpStatus.BadRequest);
     return next();
   });
 }

@@ -9,8 +9,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HTTPException } from 'hono/http-exception';
 import app from '../index.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
-import { MemoryKv } from './support/memory-kv.js';
-import { BYPASS_BINDINGS, BYPASS_HEADERS, makeCtx, makeWorkerEnv } from './support/worker-env.js';
+import type { MemoryKv } from './support/memory-kv.js';
+import { BYPASS_BINDINGS, BYPASS_HEADERS, BYPASS_ORG_ID, makeCtx, makeWorkerEnv, orgKv } from './support/worker-env.js';
 
 function pipelinePayload(period: string) {
   return { period, stages: [{ name: `stage-${period}` }], totalEvaluations: 1 };
@@ -27,7 +27,7 @@ const EVALUATIONS_7D = { rows: [{ score: 9, label: 'pass' }] };
 
 /** Every period's key holds its own payload, so a response shows which key was read. */
 function syncedKv(): MemoryKv {
-  return new MemoryKv({
+  return orgKv(BYPASS_ORG_ID, {
     'pipeline:24h': pipelinePayload('24h'),
     'pipeline:7d': pipelinePayload('7d'),
     'pipeline:30d': pipelinePayload('30d'),

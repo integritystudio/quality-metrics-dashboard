@@ -92,7 +92,7 @@ describe('upstream failures are 503', () => {
 
 describe('Supabase reads during auth', () => {
   const APP_USER_ID = 'a0000000-0000-4000-8000-000000000051';
-  const orgEnv = () => makeWorkerEnv({ ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: 'a0000000-0000-4000-8000-0000000000aa', STAFF_USER_IDS: NO_STAFF_USER_IDS });
+  const orgEnv = () => makeWorkerEnv({ HOME_ORG_ID: 'a0000000-0000-4000-8000-0000000000aa', STAFF_USER_IDS: NO_STAFF_USER_IDS });
 
   async function status(fetchImpl: FetchLike): Promise<number> {
     vi.stubGlobal('fetch', tenant.serveJwks(fetchImpl));

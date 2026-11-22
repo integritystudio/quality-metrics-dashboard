@@ -7,7 +7,8 @@
  * Tokens are signed with a real key pair and verified by real jose against the served JWKS.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import app, { acceptedIssuers } from '../index.js';
+import app from '../index.js';
+import { acceptedIssuers } from '../auth.js';
 import { jsonResponse } from './support/http.js';
 import { TEST_AUTH0_DOMAIN, createTestIssuer, issuerFor, type TestIssuer } from './support/jwt.js';
 import { NO_STAFF_USER_IDS, makeCtx, makeWorkerEnv } from './support/worker-env.js';
@@ -29,7 +30,7 @@ const HOME_MEMBERSHIP = {
 };
 
 function makeEnv(overrides?: Partial<Record<string, unknown>>) {
-  return makeWorkerEnv({ ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS, ...overrides });
+  return makeWorkerEnv({ HOME_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS, ...overrides });
 }
 
 function supabase(url: string): Promise<Response> {

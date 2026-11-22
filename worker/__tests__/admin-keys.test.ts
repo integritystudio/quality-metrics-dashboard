@@ -40,7 +40,7 @@ const AUDITOR_PERMISSIONS = [
 ];
 
 function makeEnv() {
-  return makeWorkerEnv({ ORG_SCOPING_ENABLED: 'true', HOME_ORG_ID: MOCK_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS });
+  return makeWorkerEnv({ HOME_ORG_ID: MOCK_ORG_ID, STAFF_USER_IDS: NO_STAFF_USER_IDS });
 }
 
 /**

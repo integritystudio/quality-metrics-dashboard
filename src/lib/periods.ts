@@ -11,7 +11,7 @@ export const INVALID_PERIOD_MESSAGE = `Invalid period. Must be ${new Intl.ListFo
 export type Period = z.infer<typeof PeriodEnum>;
 /** Default period for list/evaluation queries. */
 export const DEFAULT_PERIOD = '7d' satisfies Period;
-/** Default period for metric detail views (wider window). */
+/** Default period for the wider-window views: metric detail, correlations and agents. */
 export const DEFAULT_PERIOD_DETAIL = '30d' satisfies Period;
 /** The period the dashboard opens on; the e2e worker fixture warms this read before any spec runs. */
 export const INITIAL_PERIOD = '30d' satisfies Period;

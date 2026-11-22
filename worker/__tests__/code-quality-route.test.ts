@@ -12,7 +12,7 @@ import { MemoryKv } from './support/memory-kv.js';
 import { BYPASS_BINDINGS, BYPASS_HEADERS, BYPASS_ORG_ID, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 
 function makeEnv(kv: MemoryKv) {
-  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS, ORG_SCOPING_ENABLED: 'true' });
+  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS });
 }
 
 const CODE_QUALITY_PAYLOAD = {

@@ -22,7 +22,6 @@ import {
   CODE_EVENT,
   CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
   CODE_QUALITY_INVOCATION_LIMIT,
-  CODE_QUALITY_KV_KEY,
   CODE_QUALITY_LOOKBACK_DAYS,
   summarizeCodeQuality,
   type CodeQualityResponse,
@@ -54,6 +53,7 @@ import {
 } from './session-entries.js';
 import { buildTraceEntries } from './trace-entries.js';
 import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
+import { CODE_QUALITY_KV_KEY } from '../../lib/worker-contract.js';
 
 const LOG_PREFIX = '[org-kv-entries]';
 

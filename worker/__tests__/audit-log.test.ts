@@ -10,16 +10,11 @@ import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { serveSignedSession } from './support/signed-session.js';
-import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
+import { makeCtx, makeWorkerEnv, staffBindings } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
-const ADMIN_PERMISSIONS = [
-  'dashboard.read', 'dashboard.executive', 'dashboard.operator', 'dashboard.auditor',
-  'dashboard.traces.read', 'dashboard.sessions.read', 'dashboard.agents.read',
-  'dashboard.pipeline.read', 'dashboard.compliance.read', 'dashboard.admin',
-];
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
 const ASYNC_LOG_FLUSH_MS = 10;
@@ -35,8 +30,12 @@ function withAdminAuth(
     }
     if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: HttpStatus.Ok }),
+        new Response(JSON.stringify([{ roles: { name: 'admin', permissions: [] } }]), { status: HttpStatus.Ok }),
       );
+    }
+    // No memberships: the staff session resolves to the home org.
+    if (url.includes('/rest/v1/organization_memberships')) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: HttpStatus.Ok }));
     }
     return routeHandler(url, init);
   };
@@ -79,7 +78,7 @@ const ROLE_MUTATIONS: RoleMutation[] = [
 
 function requestMutation({ path, init }: RoleMutation) {
   const headers = { ...init.headers as Record<string, string>, ...authHeaders() };
-  return app.request(path, { ...init, headers }, makeWorkerEnv(), makeCtx());
+  return app.request(path, { ...init, headers }, makeWorkerEnv(staffBindings(MOCK_APP_USER_ID)), makeCtx());
 }
 
 describe.each(ROLE_MUTATIONS)('audit log: $action', (mutation) => {

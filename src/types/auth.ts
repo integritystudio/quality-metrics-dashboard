@@ -42,8 +42,7 @@ export type AppSession = {
   roles: string[];
   permissions: DashboardPermission[];
   allowedViews: DashboardView[];
-  // Org-scoping fields (P5) — present only when ORG_SCOPING_ENABLED resolves the
-  // session through organization_memberships; absent on the legacy global path.
+  // Org-scoping fields — set on every session the worker's auth middleware builds.
   /** The server-verified active org. permissions/allowedViews/role reflect this org only. */
   activeOrgId?: string;
   memberships?: OrgMembershipSummary[];

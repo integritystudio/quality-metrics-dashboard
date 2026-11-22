@@ -14,7 +14,7 @@ import { MemoryKv } from './support/memory-kv.js';
 import { BYPASS_BINDINGS, BYPASS_HEADERS, BYPASS_ORG_ID, makeCtx, makeWorkerEnv } from './support/worker-env.js';
 
 function makeEnv(kv = new MemoryKv()) {
-  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS, ORG_SCOPING_ENABLED: 'true' });
+  return makeWorkerEnv({ DASHBOARD: kv, ...BYPASS_BINDINGS });
 }
 
 const DETAIL_PAYLOAD = { name: 'relevance', displayName: 'Relevance', status: 'healthy', sampleCount: 2, dynamics: { velocity: 0.1 } };

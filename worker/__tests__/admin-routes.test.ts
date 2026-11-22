@@ -1,24 +1,24 @@
 /**
  * Admin API route tests — GET/POST/DELETE /api/admin/*
  *
- * Tests permission enforcement and basic request validation for admin routes.
- * Admin tests use withAdminAuth() to compose fetch mocks: auth middleware calls
+ * Tests permission enforcement and basic request validation for the staff-only global routes.
+ * Staff tests use withAdminAuth() to compose fetch mocks: auth middleware calls
  * are handled by the helper layer; route-specific calls are handled by the test.
- * Non-admin tests use mockAuditorAuthSequence (auditor permissions, no dashboard.admin).
+ * Non-staff tests use mockOrgOwnerAuthSequence: an org owner holds dashboard.admin in their
+ * own org and must still be refused.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
 import { serveSignedSession, type FetchMock } from './support/signed-session.js';
-import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
+import { ORG_BINDINGS, makeCtx, makeWorkerEnv, membershipRows, staffBindings } from './support/worker-env.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-admin-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 
-// Auditor has no dashboard.admin permission
-const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
-const ADMIN_PERMISSIONS = ['dashboard.read', 'dashboard.executive', 'dashboard.operator', 'dashboard.auditor', 'dashboard.traces.read', 'dashboard.sessions.read', 'dashboard.agents.read', 'dashboard.pipeline.read', 'dashboard.compliance.read', 'dashboard.admin'];
+const staffEnv = () => makeWorkerEnv(staffBindings(MOCK_APP_USER_ID));
+const orgOwnerEnv = () => makeWorkerEnv(ORG_BINDINGS);
 
 const VALID_USER_UUID = 'b1111111-1111-4111-8111-111111111111';
 const VALID_ROLE_UUID = 'c2222222-2222-4222-8222-222222222222';
@@ -26,10 +26,11 @@ const VALID_KEY_UUID = 'd3333333-3333-4333-8333-333333333333';
 
 /**
  * Wraps a route-level fetch handler with auth middleware responses.
- * The auth middleware makes 2 sequential Supabase calls (the token is verified against the served JWKS first):
+ * The auth middleware makes 3 Supabase calls (the token is verified against the served JWKS first):
  *   1. GET /rest/v1/users?auth0_id=eq.{auth0Id}&limit=1 — resolve appUserId
- *   2. GET /rest/v1/user_roles?select=roles(name,permissions)&... — load permissions
- * This helper intercepts those two by URL pattern and delegates everything else
+ *   2. GET /rest/v1/user_roles?select=roles(name,permissions)&... — load role names
+ *   3. GET /rest/v1/organization_memberships?... — none here: staff resolve to the home org
+ * This helper intercepts those by URL pattern and delegates everything else
  * to the provided routeHandler.
  */
 function withAdminAuth(
@@ -42,24 +43,30 @@ function withAdminAuth(
     }
     // Auth roles: has roles(name,permissions)
     if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
-      return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ADMIN_PERMISSIONS } }]), { status: HttpStatus.Ok }));
+      return Promise.resolve(new Response(JSON.stringify([{ roles: { name: 'admin', permissions: [] } }]), { status: HttpStatus.Ok }));
+    }
+    if (url.includes('/rest/v1/organization_memberships')) {
+      return Promise.resolve(new Response(JSON.stringify([]), { status: HttpStatus.Ok }));
     }
     return routeHandler(url, init);
   };
 }
 
-/** Mock a non-admin auth sequence (auditor permissions, no dashboard.admin). */
-function mockAuditorAuthSequence(fetchMock: FetchMock) {
+/** Mock a non-staff auth sequence: the owner of their own org. */
+function mockOrgOwnerAuthSequence(fetchMock: FetchMock) {
   fetchMock.mockImplementation((url: string) => {
     if (url.includes('/rest/v1/users') && url.includes('auth0_id=')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'auditor@test.com' }]), { status: HttpStatus.Ok }),
+        new Response(JSON.stringify([{ id: MOCK_APP_USER_ID, email: 'owner@test.com' }]), { status: HttpStatus.Ok }),
       );
     }
     if (url.includes('/rest/v1/user_roles')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: HttpStatus.Ok }),
+        new Response(JSON.stringify([{ roles: { name: 'admin', permissions: ['dashboard.admin'] } }]), { status: HttpStatus.Ok }),
       );
+    }
+    if (url.includes('/rest/v1/organization_memberships')) {
+      return Promise.resolve(new Response(JSON.stringify(membershipRows('owner')), { status: HttpStatus.Ok }));
     }
     return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
   });
@@ -69,7 +76,7 @@ function mockAuditorAuthSequence(fetchMock: FetchMock) {
 const { fetchMock, authHeaders } = serveSignedSession(MOCK_AUTH0_ID);
 
 beforeEach(() => {
-  // Default: admin auth succeeds; route handler returns 200 for unmatched calls.
+  // Default: staff auth succeeds; route handler returns 200 for unmatched calls.
   fetchMock.mockImplementation(withAdminAuth(() => Promise.resolve(new Response(null, { status: HttpStatus.Ok }))));
 });
 
@@ -104,18 +111,18 @@ describe.each(ADMIN_ROUTES)('%s %s', (method, path) => {
 // ─── GET /api/admin/users ──────────────────────────────────────────────────────
 
 describe('GET /api/admin/users', () => {
-  it('returns 403 for non-admin user (auditor)', async () => {
-    mockAuditorAuthSequence(fetchMock);
+  it('returns 403 for a non-staff org owner', async () => {
+    mockOrgOwnerAuthSequence(fetchMock);
 
     const res = await app.request(
       '/api/admin/users',
       { headers: authHeaders() },
-      makeWorkerEnv(),
+      orgOwnerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
 
-  it('returns 200 with user list for admin user', async () => {
+  it('returns 200 with user list for a staff user', async () => {
     const mockUsers = [
       { id: VALID_USER_UUID, email: 'user@test.com', created_at: '2026-03-26T05:56:23.812873+00:00' }, // PostgREST format
     ];
@@ -137,7 +144,7 @@ describe('GET /api/admin/users', () => {
     const res = await app.request(
       '/api/admin/users',
       { headers: authHeaders() },
-      makeWorkerEnv(),
+      staffEnv(),
     );
     expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
@@ -150,20 +157,20 @@ describe('GET /api/admin/users', () => {
 // ─── GET /api/admin/roles ──────────────────────────────────────────────────────
 
 describe('GET /api/admin/roles', () => {
-  it('returns 403 for non-admin user (auditor)', async () => {
-    mockAuditorAuthSequence(fetchMock);
+  it('returns 403 for a non-staff org owner', async () => {
+    mockOrgOwnerAuthSequence(fetchMock);
 
     const res = await app.request(
       '/api/admin/roles',
       { headers: authHeaders() },
-      makeWorkerEnv(),
+      orgOwnerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
 
-  it('returns 200 with roles list for admin user', async () => {
+  it('returns 200 with roles list for a staff user', async () => {
     const mockRoles = [
-      { id: VALID_ROLE_UUID, name: 'auditor', permissions: AUDITOR_PERMISSIONS },
+      { id: VALID_ROLE_UUID, name: 'auditor', permissions: ['dashboard.read', 'dashboard.auditor'] },
     ];
 
     fetchMock.mockImplementation(withAdminAuth((url) => {
@@ -176,7 +183,7 @@ describe('GET /api/admin/roles', () => {
     const res = await app.request(
       '/api/admin/roles',
       { headers: authHeaders() },
-      makeWorkerEnv(),
+      staffEnv(),
     );
     expect(res.status).toBe(HttpStatus.Ok);
     const data = await res.json();
@@ -187,7 +194,7 @@ describe('GET /api/admin/roles', () => {
   it('returns its own 500 when Supabase is unreachable', async () => {
     fetchMock.mockImplementation(withAdminAuth(() => Promise.reject(new TypeError('Network connection lost.'))));
 
-    const res = await app.request('/api/admin/roles', { headers: authHeaders() }, makeWorkerEnv());
+    const res = await app.request('/api/admin/roles', { headers: authHeaders() }, staffEnv());
     expect(res.status).toBe(HttpStatus.InternalServerError);
     expect(await res.json()).toEqual({ error: 'Failed to fetch roles' });
   });
@@ -204,7 +211,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
         headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
-      makeWorkerEnv(),
+      staffEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -217,7 +224,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
         headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({}),
       },
-      makeWorkerEnv(),
+      staffEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -238,14 +245,14 @@ describe('POST /api/admin/users/:userId/roles', () => {
         headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
-      makeWorkerEnv(),
+      staffEnv(),
       makeCtx(),
     );
     expect(res.status).toBe(HttpStatus.NoContent);
   });
 
-  it('returns 403 for non-admin user', async () => {
-    mockAuditorAuthSequence(fetchMock);
+  it('returns 403 for a non-staff org owner', async () => {
+    mockOrgOwnerAuthSequence(fetchMock);
 
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles`,
@@ -254,7 +261,7 @@ describe('POST /api/admin/users/:userId/roles', () => {
         headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json },
         body: JSON.stringify({ role_id: VALID_ROLE_UUID }),
       },
-      makeWorkerEnv(),
+      orgOwnerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });
@@ -267,7 +274,7 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
     const res = await app.request(
       `/api/admin/users/bad-id/roles/${VALID_ROLE_UUID}`,
       { method: 'DELETE', headers: authHeaders() },
-      makeWorkerEnv(),
+      staffEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -276,7 +283,7 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/bad-role-id`,
       { method: 'DELETE', headers: authHeaders() },
-      makeWorkerEnv(),
+      staffEnv(),
     );
     expect(res.status).toBe(HttpStatus.BadRequest);
   });
@@ -293,19 +300,19 @@ describe('DELETE /api/admin/users/:userId/roles/:roleId', () => {
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
       { method: 'DELETE', headers: authHeaders() },
-      makeWorkerEnv(),
+      staffEnv(),
       makeCtx(),
     );
     expect(res.status).toBe(HttpStatus.NoContent);
   });
 
-  it('returns 403 for non-admin user', async () => {
-    mockAuditorAuthSequence(fetchMock);
+  it('returns 403 for a non-staff org owner', async () => {
+    mockOrgOwnerAuthSequence(fetchMock);
 
     const res = await app.request(
       `/api/admin/users/${VALID_USER_UUID}/roles/${VALID_ROLE_UUID}`,
       { method: 'DELETE', headers: authHeaders() },
-      makeWorkerEnv(),
+      orgOwnerEnv(),
     );
     expect(res.status).toBe(HttpStatus.Forbidden);
   });

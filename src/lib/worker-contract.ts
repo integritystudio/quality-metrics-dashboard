@@ -20,6 +20,13 @@ export const QUALITY_LIVE_EVAL_LIMIT = 100;
 /** UUID shape. The worker rejects an X-Org-Id, userId or roleId that fails it. */
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** KV key families the sync writers produce and the worker reads back. */
+export const METRIC_DETAIL_KEY_PREFIX = 'metric:';
+export const TREND_KEY_PREFIX = 'trend:';
+export const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
+/** Org-prefixed by both sides. */
+export const CODE_QUALITY_KV_KEY = 'code-quality';
+
 /** The worker's 404 `error` when the org has no dashboard KV key synced yet. */
 export const WORKER_ERR_NO_DATA = 'No data available';
 

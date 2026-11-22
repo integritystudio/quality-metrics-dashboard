@@ -17,7 +17,7 @@ import {
 } from '../sync-to-kv.js';
 import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
 import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
-import { CODE_QUALITY_KV_KEY } from '../../src/api/code-quality-summary.js';
+import { CODE_QUALITY_KV_KEY } from '../../src/lib/worker-contract.js';
 import { computeOrgKvEntries } from '../../src/api/aggregates/org-kv-entries.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';

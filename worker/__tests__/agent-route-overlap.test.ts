@@ -14,17 +14,18 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import app from '../index.js';
 import { jsonResponse } from './support/http.js';
-import { MemoryKv } from './support/memory-kv.js';
 import { TEST_AUTH0_DOMAIN, createTestIssuer, type TestIssuer } from './support/jwt.js';
-import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
+import { ORG_BINDINGS, TEST_MEMBER_ORG_ID, makeCtx, makeWorkerEnv, membershipRows, orgKv } from './support/worker-env.js';
+import type { OrgMembershipRole } from '../../src/types/auth.js';
 import { HttpStatus } from '../../src/lib/http-constants.js';
 
 const MOCK_AUTH0_ID = 'auth0|test-agents-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000003';
-const AGENTS_PERMISSIONS = ['dashboard.read', 'dashboard.agents.read'];
-const READ_ONLY_PERMISSIONS = ['dashboard.read'];
-/** The role's permissions for the next request; reset to AGENTS_PERMISSIONS before each test. */
-let rolePermissions = AGENTS_PERMISSIONS;
+/** A viewer membership holds dashboard.agents.read; a plain member holds dashboard.read alone. */
+const AGENTS_ROLE: OrgMembershipRole = 'viewer';
+const READ_ONLY_ROLE: OrgMembershipRole = 'member';
+/** The membership role for the next request; reset to AGENTS_ROLE before each test. */
+let membershipRole: OrgMembershipRole = AGENTS_ROLE;
 const AGENT_ID = 'code-reviewer';
 const SESSION_ID = 'session-abc123';
 const AGENT_PAYLOAD = { agentName: AGENT_ID, invocations: 4 };
@@ -34,7 +35,10 @@ function withAgentsAuth(url: string): Promise<Response> {
     return Promise.resolve(jsonResponse([{ id: MOCK_APP_USER_ID, email: 'viewer@test.com' }]));
   }
   if (url.includes('/rest/v1/user_roles') && decodeURIComponent(url).includes('roles(name,permissions)')) {
-    return Promise.resolve(jsonResponse([{ roles: { name: 'viewer', permissions: rolePermissions } }]));
+    return Promise.resolve(jsonResponse([{ roles: { name: 'viewer', permissions: [] } }]));
+  }
+  if (url.includes('/rest/v1/organization_memberships')) {
+    return Promise.resolve(jsonResponse(membershipRows(membershipRole)));
   }
   return Promise.resolve(new Response(null, { status: HttpStatus.Ok }));
 }
@@ -48,7 +52,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  rolePermissions = AGENTS_PERMISSIONS;
+  membershipRole = AGENTS_ROLE;
   vi.stubGlobal('fetch', tenant.serveJwks(withAgentsAuth));
 });
 
@@ -56,18 +60,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function get(path: string, kv: MemoryKv) {
+function get(path: string, kvEntries: Record<string, unknown> = {}) {
   return app.request(
     path,
     { headers: { Authorization: `Bearer ${token}` } },
-    makeWorkerEnv({ DASHBOARD: kv }),
+    makeWorkerEnv({ ...ORG_BINDINGS, DASHBOARD: orgKv(TEST_MEMBER_ORG_ID, kvEntries) }),
     makeCtx(),
   );
 }
 
 describe('overlapping agent routes: /api/agents/detail/:agentId vs /api/agents/:sessionId', () => {
   it('routes /api/agents/detail/:agentId to the agent-detail handler', async () => {
-    const kv = new MemoryKv({ [`agent:${AGENT_ID}`]: AGENT_PAYLOAD, 'session:detail': { evaluations: [] } });
+    const kv = { [`agent:${AGENT_ID}`]: AGENT_PAYLOAD, 'session:detail': { evaluations: [] } };
 
     const res = await get(`/api/agents/detail/${AGENT_ID}`, kv);
 
@@ -77,7 +81,7 @@ describe('overlapping agent routes: /api/agents/detail/:agentId vs /api/agents/:
 
   it('does not fall through to the session handler for a "detail" path', async () => {
     // A param-route match would serve the literal segment's session key.
-    const kv = new MemoryKv({ 'session:detail': { evaluations: [] } });
+    const kv = { 'session:detail': { evaluations: [] } };
 
     const res = await get(`/api/agents/detail/${AGENT_ID}`, kv);
 
@@ -86,7 +90,7 @@ describe('overlapping agent routes: /api/agents/detail/:agentId vs /api/agents/:
   });
 
   it('still routes a plain /api/agents/:sessionId to the session handler', async () => {
-    const kv = new MemoryKv({ [`session:${SESSION_ID}`]: { evaluations: [] }, [`agent:${SESSION_ID}`]: AGENT_PAYLOAD });
+    const kv = { [`session:${SESSION_ID}`]: { evaluations: [] }, [`agent:${SESSION_ID}`]: AGENT_PAYLOAD };
 
     const res = await get(`/api/agents/${SESSION_ID}`, kv);
 
@@ -99,14 +103,14 @@ describe('/api/agents/:sessionId payload', () => {
   const graph = { nodes: [], edges: [], rootNodeId: null, workflowShape: 'linear' };
 
   it('serves the workflowGraph precomputed by sync-to-kv as graph', async () => {
-    const res = await get(`/api/agents/${SESSION_ID}`, new MemoryKv({ [`session:${SESSION_ID}`]: { workflowGraph: graph, evaluations: [] } }));
+    const res = await get(`/api/agents/${SESSION_ID}`, { [`session:${SESSION_ID}`]: { workflowGraph: graph, evaluations: [] } });
 
     expect(res.status).toBe(HttpStatus.Ok);
     expect((await res.json<{ graph: unknown }>()).graph).toEqual(graph);
   });
 
   it('serves graph: null for a session key synced before graphs were precomputed', async () => {
-    const res = await get(`/api/agents/${SESSION_ID}`, new MemoryKv({ [`session:${SESSION_ID}`]: { evaluations: [] } }));
+    const res = await get(`/api/agents/${SESSION_ID}`, { [`session:${SESSION_ID}`]: { evaluations: [] } });
 
     expect((await res.json<{ graph: unknown }>()).graph).toBeNull();
   });
@@ -115,7 +119,7 @@ describe('/api/agents/:sessionId payload', () => {
 describe('/api/agents/:sessionId/graph payload', () => {
   const graph = { nodes: [], edges: [], rootNodeId: null, workflowShape: 'linear' };
   const multiAgentEvaluation = { turns: [], handoffs: [], totalTurns: 0 };
-  const sessionKv = () => new MemoryKv({
+  const sessionKv = () => ({
     [`session:${SESSION_ID}`]: {
       workflowGraph: graph,
       multiAgentEvaluation,
@@ -130,14 +134,16 @@ describe('/api/agents/:sessionId/graph payload', () => {
     expect(await res.json()).toEqual({ sessionId: SESSION_ID, evaluation: multiAgentEvaluation, graph });
   });
 
-  it('answers 404 when the session has no key', async () => {
-    const res = await get(`/api/agents/${SESSION_ID}/graph`, new MemoryKv());
+  it('answers a JSON 404, still marked uncacheable, when the session has no key', async () => {
+    const res = await get(`/api/agents/${SESSION_ID}/graph`, {});
 
     expect(res.status).toBe(HttpStatus.NotFound);
+    expect(await res.json()).toEqual({ error: `No session data for: ${SESSION_ID}` });
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store');
   });
 
-  it('answers 403, without serving the session, to a role lacking dashboard.agents.read', async () => {
-    rolePermissions = READ_ONLY_PERMISSIONS;
+  it('answers 403, without serving the session, to a membership role lacking dashboard.agents.read', async () => {
+    membershipRole = READ_ONLY_ROLE;
 
     const res = await get(`/api/agents/${SESSION_ID}/graph`, sessionKv());
 
@@ -146,7 +152,7 @@ describe('/api/agents/:sessionId/graph payload', () => {
   });
 
   it('answers 400 to a session id with characters outside the id pattern', async () => {
-    const res = await get('/api/agents/bad%20id/graph', new MemoryKv());
+    const res = await get('/api/agents/bad%20id/graph', {});
 
     expect(res.status).toBe(HttpStatus.BadRequest);
   });

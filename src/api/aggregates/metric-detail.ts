@@ -12,11 +12,10 @@ import { computeMetricDetail } from '../parent/quality-views.js';
 import { computeMetricDynamics } from '../parent/qfe-dynamics.js';
 import { extractFiniteScores } from '../api-constants.js';
 import { PERIOD_MS, TIME_MS } from '../../lib/constants.js';
+import { METRIC_DETAIL_KEY_PREFIX } from '../../lib/worker-contract.js';
 import type { EvaluationResult, MetricDetailResult, MetricDynamics, Period } from '../../types.js';
 
-/** One KV key per metric and period; the Worker restates the prefix because it cannot import this module. */
-export const METRIC_DETAIL_KEY_PREFIX = 'metric:';
-
+/** One KV key per metric and period. */
 export function metricDetailKey(name: string, period: Period): string {
   return `${METRIC_DETAIL_KEY_PREFIX}${name}:${period}`;
 }

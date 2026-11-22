@@ -8,9 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import app from '../index.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../../src/lib/http-constants.js';
-import { MemoryKv } from './support/memory-kv.js';
 import { serveSignedSession, type FetchMock } from './support/signed-session.js';
-import { makeCtx, makeWorkerEnv } from './support/worker-env.js';
+import { ORG_BINDINGS, TEST_MEMBER_ORG_ID, makeCtx, makeWorkerEnv, membershipRows, orgKv } from './support/worker-env.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
 const DASHBOARD_KEY = 'dashboard:7d';
@@ -19,8 +18,10 @@ const MOCK_AUTH0_ID = 'auth0|test-user';
 const MOCK_APP_USER_ID = 'a0000000-0000-4000-8000-000000000002';
 const ASYNC_LOG_FLUSH_MS = 10;
 
-const AUDITOR_PERMISSIONS = ['dashboard.read', 'dashboard.auditor', 'dashboard.compliance.read', 'dashboard.traces.read', 'dashboard.sessions.read'];
-
+/** A viewer membership grants every data read the view routes below need. */
+function makeEnv(kvEntries: Record<string, unknown> = {}) {
+  return makeWorkerEnv({ ...ORG_BINDINGS, DASHBOARD: orgKv(TEST_MEMBER_ORG_ID, kvEntries) });
+}
 
 function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boolean }) {
   const callCount = new Map<string, number>();
@@ -38,8 +39,11 @@ function mockAuthSequence(fetchMock: FetchMock, options?: { rejectActivity?: boo
     // Get user roles
     if (url.includes('/rest/v1/user_roles')) {
       return Promise.resolve(
-        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: AUDITOR_PERMISSIONS } }]), { status: HttpStatus.Ok })
+        new Response(JSON.stringify([{ roles: { name: 'auditor', permissions: [] } }]), { status: HttpStatus.Ok })
       );
+    }
+    if (url.includes('/rest/v1/organization_memberships')) {
+      return Promise.resolve(new Response(JSON.stringify(membershipRows('viewer')), { status: HttpStatus.Ok }));
     }
     // Activity logging calls: optionally reject for failure testing
     if (url.includes('/rest/v1/user_activity') && options?.rejectActivity) {
@@ -67,7 +71,7 @@ describe('logActivity: view routes', () => {
   it.each(VIEW_ROUTES)('POSTs activity_type=$activityType on $path', async ({ activityType, path, kvKey, kvValue }) => {
     mockAuthSequence(fetchMock);
 
-    const res = await app.request(path, { headers: authHeaders() }, makeWorkerEnv({ DASHBOARD: new MemoryKv({ [kvKey]: kvValue }) }), makeCtx());
+    const res = await app.request(path, { headers: authHeaders() }, makeEnv({ [kvKey]: kvValue }), makeCtx());
     expect(res.status).toBe(HttpStatus.Ok);
 
     // Wait for microtasks to allow async activity logging to be queued
@@ -85,7 +89,7 @@ describe('logActivity: view routes', () => {
   it('does not POST to user_activity when KV returns no data (404)', async () => {
     mockAuthSequence(fetchMock);
 
-    const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeWorkerEnv(), makeCtx());
+    const res = await app.request('/api/dashboard', { headers: authHeaders() }, makeEnv(), makeCtx());
     expect(res.status).toBe(HttpStatus.NotFound);
 
     await new Promise(resolve => setTimeout(resolve, ASYNC_LOG_FLUSH_MS));
@@ -102,7 +106,7 @@ describe('logActivity: failure resilience', () => {
     const res = await app.request(
       '/api/dashboard',
       { headers: authHeaders() },
-      makeWorkerEnv({ DASHBOARD: new MemoryKv({ [DASHBOARD_KEY]: { metrics: [] } }) }),
+      makeEnv({ [DASHBOARD_KEY]: { metrics: [] } }),
       makeCtx(),
     );
     expect(res.status).toBe(HttpStatus.Ok);
@@ -119,7 +123,7 @@ describe('POST /api/activity: request body', () => {
     const res = await app.request(
       '/api/activity',
       { method: 'POST', headers: { ...authHeaders(), [CONTENT_TYPE_HEADER]: ContentType.Json }, body },
-      makeWorkerEnv(),
+      makeEnv(),
       makeCtx(),
     );
 
