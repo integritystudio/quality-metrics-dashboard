@@ -32,6 +32,18 @@ parity tests' `it.each` period lists do not cover `90d`.
   evaluation partition's read; a step gets 128 MB and its output 1 MiB (parent
   `docs/archive/kv-sync-in-worker.md`). Measure a 90-day run against the dev Workflow before raising
   the cap. The prune step's `config.maxDays < LONGEST_PERIOD_DAYS` guard moves with it.
+- **Measured 2026-11-21: D1, not the Worker, is the limit.** There is no dev Workflow, so a throwaway
+  `dashboard-kv-sync-measure` (cap raised to 90, `crons = []`, preview KV bound, prod D1) ran
+  `{dryRun: true, maxDays: 90}`, then was deleted. Every evaluation step passed (90d partitions hold
+  ~3.4× the 30d rows: 3,948 relevance samples against 1,166; `metric:*:90d` steps 12–15 s, no memory
+  or 1 MiB output error). The home org's first `sessions:` step failed every retry with
+  `D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window` and the run
+  errored after 7 min. `computeSessionsStep` reads each session's spans by
+  `attributeFilter: { session.id }` over the whole window, 25 sessions a step, and at 90 days one step
+  exceeds D1's per-window budget. Raising the cap needs that read bounded first (an indexed
+  session-id column, the session's own time range instead of the window, or fewer sessions a step).
+  A first attempt ran 30d and 90d concurrently and both hit the same error on prod D1 between
+  20:05 and 20:14 local; the 20:00 production run had already finished. Never run two syncs at once.
 
 Acceptance: the scheduled Workflow writes the `:90d` entries, the `it.each` period lists in the parity tests
 cover `90d`, `DATA_GATED_PERIOD` and `useOfferPeriod` are deleted, and e2e asserts all four periods
