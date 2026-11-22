@@ -36,7 +36,7 @@ const NO_RETRY_DELAY_MS = 0;
  * client so tests can drive a refetch through `invalidateQueries`.
  *
  * `retry: false` only covers callers that set no `retry` of their own:
- * `useApiQuery`, the admin hooks, `useCalibration`, `useDashboard`, `useTrace`
+ * `useApiQuery` (and `useTrace` through it), the admin hooks, `useCalibration`, `useDashboard`
  * and `useSessionDetail` all pass one, which overrides it. `retryDelay: 0`
  * keeps those production retry policies in force while dropping react-query's
  * 1s/2s backoff, so an error assertion resolves within `waitFor`'s default

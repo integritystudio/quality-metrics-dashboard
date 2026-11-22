@@ -79,7 +79,6 @@ export const MAX_HALLUCINATION_ROWS = 8;
 export const MAX_FAILED_EVAL_ROWS = 6;
 /** Rolling window for live quality endpoint (24 h). */
 export const LIVE_WINDOW_MS = TIME_MS.DAY;
-export const QUERY_RETRY_COUNT = 2;
 export const POLL_INTERVAL_MS = 30_000;
 export const MAX_IDS = 50;
 /** Decimal places for displayed score values in API responses. */

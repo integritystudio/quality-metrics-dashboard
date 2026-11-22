@@ -1,10 +1,7 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import type { UseQueryResult } from '@tanstack/react-query';
 import type { EvaluationResult } from '../types.js';
-import { STALE_TIME, QUERY_RETRY_COUNT } from '../lib/constants.js';
-import { useAuth } from '../contexts/AuthContext.js';
-import { useOrgOptional } from '../contexts/OrgContext.js';
-import { apiFetch } from '../lib/api-client.js';
-import { HttpStatus } from '../lib/http-constants.js';
+import { STALE_TIME } from '../lib/constants.js';
+import { useApiQuery } from './useApiQuery.js';
 
 type TraceSpanResponse = {
   traceId: string;
@@ -23,31 +20,14 @@ type TraceResponse = {
 }
 
 export function useTrace(traceId: string | undefined): UseQueryResult<TraceResponse> {
-  const { getAccessToken } = useAuth();
-  // On-choke-point (P6): org id in the key and X-Org-Id on the wire, matching
-  // useApiQuery — this hook fetches outside useApiQuery and must not drift.
-  const org = useOrgOptional();
-  const activeOrgId = org?.activeOrgId ?? null;
-  return useQuery<TraceResponse>({
-    queryKey: [activeOrgId, 'trace', traceId],
-    queryFn: async ({ signal }) => {
-      if (!traceId) throw new Error('traceId is required');
-      let token: string;
-      try {
-        token = await getAccessToken();
-      } catch {
-        throw new Error('AUTH_REQUIRED');
-      }
-      const res = await apiFetch(`/api/traces/${encodeURIComponent(traceId)}`, token, activeOrgId, { signal });
-      if (!res.ok) {
-        // Worker returns 404 with JSON body when trace not in KV — return empty data
-        if (res.status === HttpStatus.NotFound) return { traceId, spans: [], evaluations: [] };
-        throw new Error(`API error: ${res.status}`);
-      }
-      return res.json();
+  return useApiQuery<TraceResponse>(
+    ['trace', traceId],
+    () => `/api/traces/${encodeURIComponent(traceId ?? '')}`,
+    {
+      enabled: !!traceId,
+      staleTime: STALE_TIME.DETAIL,
+      // The Worker answers 404 when the trace is not in KV: show it as an empty trace.
+      onNotFound: () => ({ traceId: traceId ?? '', spans: [], evaluations: [] }),
     },
-    enabled: !!traceId,
-    staleTime: STALE_TIME.DETAIL,
-    retry: QUERY_RETRY_COUNT,
-  });
+  );
 }
