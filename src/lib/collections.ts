@@ -18,3 +18,9 @@ export function increment(counts: Record<string, number>, key: string, by = 1): 
 export function incrementIn(counts: Map<string, number>, key: string, by = 1): void {
   counts.set(key, (counts.get(key) ?? 0) + by);
 }
+
+export function toggleInSet<T>(set: ReadonlySet<T>, value: T): Set<T> {
+  const next = new Set(set);
+  if (!next.delete(value)) next.add(value);
+  return next;
+}

@@ -6,6 +6,7 @@ import type { WorkflowGraph } from '../types/workflow-graph.js';
 import type { MultiAgentEvaluation } from '../types.js';
 import { agentColorScale, fmtDuration } from '../lib/quality-utils.js';
 import { criticalPath } from '../lib/critical-path.js';
+import { toggleInSet } from '../lib/collections.js';
 import { WORKFLOW_FILTER_MIN_AGENTS, WORKFLOW_GRAPH_HEIGHT } from '../lib/constants.js';
 
 type WorkflowTab = 'dag' | 'timeline';
@@ -184,30 +185,16 @@ export function AgentWorkflowView({
     const hasErrFilter = errorsOnly;
     if (!hasAgentFilter && !hasDurFilter && !hasErrFilter) return undefined;
 
-    let result = new Set(graph.nodes.map(n => n.id));
-    if (hasAgentFilter) {
-      result = new Set([...result].filter(id => selectedAgents.has(id)));
-    }
-    if (hasDurFilter) {
-      const durPass = new Set(graph.nodes.filter(n => n.durationMs >= minDurationMs).map(n => n.id));
-      result = new Set([...result].filter(id => durPass.has(id)));
-    }
-    if (hasErrFilter) {
-      const errPass = new Set(graph.nodes.filter(n => n.hasError).map(n => n.id));
-      result = new Set([...result].filter(id => errPass.has(id)));
-    }
-    return result;
+    return new Set(graph.nodes
+      .filter(n => (!hasAgentFilter || selectedAgents.has(n.id))
+        && (!hasDurFilter || n.durationMs >= minDurationMs)
+        && (!hasErrFilter || n.hasError))
+      .map(n => n.id));
   }, [selectedAgents, minDurationMs, errorsOnly, graph.nodes]);
 
   const toggleAgent = useCallback((name: string) => {
     setSelectedAgents(prev => {
-      const base = prev ?? new Set(agentNames);
-      const next = new Set(base);
-      if (next.has(name)) {
-        next.delete(name);
-      } else {
-        next.add(name);
-      }
+      const next = toggleInSet(prev ?? new Set(agentNames), name);
       // If all agents re-selected, reset to null (all-on)
       if (next.size === agentNames.length) return null;
       return next;

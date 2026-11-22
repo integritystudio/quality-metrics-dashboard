@@ -18,6 +18,7 @@ import { group, mean, sum } from 'd3-array';
 import type { WorkflowGraph, WorkflowNode, WorkflowEdge } from '../types/workflow-graph.js';
 import { fmtDuration, formatCompactCount } from '../lib/quality-utils.js';
 import { SCORE_CHIP_PRECISION, WORKFLOW_GRAPH_HEIGHT } from '../lib/constants.js';
+import { toggleInSet } from '../lib/collections.js';
 
 export const NODE_WIDTH = 220;
 const NODE_HEIGHT = 120;
@@ -144,12 +145,6 @@ function isClusterNodeData(value: unknown): value is ClusterNodeData {
   );
 }
 
-function buildNodeDataMap(nodes: WorkflowNode[]): Map<string, WorkflowNode> {
-  const map = new Map<string, WorkflowNode>();
-  for (const n of nodes) map.set(n.id, n);
-  return map;
-}
-
 const CLUSTER_NODE_PREFIX = '__cluster__';
 
 function clusterNodeId(clusterId: string): string {
@@ -179,7 +174,7 @@ export function applyClusterCollapse(
     }
   }
 
-  const nodeDataMap = buildNodeDataMap(nodes);
+  const nodeDataMap = new Map(nodes.map(n => [n.id, n]));
   const clusterableNodes = [...nodeClusterMap.keys()].map(id => nodeDataMap.get(id)).filter((n): n is WorkflowNode => n != null);
   const clusterMembers = group(clusterableNodes, n => nodeClusterMap.get(n.id));
 
@@ -248,7 +243,7 @@ async function computeLayout(
   edges: WorkflowEdge[],
   { selectedAgents, criticalPath, onNodeActivate }: LayoutOptions = {},
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const nodeDataMap = buildNodeDataMap(nodes);
+  const nodeDataMap = new Map(nodes.map(n => [n.id, n]));
 
   const elkGraph = {
     id: 'root',
@@ -307,6 +302,32 @@ async function computeLayout(
   return { nodes: rfNodes, edges: rfEdges };
 }
 
+type NodeShellProps = {
+  className: string;
+  ariaLabel: string;
+  hasError: boolean;
+  onActivate: (() => void) | undefined;
+  children: React.ReactNode;
+};
+
+/** The card both node types share: button semantics when activatable, the error badge, and the two handles. */
+function NodeShell({ className, ariaLabel, hasError, onActivate, children }: NodeShellProps) {
+  return (
+    <div
+      className={className}
+      role={onActivate ? 'button' : 'group'}
+      tabIndex={onActivate ? 0 : undefined}
+      onKeyDown={activationKeyHandler(onActivate)}
+      aria-label={ariaLabel}
+    >
+      {children}
+      {hasError && <div className="workflow-node__error">Error</div>}
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  );
+}
+
 const AgentNodeComponent = memo(function AgentNode({ data }: NodeProps) {
   if (!isWorkflowNode(data)) return null;
   const d = data;
@@ -317,12 +338,11 @@ const AgentNodeComponent = memo(function AgentNode({ data }: NodeProps) {
   const nodeClass = agentNodeClass(d, band);
 
   return (
-    <div
+    <NodeShell
       className={nodeClass}
-      role={onActivate ? 'button' : 'group'}
-      tabIndex={onActivate ? 0 : undefined}
-      onKeyDown={activationKeyHandler(onActivate)}
-      aria-label={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
+      ariaLabel={`Agent: ${d.label}, Score: ${d.evaluationScore ?? 'N/A'}`}
+      hasError={d.hasError}
+      onActivate={onActivate}
     >
       <div className="workflow-node__label">{d.label}</div>
       {band && (
@@ -337,10 +357,7 @@ const AgentNodeComponent = memo(function AgentNode({ data }: NodeProps) {
       <div className="workflow-node__duration">
         {fmtDuration(d.durationMs)}
       </div>
-      {d.hasError && <div className="workflow-node__error">Error</div>}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
+    </NodeShell>
   );
 });
 
@@ -356,12 +373,11 @@ const ClusterNodeComponent = memo(function ClusterNode({ data }: NodeProps) {
   ].filter(Boolean).join(' ');
 
   return (
-    <div
+    <NodeShell
       className={nodeClass}
-      role={d.onActivate ? 'button' : 'group'}
-      tabIndex={d.onActivate ? 0 : undefined}
-      onKeyDown={activationKeyHandler(d.onActivate)}
-      aria-label={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
+      ariaLabel={`Cluster: ${d.clusterId}, ${d.memberCount} agents`}
+      hasError={d.hasError}
+      onActivate={d.onActivate}
     >
       <div className="workflow-cluster-node__label">{d.clusterId}</div>
       <div className="workflow-cluster-node__meta">
@@ -370,10 +386,7 @@ const ClusterNodeComponent = memo(function ClusterNode({ data }: NodeProps) {
           <span> · avg {d.avgScore.toFixed(SCORE_CHIP_PRECISION)}</span>
         )}
       </div>
-      {d.hasError && <div className="workflow-node__error">Error</div>}
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
+    </NodeShell>
   );
 });
 
@@ -416,15 +429,7 @@ export function WorkflowGraphView({ graph, onNodeClick, height = WORKFLOW_GRAPH_
   const clusterIds = extractClusterIds(graph.nodes);
 
   const toggleCluster = useCallback((clusterId: string) => {
-    setCollapsedClusters(prev => {
-      const next = new Set(prev);
-      if (next.has(clusterId)) {
-        next.delete(clusterId);
-      } else {
-        next.add(clusterId);
-      }
-      return next;
-    });
+    setCollapsedClusters(prev => toggleInSet(prev, clusterId));
   }, []);
 
   useEffect(() => {
@@ -463,10 +468,16 @@ export function WorkflowGraphView({ graph, onNodeClick, height = WORKFLOW_GRAPH_
     onNodeClick?.(node.id);
   }, [onNodeClick]);
 
-  // Large-graph fallback: skip ELK layout to avoid blocking the main thread
-  if (graph.nodes.length > MAX_ELK_NODES) {
-    return (
-      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+  return (
+    <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+      {renderGraphBody()}
+    </div>
+  );
+
+  function renderGraphBody(): React.ReactNode {
+    // Large-graph fallback: skip ELK layout to avoid blocking the main thread
+    if (graph.nodes.length > MAX_ELK_NODES) {
+      return (
         <div className="workflow-oversize text-secondary text-xs">
           <div className="workflow-oversize__heading">
             Graph too large to render ({graph.nodes.length} agents)
@@ -483,14 +494,12 @@ export function WorkflowGraphView({ graph, onNodeClick, height = WORKFLOW_GRAPH_
             ))}
           </ul>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
-    const node = graph.nodes[0];
-    return (
-      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+    if (graph.workflowShape === 'single_agent' && graph.nodes.length <= 1) {
+      const node = graph.nodes[0];
+      return (
         <div className="workflow-fallback">
           {node ? (
             <>
@@ -503,53 +512,49 @@ export function WorkflowGraphView({ graph, onNodeClick, height = WORKFLOW_GRAPH_
             <div className="workflow-fallback__empty">No agent data</div>
           )}
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (layoutError) {
-    return (
-      <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
+    if (layoutError) {
+      return (
         <div className="error-state workflow-fallback">
           Failed to compute workflow layout: {layoutError}
         </div>
-      </div>
+      );
+    }
+
+    return (
+      <>
+        {clusterIds.length > 0 && (
+          <div className="workflow-cluster-controls" role="group" aria-label="Cluster toggles">
+            {clusterIds.map(cId => (
+              <button
+                key={cId}
+                type="button"
+                className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? ' workflow-cluster-toggle--collapsed' : ''}`}
+                onClick={() => toggleCluster(cId)}
+                aria-pressed={collapsedClusters.has(cId)}
+              >
+                {collapsedClusters.has(cId) ? '▶' : '▼'} {cId}
+              </button>
+            ))}
+          </div>
+        )}
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
+          nodeTypes={NODE_TYPES}
+          nodesFocusable={false}
+          fitView
+        >
+          <Controls />
+          <Background />
+          {graph.nodes.length >= MINIMAP_THRESHOLD && <MiniMap pannable zoomable />}
+        </ReactFlow>
+      </>
     );
   }
-
-  const showMiniMap = graph.nodes.length >= MINIMAP_THRESHOLD;
-
-  return (
-    <div ref={containerRef} className="workflow-graph-container" style={containerStyle} role="img" aria-label="Agent workflow graph">
-      {clusterIds.length > 0 && (
-        <div className="workflow-cluster-controls" role="group" aria-label="Cluster toggles">
-          {clusterIds.map(cId => (
-            <button
-              key={cId}
-              type="button"
-              className={`workflow-cluster-toggle${collapsedClusters.has(cId) ? ' workflow-cluster-toggle--collapsed' : ''}`}
-              onClick={() => toggleCluster(cId)}
-              aria-pressed={collapsedClusters.has(cId)}
-            >
-              {collapsedClusters.has(cId) ? '▶' : '▼'} {cId}
-            </button>
-          ))}
-        </div>
-      )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        nodeTypes={NODE_TYPES}
-        nodesFocusable={false}
-        fitView
-      >
-        <Controls />
-        <Background />
-        {showMiniMap && <MiniMap pannable zoomable />}
-      </ReactFlow>
-    </div>
-  );
 }
