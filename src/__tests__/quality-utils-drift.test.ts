@@ -26,8 +26,6 @@ import {
   labelToOrdinal,
   ordinalToCategory,
   truncateText,
-  ROLE_DISPLAY_LIMITS,
-  ROLE_FEATURE_CONFIG,
   SCORE_COLORS,
 } from '../lib/quality-utils.js';
 import {
@@ -105,14 +103,6 @@ const ORDINAL_CATEGORIES: Array<[number, string]> = [
 ];
 
 const EXPECTED_HALLUCINATION_RISK_THRESHOLD = 0.15;
-
-// Mirrors the parent's own ROLE_DISPLAY_LIMITS test (qfe-roles-detail.test.ts)
-// so the two sides can be diffed by eye.
-const EXPECTED_ROLE_LIMITS = {
-  executive: { explanationTruncation: 80, maxWorstEvaluations: 1 },
-  operator: { explanationTruncation: 500, maxWorstEvaluations: 5 },
-  auditor: { explanationTruncation: 2000, maxWorstEvaluations: 10 },
-};
 
 
 describe('scoreColorBand', () => {
@@ -208,64 +198,6 @@ describe('hallucination flagging constants', () => {
     expect([...HALLUCINATION_RISK_EVALUATION_NAMES].toSorted()).toEqual(['hallucination', 'hallucination_risk']);
   });
 });
-
-// ROLE_FEATURE_CONFIG shape (sentinel)
-
-describe('ROLE_FEATURE_CONFIG', () => {
-  const roles = ['executive', 'operator', 'auditor'] as const;
-
-  it('has all three roles', () => {
-    for (const role of roles) {
-      expect(ROLE_FEATURE_CONFIG[role]).toBeDefined();
-    }
-  });
-
-  it('executive hides variance and operator controls', () => {
-    expect(ROLE_FEATURE_CONFIG.executive.showVariance).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.showAcceleration).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.showRawExport).toBe(false);
-    expect(ROLE_FEATURE_CONFIG.executive.maxWorstEvaluations).toBe(EXPECTED_ROLE_LIMITS.executive.maxWorstEvaluations);
-  });
-
-  it('operator shows operational metrics', () => {
-    expect(ROLE_FEATURE_CONFIG.operator.showVariance).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.showCorrelationRemediation).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.showCoverageHeatmap).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.operator.maxWorstEvaluations).toBe(EXPECTED_ROLE_LIMITS.operator.maxWorstEvaluations);
-  });
-
-  it('auditor has full access with raw export', () => {
-    expect(ROLE_FEATURE_CONFIG.auditor.showProvenance).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.auditor.showRawExport).toBe(true);
-    expect(ROLE_FEATURE_CONFIG.auditor.maxWorstEvaluations).toBe(EXPECTED_ROLE_LIMITS.auditor.maxWorstEvaluations);
-    expect(ROLE_FEATURE_CONFIG.auditor.explanationTruncation).toBe(EXPECTED_ROLE_LIMITS.auditor.explanationTruncation);
-  });
-});
-
-describe('ROLE_DISPLAY_LIMITS', () => {
-  // The assertions above pin maxWorstEvaluations for all three roles but
-  // explanationTruncation for the auditor only, so executive (80) and operator
-  // (500) could drift unnoticed. These pin the whole table.
-  for (const role of ['executive', 'operator', 'auditor'] as const) {
-    it(`${role} limits match the parent`, () => {
-      expect(ROLE_DISPLAY_LIMITS[role]).toEqual(EXPECTED_ROLE_LIMITS[role]);
-    });
-
-    it(`${role} config surfaces the limits from ROLE_DISPLAY_LIMITS`, () => {
-      expect(ROLE_FEATURE_CONFIG[role].explanationTruncation).toBe(
-        EXPECTED_ROLE_LIMITS[role].explanationTruncation,
-      );
-      expect(ROLE_FEATURE_CONFIG[role].maxWorstEvaluations).toBe(
-        EXPECTED_ROLE_LIMITS[role].maxWorstEvaluations,
-      );
-    });
-  }
-
-  it('covers every role exactly once', () => {
-    expect(Object.keys(ROLE_DISPLAY_LIMITS)).toEqual(['executive', 'operator', 'auditor']);
-  });
-});
-
 
 describe('truncateText', () => {
   const TEXT = 'hello';

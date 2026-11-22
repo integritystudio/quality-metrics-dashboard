@@ -7,9 +7,8 @@
  * Keep in sync with the parent when these definitions change. The parent module
  * that was the single source, `src/lib/quality/quality-feature-engineering.ts`,
  * no longer exists — it was split into `src/lib/quality/qfe-*.ts`, so the
- * counterparts now live in several files:
- *   - ROLE_DISPLAY_LIMITS, ROLE_FEATURE_CONFIG        → `qfe-role-config.ts`
- *   - scoreColorBand, labelToOrdinal, ordinalToCategory → `qfe-label-ordinals.ts`
+ * counterparts (scoreColorBand, labelToOrdinal, ordinalToCategory) now live in
+ * `qfe-label-ordinals.ts`.
  * The exception is the SCORE_BAND_* thresholds, imported through `./score-bands.ts`
  * from the parent's import-free `score-bands.ts`.
  *
@@ -31,7 +30,6 @@ export type LabelOrdinal = {
 import { scaleLinear, scaleOrdinal, scaleThreshold, type ScaleThreshold } from 'd3-scale';
 import { SCORE_BAND_ADEQUATE, SCORE_BAND_EXCELLENT, SCORE_BAND_GOOD, SCORE_BAND_POOR } from './score-bands.js';
 import {
-  type Role,
   AGENT_PALETTE,
   FAIL_SCORE_LABEL,
   HALLUCINATION_RISK_EVALUATION_NAMES,
@@ -46,26 +44,10 @@ import {
   ID_DISPLAY_EDGE_CHARS,
   PERCENT_MULTIPLIER,
 } from './constants.js';
-export type FeatureRoleType = Role;
 
 /** Each agent's palette color by its position in `agentNames`, cycling; an unlisted agent gets the first color. */
 export function agentColorScale(agentNames: readonly string[]): (agentName: string) => string {
   return scaleOrdinal<string, string, string>(AGENT_PALETTE).domain(agentNames).unknown(AGENT_PALETTE[0]);
-}
-
-export type RoleFeatureConfig = {
-  showCQI: boolean;
-  showCQIBreakdown: boolean;
-  showVariance: boolean;
-  showAcceleration: boolean;
-  showProjectedBreach: boolean;
-  showCorrelationRemediation: boolean;
-  showCoverageHeatmap: boolean;
-  showPipelineFunnel: boolean;
-  showProvenance: boolean;
-  showRawExport: boolean;
-  explanationTruncation: number;
-  maxWorstEvaluations: number;
 }
 
 export function truncateText(text: string, max: number): string {
@@ -266,77 +248,6 @@ export function resolveScoreLabel(evaluation: ScoredEvaluation): string | undefi
   if (typeof score !== 'number' || !Number.isFinite(score)) return undefined;
   return scoreLabelForMetric(evaluation.evaluationName, score);
 }
-
-/** The display-limit half of {@link RoleFeatureConfig} — the numeric fields only */
-export type RoleDisplayLimits = Pick<
-  RoleFeatureConfig,
-  'explanationTruncation' | 'maxWorstEvaluations'
->;
-
-/**
- * Per-role display limits — mirrors ROLE_DISPLAY_LIMITS in the parent's
- * `src/lib/quality/qfe-role-config.ts`, same shape and same values.
- *
- * This is a hand-maintained copy, not an import: the parent's runtime values
- * cannot reach frontend code (the `src/api/parent/*` barrels are Node-only, and
- * `@parent` resolves to `../dist`, which standalone CI builds without). Keeping
- * the same shape on both sides is what makes a sync a one-table diff.
- *
- * Was six loose constants until 2026-08-17 (parent QSD-6). Note the parent has
- * no OPERATOR_EXPLANATION_TRUNCATION to match: its operator truncation used to
- * come from TEXT_PREVIEW_LIMIT, which this file never mirrored — the asymmetry
- * QSD-6 removed existed only on the parent side.
- */
-export const ROLE_DISPLAY_LIMITS = {
-  /** Headline view: one worst evaluation, one line of explanation */
-  executive: { explanationTruncation: 80, maxWorstEvaluations: 1 },
-  /** Triage view */
-  operator: { explanationTruncation: 500, maxWorstEvaluations: 5 },
-  /** Evidence view: full judge rationale, deepest worst-list */
-  auditor: { explanationTruncation: 2000, maxWorstEvaluations: 10 },
-} as const satisfies Record<FeatureRoleType, RoleDisplayLimits>;
-
-export const ROLE_FEATURE_CONFIG: Record<FeatureRoleType, RoleFeatureConfig> = {
-  executive: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: false,
-    showAcceleration: false,
-    showProjectedBreach: true,
-    showCorrelationRemediation: false,
-    showCoverageHeatmap: false,
-    showPipelineFunnel: false,
-    showProvenance: false,
-    showRawExport: false,
-    ...ROLE_DISPLAY_LIMITS.executive,
-  },
-  operator: {
-    showCQI: false,
-    showCQIBreakdown: false,
-    showVariance: true,
-    showAcceleration: true,
-    showProjectedBreach: true,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: false,
-    showRawExport: false,
-    ...ROLE_DISPLAY_LIMITS.operator,
-  },
-  auditor: {
-    showCQI: true,
-    showCQIBreakdown: true,
-    showVariance: true,
-    showAcceleration: false,
-    showProjectedBreach: false,
-    showCorrelationRemediation: true,
-    showCoverageHeatmap: true,
-    showPipelineFunnel: true,
-    showProvenance: true,
-    showRawExport: true,
-    ...ROLE_DISPLAY_LIMITS.auditor,
-  },
-};
 
 const PATH_TAIL_SEGMENTS = 3;
 
