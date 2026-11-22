@@ -1,6 +1,7 @@
 /**
  * Turns: their shape, their key, anchoring to spans and fitting to the judge's input caps.
- * Imports nothing Node-only, so a Worker can bundle it; reading turns out of transcripts is `transcript-turns.ts`.
+ * Imports no Node built-in itself, and loads under workerd (the parent's `dashboard-pipeline-loads.workers.test.ts`);
+ * reading turns out of transcripts is `transcript-turns.ts`.
  */
 
 import { group } from 'd3-array';

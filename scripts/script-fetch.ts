@@ -19,6 +19,10 @@ export function setScriptFetch(fetchFn: FetchFn | undefined): void {
   installed = fetchFn;
 }
 
+/**
+ * Resolved on each request, not when taken: a client built before the entry
+ * point installs its fetch still sends over the installed one.
+ */
 export function scriptFetch(): FetchFn {
-  return installed ?? (async (input, init): Promise<Response> => globalThis.fetch(input, init));
+  return async (input, init): Promise<Response> => (installed ? installed(input, init) : globalThis.fetch(input, init));
 }
