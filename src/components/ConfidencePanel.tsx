@@ -1,24 +1,14 @@
 import type { ConfidenceIndicator } from '../types.js';
-import { min as minOf, max as maxOf } from 'd3-array';
-import { SCORE_COLORS, formatScore, formatPercent, percentOf, scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
+import { SCORE_COLORS, formatPercent, percentOf, scoreColorBand, type ScoreColorBand } from '../lib/quality-utils.js';
 import {
   VARIANCE_LOW_PCT, VARIANCE_MEDIUM_PCT,
-  CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_CHIP_PRECISION, SCORE_DISPLAY_PRECISION,
+  CONFIDENCE_MIN_SAMPLE_SIZE, SCORE_DISPLAY_PRECISION,
   PERCENT_MAX, PERCENT_MULTIPLIER,
 } from '../lib/constants.js';
 import { BarIndicator } from './BarIndicator.js';
 
-
-type EvaluatorScore = {
-  evaluator: string;
-  score: number;
-  label?: string;
-}
-
 type ConfidencePanelProps = {
   confidence: ConfidenceIndicator;
-  /** Per-evaluator scores for multi-judge display */
-  evaluatorScores?: EvaluatorScore[];
 }
 
 const LEVEL_STATUS: Record<ConfidenceIndicator['level'], 'healthy' | 'warning' | 'critical'> = {
@@ -46,44 +36,7 @@ function VarianceBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-function JudgePanel({ scores }: { scores: EvaluatorScore[] }) {
-  const scoreValues = scores.map(s => s.score);
-  const minScore = minOf(scoreValues) ?? 0;
-  const maxScore = maxOf(scoreValues) ?? 0;
-  return (
-    <div>
-      <div className="uppercase text-xs text-muted mb-1-5">Judge Panel</div>
-      <div className="agreement-grid">
-        <span className="ag-header">Evaluator</span>
-        <span className="ag-header">Score</span>
-        <span className="ag-header">Label</span>
-        {scores.map((es) => (
-          <div key={es.evaluator} className="contents">
-            <span className="mono-xs">{es.evaluator}</span>
-            <span className="mono-xs">{formatScore(es.score)}</span>
-            <span className="text-secondary text-xs">{es.label ?? '-'}</span>
-          </div>
-        ))}
-      </div>
-      <div className="agreement-summary">
-        <div>
-          Agreement: <span className="summary-value">
-            {scores.every(s => s.label === scores[0]?.label) ? '100%' : 'partial'}
-          </span>
-          {' '}({scores.filter(s => s.label === scores[0]?.label).length}/{scores.length} same label)
-        </div>
-        <div>
-          Score Range: <span className="summary-value">
-            {minScore.toFixed(SCORE_CHIP_PRECISION)} &ndash; {maxScore.toFixed(SCORE_CHIP_PRECISION)}
-          </span>
-          {' '}(spread: {(maxScore - minScore).toFixed(SCORE_DISPLAY_PRECISION)})
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanelProps) {
+export function ConfidencePanel({ confidence }: ConfidencePanelProps) {
   const { level, sampleCount, scoreStdDev, evaluatorCount, evaluatorAgreement } = confidence;
   const method = evaluatorCount > 1 ? 'multi-judge agreement' : sampleCount > CONFIDENCE_MIN_SAMPLE_SIZE ? 'sample size' : 'sample count';
 
@@ -122,10 +75,6 @@ export function ConfidencePanel({ confidence, evaluatorScores }: ConfidencePanel
           </>
         )}
       </div>
-
-      {evaluatorScores && evaluatorScores.length > 1 && (
-        <JudgePanel scores={evaluatorScores} />
-      )}
     </div>
   );
 }

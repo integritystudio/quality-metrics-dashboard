@@ -5,13 +5,6 @@ import { routes } from '../lib/routes.js';
 import { timestampToMs } from '../lib/timestamps.js';
 import { ContentType } from '../lib/http-constants.js';
 
-type EvaluatorTypeCounts = {
-  rule: number;
-  llm: number;
-  seed: number;
-  canary: number;
-}
-
 type ProvenancePanelProps = {
   evaluationName: string;
   scoreValue?: number | undefined;
@@ -26,8 +19,6 @@ type ProvenancePanelProps = {
   agentName?: string | undefined;
   /** Raw evaluation object for JSON export */
   rawData?: Record<string, unknown> | undefined;
-  /** Evaluator type breakdown counts */
-  evaluatorTypeCounts?: EvaluatorTypeCounts | undefined;
 }
 
 export function ProvenancePanel(props: ProvenancePanelProps) {
@@ -35,7 +26,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
     evaluationName, scoreValue, scoreLabel,
     traceId, spanId, sessionId, timestamp,
     evaluator, evaluatorType, scoreUnit,
-    agentName, rawData, evaluatorTypeCounts,
+    agentName, rawData,
   } = props;
 
   const handleExportJson = useCallback(() => {
@@ -102,23 +93,6 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
           </div>
         ) : null)}
       </div>
-      {evaluatorTypeCounts && (
-        <div className="flex-wrap gap-1-5 my-2">
-          {(Object.entries(evaluatorTypeCounts) as Array<[keyof EvaluatorTypeCounts, number]>)
-            .filter(([, count]) => count > 0)
-            .map(([type, count]) => (
-              <span
-                key={type}
-                className="mono-xs text-secondary chip gap-1 inline-flex-center surface-elevated"
-              >
-                {type}
-                <span className="font-bold text-primary">
-                  {count}
-                </span>
-              </span>
-            ))}
-        </div>
-      )}
       <div className="provenance-actions">
         <button type="button" className="text-xs" onClick={handleExportJson}>
           Export as JSON

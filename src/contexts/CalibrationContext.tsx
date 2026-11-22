@@ -4,27 +4,18 @@ import type { CalibrationResponse } from '../lib/validation/dashboard-schemas.js
 
 type CalibrationContextValue = {
   data: CalibrationResponse | undefined;
-  isLoading: boolean;
 }
 
 const CalibrationContext = createContext<CalibrationContextValue | null>(null);
 
 export function CalibrationProvider({ children }: { children: ReactNode }) {
-  const { data, isLoading } = useCalibration();
-  const value = useMemo(() => ({ data, isLoading }), [data, isLoading]);
+  const { data } = useCalibration();
+  const value = useMemo(() => ({ data }), [data]);
   return (
     <CalibrationContext value={value}>
       {children}
     </CalibrationContext>
   );
-}
-
-export function useCalibrationData(): CalibrationContextValue {
-  const ctx = use(CalibrationContext);
-  if (!ctx) {
-    throw new Error('useCalibrationData must be used within a CalibrationProvider');
-  }
-  return ctx;
 }
 
 export function useMetricCalibration(metricName: string): MetricCalibration | undefined {

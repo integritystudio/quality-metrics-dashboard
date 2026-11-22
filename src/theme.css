@@ -228,7 +228,6 @@
 .summary-count .label,
 .sla-table th,
 .cot-summary,
-.agreement-grid .ag-header,
 .stat-label,
 .field-label,
 .uppercase {
@@ -393,8 +392,7 @@ body {
 
 /* Shared section divider */
 .metric-footer,
-.pipeline-stats,
-.agreement-summary {
+.pipeline-stats {
   margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: var(--border-width-thin) solid var(--border-subtle);
@@ -1094,16 +1092,14 @@ details[open] > .cot-summary::before {
   font-weight: var(--light-bold);
 }
 
-/* Provenance / confidence / agreement grids */
+/* Provenance / confidence grids */
 .provenance-grid,
-.agreement-grid,
 .confidence-stats-grid {
   display: grid;
   gap: var(--space-1) var(--space-4);
 }
 .provenance-grid,
 .confidence-stats-grid { grid-template-columns: auto 1fr; }
-.agreement-grid { grid-template-columns: 1fr auto auto; }
 .provenance-grid .prov-label {
   color: var(--text-secondary);
   font-family: var(--font-body);
@@ -1133,17 +1129,6 @@ details[open] > .cot-summary::before {
   margin-bottom: var(--space-3);
 }
 .agreement-value { color: var(--band-fg, var(--score-failing)); }
-.agreement-grid .ag-header {
-  color: var(--text-muted);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-body);
-  padding-bottom: var(--space-1);
-  border-bottom: var(--border-width-thin) solid var(--border-subtle);
-}
-.agreement-summary .summary-value {
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-}
 .variance-bar {
   gap: var(--space-2);
 }
@@ -1186,8 +1171,7 @@ details[open] > .cot-summary::before {
   color: var(--text-muted);
 }
 .metric-values,
-.provenance-grid,
-.agreement-grid { font-family: var(--font-mono); font-size: var(--font-size-xs); }
+.provenance-grid { font-family: var(--font-mono); font-size: var(--font-size-xs); }
 .mono-xl   { font-family: var(--font-mono); font-size: var(--font-size-xl); }
 
 /* Font size */
