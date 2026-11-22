@@ -8,14 +8,14 @@ Open items from code reviews and deferred work.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-SYNC-90D-PERIOD | Write the `90d` KV entries and lift the header's 90d data gate | P3 | `'90d'` is a full period in code, but `sync-to-kv` still defaults to `--days=30`, so no `:90d` entry exists and `DATA_GATED_PERIOD` hides the button. Split out of DASH-LINT-PARENT-PARITY on 2026-10-21. Source: session 2026-10-18 |
+| DASH-SYNC-90D-PERIOD | Write the `90d` KV entries and lift the header's 90d data gate | P3 | `'90d'` is a full period in code, but the parent's `kv-sync` Workflow caps `maxDays` at 30, so no `:90d` entry exists and `DATA_GATED_PERIOD` hides the button. Split out of DASH-LINT-PARENT-PARITY on 2026-10-21. Source: session 2026-10-18 |
 | DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS | The judge sees a turn's oldest tool results, not its newest | Done | Fixed 2026-10-22: `fitContextForJudge` keeps the latest. Found by the judge-suite audit's mutation check. Source: session 2026-10-22 |
 
 **DASH-SYNC-90D-PERIOD.** `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is a full period
 (`PERIOD_KEYS`, `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`,
-which iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **sync-to-kv still defaults to
-`--days=30`**, and `computeOrgKvEntries` skips any period longer than that, so no `:90d` KV entry is
-written until a run passes `--days=90`. The default was left alone deliberately: an org already holds
+which iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **The parent's `kv-sync` Workflow caps `maxDays` at 30** (the
+deleted `sync-to-kv` defaulted to `--days=30`), and a period longer than the window is skipped, so no
+`:90d` KV entry is written. The cap was left alone deliberately: the whole-org build held
 ~1.65 GB in memory at 30 days, and the evaluation read spans `METRIC_DETAIL_WINDOWS` × the window. The
 parity tests' `it.each` period lists do not cover `90d`.
 - **So the header hides 90d until it has data.** `DATA_GATED_PERIOD` (`constants.ts`) names it;
