@@ -1,6 +1,6 @@
 /**
  * The session detail, built once for both the API route (`sessions.ts`) and the
- * KV sync script (`sync-to-kv.ts`). Callers pass in only what differs (logs,
+ * KV sync Workflow. Callers pass in only what differs (logs,
  * truncation flags, the multi-agent evaluator).
  *
  * Adding a field: add it to `computeSessionDetail`, and both paths carry it.

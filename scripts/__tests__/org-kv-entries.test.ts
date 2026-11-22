@@ -1,5 +1,5 @@
 /**
- * SYNC-ORG-ENTRIES-UNTESTED: computeOrgEntries reads one org's evaluations once
+ * computeOrgKvEntries reads one org's evaluations once
  * and slices them per window in memory, reproducing the server's day-aligned
  * bounds (`queriedDateWindow`). These tests drive it through a fake backend that
  * behaves like the server's read (newest first, at most `limit` rows), so the
@@ -7,18 +7,10 @@
  * reader receives.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import {
-  addRecentSession,
-  computeOrgEntries,
-  dashboardEntry,
-  QUERY_LIMIT,
-  type OrgComputation,
-  type OrgReadBackend,
-} from '../sync-to-kv.js';
 import { RULE_EVALUATOR_TYPE, SEED_COHORT } from '../eval-record.js';
-import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
-import { CODE_QUALITY_KV_KEY } from '../../src/lib/worker-contract.js';
-import { computeOrgKvEntries } from '../../src/api/aggregates/org-kv-entries.js';
+import { dashboardEntry } from '../../src/api/aggregates/kv-entry.js';
+import { computeOrgKvEntries, QUERY_LIMIT, type OrgComputation, type OrgReadBackend } from '../../src/api/aggregates/org-kv-entries.js';
+import { addRecentSession } from '../../src/api/aggregates/session-entries.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { evaluation, FIXTURE_METRIC, isoToNs } from './support/evaluations.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -56,11 +48,7 @@ function fakeBackend(evaluations: EvaluationResult[], spans: TraceSpan[] = []): 
 
 const LONGEST_PERIOD_DAYS = 30;
 
-/**
- * The builder both writers share, as a non-home org (no degradation state). The
- * CLI's `computeOrgEntries` wraps it and drops the families the Workflow writes,
- * so the entries themselves are checked here.
- */
+/** As a non-home org (no degradation state). */
 function compute(evaluations: EvaluationResult[], spans: TraceSpan[] = []): Promise<OrgComputation> {
   return computeOrgKvEntries(fakeBackend(evaluations, spans), NOW, { maxDays: LONGEST_PERIOD_DAYS });
 }
@@ -79,7 +67,7 @@ function rowLabels(result: OrgComputation, period: string): string[] {
   return (value?.rows ?? []).map(r => r.explanation ?? '');
 }
 
-describe('computeOrgEntries period windows', () => {
+describe('computeOrgKvEntries period windows', () => {
   // now − 24h, now − 7d and now − 30d fall on Oct 7, Oct 1 and Sep 8; each window
   // starts at that day's UTC midnight and ends at the midnight after `now` (Oct 9).
   const cases: Array<[label: string, iso: string, periods: string[]]> = [
@@ -105,7 +93,7 @@ describe('computeOrgEntries period windows', () => {
   });
 });
 
-describe('computeOrgEntries metric detail weeks', () => {
+describe('computeOrgKvEntries metric detail weeks', () => {
   it('starts the current week at the UTC midnight seven days back', async () => {
     const result = await compute([
       evaluation('7d start-day midnight', '2026-10-01T00:00:00.000Z'),
@@ -172,7 +160,7 @@ describe('computeOrgEntries metric detail weeks', () => {
   });
 });
 
-describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRITES)', () => {
+describe('computeOrgKvEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRITES)', () => {
   /** Later on the same UTC day as NOW, so every window reads the same rows. */
   const LATER = new Date('2026-10-08T05:08:00.000Z');
   const rows = ALERTING_SCORES.map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
@@ -225,7 +213,7 @@ describe('computeOrgEntries dashboard change hash (SYNC-DASHBOARD-TIMESTAMP-WRIT
   });
 });
 
-describe('computeOrgEntries synthetic cohorts', () => {
+describe('computeOrgKvEntries synthetic cohorts', () => {
   const rows = HEALTHY_SCORES.map(score => evaluation(`score ${score}`, '2026-10-07T12:00:00.000Z', { scoreValue: score }));
   const dashboardHashes = (result: OrgComputation) =>
     new Map(result.allEntries.filter(e => e.key.startsWith('dashboard:')).map(e => [e.key, e.hashBasis]));
@@ -274,7 +262,7 @@ describe('dashboardEntry', () => {
   });
 });
 
-describe('computeOrgEntries evaluation truncation', () => {
+describe('computeOrgKvEntries evaluation truncation', () => {
   // Newest first, as the server returns them. The filler is named after no
   // quality metric, so only the two labelled rows reach the metric entries.
   const newest = evaluation('newest', '2026-10-07T12:00:00.000Z', { traceId: TRACE_ID });
@@ -422,15 +410,5 @@ describe('coverage matrix rule-eval filter (CVG-RULE-FILTER)', () => {
     expect(matrix.metrics).toHaveLength(0);
     expect(matrix.inputs).toHaveLength(0);
     expect(matrix.overallCoveragePercent).toBe(0);
-  });
-});
-
-describe('computeOrgEntries families handed over to the Workflow', () => {
-  it('returns no entry in a family the Workflow writes, and still returns the others', async () => {
-    const result = await computeOrgEntries(fakeBackend([evaluation('recent', '2026-10-08T00:00:00.000Z')]), NOW, false);
-
-    const keys = result.allEntries.map(entry => entry.key);
-    expect(keys).toContain(CODE_QUALITY_KV_KEY);
-    expect(keys.filter(key => WORKFLOW_OWNED_FAMILIES.some(prefix => key.startsWith(prefix)))).toEqual([]);
   });
 });

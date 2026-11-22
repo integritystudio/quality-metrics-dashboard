@@ -59,7 +59,7 @@ async function encode(value: KvPutValue): Promise<string> {
 export class MemoryKv {
   readonly #entries = new Map<string, StoredEntry>();
 
-  /** Each seed value is stored as its JSON text, the form sync-to-kv writes. */
+  /** Each seed value is stored as its JSON text, the form the KV sync Workflow writes. */
   constructor(seed: Record<string, unknown> = {}) {
     for (const [key, value] of Object.entries(seed)) {
       this.#entries.set(key, { value: JSON.stringify(value), metadata: null });

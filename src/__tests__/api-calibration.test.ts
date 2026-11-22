@@ -116,7 +116,7 @@ describe('GET /api/calibration', () => {
 
 /*
  * The KV read is a trust boundary: the value may have been written by an older
- * sync-to-kv than the worker serving it. These cover what the schema catches
+ * writer than the worker serving it. These cover what the schema catches
  * there, and — just as importantly — what it deliberately lets through.
  */
 describe('GET /api/calibration: malformed KV payload', () => {

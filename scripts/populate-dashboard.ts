@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * Single-command pipeline: derive and judge evaluations, then sync KV.
+ * Single-command pipeline: derive and judge evaluations. The dashboard's KV
+ * keys are written by the parent's kv-sync Workflow, hourly, from the cloud.
  *
  * Steps:
  *   0. hook-gap-check      → flags background sessions whose turns ran without hooks
@@ -16,19 +17,14 @@
  *   3. judge-evaluations   → LLM-based (relevance, coherence, faithfulness, hallucination)
  *                            over turns the cloud lists for the last 7 days
  *                            (`--days=7`), POSTed to ingest
- *   4. sync-to-kv          → aggregate + write the families the KV sync Workflow does not own
  *
- * Step 4 reads only the *cloud* (`CloudBackend.queryEvaluations`, source
- * `'table'`). Steps 1 and 3 post their own records, and the hooks' records reach it
+ * Steps 1 and 3 post their own records, and the hooks' records reach the cloud
  * as log events through the span shipper.
  *
  * Usage:
  *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
  *   npm run populate -- --dry-run             # preview only, no writes
- *   npm run populate -- --skip-judge          # rule-based + sync only
- *   npm run populate -- --skip-derive --skip-judge --sync-budget 700
- *                                             # refresh only: sync, capped KV writes (the hourly launchd job)
- *   npm run populate -- --skip-sync           # derive + judge only
+ *   npm run populate -- --skip-judge          # rule-based only
  *   npm run populate -- --limit 5             # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
@@ -42,22 +38,20 @@
  *   1     any other stage failure, and the pipeline stops there. Also: no judge
  *         key and no --skip-judge given, so nothing runs
  *
- * derive-evaluations, ship-turn-content and sync-to-kv are retried on transient
+ * derive-evaluations and ship-turn-content are retried on transient
  * network failures with the bounded schedule in pipeline-stages.ts.
  */
 
 import { sum } from 'd3-array';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   DRY_RUN_FLAG,
-  SYNC_BUDGET_FLAG,
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
   rejectRemovedFlags,
-  SYNC_RETRY_DELAYS_MS,
+  NETWORK_RETRY_DELAYS_MS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
@@ -70,22 +64,18 @@ import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli
 import { BYTES, TIME_MS } from '../../src/lib/core/units.js';
 
 const SCRIPTS_DIR = import.meta.dirname;
-const DIST_DIR = join(SCRIPTS_DIR, '..', '..', 'dist');
 /** Captured stderr ceiling per stage; a stack trace plus warnings is kilobytes, not megabytes. */
 // eslint-disable-next-line local/no-magic-numbers-ignore-bitwise -- the multiplier is the named constant's value
 const STDERR_CAPTURE_MAX_BYTES = 16 * BYTES.MB;
 
 const SKIP_DERIVE_FLAG = '--skip-derive';
 const SKIP_JUDGE_FLAG = '--skip-judge';
-const SKIP_SYNC_FLAG = '--skip-sync';
 const SKIP_SHIP_TURNS_FLAG = '--skip-ship-turns';
 const SKIP_HOOK_GAP_CHECK_FLAG = '--skip-hook-gap-check';
-/** Forwarded to sync-to-kv as `--budget=<n>`; unset leaves sync's own default. */
-const SYNC_BUDGET_ARG = '--sync-budget';
 const POPULATE_CLI: CliSpec = {
-  values: [JUDGE_LIMIT_FLAG, SYNC_BUDGET_ARG],
+  values: [JUDGE_LIMIT_FLAG],
   switches: [
-    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_SYNC_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
+    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
     JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
@@ -100,12 +90,10 @@ type PopulateArgs = {
   skipJudge: boolean;
   skipShipTurns: boolean;
   skipHookGapCheck: boolean;
-  skipSync: boolean;
   dryRun: boolean;
   batch: boolean;
   perCriterion: boolean;
   limit: string | undefined;
-  syncBudget: number | undefined;
   deriveScope: string[];
   judgeScope: string[];
 };
@@ -119,18 +107,16 @@ function readArgs(argv: readonly string[]): PopulateArgs {
     skipJudge: cli.has(SKIP_JUDGE_FLAG),
     skipShipTurns: cli.has(SKIP_SHIP_TURNS_FLAG),
     skipHookGapCheck: cli.has(SKIP_HOOK_GAP_CHECK_FLAG),
-    skipSync: cli.has(SKIP_SYNC_FLAG),
     dryRun: cli.has(DRY_RUN_FLAG),
     batch: cli.has(JUDGE_BATCH_FLAG),
     perCriterion: cli.has(JUDGE_PER_CRITERION_FLAG),
     limit: limit === undefined ? undefined : String(limit),
-    syncBudget: positiveIntArg(SYNC_BUDGET_ARG, cli.value(SYNC_BUDGET_ARG)),
     deriveScope: deriveScopeArgs(argv),
     judgeScope: judgeScopeArgs(argv),
   };
 }
 
-const { skipDerive, skipJudge, skipShipTurns, skipHookGapCheck, skipSync, dryRun, batch, perCriterion, limit, syncBudget, deriveScope, judgeScope } =
+const { skipDerive, skipJudge, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, limit, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key: never fall back to
@@ -145,12 +131,6 @@ if (!skipJudge && !dryRun && !resolveJudgeApiKey()) {
     'populated and is fabricated. Set the key (e.g. run under `doppler run --project ' +
     'integrity-studio --config prd`), or pass --skip-judge to leave judge metrics out.',
   );
-  process.exit(1);
-}
-
-// Preflight: dist/ must exist for sync-to-kv (imports compiled quality-metrics)
-if (!skipSync && !existsSync(DIST_DIR)) {
-  console.error(`[populate] Error: ${DIST_DIR} not found. Run \`npm run build\` in the parent observability-toolkit first.`);
   process.exit(1);
 }
 
@@ -197,7 +177,7 @@ async function runWithNetworkRetry(name: string, script: string, extraArgs: stri
   return runWithRetry<StepOutcome>({
     attempt: () => runStep(name, script, extraArgs, true),
     shouldRetry: outcome => !outcome.ok && isTransientNetworkFailure(outcome.stderr),
-    delaysMs: SYNC_RETRY_DELAYS_MS,
+    delaysMs: NETWORK_RETRY_DELAYS_MS,
     onRetry: (waitMs, failedAttempt, totalAttempts) => {
       console.error(`[populate] ${name} attempt ${failedAttempt}/${totalAttempts} failed on a transient network error; retrying in ${Math.round(waitMs / TIME_MS.SECOND)} s`);
     },
@@ -239,7 +219,7 @@ async function runDerive(): Promise<void> {
   const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
   if (derive.ok) return;
   continueOrAbort('derive', 'derive-evaluations', derive,
-    status => `[populate] derive-evaluations exited ${status}; continuing to judge + sync, then exiting ${status}`);
+    status => `[populate] derive-evaluations exited ${status}; continuing to the judge, then exiting ${status}`);
 }
 
 /**
@@ -265,13 +245,12 @@ async function runShipTurns(): Promise<void> {
   const ship = await runWithNetworkRetry('ship-turn-content', 'ship-turn-content.ts', shipArgs);
   if (ship.ok) return;
   continueOrAbort('ship-turns', 'ship-turn-content', ship,
-    status => `[populate] ship-turn-content exited ${status}; continuing to judge + sync, then exiting ${status}`);
+    status => `[populate] ship-turn-content exited ${status}; continuing to the judge, then exiting ${status}`);
 }
 
 /**
- * The judge says on its own stderr why it produced nothing. The rule-based
- * evaluations from derive still deserve to reach the cloud, so a soft failure
- * keeps going — and carries the code to the exit, so the launchd wrapper logs FAILED.
+ * The judge says on its own stderr why it produced nothing. A soft failure
+ * carries its code to the exit, so the launchd wrapper logs FAILED.
  */
 function runJudge(): void {
   const judgeArgs: string[] = [...judgeScope];
@@ -282,15 +261,7 @@ function runJudge(): void {
   const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
   if (judge.ok) return;
   continueOrAbort('judge', 'judge-evaluations', judge,
-    status => `[populate] judge-evaluations exited ${status}; continuing to sync, then exiting ${status}`);
-}
-
-async function runSync(): Promise<void> {
-  const syncArgs: string[] = [];
-  if (dryRun) syncArgs.push(DRY_RUN_FLAG);
-  if (syncBudget !== undefined) syncArgs.push(`${SYNC_BUDGET_FLAG}=${syncBudget}`);
-  const sync = await runWithNetworkRetry('sync-to-kv', 'sync-to-kv.ts', syncArgs);
-  if (!sync.ok) abort('sync-to-kv', sync);
+    status => `[populate] judge-evaluations exited ${status}; exiting ${status}`);
 }
 
 async function main(): Promise<void> {
@@ -298,7 +269,6 @@ async function main(): Promise<void> {
   if (!dryRun && !skipDerive) await runDerive();
   if (!skipJudge && !skipShipTurns) await runShipTurns();
   if (!skipJudge) runJudge();
-  if (!skipSync) await runSync();
 
   const total = sum(results, r => r.ms);
   console.log(`[populate] steps: ${results.map(r => `${r.name}=${r.ms}ms`).join(' ')} total=${total}ms exit=${pipelineExitCode}`);

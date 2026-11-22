@@ -129,6 +129,7 @@ const CLOUD_ONLY_REASON = 'derive and the judge read the cloud only';
  * ignored, so a stale one would run the stage as if it were absent, which for
  * the judge is a paid run.
  */
+const KV_SYNC_MOVED_REASON = 'populate has no KV sync stage: the kv-sync Workflow writes the dashboard keys hourly';
 const REMOVED_FLAGS: ReadonlyMap<string, string> = new Map([
   ['--backfill', 'the judge writes no placeholder scores'],
   ['--seed', 'the judge has no offline mode (use --dry-run to price a run)'],
@@ -137,6 +138,8 @@ const REMOVED_FLAGS: ReadonlyMap<string, string> = new Map([
   ['--derive-source', CLOUD_ONLY_REASON],
   ['--skip-upload', 'populate has no upload stage: derive and the judge post their own records'],
   ['--content', 'the judge reads turn text from the cloud only (ship-turn-content posts it)'],
+  ['--skip-sync', KV_SYNC_MOVED_REASON],
+  ['--sync-budget', KV_SYNC_MOVED_REASON],
 ]);
 
 /** Throw on the first removed flag in `args`, given bare or as `--flag=value`. */
@@ -152,8 +155,6 @@ export function rejectRemovedFlags(args: readonly string[]): void {
 export const DAYS_FLAG = '--days=';
 /** derive flag: post only records from the last N days, whatever `--days=` read. */
 export const POST_DAYS_FLAG = '--post-days=';
-/** sync-to-kv flag: KV writes one run may spend. populate forwards `--sync-budget <n>` as `--budget=<n>`. */
-export const SYNC_BUDGET_FLAG = '--budget';
 
 /**
  * How far back derive posts when nothing narrower is asked for: an unscoped
@@ -242,15 +243,15 @@ export const JUDGE_LIMIT_FLAG = '--limit';
 /** Every stage's preview switch: compute and report, write nothing. */
 export const DRY_RUN_FLAG = '--dry-run';
 
-const SYNC_RETRY_COUNT = 5;
+const NETWORK_RETRY_COUNT = 5;
 /**
- * Waits between sync-to-kv attempts, in order — five retries, ~30 minutes in
+ * Waits between a network stage's attempts, in order — five retries, ~30 minutes in
  * total, sized to the 15–35 minute laptop network outages seen in practice
  * (docs/data-pipeline.md § Historical incidents). Bounded so a real code
  * failure cannot hold a run open. Doubling from a minute, capped at fifteen.
  */
-export const SYNC_RETRY_DELAYS_MS: readonly number[] = Array.from(
-  { length: SYNC_RETRY_COUNT },
+export const NETWORK_RETRY_DELAYS_MS: readonly number[] = Array.from(
+  { length: NETWORK_RETRY_COUNT },
   (_, retry) => Math.min(TIME_MS.MINUTE * 2 ** retry, DURATION_MS.FIFTEEN_MINUTES),
 );
 
@@ -284,7 +285,7 @@ export type RetryOptions<T> = {
   shouldRetry: (outcome: T) => boolean;
   /** Called before each wait with the wait length, the attempt that just failed, the total attempts, and that attempt's outcome. */
   onRetry?: (waitMs: number, failedAttempt: number, totalAttempts: number, outcome: T) => void;
-  /** Waits before retry 1, retry 2, … Defaults to SYNC_RETRY_DELAYS_MS. */
+  /** Waits before retry 1, retry 2, … Defaults to NETWORK_RETRY_DELAYS_MS. */
   delaysMs?: readonly number[];
   /** Injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
@@ -298,7 +299,7 @@ export type RetryOptions<T> = {
  * the caller's behalf, so the caller decides what a final failure means.
  */
 export async function runWithRetry<T>(options: RetryOptions<T>): Promise<T> {
-  const delays = options.delaysMs ?? SYNC_RETRY_DELAYS_MS;
+  const delays = options.delaysMs ?? NETWORK_RETRY_DELAYS_MS;
   const wait = options.sleep ?? sleep;
   const totalAttempts = delays.length + 1;
   let outcome = await options.attempt(1);

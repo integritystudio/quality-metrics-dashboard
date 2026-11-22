@@ -1,7 +1,7 @@
 /**
  * /api/metrics/:name and /api/trends/:name in the Worker (production). They
  * serve the `metric:<name>:<period>` and `trend:<name>:<period>` keys
- * scripts/sync-to-kv.ts writes with the dev routes' projections. The metric
+ * the KV sync Workflow writes with the dev routes' projections. The metric
  * route once read a bare `metric:<name>` whatever period the page asked for,
  * and the trend route's empty answer carried `points`, which the page never
  * reads (DASHBOARD-AGGREGATE-DUAL-IMPL).

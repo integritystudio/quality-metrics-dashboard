@@ -21,7 +21,7 @@ import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 /**
  * Dev-server route: a live query. Production never reaches this — the Worker
- * serves `/api/code-quality` from the KV key `scripts/sync-to-kv.ts` writes.
+ * serves `/api/code-quality` from the `code-quality` KV key.
  */
 export const codeQualityRoutes = new Hono();
 codeQualityRoutes.onError(handleRouteError);

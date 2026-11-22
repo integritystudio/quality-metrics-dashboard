@@ -194,7 +194,7 @@ app.use('/api/*', async (c, next) => {
 // Session-less, so registered before the auth middleware: a handler that answers ends the chain.
 app.get('/api/health', async (c) => {
   // It must never touch an org-prefixed key, so it reads the allowlisted global heartbeat
-  // that sync-to-kv writes alongside the per-org lastSync keys.
+  // that the KV sync Workflow writes alongside the per-org lastSync keys.
   const lastSync = await getGlobalKv<string>(c.env.DASHBOARD, 'system:lastSync');
   return c.json({
     status: lastSync ? 'ok' : 'no_data',
@@ -407,7 +407,7 @@ function workflowPayload(sessionId: string, session: Record<string, unknown>): R
   return {
     sessionId,
     evaluation: session.multiAgentEvaluation ?? null,
-    // Precomputed by sync-to-kv; absent on session keys written before it was added.
+    // Precomputed by the KV sync Workflow; absent on session keys written before it was added.
     graph: session.workflowGraph ?? null,
   };
 }

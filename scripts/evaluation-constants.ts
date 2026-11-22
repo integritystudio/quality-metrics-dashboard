@@ -2,7 +2,7 @@
  * Telemetry paths and evaluation markers shared by the pipeline stages.
  *
  * Kept apart from judge-evaluations.ts so a stage that needs only these
- * (sync-to-kv, trace-coverage) does not load the judge and its dependencies.
+ * (trace-coverage) does not load the judge and its dependencies.
  */
 
 import { join } from 'node:path';

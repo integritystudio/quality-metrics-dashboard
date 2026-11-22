@@ -1,8 +1,9 @@
 /**
  * Code-quality aggregation shared by the dev API route (`routes/code-quality.ts`,
- * live query) and `scripts/sync-to-kv.ts` (production: the Worker serves the
- * `code-quality` KV key it writes). One implementation, so the two paths cannot
- * disagree on grouping, defaults or number parsing.
+ * live query) and whichever sync writes the `code-quality` KV key the Worker
+ * serves in production. One implementation, so the two paths cannot disagree
+ * on grouping, defaults or number parsing. That key is the one the retired CLI sync last wrote;
+ * nothing refreshes it until the Workflow ports it (KV-CODE-QUALITY-SUMMARY-PORT).
  */
 
 import { mean } from 'd3-array';

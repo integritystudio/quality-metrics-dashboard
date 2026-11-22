@@ -1,6 +1,6 @@
 /**
  * Metric correlation matrix (`GET /api/correlations`), built once for both the API
- * route (`routes/correlations.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
+ * route (`routes/correlations.ts`) and the KV sync Workflow.
  *
  * Callers load the evaluations; this module only projects them.
  */

@@ -264,7 +264,7 @@ export default tseslint.config(
         // `foo?.endsWith(x) || foo?.endsWith(y)` is boolean | undefined — a
         // `??` fix would stop at a valid `false` instead of checking the
         // second operand, changing behavior. See isDirectRun guards in
-        // scripts/{backtest-degradation,derive-evaluations,judge-evaluations,sync-to-kv}.ts.
+        // scripts/{backtest-degradation,derive-evaluations,judge-evaluations}.ts.
         ignorePrimitives: { boolean: true },
       }],
     },

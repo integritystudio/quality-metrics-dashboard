@@ -1,8 +1,7 @@
 /**
  * Publishes `meta:calibration`, the percentile distributions the dashboard
  * reads, straight to Cloudflare KV. derive computes the calibration state and
- * is the key's only writer: neither `sync-to-kv.ts` nor the KV sync Workflow
- * touches it, so the key no longer depends on a file the sync has to find.
+ * is the key's only writer: the KV sync Workflow does not touch it.
  */
 import { loadCalibrationState } from '../../src/lib/quality/qfe-percentiles.js';
 import { CALIBRATION_STATE_FILE } from '../../src/lib/quality/quality-constants.js';

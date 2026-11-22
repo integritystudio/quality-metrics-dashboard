@@ -1,6 +1,6 @@
 /**
  * The live quality view, built the same way by the API server (from evaluations
- * it loads) and the Worker (from the `metric:evaluations:*` rows sync-to-kv
+ * it loads) and the Worker (from the `metric:evaluations:*` rows the KV sync Workflow
  * writes). Worker-safe: imports nothing that reaches Node or import.meta.env.
  */
 

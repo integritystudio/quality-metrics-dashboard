@@ -1,6 +1,6 @@
 /**
  * Pipeline funnel (`GET /api/pipeline`), built once for both the API route
- * (`routes/pipeline.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
+ * (`routes/pipeline.ts`) and the KV sync Workflow.
  *
  * Callers load the evaluations; this module only projects them.
  */

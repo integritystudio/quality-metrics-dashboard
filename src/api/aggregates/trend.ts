@@ -1,6 +1,6 @@
 /**
  * Metric trend series (`GET /api/trends/:name`), built once for both the API
- * route (`routes/trends.ts`) and the KV sync (`scripts/sync-to-kv.ts`), one key
+ * route (`routes/trends.ts`) and the KV sync Workflow, one key
  * per period (DASHBOARD-AGGREGATE-DUAL-IMPL).
  *
  * Callers load the period's evaluations; this module buckets and projects them,

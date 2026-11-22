@@ -1,6 +1,6 @@
 /**
  * /api/agents in the Worker (production). It serves the `meta:agents:<period>`
- * key scripts/sync-to-kv.ts writes with the dev route's projection. It once
+ * key the KV sync Workflow writes with the dev route's projection. It once
  * served a bare summary list from `meta:agents`, which the page's shape check
  * rejected on every load (DASHBOARD-AGGREGATE-DUAL-IMPL).
  */

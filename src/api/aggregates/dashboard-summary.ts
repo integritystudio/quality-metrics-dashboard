@@ -1,6 +1,6 @@
 /**
  * Full dashboard summary (`GET /api/dashboard`), built once for both the API
- * route (`routes/dashboard.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
+ * route (`routes/dashboard.ts`) and the KV sync Workflow.
  *
  * Callers load the evaluations and provide the period dates; this module projects
  * them into the shape both the route and the Worker serve.

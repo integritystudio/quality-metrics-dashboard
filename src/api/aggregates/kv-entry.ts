@@ -1,7 +1,7 @@
 /**
  * A KV entry as the sync writers hand it to Cloudflare: the serialised value and,
  * when the value carries run-time fields, the basis change detection hashes
- * instead. Shared by the CLI sync (`scripts/sync-to-kv.ts`) and the Workflow
+ * instead. Shared by the parity gate's reference build and the Workflow
  * (`services/kv-sync-workflow`), which must hash a given view identically for
  * the parity gate in `docs/roadmap/kv-sync-in-worker.md`.
  */

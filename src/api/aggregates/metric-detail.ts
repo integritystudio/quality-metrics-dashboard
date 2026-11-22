@@ -1,6 +1,6 @@
 /**
  * Metric detail (`GET /api/metrics/:name`), built once for both the API route
- * (`routes/metrics.ts`) and the KV sync (`scripts/sync-to-kv.ts`), one key per
+ * (`routes/metrics.ts`) and the KV sync Workflow, one key per
  * period (DASHBOARD-AGGREGATE-DUAL-IMPL).
  *
  * Callers load the current window and the one before it; this module projects

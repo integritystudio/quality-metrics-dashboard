@@ -57,7 +57,7 @@ export const PERIOD_MS = {
   '90d': VALID_PERIODS['90d'] * TIME_MS.DAY,
 } satisfies Record<Period, number>;
 /**
- * The period the header offers only once its dashboard has data: sync-to-kv writes its KV
+ * The period the header offers only once its dashboard has data: the KV sync Workflow writes its KV
  * entries only on a run with `--days` at least this long, so until then every card is no-data.
  */
 export const DATA_GATED_PERIOD = '90d' satisfies Period;

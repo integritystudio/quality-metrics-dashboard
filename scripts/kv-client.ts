@@ -1,8 +1,8 @@
 /**
  * The Cloudflare KV client the pipeline scripts share: where the account and
  * namespace come from, and the fetch wrapper the SDK needs for KV's 204s and
- * the daily write limit. `sync-to-kv.ts` writes the aggregates through it and
- * `derive-evaluations.ts` publishes `meta:calibration`.
+ * the daily write limit. `derive-evaluations.ts` publishes `meta:calibration`
+ * through it.
  */
 import Cloudflare, { type ClientOptions as CloudflareClientOptions } from 'cloudflare';
 import { parse as parseToml } from 'smol-toml';

@@ -108,7 +108,7 @@ const calibrationPercentilesSchema = z.object({
 /**
  * KV `meta:calibration` — the single contract for its whole pipeline.
  *
- * `buildCalibrationEntry` (scripts/sync-to-kv.ts) writes this payload, the
+ * `buildCalibrationEntry` builds this payload and derive publishes it, the
  * worker's `GET /api/calibration` parses it here and serves it verbatim, and
  * `useCalibration` consumes it. Every stage types against `CalibrationResponse`
  * below, so producer/consumer drift is a typecheck failure and a stale KV value

@@ -1,7 +1,6 @@
 /**
  * /api/code-quality in the Worker (production). The dev API route runs a live
- * query; the Worker has no such path, so it serves the `code-quality` KV key
- * scripts/sync-to-kv.ts writes. Before this route existed the page's request
+ * query; the Worker has no such path, so it serves the `code-quality` KV key. Before this route existed the page's request
  * missed every Worker route in production.
  */
 

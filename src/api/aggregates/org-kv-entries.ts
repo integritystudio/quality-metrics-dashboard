@@ -1,11 +1,10 @@
 /**
  * Every KV entry one org's dashboard is served from, computed from that org's
- * cloud rows. The CLI sync (`scripts/sync-to-kv.ts`) calls this and owns the
- * delta state, the Cloudflare writes and the owner-local input it passes in
- * (`degradationState`); the Workflow port
- * (`services/kv-sync-workflow`, `docs/roadmap/kv-sync-in-worker.md`) is meant
- * to call the same functions, so nothing here reads a file, the environment
- * or `process.argv`.
+ * cloud rows, a whole org at a time. It is the reference the parent's KV sync
+ * Workflow (`services/kv-sync-workflow`) must stay hash-equal to: the parity
+ * gate and the Workflow's parity tests run it beside the Workflow, which calls
+ * the same builders one partition per step. Nothing here reads a file, the
+ * environment or `process.argv`.
  */
 
 import { group } from 'd3-array';

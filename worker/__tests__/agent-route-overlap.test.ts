@@ -102,7 +102,7 @@ describe('overlapping agent routes: /api/agents/detail/:agentId vs /api/agents/:
 describe('/api/agents/:sessionId payload', () => {
   const graph = { nodes: [], edges: [], rootNodeId: null, workflowShape: 'linear' };
 
-  it('serves the workflowGraph precomputed by sync-to-kv as graph', async () => {
+  it('serves the workflowGraph precomputed by the KV sync Workflow as graph', async () => {
     const res = await get(`/api/agents/${SESSION_ID}`, { [`session:${SESSION_ID}`]: { workflowGraph: graph, evaluations: [] } });
 
     expect(res.status).toBe(HttpStatus.Ok);

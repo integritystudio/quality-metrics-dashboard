@@ -1,6 +1,6 @@
 /**
  * Coverage matrix (`GET /api/coverage`), built once for both the API route
- * (`routes/coverage.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
+ * (`routes/coverage.ts`) and the KV sync Workflow.
  *
  * Callers load the evaluations; this module filters and projects them.
  */

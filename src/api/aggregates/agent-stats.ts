@@ -1,6 +1,6 @@
 /**
  * The agent activity list (`GET /api/agents`), built once for both the API
- * route (`routes/agents.ts`) and the KV sync (`scripts/sync-to-kv.ts`).
+ * route (`routes/agents.ts`) and the KV sync Workflow.
  *
  * Callers load the spans and evaluations; this module only projects them, so
  * one fixture through both paths yields the same value.

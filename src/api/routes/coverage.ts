@@ -26,7 +26,7 @@ coverageRoutes.get('/coverage', validQuery(CoverageQuery), async (c) => {
 
   const allEvaluations = await loadEvaluationsByMetric(start, end);
 
-  // Columnar, matching what sync-to-kv writes to KV and the Worker serves, so
+  // Columnar, matching what the KV sync Workflow writes to KV and the Worker serves, so
   // the dev server and production hand the grid the same shape (CVG-1).
   const matrix = computeCoverage(allEvaluations, { inputKey });
 

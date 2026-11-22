@@ -1,7 +1,7 @@
 /**
  * /api/quality/live in the Worker (production). It has no evaluation store of its
  * own: it lists the metrics in the org's `dashboard:24h` summary and takes each
- * one's newest row from the `metric:evaluations:<name>:24h` key sync-to-kv writes
+ * one's newest row from the `metric:evaluations:<name>:24h` key the KV sync Workflow writes
  * newest first, with timestamps as the nanosecond strings toKVValue produces and
  * an unscored evaluation as `score: 0, unscored: true` (projectEvaluationRow).
  */

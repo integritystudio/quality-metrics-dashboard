@@ -1,7 +1,6 @@
 /**
  * Per-metric evaluation row projection (`GET /api/metrics/:name/evaluations`),
- * shared by the API route (`routes/metrics.ts`) and the KV sync
- * (`scripts/sync-to-kv.ts`).
+ * shared by the API route (`routes/metrics.ts`) and the KV sync Workflow.
  *
  * Callers sort and slice; this module only projects one evaluation record.
  */

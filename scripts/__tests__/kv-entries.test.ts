@@ -2,26 +2,14 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import {
-  buildCalibrationEntry,
-  buildTraceEntries,
-  cliOwnedEntries,
-  forgetHandedOverKeys,
-  orgPrefixedKey,
-  ORG_KEY_PREFIX_RE,
-  KV_ENTRY_TTL_DAYS,
-  stripOrgPrefix,
-  SYSTEM_LAST_SYNC_KEY,
-  toKVValue,
-  KV_ENTRY_TTL_SECONDS,
-} from '../sync-to-kv.js';
+import { orgPrefixedKey } from '../kv-client.js';
 import { calibrationEntries, loadCalibrationEntry } from '../publish-calibration.js';
-import { META_CALIBRATION_KEY } from '../../src/api/aggregates/org-kv-entries.js';
+import { buildCalibrationEntry, META_CALIBRATION_KEY } from '../../src/api/aggregates/org-kv-entries.js';
+import { buildTraceEntries } from '../../src/api/aggregates/trace-entries.js';
 import { saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.js';
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
-import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
-import { CODE_QUALITY_KV_KEY } from '../../src/lib/worker-contract.js';
+import { KV_ENTRY_TTL_DAYS, KV_ENTRY_TTL_SECONDS, toKVValue } from '../../src/api/aggregates/kv-entry.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
@@ -205,23 +193,13 @@ describe('KV trace/session TTL constant', () => {
   });
 });
 
-describe('org-scoped key helpers (P4)', () => {
+describe('orgPrefixedKey', () => {
   const ORG = 'f4286657-da73-4174-9e49-937f1bb6097f';
 
-  it('orgPrefixedKey builds org:<uuid>:<key>', () => {
+  it('builds org:<uuid>:<key>', () => {
     expect(orgPrefixedKey(ORG, 'dashboard:7d')).toBe(`org:${ORG}:dashboard:7d`);
   });
 
-  it('stripOrgPrefix removes exactly one org prefix and leaves bare keys alone', () => {
-    expect(stripOrgPrefix(orgPrefixedKey(ORG, 'trend:relevance:7d'))).toBe('trend:relevance:7d');
-    expect(stripOrgPrefix('dashboard:7d')).toBe('dashboard:7d');
-    // A non-uuid "org:" segment is data, not a scope prefix — must not be stripped.
-    expect(stripOrgPrefix('org:not-a-uuid:dashboard:7d')).toBe('org:not-a-uuid:dashboard:7d');
-  });
-
-  it('system:lastSync is a bare global key, never org-prefixed', () => {
-    expect(ORG_KEY_PREFIX_RE.test(SYSTEM_LAST_SYNC_KEY)).toBe(false);
-  });
 });
 
 describe('buildTraceEntries with bigint timestamps (SYNC-KV-BIGINT)', () => {
@@ -330,36 +308,6 @@ describe('loadCalibrationEntry', () => {
     const entry = loadFromDefaultDir();
 
     expect(JSON.parse(entry?.value ?? '{}')).toMatchObject({ lastCalibrated: DEFAULT_DIR_CALIBRATED_AT });
-  });
-});
-
-describe('families handed over to the Workflow', () => {
-  const ORG_ID = '11111111-1111-4111-8111-111111111111';
-  /** A key in each family, and the heartbeat keys, which are listed whole. */
-  const workflowOwned = WORKFLOW_OWNED_FAMILIES.map(prefix => (prefix.endsWith(':') ? `${prefix}7d` : prefix));
-  const KEPT_KEYS = [CODE_QUALITY_KV_KEY];
-  /** derive publishes it now, so the sync treats it as it does the Workflow's families. */
-  const DERIVE_OWNED_KEY = META_CALIBRATION_KEY;
-
-  it('hands over at least one family, so these cases compare something', () => {
-    expect(workflowOwned.length).toBeGreaterThan(0);
-  });
-
-  it('writes none of the Workflow\'s keys, bare or under an org, and keeps the rest', () => {
-    const keys = [...workflowOwned, DERIVE_OWNED_KEY, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
-
-    const kept = cliOwnedEntries(keys.map(key => ({ key, value: '{}' }))).map(entry => entry.key);
-
-    expect(kept).toEqual(KEPT_KEYS.flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]));
-  });
-
-  it('drops the Workflow\'s keys from the local state, so the prune step cannot delete them from KV', () => {
-    const keys = [...workflowOwned, DERIVE_OWNED_KEY, ...KEPT_KEYS].flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]);
-    const state = new Map(keys.map(key => [key, { hash: 'h' }]));
-
-    const remaining = [...forgetHandedOverKeys(state).keys()];
-
-    expect(remaining).toEqual(KEPT_KEYS.flatMap(key => [key, orgPrefixedKey(ORG_ID, key)]));
   });
 });
 

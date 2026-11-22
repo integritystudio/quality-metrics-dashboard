@@ -11,7 +11,7 @@ import {
   JUDGE_EXIT_NO_SCORES,
   JUDGE_EXIT_POST_FAILED,
   JUDGE_SOFT_FAILURE_EXITS,
-  SYNC_RETRY_DELAYS_MS,
+  NETWORK_RETRY_DELAYS_MS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
@@ -160,8 +160,8 @@ describe('pipeline exit-code contract', () => {
     expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
   });
 
-  it('bounds the sync retry window to between fifteen and thirty minutes', () => {
-    const total = SYNC_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
+  it('bounds the network retry window to between fifteen and thirty minutes', () => {
+    const total = NETWORK_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
 
     expect(total).toBeGreaterThanOrEqual(SYNC_RETRY_WINDOW_MINUTES.min * MS_PER_MINUTE);
     expect(total).toBeLessThanOrEqual(SYNC_RETRY_WINDOW_MINUTES.max * MS_PER_MINUTE);
