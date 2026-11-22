@@ -20,7 +20,6 @@
  * - `judge-evaluations` scores a transcript turn, whose own spans are the
  *   session's spans between that turn and the next: `turnAccount` for its
  *   stamp and `turnSpan` for the span it is parented to (Phase 2).
- * The pre-Phase-1 time-based join was removed under TKR9; see `indexSpanRecords`.
  *
  * This module never touches the filesystem; the local trace-file readers live
  * in `telemetry-files.ts` and are used only by `trace-coverage`.
@@ -111,10 +110,8 @@ export function readSpanRecord(parsed: unknown): SpanRecordFields | undefined {
  * in any account lookup. The judge's cloud source feeds `/v1/traces` spans
  * through here, stamped with the account whose key read them.
  *
- * The pre-Phase-1 `byTrace`/`bySession` time-based join was removed once
- * `join=0` held across all pipeline runs (TKR9, 2026-10-01), so a record with
- * neither its own stamp nor a named span routes to the webhook, as an
- * unstamped span does.
+ * A record with neither its own stamp nor a named span routes to the webhook,
+ * as an unstamped span does.
  */
 export function indexSpanRecords(records: Iterable<unknown>): AccountIndex {
   const index: AccountIndex = { sessionSpans: new Map(), bySpan: new Map() };

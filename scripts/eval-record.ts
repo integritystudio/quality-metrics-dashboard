@@ -1,7 +1,7 @@
 /**
  * The evaluation record derive and the judge write, and its OTel log-record
- * serialization. Split out of judge-evaluations.ts so a stage that only writes
- * records does not load the judge.
+ * serialization. Kept apart from judge-evaluations.ts so a stage that only
+ * writes records does not load the judge.
  */
 
 import type { EvaluatorType, EvaluatorKind, EvaluationCohort } from '../../src/lib/core/shared-schemas.js';
@@ -65,9 +65,7 @@ export const BACKFILL_COHORT: EvaluationCohort = 'backfill';
  *   a judge span that carries `gen_ai.request.model`; this judge records no span.
  *
  * Custom keys live under `integritystudio.*`: OTel semconv defines none of them
- * and advises against inventing keys under a namespace it owns. That is why
- * `gen_ai.evaluation.evaluator{,.type}` were dropped here (OBP16) and the score
- * unit moved off `gen_ai.evaluation.score.unit` on 2026-09-29.
+ * and advises against inventing keys under a namespace it owns.
  */
 export const EVALUATION_ATTRS = {
   NAME: GENAI_EVALUATION_ATTRIBUTES.NAME,
@@ -172,16 +170,12 @@ export function toOTelRecord(ev: EvalRecord): object {
     timestamp: ev.timestamp,
     name: EVALUATION_RESULT_EVENT,
     attributes: attrs,
-    // Envelope metadata, as the hooks' appendEvaluation writes it (AA3
-    // § Migration). Safe to add here since derive posts straight to ingest
-    // (cloud-read Phase 6) and never re-fingerprints a file.
+    // Envelope metadata, as the hooks' appendEvaluation writes it.
     schemaUrl: EVALUATION_SCHEMA_URL,
     // Omit rather than emit '' — TraceIdSchema is optional but rejects an
     // empty string, so a written '' is silently dropped on read.
     ...(ev.traceId && { traceId: ev.traceId }),
-    // Org-scoping P4: stamp the home org constant rather than "group by org"
-    // (docs/roadmap/org-scoped-multi-tenancy.md, Phase 4). Omitted when the
-    // env is unset so pre-tenancy behavior is byte-identical.
+    // Omitted when the env is unset.
     ...(process.env.HOME_ORG_ID && { org_id: process.env.HOME_ORG_ID }),
     // Field order is part of the record's identity: evaluationId() hashes the
     // serialized record when it has no stableEvaluationKey, so moving a field

@@ -65,10 +65,10 @@ import { AGENT_ATTRIBUTES, MCP_ATTRIBUTES, TASK_ATTRIBUTES, TOOL_ATTRIBUTES } fr
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
 
 /**
- * Each span's account stamp by span id, set by `main` from the raw trace lines
- * (TKR8 Phase 1). The raw lines, because `localTraceSpanSchema` strips unknown
- * keys, so the stamp never reaches the parsed spans. Empty by default, which
- * leaves every record unstamped, as before.
+ * Each span's account stamp by span id, set by `main` from the raw trace lines.
+ * The raw lines, because `localTraceSpanSchema` strips unknown keys, so the
+ * stamp never reaches the parsed spans. Empty by default, which leaves every
+ * record unstamped.
  */
 let spanAccounts: ReadonlyMap<string, AccountRef> = new Map();
 
@@ -148,12 +148,7 @@ const TRANSCRIPT_READ_CONCURRENCY = 8;
  */
 const MIN_SESSION_COMPLETION_AGE_MS = DURATION_MS.TWELVE_HOURS;
 
-/**
- * The Agent tool's pre- and post-tool hook spans. Derive matched their old
- * names (`hook:agent-pre-tool` / `hook:agent-post-tool`) for six weeks after
- * the hooks renamed them, so agent completion, handoff_correctness and agent
- * hook latency produced nothing (AGENT-POST-TOOL-READERS-DEAD).
- */
+/** The Agent tool's pre- and post-tool hook spans; agent completion, handoff_correctness and agent hook latency read them. */
 const AGENT_PREPARE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_PREPARE}`;
 const AGENT_FINALIZE_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.AGENT_FINALIZE}`;
 const BUILTIN_POST_TOOL_SPAN = `${HOOK_SPAN_PREFIX}${HOOK_NAME.BUILTIN_POST_TOOL}`;
@@ -446,16 +441,6 @@ function heuristicRecords(
   ]);
 }
 
-/**
- * The agent heuristics only `agent-eval-metrics` computes (AGENT-EVAL-METRICS-UNUSED):
- * `argument_correctness` and `agent_overall` per subagent run, from the transcript its
- * `subagent-stop` span names, and `conversation_completeness`, `turn_relevancy` and
- * `conversation_overall` per session, from `sessionTranscripts`, on the session's last span.
- *
- * Spans hold neither replies nor tool arguments, so a run or session whose transcript is
- * not on this machine is skipped rather than scored on placeholders. Spans that start
- * before `sinceMs` are not read, so a run opens only the transcripts it can post.
- */
 type TranscriptLimit = ReturnType<typeof pLimit>;
 
 /**
@@ -504,6 +489,16 @@ function sessionJob(
   });
 }
 
+/**
+ * The agent heuristics only `agent-eval-metrics` computes:
+ * `argument_correctness` and `agent_overall` per subagent run, from the transcript its
+ * `subagent-stop` span names, and `conversation_completeness`, `turn_relevancy` and
+ * `conversation_overall` per session, from `sessionTranscripts`, on the session's last span.
+ *
+ * Spans hold neither replies nor tool arguments, so a run or session whose transcript is
+ * not on this machine is skipped rather than scored on placeholders. Spans that start
+ * before `sinceMs` are not read, so a run opens only the transcripts it can post.
+ */
 export async function deriveAgentHeuristics(
   spans: readonly LocalTraceSpan[],
   sinceMs: number,
@@ -639,9 +634,8 @@ export function postFloorMs(dateScope: Set<string> | null, nowMs: number, postDa
 
 /**
  * `gen_ai.operation.name` of the synthetic `invoke_agent <agent>` span each agent
- * invocation emits, whatever the hook spans are named. Since 2026-09-29 that span is
- * the only one carrying it (the prepare/finalize hook spans and the code-survival
- * seed stopped claiming the operation), so this counts one span per invocation.
+ * invocation emits, whatever the hook spans are named. No other span carries it, so
+ * this counts one span per invocation; before 2026-09-29 the hook spans carried it too.
  */
 const INVOKE_AGENT_OPERATION = 'invoke_agent';
 /** Fewer tool spans than this in a day cannot tell a renamed attribute from a few hooks that failed before recording one. */
@@ -656,16 +650,6 @@ type DayInput = {
   toolMissingSuccess: number;
 }
 
-/**
- * Days whose input the derivations can no longer read (HOOK-RENAME-SILENT).
- * A hooks-side rename can empty a metric while every stage exits 0 (twice so
- * far: docs/data-pipeline.md § Historical incidents). Each check
- * compares a day's spans with themselves, never with a previous run, so it
- * fires on the first run after a rename rather than once the old names have
- * aged out of the read window, and a quiet day cannot trip it:
- * - spans record an agent invocation, but none has a name derive matches;
- * - most tool spans carry no success flag under the key derive reads.
- */
 /** What each day's spans record of the inputs the derivations read. */
 function tallyDayInputs(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): Map<string, DayInput> {
   const days = new Map<string, DayInput>();
@@ -685,6 +669,15 @@ function tallyDayInputs(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet
   return days;
 }
 
+/**
+ * Days whose input the derivations can no longer read. A hooks-side rename can
+ * empty a metric while every stage exits 0 (docs/data-pipeline.md § Historical
+ * incidents). Each check compares a day's spans with themselves, never with a
+ * previous run, so it fires on the first run after a rename rather than once
+ * the old names have aged out of the read window, and a quiet day cannot trip it:
+ * - spans record an agent invocation, but none has a name derive matches;
+ * - most tool spans carry no success flag under the key derive reads.
+ */
 export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): string[] {
   const days = tallyDayInputs(spans, dateScope);
 

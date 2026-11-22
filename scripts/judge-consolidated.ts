@@ -21,7 +21,7 @@
  * - The mode is recorded in `evaluator` (CONSOLIDATED_PRODUCER); `EvalRecord`
  *   has no slot for a `judge.method` attribute.
  *
- * The default since JCP4 (2026-09-22, docs/judge-quality-2026-09-22.json);
+ * The default path (docs/judge-quality-2026-09-22.json);
  * `--per-criterion` opts back out and `--batch` routes it through the Message
  * Batches provider (`adaptBatchProvider`). judge-agreement.ts measures agreement
  * with the per-criterion path, judge-quality-eval.ts distance from a reference.
@@ -86,12 +86,9 @@ export const SCORE_KEY = 'score';
  * Deliberately NOT the per-criterion path's `PRODUCER`. The two paths measure
  * `faithfulness` and `hallucination` with different instruments — G-Eval and an
  * inversion here, a QAG sweep and a fabrication tally there — so records from
- * the two are not interchangeable samples of one series. They were nevertheless
- * written under the same producer string until 2026-09-22, which made the
- * instrument switch at the JCP4 cutover invisible in the stored data: same
- * evaluation name, same cohort, same evaluator kind, same judge model, nothing
- * to join or filter on. This is the only field in `EvalRecord` free enough to
- * carry that, and nothing filters or groups on its value.
+ * the two are not interchangeable samples of one series. Records before
+ * 2026-09-22 carry `PRODUCER` whichever path wrote them. This is the only
+ * field in `EvalRecord` free enough to tell the two apart.
  */
 export const CONSOLIDATED_PRODUCER = 'dashboard:judge-consolidated';
 
@@ -599,7 +596,7 @@ export async function createConsolidatedTurnEvaluator(
 }
 
 // ---------------------------------------------------------------------------
-// Batch path (JCP3)
+// Batch path
 // ---------------------------------------------------------------------------
 
 /**
@@ -624,8 +621,8 @@ export function adaptBatchProvider(batch: BatchLLMProvider): ConsolidatedProvide
 /**
  * The --batch path. Every turn is issued at once; the first round carries the
  * evaluation-steps calls (one per criterion, shared through the cache), the
- * second the verdicts, both drained by one flush(). A wall-clock overrun is
- * thrown, never returned as partial records — as in evaluateTurnsBatched.
+ * second the verdicts, both drained by one flush(). Only a provider `failure`
+ * throws, as in evaluateTurnsBatched.
  */
 export async function evaluateTurnsConsolidatedBatched(
   batch: BatchLLMProvider,

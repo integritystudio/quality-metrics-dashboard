@@ -74,8 +74,8 @@ export { orgPrefixedKey } from './kv-client.js';
 const DEFAULT_DAYS = 30;
 /**
  * Sized to Workers Paid (1M KV writes/month included): about 680 keys change
- * between the twice-daily runs, so the old free-tier 450 let `deferred` grow.
- * 3,000 × 60 runs/month stays under a fifth of the included writes.
+ * between the twice-daily runs, and 3,000 × 60 runs/month stays under a fifth
+ * of the included writes.
  */
 const DEFAULT_WRITE_BUDGET = 3_000;
 const MAX_WRITES_HEADROOM = 50;
@@ -107,12 +107,9 @@ const UNEVALUATED_TRACE_SCORE = 1;
 export const SYSTEM_LAST_SYNC_KEY = 'system:lastSync';
 
 /**
- * Org-scoping P4 (docs/roadmap/org-scoped-multi-tenancy.md). When HOME_ORG_ID
- * is set, the sync runs once per discovered org, prefixes every key with
- * `org:<orgId>:`, and DUAL-WRITES the legacy bare keys for the home org so the
- * read cutover (P7) can flip without a data migration. When unset, behavior is
- * byte-identical to the pre-tenancy sync (bare keys only) — the AlephAuto cron
- * keeps working unchanged until the env lands.
+ * When set, the sync runs once per discovered org, prefixes every key with
+ * `org:<orgId>:`, and also writes the bare keys for the home org. When unset
+ * it writes bare keys only.
  */
 const HOME_ORG_ID = process.env.HOME_ORG_ID ?? '';
 export const ORG_KEY_PREFIX_RE = /^org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
@@ -250,11 +247,6 @@ export function chunkKvPairs<T extends { key: string; value: string }>(
   return chunks;
 }
 
-/**
- * Write entries in byte-capped bulk requests and return the keys written.
- * A connection failure defers only its own chunk, so later chunks still land
- * and the next run retries the rest; it throws only when every request failed.
- */
 /** Credit the keys the API accepted; the rest are left for the next run to retry. */
 function creditWritten(
   unsuccessfulKeys: string[] | null | undefined,
@@ -312,6 +304,11 @@ async function putChunk(batch: EnvelopedKVPair[], batchLabel: string, writtenKey
   }
 }
 
+/**
+ * Write entries in byte-capped bulk requests and return the keys written.
+ * A connection failure defers only its own chunk, so later chunks still land
+ * and the next run retries the rest; it throws only when every request failed.
+ */
 export async function kvBulkPut(entries: KVEntry[]): Promise<Set<string>> {
   const writtenKeys = new Set<string>();
   if (entries.length === 0) return writtenKeys;
@@ -485,11 +482,7 @@ type OrgsComputation = {
   perOrgSummaries: string[];
 };
 
-/**
- * Fold one org's entries into the run. Dual-write: the home org (and legacy
- * mode) also emits the bare key so pre-cutover readers keep serving identical
- * content. P8 removes that arm.
- */
+/** Fold one org's entries into the run. The home org, and a run with no HOME_ORG_ID, also emit the bare key. */
 function mergeOrgResult(agg: OrgsComputation, res: OrgComputation, orgId: string | null, isHome: boolean): void {
   for (const e of res.allEntries) {
     if (orgId) agg.allEntries.push({ ...e, key: orgPrefixedKey(orgId, e.key) });
@@ -578,7 +571,7 @@ async function pruneStaleKeys(newState: SyncState, computedKeys: ReadonlySet<str
 }
 
 /**
- * KV write-budget instrumentation (P4): total and per-scope counts, so the plan's
+ * KV write-budget instrumentation: total and per-scope counts, so the plan's
  * monthly write allowance can be checked against a concrete number (this counter ×
  * cron runs). Warns when a single run exceeds --max-writes; the cap itself is
  * enforced upstream by --budget.

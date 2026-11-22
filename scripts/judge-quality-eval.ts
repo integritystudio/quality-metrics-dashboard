@@ -367,11 +367,6 @@ export async function createReferenceProvider(
   };
 }
 
-/**
- * One call per criterion. Returns normalized (0–1) scores keyed by record
- * name, with hallucination derived as 1 - faithfulness. A failed criterion is
- * absent and its error lands in `errors`.
- */
 /** The reference judge itself: built once, reused for every turn. */
 type ReferenceJudge = {
   provider: ConsolidatedProvider;
@@ -379,6 +374,11 @@ type ReferenceJudge = {
   canSpend: () => boolean;
 };
 
+/**
+ * One call per criterion. Returns normalized (0–1) scores keyed by record
+ * name, with hallucination derived as 1 - faithfulness. A failed criterion is
+ * absent and its error lands in `errors`.
+ */
 async function scoreTurnWithReference(
   { provider, stepsCache, canSpend }: ReferenceJudge,
   turn: Turn,

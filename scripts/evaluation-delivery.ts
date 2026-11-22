@@ -83,8 +83,8 @@ export const EVALUATION_SERVICE_NAME = 'dashboard:upload-evaluations';
  */
 const STABLE_EVALUATION_KEY_FIELD = 'stableEvaluationKey';
 /**
- * Top-level schema URL a record carries (AA3 § Migration, stamped since
- * 2026-10-07). Shipped as `metadata.schemaUrl`, the webhook's only slot for
+ * Top-level schema URL a record carries; records before 2026-10-07 have none.
+ * Shipped as `metadata.schemaUrl`, the webhook's only slot for
  * it, so a D1 row records the attribute schema it was written under.
  */
 const SCHEMA_URL_FIELD = 'schemaUrl';
@@ -116,7 +116,7 @@ export type EvaluationPayload = {
   serviceName?: string;
   /** Sampling population; the webhook rejects a value outside its enum. */
   cohort?: string;
-  /** Model id of the LLM judge that produced the score. Its own field since 2026-09-30; was `metadata.judgeModel`. */
+  /** Model id of the LLM judge that produced the score. */
   judgeModel?: string;
   /** Client-supplied event time (Unix ms). When set the flush dates the row to
    *  this time instead of the batch-receipt time, so period aggregations are
@@ -199,8 +199,6 @@ function scoreFields(attrs: Record<string, unknown>): Partial<EvaluationPayload>
   if (scoreLabel) fields.scoreLabel = truncate(scoreLabel, WEBHOOK_MAX_NAME_LENGTH);
   const explanation = asString(attrs[EVALUATION_ATTRS.EXPLANATION]);
   if (explanation) fields.explanation = truncate(explanation, WEBHOOK_MAX_EXPLANATION_LENGTH);
-  // Top-level since 2026-09-30 so readers populate EvaluationResult.judgeModel; the
-  // metadata copy it replaced was never read back (JUDGE-MODEL-METADATA-ONLY).
   const judgeModel = asString(attrs[EVALUATION_ATTRS.JUDGE_MODEL]);
   if (judgeModel) fields.judgeModel = truncate(judgeModel, WEBHOOK_MAX_NAME_LENGTH);
   return fields;

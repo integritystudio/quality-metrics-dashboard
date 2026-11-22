@@ -6,9 +6,7 @@
  * origin, and once that session is destroyed it keeps handing out the dead
  * session: every later request fails at once with `fetch failed <-
  * ERR_HTTP2_INVALID_SESSION`, which the SDK reports only as "Connection
- * error.", and no socket is opened. A synchronous judge run hit it three to
- * four minutes in, twice, and scored nothing after (2026-09-24,
- * judge-hallucination-eval.ts). Over HTTP/1.1 a dead connection is dropped
+ * error.", and no socket is opened. Over HTTP/1.1 a dead connection is dropped
  * from the pool and the next request opens a new one.
  *
  * Both imports are dynamic so that a `--dry-run` never loads the SDK.

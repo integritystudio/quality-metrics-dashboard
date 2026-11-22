@@ -144,12 +144,7 @@ export type BatchLLMProvider = {
   readonly failure: Error | undefined;
 } & LLMProvider
 
-/**
- * `generate()` options. `jsonSchema` is the structured-output option a sibling
- * change adds to the judge library's `LLMProvider`; this tree's contract does
- * not carry it yet, so it is declared here and honoured by
- * {@link toRequestSettings} — the one place to touch when it lands.
- */
+/** `generate()` options: `LLMProvider`'s, with `jsonSchema` narrowed to the SDK's schema type and a per-request `maxTokens`. */
 export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate']>[1]> & {
   jsonSchema?: Anthropic.Messages.JSONOutputFormat['schema'];
   /** Per-request output budget; the provider's `maxTokens` when absent. A consolidated verdict needs more than one criterion's. */
