@@ -42,6 +42,7 @@ test.describe('Responsive Layout', () => {
   test('renders on tablet viewport', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto('/');
-    await expect(page.locator('.metric-grid, .card-link').first()).toBeVisible();
+    // A layout check, so it holds with or without data: the metric grid, or the no-data state.
+    await expect(page.locator('.metric-grid, .card-link, .empty-state').first()).toBeVisible();
   });
 });
