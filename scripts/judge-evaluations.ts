@@ -38,9 +38,7 @@ import pLimit from 'p-limit';
 import type { LLMProvider, ResponseJsonSchema, QagVerificationMode } from '../../src/lib/judge/llm-as-judge.js';
 import { LLMJudge, COHERENCE_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
 import { HALLUCINATION_EVAL_NAME, LLM_EVALUATOR_TYPE } from '../../src/lib/validation/dashboard-schemas.js';
-import type { EvaluatorKind, EvaluationCohort } from '../../src/lib/core/shared-schemas.js';
 import { TIME_MS } from '../../src/lib/core/units.js';
-import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import {
   JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG,
@@ -53,6 +51,7 @@ import {
   BATCH_CANCEL_GRACE_MS,
   BATCH_POLL_INTERVAL_MS,
   BATCH_WALL_CLOCK_MS,
+  settleBatchedTurns,
   type BatchLLMProvider,
 } from './judge-batch-provider.js';
 import { toDateOnly } from '../src/api/api-constants.js';
@@ -68,14 +67,10 @@ import { selectTurns, formatTurnSelection, type TurnSelection } from './judge-se
 import { formatPostSummary, postRoutedRecords, routeEvaluationRecords, undeliveredCount, type RoutedRecord } from './post-evaluations.js';
 import { JUDGE_PENDING_FILE, addPendingKeys, readPendingEvaluations, writePendingEvaluations } from './judge-pending.js';
 import {
-  LLM_EVALUATOR_KIND,
-  NORMAL_COHORT,
   PRODUCER,
   SCORE_PREVIEW_DECIMALS,
   SESSION_ID_PREVIEW_LEN,
   EVAL_SCORE_PRECISION,
-  legacyEvaluatorTypeField,
-  normalizeScore,
   toOTelRecord,
   type EvalRecord,
 } from './eval-record.js';
@@ -95,7 +90,7 @@ import { turnJudgedKey } from './judge-dedup.js';
 import {
   anchorTurns,
   fitContextForJudge,
-  turnSourceFields,
+  judgeRecord,
   type Turn,
 } from './judge-turns.js';
 import {
@@ -128,43 +123,6 @@ const SYNC_MODE_MAX_RETRIES = 2;
 const DRY_RUN_TOP_SESSIONS = 10;
 
 const MAX_TURN_LIMIT = 10_000;
-
-/**
- * `kind` and `cohort` are separate fields on purpose (OBP16), so a record
- * cannot claim to be judged unless it was. `judgeModel` is omitted for any
- * score no model produced.
- */
-type EvalRecordFields = {
-  evaluationName: string;
-  scoreValue: number;
-  explanation: string;
-  kind: EvaluatorKind;
-  cohort: EvaluationCohort;
-  judgeModel?: string;
-}
-
-/** Build one record. */
-function createEvalRecord(
-  turn: Turn,
-  { evaluationName, scoreValue, explanation, kind, cohort, judgeModel }: EvalRecordFields,
-): EvalRecord {
-  return {
-    timestamp: turn.timestamp,
-    evaluationName,
-    scoreValue: normalizeScore(scoreValue),
-    scoreLabel: scoreLabelForMetric(evaluationName, scoreValue),
-    explanation,
-    evaluator: PRODUCER,
-    // Narrowed to the kind axis; the cohort has its own field now.
-    ...legacyEvaluatorTypeField(kind),
-    evaluatorKind: kind,
-    cohort,
-    ...(judgeModel && { judgeModel, stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel) }),
-    traceId: turn.traceId,
-    sessionId: turn.sessionId,
-    ...turnSourceFields(turn),
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Usage accounting
@@ -269,14 +227,7 @@ export async function evaluateTurn(
 
   const isJudged = (evalName: string): boolean => existingKeys.has(turnJudgedKey(turn, evalName, HAIKU_MODEL));
   const record = (evalName: string, value: number, reason: string): void => {
-    evals.push(createEvalRecord(turn, {
-      evaluationName: evalName,
-      scoreValue: value,
-      explanation: reason,
-      kind: LLM_EVALUATOR_KIND,
-      cohort: NORMAL_COHORT,
-      judgeModel: HAIKU_MODEL,
-    }));
+    evals.push(judgeRecord(turn, PRODUCER, HAIKU_MODEL, { evaluationName: evalName, scoreValue: value, explanation: reason }));
   };
   const fail = (evalName: string, err: unknown): void => trackFailure(evalName, err, sessionPreview);
   const fallbackReason = (label: string, value: number): string =>
@@ -358,11 +309,7 @@ export async function evaluateTurnsBatched(
   turns: Turn[],
   existingKeys: Set<string>,
 ): Promise<EvalRecord[][]> {
-  const inFlight = turns.map(async turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true }));
-  await provider.flush();
-  const perTurn = await Promise.all(inFlight);
-  if (provider.failure) throw provider.failure;
-  return perTurn;
+  return settleBatchedTurns(provider, turns.map(async turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true })));
 }
 
 export type TurnDiscovery = {

@@ -7,7 +7,15 @@
 import { group } from 'd3-array';
 import { MAX_TEXT_LENGTH, MAX_CONTEXT_ITEMS } from '../../src/lib/judge/llm-judge-constants.js';
 import { turnAccount, turnSpan, type AccountIndex, type AccountRef } from './account-index.js';
-import type { EvalRecord } from './eval-record.js';
+import {
+  LLM_EVALUATOR_KIND,
+  NORMAL_COHORT,
+  legacyEvaluatorTypeField,
+  normalizeScore,
+  type EvalRecord,
+} from './eval-record.js';
+import { turnJudgedKey } from './judge-dedup.js';
+import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { turnContentKey } from '../../src/lib/validation/api-schemas.js';
 
 /** Maximum tool context items to balance quality vs cost in evaluations */
@@ -42,6 +50,38 @@ export function turnSourceFields(turn: Turn): Pick<EvalRecord, 'identityKeyRef' 
   return {
     ...(turn.spanId ? { spanId: turn.spanId } : turn.responseId ? { responseId: turn.responseId } : {}),
     ...(turn.identityKeyRef !== undefined && { identityKeyRef: turn.identityKeyRef }),
+  };
+}
+
+/** One judge criterion's result on a turn: the raw score, before normalisation. */
+export type ScoredCriterion = { evaluationName: string; scoreValue: number; explanation: string };
+
+/**
+ * The record a judge path writes for one criterion on one turn; `producer` (the record's `evaluator`) is the
+ * only difference between the per-criterion and consolidated paths. Field order is part of a record's
+ * identity when it has no `stableEvaluationKey` (`eval-record.ts`), so keep it.
+ */
+export function judgeRecord(
+  turn: Turn,
+  producer: string,
+  judgeModel: string,
+  { evaluationName, scoreValue, explanation }: ScoredCriterion,
+): EvalRecord {
+  return {
+    timestamp: turn.timestamp,
+    evaluationName,
+    scoreValue: normalizeScore(scoreValue),
+    scoreLabel: scoreLabelForMetric(evaluationName, scoreValue),
+    explanation,
+    evaluator: producer,
+    ...legacyEvaluatorTypeField(LLM_EVALUATOR_KIND),
+    evaluatorKind: LLM_EVALUATOR_KIND,
+    cohort: NORMAL_COHORT,
+    judgeModel,
+    stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel),
+    traceId: turn.traceId,
+    sessionId: turn.sessionId,
+    ...turnSourceFields(turn),
   };
 }
 

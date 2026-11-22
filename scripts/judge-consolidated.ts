@@ -27,7 +27,7 @@
  * with the per-criterion path, judge-quality-eval.ts distance from a reference.
  */
 
-import type { BatchLLMProvider } from './judge-batch-provider.js';
+import { settleBatchedTurns, type BatchLLMProvider } from './judge-batch-provider.js';
 import { sanitizeForPrompt, sanitizeContextArray, safeJSONParse, type GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import { normalizeEvaluationSteps } from '../../src/lib/judge/llm-judge-geval.js';
 import {
@@ -45,16 +45,11 @@ import {
   G_EVAL_MAX_STEPS,
 } from '../../src/lib/judge/llm-judge-constants.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
-import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
-import { type Turn, fitContextForJudge, turnSourceFields } from './judge-turns.js';
+import { type Turn, fitContextForJudge, judgeRecord } from './judge-turns.js';
 import {
   type EvalRecord,
-  LLM_EVALUATOR_KIND,
-  NORMAL_COHORT,
-  legacyEvaluatorTypeField,
   SESSION_ID_PREVIEW_LEN,
   SCORE_PREVIEW_DECIMALS,
-  normalizeScore,
 } from './eval-record.js';
 import {
   RELEVANCE_EVAL_NAME,
@@ -403,7 +398,7 @@ export function parseConsolidatedResponse(text: string, criterionNames: readonly
 }
 
 // ---------------------------------------------------------------------------
-// Records — mirrors createEvalRecord in judge-evaluations.ts for kind 'llm'
+// Score scale
 // ---------------------------------------------------------------------------
 
 /** G-Eval's normalization: (score - min) / range. */
@@ -414,27 +409,6 @@ export function toNormalizedScore(score: number): number {
 /** The inverse of {@link toNormalizedScore}: a record's 0–1 value back on the judge's 1–5 scale. */
 export function toFivePointScale(normalized: number): number {
   return G_EVAL_MIN_SCORE + normalized * G_EVAL_SCORE_RANGE;
-}
-
-type ScoredCriterion = { evaluationName: string; scoreValue: number; explanation: string };
-
-function buildRecord(turn: Turn, judgeModel: string, { evaluationName, scoreValue, explanation }: ScoredCriterion): EvalRecord {
-  return {
-    timestamp: turn.timestamp,
-    evaluationName,
-    scoreValue: normalizeScore(scoreValue),
-    scoreLabel: scoreLabelForMetric(evaluationName, scoreValue),
-    explanation,
-    evaluator: CONSOLIDATED_PRODUCER,
-    ...legacyEvaluatorTypeField(LLM_EVALUATOR_KIND),
-    evaluatorKind: LLM_EVALUATOR_KIND,
-    cohort: NORMAL_COHORT,
-    judgeModel,
-    stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel),
-    traceId: turn.traceId,
-    sessionId: turn.sessionId,
-    ...turnSourceFields(turn),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -494,7 +468,7 @@ function recordsFromVerdicts(
     const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
     const explanation = verdict.reasoning.trim()
       || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${ctx.sessionPreview}`;
-    records.push(buildRecord(turn, ctx.judgeModel, { evaluationName: name, scoreValue: score, explanation }));
+    records.push(judgeRecord(turn, CONSOLIDATED_PRODUCER, ctx.judgeModel, { evaluationName: name, scoreValue: score, explanation }));
   }
   return records;
 }
@@ -631,9 +605,5 @@ export async function evaluateTurnsConsolidatedBatched(
 ): Promise<EvalRecord[][]> {
   const provider = adaptBatchProvider(batch);
   const stepsCache: EvaluationStepsCache = new Map();
-  const inFlight = turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache }));
-  await batch.flush();
-  const perTurn = await Promise.all(inFlight);
-  if (batch.failure) throw batch.failure;
-  return perTurn;
+  return settleBatchedTurns(batch, turns.map(async turn => evaluateTurnConsolidated(provider, turn, existingKeys, { stepsCache })));
 }

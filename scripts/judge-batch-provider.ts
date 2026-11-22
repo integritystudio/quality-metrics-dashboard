@@ -144,6 +144,17 @@ export type BatchLLMProvider = {
   readonly failure: Error | undefined;
 } & LLMProvider
 
+/**
+ * Drain a batch whose requests `inFlight` already issued: flush, then wait for every turn. Each turn comes back
+ * with what was scored (a wall-clock overrun settles the rest as failures); only a provider `failure` throws.
+ */
+export async function settleBatchedTurns<T>(provider: BatchLLMProvider, inFlight: ReadonlyArray<Promise<T>>): Promise<T[]> {
+  await provider.flush();
+  const perTurn = await Promise.all(inFlight);
+  if (provider.failure) throw provider.failure;
+  return perTurn;
+}
+
 /** `generate()` options: `LLMProvider`'s, with `jsonSchema` narrowed to the SDK's schema type and a per-request `maxTokens`. */
 export type BatchGenerateOptions = NonNullable<Parameters<LLMProvider['generate']>[1]> & {
   jsonSchema?: Anthropic.Messages.JSONOutputFormat['schema'];
