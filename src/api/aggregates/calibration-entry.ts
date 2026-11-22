@@ -1,7 +1,7 @@
 /** The `meta:calibration` KV entry derive publishes: the percentile distributions the dashboard reads. */
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { toKVValue, type KVEntry } from './kv-entry.js';
+import { orgPrefixedKey, toKVValue, type KVEntry } from './kv-entry.js';
 
 export const META_CALIBRATION_KEY = 'meta:calibration';
 
@@ -25,4 +25,9 @@ export function buildCalibrationEntry(
     lastCalibrated: state.lastCalibrated,
   };
   return { key: META_CALIBRATION_KEY, value: toKVValue(payload) };
+}
+
+/** The entry under each key the dashboard reads it from: the home org's, and the bare key it falls back to. */
+export function calibrationEntries(entry: KVEntry, homeOrgId: string): KVEntry[] {
+  return homeOrgId ? [{ ...entry, key: orgPrefixedKey(homeOrgId, entry.key) }, entry] : [entry];
 }

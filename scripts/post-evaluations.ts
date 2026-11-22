@@ -30,6 +30,7 @@ import {
   type MapSkip,
   type Route,
   type RouteBasis,
+  type SendConfig,
 } from './evaluation-delivery.js';
 import type { AccountIndex } from './account-index.js';
 import { sleep } from './sleep.js';
@@ -61,6 +62,14 @@ export type PostSummary = {
   routedBy: Record<RouteBasis, number>;
   /** The first rejected batch, when one was; nothing after it was sent. */
   failure?: string;
+  /** Whether sending the failed batch again could succeed: false for a refused key or payload, and for a missing setting. */
+  failureRetryable?: boolean;
+}
+
+/** Where a post reads its keys and ingest settings, and what it sends over, when not the process's own. */
+export type PostTarget = {
+  env?: NodeJS.ProcessEnv;
+  fetch?: typeof globalThis.fetch;
 }
 
 export function emptyAccountIndex(): AccountIndex {
@@ -78,7 +87,7 @@ export function routeEvaluationRecords(records: readonly unknown[], accounts: Ac
 }
 
 /** One batch per destination, counting everything that ships nowhere as it goes. */
-function batchRecords(routed: readonly RoutedRecord[], summary: PostSummary): Map<string, EvaluationPayload[]> {
+function batchRecords(routed: readonly RoutedRecord[], summary: PostSummary, env: NodeJS.ProcessEnv): Map<string, EvaluationPayload[]> {
   const batches = new Map<string, EvaluationPayload[]>();
   for (const entry of routed) {
     if (entry.skip) {
@@ -86,7 +95,7 @@ function batchRecords(routed: readonly RoutedRecord[], summary: PostSummary): Ma
       continue;
     }
     summary.routedBy[entry.basis]++;
-    const delivery = deliveryFor(entry.route);
+    const delivery = deliveryFor(entry.route, env);
     if (delivery.kind === 'withheld') {
       summary.withheld++;
       continue;
@@ -105,12 +114,19 @@ export async function postEvaluationRecords(records: readonly unknown[], opts: P
   return postRoutedRecords(routeEvaluationRecords(records, opts.accounts), opts.dryRun);
 }
 
+/** Why nothing can be sent with these settings, when that is so. */
+function unsendableReason(batches: ReadonlyMap<string, unknown>, { baseUrl, secret }: SendConfig): string | undefined {
+  if (batches.has(WEBHOOK_DESTINATION) && !secret) return 'INJECT_HMAC_SECRET is not set, so unstamped records cannot be signed';
+  return baseUrl ? undefined : INGEST_URL_NOT_SET_MESSAGE;
+}
+
 /**
  * Post records already routed. Stops at the first rejected batch and reports
  * it in `failure`; everything before it was accepted, and a re-run re-sends
  * the rest without duplicating what landed.
  */
-export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun: boolean): Promise<PostSummary> {
+export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun: boolean, target: PostTarget = {}): Promise<PostSummary> {
+  const env = target.env ?? process.env;
   const summary: PostSummary = {
     sent: 0,
     byDestination: {},
@@ -119,16 +135,13 @@ export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun:
     heldForKey: {},
     routedBy: { stamp: 0, span: 0, join: 0 },
   };
-  const batches = batchRecords(routed, summary);
+  const batches = batchRecords(routed, summary, env);
 
-  const sendConfig = resolveSendConfig();
-  const { baseUrl, secret } = sendConfig;
-  if (!dryRun && batches.has(WEBHOOK_DESTINATION) && !secret) {
-    summary.failure = 'INJECT_HMAC_SECRET is not set, so unstamped records cannot be signed';
-    return summary;
-  }
-  if (!dryRun && !baseUrl) {
-    summary.failure = INGEST_URL_NOT_SET_MESSAGE;
+  const sendConfig = { ...resolveSendConfig(env), ...(target.fetch && { fetch: target.fetch }) };
+  const unsendable = dryRun ? undefined : unsendableReason(batches, sendConfig);
+  if (unsendable !== undefined) {
+    summary.failure = unsendable;
+    summary.failureRetryable = false;
     return summary;
   }
 
@@ -137,9 +150,10 @@ export async function postRoutedRecords(routed: readonly RoutedRecord[], dryRun:
       const chunk = payloads.slice(i, i + MAX_BATCH_SIZE);
       if (!dryRun) {
         // eslint-disable-next-line no-await-in-loop -- batches are paced below and abort on the first failure
-        const res = await sendBatch(destination, chunk, sendConfig);
+        const res = await sendBatch(destination, chunk, sendConfig, env);
         if (!res.ok) {
           summary.failure = `POST to ${destination} failed: ${res.detail}`;
+          summary.failureRetryable = res.retryable;
           return summary;
         }
         // eslint-disable-next-line no-await-in-loop -- the pacing delay between batches is the point

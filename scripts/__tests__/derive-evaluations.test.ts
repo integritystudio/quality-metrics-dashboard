@@ -8,19 +8,11 @@ import {
   postFloorMs,
   splitAtRepostFloor,
 } from '../derive-rule-metrics.js';
-import {
-  deriveAgentHeuristics,
-  detectInputDrift,
-  resolvePostDays,
-  readScope,
-  carryForwardDistributions,
-  calibrationScores,
-  recentScores,
-  MAX_RAW_SCORES_PER_METRIC,
-  formatCalibrationCheck,
-  DRIFT_MIN_TOOL_SPANS,
-  type TraceSpan,
-} from '../derive-evaluations.js';
+import { deriveAgentHeuristics, resolvePostDays, readScope, type TraceSpan } from '../derive-evaluations.js';
+import { detectInputDrift, driftWarnings, DRIFT_MIN_TOOL_SPANS, sumDayInputs, tallyDayInputs } from '../derive-input-drift.js';
+import { carryForwardDistributions, calibrationScores, decideCalibration, recentScores, MAX_RAW_SCORES_PER_METRIC, formatCalibrationCheck } from '../calibration-update.js';
+import { MIN_QUANTILE_SAMPLE_SIZE } from '../../../src/lib/quality/qfe-label-ordinals.js';
+import { CALIBRATION_MAX_AGE_DAYS } from '../../../src/lib/quality/quality-constants.js';
 import { type EvalRecord } from '../eval-record.js';
 import { OTEL_STATUS_ERROR_CODE } from '../../src/api/api-constants.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_CORE_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
@@ -256,6 +248,37 @@ describe('formatCalibrationCheck', () => {
     );
 
     expect(line).toBe(`psi tool_correctness=${MEASURED_PSI}; too few samples: handoff_correctness (1 stored, 0 now)`);
+  });
+});
+
+describe('decideCalibration', () => {
+  const NOW = Date.parse('2026-11-22T06:00:00.000Z');
+  const SPREAD = 10;
+  const enough = (shift = 0): number[] => Array.from({ length: MIN_QUANTILE_SAMPLE_SIZE }, (_, i) => ((i % SPREAD) + shift) / (SPREAD * 2));
+  const first = decideCalibration(null, { tool_correctness: enough(), handoff_correctness: enough() }, NOW);
+
+  it('writes a first state dated at the run, with the scores a later run measures drift against', () => {
+    expect(first).toMatchObject({ kind: 'rewrite', carried: [], state: { lastCalibrated: new Date(NOW).toISOString(), rawScores: { tool_correctness: enough() } } });
+  });
+
+  it('leaves the state alone while the scores have not moved and it is not too old', () => {
+    if (first.kind !== 'rewrite') throw new Error('expected a first state');
+
+    expect(decideCalibration(first.state, { tool_correctness: enough(), handoff_correctness: enough() }, NOW + TIME_MS.DAY))
+      .toMatchObject({ kind: 'unchanged', lastCalibrated: first.state.lastCalibrated });
+  });
+
+  it('rewrites a state past its maximum age, keeping a metric this run had too few scores for', () => {
+    if (first.kind !== 'rewrite') throw new Error('expected a first state');
+
+    const later = decideCalibration(first.state, { tool_correctness: enough(), handoff_correctness: [1] }, NOW + (CALIBRATION_MAX_AGE_DAYS + 1) * TIME_MS.DAY);
+
+    expect(later).toMatchObject({ kind: 'rewrite', carried: ['handoff_correctness'] });
+    expect(later.kind === 'rewrite' && later.state.distributions.handoff_correctness).toEqual(first.state.distributions.handoff_correctness);
+  });
+
+  it('decides nothing when no metric reaches the sample floor', () => {
+    expect(decideCalibration(null, { tool_correctness: [1] }, NOW)).toEqual({ kind: 'no-samples' });
   });
 });
 
@@ -668,6 +691,16 @@ describe('detectInputDrift', () => {
 
   it('checks only the days in scope', () => {
     expect(detectInputDrift(agentSpans('hook:agent.lifecycle.finalize'), new Set(['2026-09-27']))).toEqual([]);
+  });
+
+  it('judges a day from tallies taken apart as it does the day read whole', () => {
+    const oneAccount = toolSpans(DRIFT_MIN_TOOL_SPANS - 1, {});
+    const another = toolSpans(1, {}, DRIFT_MIN_TOOL_SPANS - 1);
+
+    const summed = sumDayInputs([oneAccount, another].flatMap(spans => [...tallyDayInputs(spans, null)]));
+
+    expect(driftWarnings(summed)).toEqual(detectInputDrift([...oneAccount, ...another], null));
+    expect(driftWarnings(summed)).toHaveLength(1);
   });
 });
 

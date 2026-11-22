@@ -232,6 +232,14 @@ export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
 export const JUDGE_LIMIT_FLAG = '--limit';
 /** Every stage's preview switch: compute and report, write nothing. */
 export const DRY_RUN_FLAG = '--dry-run';
+/**
+ * derive-evaluations flag, forwarded by populate-dashboard.ts: post only the
+ * agent heuristics, which need this machine's transcripts. The four rule
+ * metrics, calibration and the input-drift check are then the parent's derive
+ * Workflow's (`services/dashboard-pipeline-workflow`), which must be posting
+ * on its cron before a scheduled run passes this.
+ */
+export const DERIVE_SKIP_RULES_FLAG = '--skip-derive-rules';
 
 const NETWORK_RETRY_COUNT = 5;
 /**

@@ -25,6 +25,7 @@
  *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
  *   npm run populate -- --dry-run             # preview only, no writes
  *   npm run populate -- --skip-judge          # rule-based only
+ *   npm run populate -- --skip-derive-rules   # derive posts the agent heuristics only (the rule metrics are the Workflow's)
  *   npm run populate -- --limit 5             # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
@@ -46,6 +47,7 @@ import { sum } from 'd3-array';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import {
+  DERIVE_SKIP_RULES_FLAG,
   DRY_RUN_FLAG,
   JUDGE_BATCH_FLAG,
   JUDGE_LIMIT_FLAG,
@@ -75,7 +77,7 @@ const SKIP_HOOK_GAP_CHECK_FLAG = '--skip-hook-gap-check';
 const POPULATE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG],
   switches: [
-    SKIP_DERIVE_FLAG, SKIP_JUDGE_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
+    SKIP_DERIVE_FLAG, DERIVE_SKIP_RULES_FLAG, SKIP_JUDGE_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
     JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
@@ -87,6 +89,7 @@ const POPULATE_CLI: CliSpec = {
  */
 type PopulateArgs = {
   skipDerive: boolean;
+  skipDeriveRules: boolean;
   skipJudge: boolean;
   skipShipTurns: boolean;
   skipHookGapCheck: boolean;
@@ -104,6 +107,7 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   const limit = positiveIntArg(JUDGE_LIMIT_FLAG, cli.value(JUDGE_LIMIT_FLAG));
   return {
     skipDerive: cli.has(SKIP_DERIVE_FLAG),
+    skipDeriveRules: cli.has(DERIVE_SKIP_RULES_FLAG),
     skipJudge: cli.has(SKIP_JUDGE_FLAG),
     skipShipTurns: cli.has(SKIP_SHIP_TURNS_FLAG),
     skipHookGapCheck: cli.has(SKIP_HOOK_GAP_CHECK_FLAG),
@@ -116,7 +120,7 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   };
 }
 
-const { skipDerive, skipJudge, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, limit, deriveScope, judgeScope } =
+const { skipDerive, skipDeriveRules, skipJudge, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, limit, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 
 // Fail closed when the judge would run with no key: never fall back to
@@ -222,7 +226,7 @@ const STAGES: readonly StageSpec[] = [
     stage: 'derive',
     script: 'derive-evaluations',
     runs: !dryRun && !skipDerive,
-    args: deriveScope,
+    args: [...deriveScope, ...(skipDeriveRules ? [DERIVE_SKIP_RULES_FLAG] : [])],
     networkRetry: true,
     continuation: CONTINUE_TO_JUDGE,
   },

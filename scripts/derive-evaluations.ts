@@ -18,18 +18,12 @@
  *   tsx scripts/derive-evaluations.ts --dry-run                    # what populate runs: 7 days read, 2 posted
  *   tsx scripts/derive-evaluations.ts --date=2026-10-01 --dry-run
  *   tsx scripts/derive-evaluations.ts --days=3
+ *   tsx scripts/derive-evaluations.ts --skip-derive-rules          # the agent heuristics only; see DERIVE_SKIP_RULES_FLAG
  */
 
 import { ascending, rollup } from 'd3-array';
 import pLimit from 'p-limit';
-import {
-  computeCalibrationDistributions,
-  isCalibrationStale,
-  loadCalibrationState,
-  saveCalibrationState,
-  shouldRecalibrate,
-  type CalibrationState,
-} from '../../src/lib/quality/qfe-percentiles.js';
+import { loadCalibrationState, saveCalibrationState } from '../../src/lib/quality/qfe-percentiles.js';
 import type { LocalTraceSpan } from '../../src/lib/validation/dashboard-schemas.js';
 export type { LocalTraceSpan as TraceSpan };
 import {
@@ -40,11 +34,11 @@ import {
   type EvalRecord,
 } from './eval-record.js';
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
+import { calibrationScores, decideCalibration } from './calibration-update.js';
+import { detectInputDrift } from './derive-input-drift.js';
 import { publishCalibration } from './publish-calibration.js';
-import { toDateOnly, HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
+import { HOOK_NAME, HOOK_SPAN_PREFIX } from '../src/api/api-constants.js';
 import {
-  AGENT_FINALIZE_SPAN,
-  AGENT_PREPARE_SPAN,
   attrString,
   byStartThenSpanId,
   deriveAll,
@@ -52,29 +46,23 @@ import {
   lastUtcDays,
   postFloorMs,
   recordsToPost,
-  isToolSpan,
   ruleRecord,
-  toolSuccessOf,
+  setSpanAccounts,
 } from './derive-rule-metrics.js';
 import { emptyAccountIndex, formatPostSummary, postEvaluationRecords } from './post-evaluations.js';
 import { loadCloudSpans, queryEachAccount, type LoadedSpans } from './cloud-trace-source.js';
-import type { EvaluationResult } from '../../src/backends/index.js';
 import { CALIBRATION_WINDOW_DAYS } from '../../src/lib/quality/quality-constants.js';
-import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
+import { DAYS_FLAG as DAYS_ARG, DERIVE_DEFAULT_DAYS, DERIVE_EXIT_INPUT_DRIFT, DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_SKIP_RULES_FLAG, DRY_RUN_FLAG, POST_DAYS_FLAG as POST_DAYS_ARG, rejectRemovedFlags } from './pipeline-stages.js';
 import { DURATION_MS, TIME_MS } from '../../src/lib/core/units.js';
-import { hrtToISO, hrtToSeconds, msToNs } from './hrt.js';
+import { hrtToSeconds, msToNs } from './hrt.js';
 import { CliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 import { runIfMain } from './cli-main.js';
 import { computeAgentHeuristicEvaluations } from '../../src/lib/agent-judge/agent-eval-metrics.js';
 import { knownLabelSchema } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { readMultiTurnInput, readSingleTurnInput } from './agent-heuristic-inputs.js';
 import { resolveTranscriptPath, scanTranscriptDirs } from './transcript-turns.js';
-import { GENAI_CORE_ATTRIBUTES } from '../../src/lib/otel/genai-attributes.js';
 import { AGENT_ATTRIBUTES } from '../src/lib/hook-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../src/lib/otel/constants-otel.js';
-
-/** Maximum raw scores to persist per metric in calibration state (bounds file size) */
-export const MAX_RAW_SCORES_PER_METRIC = 500;
 
 /** Upper bound on stored rule rows read per account for calibration; 30 days hold ~45,000. */
 const CALIBRATION_ROW_LIMIT = 500_000;
@@ -205,7 +193,7 @@ export async function deriveAgentHeuristics(
 const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ARG = '--date=';
 /** Every flag derive reads; judge-evaluations reuses the readers below. */
-const DERIVE_CLI: CliSpec = { values: [DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_FLAG] };
+const DERIVE_CLI: CliSpec = { values: [DATE_ARG, DAYS_ARG, POST_DAYS_ARG], switches: [DRY_RUN_FLAG, DERIVE_SKIP_RULES_FLAG] };
 
 /**
  * The dates a run reads: the caller's `--date=`/`--days=`, else the last
@@ -235,108 +223,9 @@ export function resolveDateScope(args: string[], now: Date = new Date()): Set<st
   return days === undefined ? null : lastUtcDays(days, now);
 }
 
-
-
 /** `--post-days=N` as a day count; `null` when absent. */
 export function resolvePostDays(args: string[]): number | null {
   return positiveIntArg(POST_DAYS_ARG, parseCli(args, DERIVE_CLI).value(POST_DAYS_ARG)) ?? null;
-}
-
-/**
- * `gen_ai.operation.name` of the synthetic `invoke_agent <agent>` span each agent
- * invocation emits, whatever the hook spans are named. No other span carries it, so
- * this counts one span per invocation; before 2026-09-29 the hook spans carried it too.
- */
-const INVOKE_AGENT_OPERATION = 'invoke_agent';
-/** Fewer tool spans than this in a day cannot tell a renamed attribute from a few hooks that failed before recording one. */
-export const DRIFT_MIN_TOOL_SPANS = 20;
-/** A day's tool spans may lack a success flag up to this share; past it the flag has most likely been renamed. */
-const DRIFT_MAX_MISSING_SUCCESS_SHARE = 0.5;
-
-type DayInput = {
-  agentEvidence: number;
-  agentMatched: number;
-  toolSpans: number;
-  toolMissingSuccess: number;
-}
-
-/** What each day's spans record of the inputs the derivations read. */
-function tallyDayInputs(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): Map<string, DayInput> {
-  const days = new Map<string, DayInput>();
-  for (const span of spans) {
-    const date = toDateOnly(hrtToISO(span.startTime));
-    if (dateScope && !dateScope.has(date)) continue;
-    let day = days.get(date);
-    if (!day) days.set(date, day = { agentEvidence: 0, agentMatched: 0, toolSpans: 0, toolMissingSuccess: 0 });
-    const attrs = span.attributes;
-    if (attrs[GENAI_CORE_ATTRIBUTES.OPERATION_NAME] === INVOKE_AGENT_OPERATION) day.agentEvidence++;
-    if (span.name === AGENT_PREPARE_SPAN || span.name === AGENT_FINALIZE_SPAN) day.agentMatched++;
-    if (isToolSpan(span)) {
-      day.toolSpans++;
-      if (typeof toolSuccessOf(span, attrs) !== 'boolean') day.toolMissingSuccess++;
-    }
-  }
-  return days;
-}
-
-/**
- * Days whose input the derivations can no longer read. A hooks-side rename can
- * empty a metric while every stage exits 0 (docs/data-pipeline.md § Historical
- * incidents). Each check compares a day's spans with themselves, never with a
- * previous run, so it fires on the first run after a rename rather than once
- * the old names have aged out of the read window, and a quiet day cannot trip it:
- * - spans record an agent invocation, but none has a name derive matches;
- * - most tool spans carry no success flag under the key derive reads.
- */
-export function detectInputDrift(spans: readonly LocalTraceSpan[], dateScope: ReadonlySet<string> | null): string[] {
-  const days = tallyDayInputs(spans, dateScope);
-
-  const warnings: string[] = [];
-  for (const [date, day] of [...days].toSorted(([a], [b]) => ascending(a, b))) {
-    if (day.agentEvidence > 0 && day.agentMatched === 0) {
-      warnings.push(`${date}: ${day.agentEvidence} spans record agent invocations, but none is named ${AGENT_PREPARE_SPAN} or ${AGENT_FINALIZE_SPAN}, so the agent metrics are empty. Were the hook spans renamed?`);
-    }
-    if (day.toolSpans >= DRIFT_MIN_TOOL_SPANS && day.toolMissingSuccess / day.toolSpans > DRIFT_MAX_MISSING_SUCCESS_SHARE) {
-      warnings.push(`${date}: ${day.toolMissingSuccess} of ${day.toolSpans} tool spans carry no success flag, so tool_correctness scores them as failures. Was the attribute renamed?`);
-    }
-  }
-  return warnings;
-}
-
-/**
- * Keep a metric's previous calibration when this run could not recompute it. A metric under
- * `MIN_QUANTILE_SAMPLE_SIZE` samples gets no distribution, so a metric still sparse over the
- * `CALIBRATION_WINDOW_DAYS` read (handoff_correctness) would otherwise drop out of
- * `meta:calibration` at every rewrite. A carried entry keeps its own windowStart/windowEnd, so its
- * age stays visible; a freshly computed one always replaces it.
- */
-export function carryForwardDistributions(
-  previous: CalibrationState['distributions'] | undefined,
-  fresh: CalibrationState['distributions'],
-): CalibrationState['distributions'] {
-  return { ...previous, ...fresh };
-}
-
-type CalibrationRow = Pick<EvaluationResult, 'timestamp' | 'evaluationId' | 'evaluationName' | 'scoreValue'>;
-
-/**
- * Each metric's scores from stored rows, oldest first so a tail slice keeps the
- * latest. A row two account keys both read is counted once.
- */
-export function calibrationScores(rows: Iterable<CalibrationRow>): Record<string, number[]> {
-  const seenIds = new Set<string>();
-  const scored: Array<CalibrationRow & { scoreValue: number }> = [];
-  for (const row of rows) {
-    const { scoreValue, evaluationId } = row;
-    if (typeof scoreValue !== 'number' || !Number.isFinite(scoreValue)) continue;
-    if (evaluationId !== undefined) {
-      if (seenIds.has(evaluationId)) continue;
-      seenIds.add(evaluationId);
-    }
-    scored.push({ ...row, scoreValue });
-  }
-  scored.sort((a, b) => Number(a.timestamp - b.timestamp));
-  return Object.fromEntries(rollup(scored, group => group.map(row => row.scoreValue), row => row.evaluationName));
 }
 
 /**
@@ -356,27 +245,6 @@ async function loadCalibrationScores(nowMs: number, env: NodeJS.ProcessEnv = pro
 }
 
 /**
- * Each metric's latest `MAX_RAW_SCORES_PER_METRIC` scores: what the state file
- * keeps, and so what a later run's PSI must be measured on. Comparing the
- * stored tail with a whole window would read the window's age mix as drift.
- */
-export function recentScores(scoresByMetric: Record<string, number[]>): Record<string, number[]> {
-  return Object.fromEntries(Object.entries(scoresByMetric).map(([metric, scores]) => [metric, scores.slice(-MAX_RAW_SCORES_PER_METRIC)]));
-}
-
-/** One line per check: each metric's measured PSI, or that it had too few samples for one. */
-export function formatCalibrationCheck(
-  previousScores: Record<string, number[]>,
-  scoresByMetric: Record<string, number[]>,
-  psiValues: Record<string, number>,
-  unmeasured: readonly string[],
-): string {
-  const measured = Object.entries(psiValues).toSorted(([a], [b]) => ascending(a, b)).map(([metric, psi]) => `${metric}=${psi}`);
-  const sparse = unmeasured.toSorted(ascending).map(metric => `${metric} (${previousScores[metric]?.length ?? 0} stored, ${scoresByMetric[metric]?.length ?? 0} now)`);
-  return `psi ${measured.join(' ') || 'none'}; too few samples: ${sparse.join(', ') || 'none'}`;
-}
-
-/**
  * Compute per-metric percentile distributions over the calibration window and
  * persist them to `.calibration-state.json`, which `publishCalibration` puts
  * in KV as `meta:calibration`. Rewritten when a distribution drifts (PSI), a metric
@@ -392,38 +260,24 @@ async function updateCalibration(dryRun: boolean, nowMs: number = Date.now()): P
     return;
   }
 
-  const newDistributions = computeCalibrationDistributions(scoresByMetric);
-  if (Object.keys(newDistributions).length === 0) {
+  const decision = decideCalibration(loadCalibrationState(CALIBRATION_STATE_DIR), scoresByMetric, nowMs);
+  if (decision.kind === 'no-samples') {
     console.log(`${CALIBRATION_LOG_PREFIX} no metric has enough samples; state left unchanged`);
     return;
   }
-
-  const previousState = loadCalibrationState(CALIBRATION_STATE_DIR);
-  const rawScores = recentScores(scoresByMetric);
-  const { shouldWrite, psiValues, unmeasured } = shouldRecalibrate(previousState, rawScores);
-  console.log(`${CALIBRATION_LOG_PREFIX} ${formatCalibrationCheck(previousState?.rawScores ?? {}, scoresByMetric, psiValues, unmeasured)}`);
-  // psiValues reflects PSI at the time of last write, not from every check:
-  // a run that finds nothing to rewrite leaves the file alone.
-  if (previousState !== null && !shouldWrite && !isCalibrationStale(previousState, nowMs)) {
-    console.log(`${CALIBRATION_LOG_PREFIX} unchanged, lastCalibrated=${previousState.lastCalibrated}`);
+  console.log(`${CALIBRATION_LOG_PREFIX} ${decision.check}`);
+  if (decision.kind === 'unchanged') {
+    console.log(`${CALIBRATION_LOG_PREFIX} unchanged, lastCalibrated=${decision.lastCalibrated}`);
     return;
   }
   if (dryRun) {
     console.log('[dry-run] would update .calibration-state.json');
     return;
   }
-
-  const distributions = carryForwardDistributions(previousState?.distributions, newDistributions);
-  const carried = Object.keys(distributions).filter(metric => !(metric in newDistributions));
-  if (carried.length > 0) {
-    console.log(`[derive] calibration: kept the previous distribution for ${carried.join(', ')} (too few samples this run)`);
+  if (decision.carried.length > 0) {
+    console.log(`${CALIBRATION_LOG_PREFIX} kept the previous distribution for ${decision.carried.join(', ')} (too few samples this run)`);
   }
-  saveCalibrationState(CALIBRATION_STATE_DIR, {
-    lastCalibrated: new Date().toISOString(),
-    distributions,
-    psiValues,
-    rawScores,
-  });
+  saveCalibrationState(CALIBRATION_STATE_DIR, decision.state);
 }
 
 async function main(): Promise<void> {
@@ -432,7 +286,9 @@ async function main(): Promise<void> {
   const dateScope = resolveDateScope(argv);
   const scope = readScope(dateScope, DERIVE_DEFAULT_DAYS);
   const postDays = resolvePostDays(argv);
-  const dryRun = parseCli(argv, DERIVE_CLI).has(DRY_RUN_FLAG);
+  const cli = parseCli(argv, DERIVE_CLI);
+  const dryRun = cli.has(DRY_RUN_FLAG);
+  const skipRules = cli.has(DERIVE_SKIP_RULES_FLAG);
 
   let loaded: LoadedSpans;
   try {
@@ -445,7 +301,9 @@ async function main(): Promise<void> {
     process.exitCode = DERIVE_EXIT_READ_FAILED;
     return;
   }
-  const allEvals = deriveAll(loaded);
+  // The heuristics stamp each record from the same span accounts the rule scorers set.
+  setSpanAccounts(loaded.accounts);
+  const allEvals = skipRules ? [] : deriveAll(loaded);
   // The window comes from the caller's scope, not the defaulted read, so an
   // unscoped run posts the last DERIVE_POST_WINDOW_DAYS of its 7-day read.
   const floorMs = postFloorMs(dateScope, Date.now(), postDays);
@@ -470,14 +328,16 @@ async function main(): Promise<void> {
     process.exitCode = DERIVE_EXIT_POST_FAILED;
   }
 
-  await updateCalibration(dryRun);
-  await publishCalibration(dryRun);
+  if (!skipRules) {
+    await updateCalibration(dryRun);
+    await publishCalibration(dryRun);
+  }
 
   const byName = rollup(inScope, evs => evs.length, ev => ev.evaluationName);
   const counts = [...byName].toSorted(([a], [b]) => ascending(a, b)).map(([name, n]) => `${name}=${n}`);
   console.log(`[derive] records: ${counts.join(' ') || 'none'}`);
 
-  const drift = detectInputDrift(loaded.spans, scope);
+  const drift = skipRules ? [] : detectInputDrift(loaded.spans, scope);
   for (const warning of drift) console.error(`[derive] input drift on ${warning}`);
   // A failed post is the more urgent code; drift persists and shows on the next run.
   if (drift.length > 0 && process.exitCode === undefined) process.exitCode = DERIVE_EXIT_INPUT_DRIFT;

@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import { startRecordingServer, type RecordingServer } from './support/recording-server.js';
-import { emptyAccountIndex, postEvaluationRecords, undeliveredCount } from '../post-evaluations.js';
+import { emptyAccountIndex, postEvaluationRecords, postRoutedRecords, routeEvaluationRecords, undeliveredCount } from '../post-evaluations.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT } from '../eval-record.js';
 import { evaluationId, INGEST_URL_NOT_SET_MESSAGE, MAX_BATCH_SIZE } from '../evaluation-delivery.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
@@ -161,5 +161,43 @@ describe('postEvaluationRecords', () => {
 
     expect(summary).toMatchObject({ sent: 1 });
     expect(summary.failure).toBeUndefined();
+  });
+});
+
+describe('postRoutedRecords', () => {
+  const routed = () => routeEvaluationRecords([record({ identityKeyRef: KEY_REF })], emptyAccountIndex());
+
+  it('takes the ingest host and the account key from the env it is given, not the process', async () => {
+    const BOUND_KEY = 'bound-api-key';
+    vi.stubEnv('OBTOOL_INGEST_URL', '');
+    vi.stubEnv(KEY_REF, '');
+
+    const summary = await postRoutedRecords(routed(), false, { env: { OBTOOL_INGEST_URL: ingest.url, [KEY_REF]: BOUND_KEY } });
+
+    expect(summary).toMatchObject({ sent: 1, byDestination: { [KEY_REF]: 1 } });
+    expect(ingest.requests.map(req => req.headers.authorization)).toEqual([`Bearer ${BOUND_KEY}`]);
+  });
+
+  it('sends over the fetch it is given', async () => {
+    const sent: string[] = [];
+    const transport: typeof fetch = (input) => {
+      sent.push(new Request(input).url);
+      return Promise.resolve(new Response('{}'));
+    };
+
+    const summary = await postRoutedRecords(routed(), false, { fetch: transport });
+
+    expect(summary.sent).toBe(1);
+    expect(sent).toEqual([`${ingest.url}${KEYED_INGEST_PATH}`]);
+    expect(ingest.requests).toHaveLength(0);
+  });
+
+  it('reports a refused key as a failure sending again cannot fix', async () => {
+    ingest.respondWith(() => ({ status: HttpStatus.Unauthorized, body: '{}' }));
+
+    const summary = await postRoutedRecords(routed(), false);
+
+    expect(summary).toMatchObject({ sent: 0, failureRetryable: false });
+    expect(summary.failure).toMatch(/failed: 401/);
   });
 });

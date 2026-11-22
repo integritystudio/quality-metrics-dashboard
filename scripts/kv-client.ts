@@ -11,8 +11,7 @@ import { join } from 'node:path';
 import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { CONTENT_TYPE_HEADER, ContentType, HttpStatus } from '../src/lib/http-constants.js';
-import { KV_SCHEMA_VERSION } from '../src/api/api-constants.js';
-import type { KVEntry } from '../src/api/aggregates/kv-entry.js';
+import { envelopedValue, type KVEntry } from '../src/api/aggregates/kv-entry.js';
 
 type CloudflareConfig = {
   accountId: string;
@@ -127,12 +126,6 @@ export function getCloudflareClient(): Cloudflare {
   return cfClient ??= new Cloudflare({ fetch: kvSdkFetch });
 }
 
-const ORG_KEY_PREFIX = 'org:';
-
-export function orgPrefixedKey(orgId: string, key: string): string {
-  return `${ORG_KEY_PREFIX}${orgId}:${key}`;
-}
-
 export type EnvelopedKVPair = {
   key: string;
   value: string;
@@ -142,9 +135,7 @@ export type EnvelopedKVPair = {
 export function envelope(e: KVEntry): EnvelopedKVPair {
   return {
     key: e.key,
-    // `e.value` is already JSON (toKVValue), so the version envelope is spliced
-    // around it as text; parsing and re-serializing gave the same bytes.
-    value: `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${e.value}}`,
+    value: envelopedValue(e),
     ...(e.expirationTtl != null ? { expiration_ttl: e.expirationTtl } : {}),
   };
 }

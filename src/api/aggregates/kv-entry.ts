@@ -5,13 +5,29 @@
  * (`services/kv-sync-workflow`) writes these.
  */
 
-import { bigintReplacer } from '../api-constants.js';
+import { bigintReplacer, KV_SCHEMA_VERSION } from '../api-constants.js';
 import { SECONDS } from '../parent/units.js';
 
 const LOG_PREFIX = '[kv-entry]';
 
 /** `hashBasis`, when set, is what change detection hashes instead of `value`. */
 export type KVEntry = { key: string; value: string; expirationTtl?: number; hashBasis?: string };
+
+const ORG_KEY_PREFIX = 'org:';
+
+/** The key an org's copy of a logical key is stored under. */
+export function orgPrefixedKey(orgId: string, key: string): string {
+  return `${ORG_KEY_PREFIX}${orgId}:${key}`;
+}
+
+/**
+ * The stored form of an entry's value, as the dashboard worker's `getKv()` unwraps it.
+ * `value` is already JSON (`toKVValue`), so the version envelope is spliced
+ * around it as text; parsing and re-serializing gave the same bytes.
+ */
+export function envelopedValue(entry: Pick<KVEntry, 'value'>): string {
+  return `{"v":${JSON.stringify(KV_SCHEMA_VERSION)},"data":${entry.value}}`;
+}
 
 /** The literal `worker/index.ts` reads at GET /api/degradation-signals; keep the two in step. */
 export const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';

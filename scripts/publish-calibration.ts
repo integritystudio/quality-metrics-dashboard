@@ -6,10 +6,10 @@
 import { loadCalibrationState } from '../../src/lib/quality/qfe-percentiles.js';
 import { CALIBRATION_STATE_FILE } from '../../src/lib/quality/quality-constants.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
-import { buildCalibrationEntry, META_CALIBRATION_KEY } from '../src/api/aggregates/calibration-entry.js';
+import { buildCalibrationEntry, calibrationEntries, META_CALIBRATION_KEY } from '../src/api/aggregates/calibration-entry.js';
 import type { KVEntry } from '../src/api/aggregates/kv-entry.js';
 import { CALIBRATION_STATE_DIR } from './evaluation-constants.js';
-import { orgPrefixedKey, putKvEntries } from './kv-client.js';
+import { putKvEntries } from './kv-client.js';
 
 const LOG_PREFIX = '[calibration]';
 
@@ -26,11 +26,6 @@ export function loadCalibrationEntry(dir: string = CALIBRATION_STATE_DIR): KVEnt
   }
   console.log(`${LOG_PREFIX} lastCalibrated=${state.lastCalibrated} (${dir})`);
   return buildCalibrationEntry(state);
-}
-
-/** The entry under each key the dashboard reads it from: the home org's, and the bare key it falls back to. */
-export function calibrationEntries(entry: KVEntry, homeOrgId: string): KVEntry[] {
-  return homeOrgId ? [{ ...entry, key: orgPrefixedKey(homeOrgId, entry.key) }, entry] : [entry];
 }
 
 /**
