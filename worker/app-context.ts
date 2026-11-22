@@ -3,7 +3,7 @@
  * guards every route module builds on.
  */
 
-import type { Context, HonoRequest, MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { createFactory } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -11,7 +11,7 @@ import type { z } from 'zod';
 import type { AppSession, DashboardPermission } from '../src/types/auth.js';
 import { PERMISSION } from '../src/lib/org-rbac.js';
 import { HttpStatus } from '../src/lib/http-constants.js';
-import { ERR_AUTH_UNAVAILABLE, ERR_FORBIDDEN, ERR_INTERNAL, ERR_UNAUTHORIZED } from './error-messages.js';
+import { ERR_AUTH_UNAVAILABLE, ERR_FORBIDDEN, ERR_INTERNAL, ERR_INVALID_REQUEST_BODY, ERR_UNAUTHORIZED } from './error-messages.js';
 
 export type Bindings = {
   DASHBOARD: KVNamespace;
@@ -103,11 +103,11 @@ export function requireParam(name: string, pattern: RegExp, error: string): Midd
 }
 
 /**
- * The request's JSON body parsed by `schema`, or null when it is absent, malformed or
- * invalid. Called inside the handler, after its permission and path checks, so a caller
+ * The request's JSON body parsed by `schema`; an absent, malformed or invalid one ends the
+ * request with a 400. Called inside the handler, after its permission and path checks, so a caller
  * without access is refused before its body is read.
  */
-export async function readJsonBody<T extends z.ZodType>(req: HonoRequest, schema: T): Promise<z.output<T> | null> {
-  const result = schema.safeParse(await req.json().catch(() => null));
-  return result.success ? result.data : null;
+export async function readJsonBody<T extends z.ZodType>(c: AppContext, schema: T): Promise<z.output<T>> {
+  const result = schema.safeParse(await c.req.json().catch(() => null));
+  return result.success ? result.data : abort(c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest));
 }

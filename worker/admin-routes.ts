@@ -42,7 +42,6 @@ import {
   ERR_FETCH_ROLES,
   ERR_FETCH_USERS,
   ERR_INVALID_KEY_ID,
-  ERR_INVALID_REQUEST_BODY,
   ERR_INVALID_ROLE_ID,
   ERR_INVALID_USER_ID,
   ERR_KEY_NOT_FOUND_IN_ORG,
@@ -129,8 +128,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     const orgId = c.get('orgId');
     const userId = c.req.param('userId');
 
-    const body = await readJsonBody(c.req, UpdateMemberRoleRequestSchema);
-    if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
+    const body = await readJsonBody(c, UpdateMemberRoleRequestSchema);
     const newRole = body.membershipRole;
 
     // Read the target's current role first — both granting owner and demoting an
@@ -204,8 +202,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
   app.post('/api/admin/users/:userId/roles', requireGlobalAdmin, requireUserId, async (c) => {
     const userId = c.req.param('userId');
 
-    const body = await readJsonBody(c.req, AssignRoleRequestSchema);
-    if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
+    const body = await readJsonBody(c, AssignRoleRequestSchema);
 
     const { error } = await db(c.env).from('user_roles')
       .insert({ user_id: userId, role_id: body.role_id });

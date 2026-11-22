@@ -46,7 +46,6 @@ import {
   ERR_INVALID_METRIC_NAME,
   ERR_INVALID_PAGINATION,
   ERR_INVALID_QUERY,
-  ERR_INVALID_REQUEST_BODY,
   ERR_INVALID_ROLE,
   ERR_INVALID_SESSION_ID,
   ERR_INVALID_TRACE_ID,
@@ -254,8 +253,7 @@ app.get('/api/me', (c) => respondMe(c, c.get('session')));
 // default_organization_id, and echoed back as an updated me payload.
 app.post('/api/org/switch', async (c) => {
   const session = c.get('session');
-  const body = await readJsonBody(c.req, OrgSwitchRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
+  const body = await readJsonBody(c, OrgSwitchRequestSchema);
   const { orgId } = body;
 
   const { isStaff, memberships } = session;
@@ -275,8 +273,7 @@ app.post('/api/logout', (c) => {
 });
 
 app.post('/api/activity', async (c) => {
-  const body = await readJsonBody(c.req, ActivityRequestSchema);
-  if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
+  const body = await readJsonBody(c, ActivityRequestSchema);
   logActivity(c, body.activity_type);
   return c.body(null, HttpStatus.NoContent);
 });
