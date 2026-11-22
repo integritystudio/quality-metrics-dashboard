@@ -24,7 +24,7 @@ export const DEGRADATION_KV_KEY = 'meta/dashboard/degradation-signals';
  * CLI's next run, and the Workflow takes it at its next deploy. Deploy the
  * Workflow after the CLI picks the change up, never before, or both write it.
  */
-export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:', 'dashboard:', 'metric:', 'trend:', `${DEGRADATION_KV_KEY}:`, 'session:', 'trace:', 'evaluations:trace:', 'agent:', 'meta:agents:'];
+export const WORKFLOW_OWNED_FAMILIES: readonly string[] = ['correlations:', 'coverage:', 'pipeline:', 'dashboard:', 'metric:', 'trend:', `${DEGRADATION_KV_KEY}:`, 'session:', 'trace:', 'evaluations:trace:', 'agent:', 'meta:agents:', 'meta:lastSync', 'system:lastSync'];
 
 /** Whether the Workflow is the writer of this logical key (org prefix already stripped). */
 export function isWorkflowOwnedKey(logicalKey: string, families: readonly string[] = WORKFLOW_OWNED_FAMILIES): boolean {

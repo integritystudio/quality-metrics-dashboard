@@ -21,6 +21,7 @@ import { saveCalibrationState } from '../../../src/lib/quality/qfe-percentiles.j
 import type { CalibrationState } from '@parent/lib/quality/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../../src/backends/index.js';
 import { WORKFLOW_OWNED_FAMILIES } from '../../src/api/aggregates/kv-entry.js';
+import { CODE_QUALITY_KV_KEY } from '../../src/lib/worker-contract.js';
 import type { CalibrationResponse } from '../../src/lib/validation/dashboard-schemas.js';
 import { SECONDS } from '../../../src/lib/core/units.js';
 import { defined } from '../../src/__tests__/support/defined.js';
@@ -334,8 +335,9 @@ describe('loadCalibrationEntry', () => {
 
 describe('families handed over to the Workflow', () => {
   const ORG_ID = '11111111-1111-4111-8111-111111111111';
-  const workflowOwned = WORKFLOW_OWNED_FAMILIES.map(prefix => `${prefix}7d`);
-  const KEPT_KEYS = ['meta:lastSync', 'system:lastSync'];
+  /** A key in each family, and the heartbeat keys, which are listed whole. */
+  const workflowOwned = WORKFLOW_OWNED_FAMILIES.map(prefix => (prefix.endsWith(':') ? `${prefix}7d` : prefix));
+  const KEPT_KEYS = [CODE_QUALITY_KV_KEY];
   /** derive publishes it now, so the sync treats it as it does the Workflow's families. */
   const DERIVE_OWNED_KEY = META_CALIBRATION_KEY;
 

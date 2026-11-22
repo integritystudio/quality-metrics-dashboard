@@ -543,7 +543,7 @@ function buildMetaEntries(now: Date, orgIds: ReadonlyArray<string | null>): KVEn
     }
     metaEntries.push({ key: SYSTEM_LAST_SYNC_KEY, value: heartbeat });
   }
-  return metaEntries;
+  return cliOwnedEntries(metaEntries);
 }
 
 /** Nothing changed: refresh the heartbeat keys (legacy, per-org and global system), so they reflect this run. */
