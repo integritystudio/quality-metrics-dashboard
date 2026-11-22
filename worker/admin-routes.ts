@@ -77,17 +77,23 @@ function requireUuid(param: string, error: string): MiddlewareHandler<AppEnv> {
 }
 const requireUserId = requireUuid('userId', ERR_INVALID_USER_ID);
 
-/** The target's membership role in the active org; a failed read is a 500, a non-member a 404. */
-async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId: string): Promise<string | undefined> {
-  const current = await supabase.from('organization_memberships')
-    .select('role')
-    .eq('organization_id', c.get('orgId'))
-    .eq('user_id', userId)
-    .limit(1);
+const MEMBERSHIPS_TABLE = 'organization_memberships';
+
+/** The `.match()` filter for `userId`'s membership row in the active org. */
+function memberOf(c: AppContext, userId: string): { organization_id: string; user_id: string } {
+  return { organization_id: c.get('orgId'), user_id: userId };
+}
+
+/**
+ * Refuses unless the caller may change the target's membership: granting `owner`, or touching
+ * an existing owner, is owner-only. A failed read is a 500, a non-member a 404.
+ */
+async function assertMayChangeMember(c: AppContext, supabase: PostgrestClient, userId: string, newRole?: string): Promise<void> {
+  const current = await supabase.from(MEMBERSHIPS_TABLE).select('role').match(memberOf(c, userId)).limit(1);
   if (current.error) abort(internalError(c, ERR_FETCH_MEMBER));
   const [row] = safeArray<{ role?: string }>(current.data);
   if (!row) abort(c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound));
-  return row.role;
+  if ((newRole === 'owner' || row.role === 'owner') && !canTouchOwnerRole(c.get('session'))) abort(forbidden(c));
 }
 
 // The global user/role routes are staff-only: dashboard.admin is an org-scoped grant and
@@ -112,7 +118,7 @@ function activeOrgKeys(env: SupabaseEnv, userId: string, orgId: string, columns:
 
 export function registerAdminRoutes(app: Hono<AppEnv>): void {
   app.get('/api/admin/members', requireOrgAdmin, async (c) => {
-    const { data, error } = await db(c.env).from('organization_memberships')
+    const { data, error } = await db(c.env).from(MEMBERSHIPS_TABLE)
       .select('user_id,role,users(id,email)')
       .eq('organization_id', c.get('orgId'));
     if (error) return internalError(c, ERR_FETCH_MEMBERS);
@@ -129,21 +135,11 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     const orgId = c.get('orgId');
     const userId = c.req.param('userId');
 
-    const body = await readJsonBody(c, UpdateMemberRoleRequestSchema);
-    const newRole = body.membershipRole;
+    const { membershipRole } = await readJsonBody(c, UpdateMemberRoleRequestSchema);
 
-    // Read the target's current role first — both granting owner and demoting an
-    // existing owner are owner-only operations.
     const supabase = db(c.env);
-    const currentRole = await targetMemberRole(c, supabase, userId);
-    if ((newRole === 'owner' || currentRole === 'owner') && !canTouchOwnerRole(c.get('session'))) {
-      return forbidden(c);
-    }
-
-    const { error } = await supabase.from('organization_memberships')
-      .update({ role: newRole })
-      .eq('organization_id', orgId)
-      .eq('user_id', userId);
+    await assertMayChangeMember(c, supabase, userId, membershipRole);
+    const { error } = await supabase.from(MEMBERSHIPS_TABLE).update({ role: membershipRole }).match(memberOf(c, userId));
     if (error) return internalError(c, ERR_UPDATE_MEMBER_ROLE);
     logAuditEvent(c, 'member.role_change', userId, { organizationId: orgId });
     return c.body(null, HttpStatus.NoContent);
@@ -154,15 +150,8 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
     const userId = c.req.param('userId');
 
     const supabase = db(c.env);
-    const currentRole = await targetMemberRole(c, supabase, userId);
-    if (currentRole === 'owner' && !canTouchOwnerRole(c.get('session'))) {
-      return forbidden(c);
-    }
-
-    const { error } = await supabase.from('organization_memberships')
-      .delete()
-      .eq('organization_id', orgId)
-      .eq('user_id', userId);
+    await assertMayChangeMember(c, supabase, userId);
+    const { error } = await supabase.from(MEMBERSHIPS_TABLE).delete().match(memberOf(c, userId));
     if (error) return internalError(c, ERR_REMOVE_MEMBER);
     logAuditEvent(c, 'member.remove', userId, { organizationId: orgId });
     return c.body(null, HttpStatus.NoContent);
