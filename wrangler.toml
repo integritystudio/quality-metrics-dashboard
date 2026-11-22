@@ -29,10 +29,6 @@ AUTH0_AUDIENCE = "https://api.integritystudio.dev"
 # of this list gates api-gateway's /v1/admin/* routes (its wrangler.toml); change both.
 HOME_ORG_ID = "f4286657-da73-4174-9e49-937f1bb6097f"
 STAFF_USER_IDS = '["f7a787eb-b97f-4636-b68d-2a08c52ae13d","b178a643-7bde-44d9-b533-fd9c827786b3","f5e6d6e0-f618-46bb-9b17-477f0016148e","cc43086f-708f-467c-9483-666b1e294832","ed37810d-0792-47c6-9108-a3a1f62a8eaa","adff602e-1ac6-4f86-9ee3-2e880123f6dd","f78fdf56-6a7a-461b-8cfc-c80d1746d693","ce183805-4b76-454a-b198-7e12dbcd86c9","39557dad-3019-4fd1-a38d-4c99afa8307f"]'
-# The P7 cutover flag: gates org resolution + getKv org-prefixing (P5). Flipping
-# to "true" is the cutover; flipping back is the backout — no redeploy of data.
-# Flipped to "true" 2026-09-18 (P7 cutover). Backout = "false" + deploy of both prod workers.
-ORG_SCOPING_ENABLED = "true"
 
 [[kv_namespaces]]
 binding = "DASHBOARD"
@@ -89,21 +85,11 @@ HOME_ORG_ID = "4fab26df-8675-47b1-9ba3-eae681c1285f"
 # would bypass the membership checks the e2e suite asserts on. Same list as
 # api-gateway's [env.dev.vars] STAFF_USER_IDS; change both together.
 STAFF_USER_IDS = '["71226e17-8969-4699-bb77-836ca2351ecf","c93fc459-e2d5-43fb-84b0-6022d32e313f"]'
-# Dev cut over first, deliberately — that is what this environment is for — and
-# the two production workers followed on 2026-09-18 (P7, `f813e0a`), so both
-# blocks now read "true". Flip them separately: dev may lead production again.
-#
-# Turning this on changes who can see what, not just which keys are read: the
-# worker now derives permissions from the ACTIVE ORG's membership role
-# (DASHBOARD_ROLE_BY_MEMBERSHIP) instead of legacy user_roles, and scopes every
-# KV read to `org:<activeOrgId>:…` with the bare-key fallback restricted to the
-# home org, and refuses (403) any non-staff user with no org membership, whatever
-# their user_roles (AUTH-NO-ORG-LEGACY-SESSION). The e2e users the sender mints are `owner` of their own fresh empty
-# personal org, which under those rules would hand them `dashboard.admin` and
-# 404 every data route — so `createAuth0TestUser` grants them a home-org
-# `viewer` membership and pins `default_organization_id` to it. Flipping this
-# back to "false" without reverting that is harmless; the reverse is not.
-ORG_SCOPING_ENABLED = "true"
+# The worker derives permissions from the ACTIVE ORG's membership role and refuses
+# (403) any non-staff user with no org membership. The e2e users the sender mints
+# are `owner` of their own fresh empty personal org, which would hand them
+# `dashboard.admin` and 404 every data route — so `createAuth0TestUser` grants them
+# a home-org `viewer` membership and pins `default_organization_id` to it.
 
 [env.dev.observability]
 enabled = true
