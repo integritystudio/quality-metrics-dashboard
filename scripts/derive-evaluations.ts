@@ -242,20 +242,20 @@ type SessionTaskData = {
   lastSpan: LocalTraceSpan | null;
 }
 
-export const sessionTasks = new Map<string, SessionTaskData>();
+const sessionTasks = new Map<string, SessionTaskData>();
 
 const TASK_COMPLETION_EVAL_NAME = 'task_completion';
 
 /** The old fallback assumes each task gets a status update and a completion update. */
 const EXPECTED_UPDATES_PER_TASK = 2;
 
-export const STATUS_SCORES: { pending: number; in_progress: number; completed: number } = {
+const STATUS_SCORES: { pending: number; in_progress: number; completed: number } = {
   pending: 0.0,
   in_progress: 0.5,
   completed: 1.0,
 };
 
-export function trackTaskActivity(span: LocalTraceSpan): void {
+function trackTaskActivity(span: LocalTraceSpan): void {
   if (span.name !== BUILTIN_POST_TOOL_SPAN) return;
   const attrs = span.attributes;
   const tool = attrs[GENAI_TOOL_ATTRIBUTES.TOOL_NAME];
@@ -282,13 +282,13 @@ export function trackTaskActivity(span: LocalTraceSpan): void {
   }
 }
 
-export function scoreTask(statuses: Set<string>): number {
+function scoreTask(statuses: Set<string>): number {
   if (statuses.has('completed')) return STATUS_SCORES.completed;
   if (statuses.has('in_progress')) return STATUS_SCORES.in_progress;
   return STATUS_SCORES.pending;
 }
 
-export function deriveTaskCompletionPerSession(): EvalRecord[] {
+function deriveTaskCompletionPerSession(): EvalRecord[] {
   const evals: EvalRecord[] = [];
 
   for (const [sessionId, data] of sessionTasks) {

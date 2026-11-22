@@ -55,7 +55,6 @@ import {
 import {
   addUsage,
   createUsageTotals,
-  judgePricing,
   estimateJudgeRun,
   EST_OUTPUT_TOKENS_PER_EVAL,
   BATCH_PRICE_RATIO,
@@ -66,13 +65,12 @@ import type { BatchLLMProvider } from '../judge-batch-provider.js';
 import { MAX_TEXT_LENGTH } from '../../../src/lib/judge/llm-judge-constants.js';
 import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK } from '../pipeline-stages.js';
 import { JUDGE_API_KEY_ENV, DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
-import { TOKENS_PER_MILLION } from '../../../src/lib/core/constants-models.js';
 import { TIME_MS } from '../../../src/lib/core/units.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-import { judgedKeys, makeToolTurn, makeTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
+import { judgedKeys, makeSizedTurn, makeToolTurn, makeTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
 import { createMockLLM, judgeOver, mockResponse } from './support/mock-judge.js';
 import { useTempDir } from './support/temp-dir.js';
 import { transcriptMessage, writeJsonl } from './support/transcripts.js';
@@ -91,7 +89,7 @@ function makeEvalRecord(overrides: Partial<EvalRecord> = {}): EvalRecord {
     ...legacyEvaluatorTypeField('llm'),
     evaluatorKind: 'llm',
     cohort: 'normal',
-    judgeModel: 'claude-haiku-4-5-20251001',
+    judgeModel: HAIKU_MODEL,
     traceId: 'trace-001',
     sessionId: 'abc12345-session',
     ...overrides,
@@ -285,7 +283,7 @@ describe('toOTelRecord', () => {
       [EVALUATION_ATTRS.PRODUCER]: PRODUCER,
       [EVALUATION_ATTRS.EVALUATOR_KIND]: 'llm',
       [EVALUATION_ATTRS.COHORT]: 'normal',
-      [EVALUATION_ATTRS.JUDGE_MODEL]: 'claude-haiku-4-5-20251001',
+      [EVALUATION_ATTRS.JUDGE_MODEL]: HAIKU_MODEL,
       [SESSION_ATTRIBUTES.ID]: 'abc12345-session',
     });
   });
@@ -619,18 +617,18 @@ describe('summarizeJudgeRun', () => {
   });
 
   it('carries the usage totals, both cost figures and the key source name on the line', () => {
-    const usage: JudgeTokenUsage = { inputTokens: 1_000_000, outputTokens: 100_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
+    const usage: JudgeTokenUsage = { inputTokens: 5_000_000, outputTokens: 1_000_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
     const estimatedUsd = 1.8;
     const succeeded = 5;
 
+    // Judge list rates: 5M input at $0.10/M plus 1M output at $0.50/M.
+    const actualUsd = 1;
+
     const summary = summarize({ succeeded }, { usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
 
-    const pricing = judgePricing();
-    const actualUsd = (usage.inputTokens / TOKENS_PER_MILLION) * pricing.input + (usage.outputTokens / TOKENS_PER_MILLION) * pricing.output;
-    expect(summary).toMatchObject({ usage, estimatedUsd, keySource: JUDGE_API_KEY_ENV });
-    expect(summary.actualUsd).toBeCloseTo(actualUsd);
+    expect(summary).toMatchObject({ usage, estimatedUsd, actualUsd, keySource: JUDGE_API_KEY_ENV });
     expect(summary.line).toContain(
-      `usage: in=1000000 out=100000 cache_read=0 cache_creation=0 est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=LLM_JUDGE_ANTHROPIC_KEY`,
+      `usage: in=5000000 out=1000000 cache_read=0 cache_creation=0 est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=LLM_JUDGE_ANTHROPIC_KEY`,
     );
   });
 
@@ -678,24 +676,42 @@ describe('readRunState / writeRunState', () => {
 });
 
 describe('estimateJudgeRun', () => {
+  /** The default two digits would pass a fraction-of-a-cent estimate of $0. */
+  const COST_CLOSE_TO_DIGITS = 10;
+  // SIZED_TURN_CHARS: 1200 chars of text at 4 chars per token.
+  const SIZED_TURN_TOKENS = 300;
+  // A 400-char tool result adds 100 tokens to the same turn.
+  const SIZED_TOOL_RESULT_CHARS = 400;
+  const SIZED_TOOL_TURN_TOKENS = 400;
+  // Four, not five: faithfulness and hallucination come from one QAG sweep, so
+  // the second score costs nothing to price.
+  const EVALS_PER_PLAIN_TURN = 2;
+  const EVALS_PER_TOOL_TURN = 4;
+
   it('counts two evals for a turn without tools and four for one with', () => {
-    // Four, not five: faithfulness and hallucination come from one QAG sweep, so
-    // the second score costs nothing to price.
-    const EVALS_PER_PLAIN_TURN = 2;
-    const EVALS_PER_TOOL_TURN = 4;
     const est = estimateJudgeRun([makeTurn(), makeToolTurn()]);
 
     expect(est.evals).toBe(EVALS_PER_PLAIN_TURN + EVALS_PER_TOOL_TURN);
     expect(est.outputTokens).toBe(est.evals * EST_OUTPUT_TOKENS_PER_EVAL);
-    expect(est.inputTokens).toBeGreaterThan(0);
   });
 
-  it('prices the estimate at the judge model list rates, with no discount by default', () => {
-    const est = estimateJudgeRun([makeTurn()]);
-    const pricing = judgePricing();
+  it('resends the turn content on every per-criterion call', () => {
+    const toolTurn = makeSizedTurn({ toolResults: ['t'.repeat(SIZED_TOOL_RESULT_CHARS)] });
 
-    expect(est.costUsd).toBeCloseTo((est.inputTokens / TOKENS_PER_MILLION) * pricing.input + (est.outputTokens / TOKENS_PER_MILLION) * pricing.output);
-    expect(estimateJudgeRun([makeTurn()], false)).toEqual(est);
+    const est = estimateJudgeRun([makeSizedTurn(), toolTurn]);
+
+    expect(est.inputTokens).toBe(SIZED_TURN_TOKENS * EVALS_PER_PLAIN_TURN + SIZED_TOOL_TURN_TOKENS * EVALS_PER_TOOL_TURN);
+  });
+
+  it('prices the estimate at the judge model list rates', () => {
+    // 600 input tokens at $0.10/M plus 400 output tokens at $0.50/M; not exact in binary floating point.
+    const expectedUsd = 0.00026;
+
+    expect(estimateJudgeRun([makeSizedTurn()]).costUsd).toBeCloseTo(expectedUsd, COST_CLOSE_TO_DIGITS);
+  });
+
+  it('applies no batch discount by default', () => {
+    expect(estimateJudgeRun([makeSizedTurn()])).toEqual(estimateJudgeRun([makeSizedTurn()], false));
   });
 
   it('is free for no turns', () => {
@@ -703,11 +719,11 @@ describe('estimateJudgeRun', () => {
   });
 
   it('applies the batch discount to the cost and nothing else', () => {
-    const { costUsd: listCost, ...listCounts } = estimateJudgeRun([makeTurn()], false);
-    const { costUsd: batchCost, ...batchCounts } = estimateJudgeRun([makeTurn()], true);
+    const { costUsd: listCost, ...listCounts } = estimateJudgeRun([makeSizedTurn()], false);
+    const { costUsd: batchCost, ...batchCounts } = estimateJudgeRun([makeSizedTurn()], true);
 
     expect(batchCounts).toEqual(listCounts);
-    expect(batchCost).toBeCloseTo(listCost * BATCH_PRICE_RATIO);
+    expect(batchCost).toBe(listCost * BATCH_PRICE_RATIO);
   });
 });
 
@@ -783,45 +799,45 @@ describe('anthropicProviderFor', () => {
 
 // evaluateTurn concurrent mode + evaluateTurnsBatched (--batch wiring)
 
-/** Long enough for gEval's dynamic import and promise chain to reach the provider. */
-const SETTLE_MS = 20;
-const settle = () => new Promise(resolve => setTimeout(resolve, SETTLE_MS));
-
-/** A provider that answers nothing until asked, so in-flight calls can be counted. */
+/**
+ * A provider that answers nothing until released, so in-flight calls can be
+ * counted; once released it answers every waiting and later call.
+ */
 function createDeferredLLM() {
   const waiting: Array<{ prompt: string; resolve: (r: { text: string }) => void }> = [];
+  let released = false;
   const llm: LLMProvider = {
     generate(prompt: string) {
+      if (released) return Promise.resolve(mockResponse(prompt));
       return new Promise(resolve => { waiting.push({ prompt, resolve }); });
     },
   };
-  const answerAll = () => {
+  const release = () => {
+    released = true;
     for (const { prompt, resolve } of waiting.splice(0)) resolve(mockResponse(prompt));
   };
-  return { llm, waiting, answerAll };
+  return { llm, waiting, release };
 }
 
 describe('evaluateTurn in concurrent mode', () => {
-  it('issues every criterion before any result comes back, unlike the sequential default', async () => {
-    const sequential = createDeferredLLM();
-    const sequentialRun = evaluateTurn(judgeOver(sequential.llm), makeTurn(), new Set());
-    await settle();
-    expect(sequential.waiting).toHaveLength(1);
+  it('issues one criterion at a time by default', async () => {
+    const deferred = createDeferredLLM();
+    const run = evaluateTurn(judgeOver(deferred.llm), makeTurn(), new Set());
 
-    const concurrent = createDeferredLLM();
-    const concurrentRun = evaluateTurn(judgeOver(concurrent.llm), makeTurn(), new Set(), { concurrent: true });
-    await settle();
-    expect(concurrent.waiting).toHaveLength(PLAIN_CRITERIA.length); // both at their first call
+    await vi.waitFor(() => expect(deferred.waiting).toHaveLength(1));
+    deferred.release();
 
-    // Each answered round lets the next call out; both runs are done once a round leaves nothing waiting.
-    do {
-      sequential.answerAll();
-      concurrent.answerAll();
-      // eslint-disable-next-line no-await-in-loop -- one round at a time, see above
-      await settle();
-    } while (sequential.waiting.length + concurrent.waiting.length > 0);
-    expect((await concurrentRun).map(e => e.evaluationName).toSorted()).toEqual(PLAIN_CRITERIA.toSorted());
-    expect((await sequentialRun).map(e => e.evaluationName)).toEqual(PLAIN_CRITERIA);
+    expect((await run).map(e => e.evaluationName)).toEqual(PLAIN_CRITERIA);
+  });
+
+  it('issues every criterion before any result comes back', async () => {
+    const deferred = createDeferredLLM();
+    const run = evaluateTurn(judgeOver(deferred.llm), makeTurn(), new Set(), { concurrent: true });
+
+    await vi.waitFor(() => expect(deferred.waiting).toHaveLength(PLAIN_CRITERIA.length));
+    deferred.release();
+
+    expect((await run).map(e => e.evaluationName).toSorted()).toEqual(PLAIN_CRITERIA.toSorted());
   });
 });
 
@@ -847,14 +863,16 @@ describe('evaluateTurnsBatched', () => {
   // A run failure, not the wall clock: the wall clock settles what it can and
   // resolves flush() (see judge-batch-provider.test.ts); only an error that
   // escapes a batch rejects it and is recorded as the provider's failure.
-  it('throws when flush() fails, and when the provider records a failure, instead of returning partial records', async () => {
-    const runFailure = new Error('a batch response the provider could not read');
+  const runFailure = new Error('a batch response the provider could not read');
+  const FAILING_PROVIDERS: Array<[string, Partial<BatchLLMProvider>]> = [
+    ['flush() rejects', { flush: vi.fn(() => Promise.reject(runFailure)) }],
+    ['the provider records a failure', { failure: runFailure }],
+  ];
 
-    const failingFlush = batchProvider({ flush: vi.fn(() => Promise.reject(runFailure)) });
-    await expect(evaluateTurnsBatched(failingFlush, judgeOver(failingFlush), [makeTurn()], new Set())).rejects.toBe(runFailure);
+  it.each(FAILING_PROVIDERS)('throws instead of returning partial records when %s', async (_case, overrides) => {
+    const provider = batchProvider(overrides);
 
-    const recorded = batchProvider({ failure: runFailure });
-    await expect(evaluateTurnsBatched(recorded, judgeOver(recorded), [makeTurn()], new Set())).rejects.toBe(runFailure);
+    await expect(evaluateTurnsBatched(provider, judgeOver(provider), [makeTurn()], new Set())).rejects.toBe(runFailure);
   });
 });
 

@@ -74,6 +74,11 @@ describe('turnSkip', () => {
     const { identityKeyRef: _unstamped, ...t } = turn('1');
 
     expect(selectTurns([t], new Set(), { ...opts, env: {} }).heldForKey).toEqual({ [WEBHOOK_SECRET_ENV]: 1 });
+  });
+
+  it('selects an unstamped turn when the webhook secret is present', () => {
+    const { identityKeyRef: _unstamped, ...t } = turn('1');
+
     expect(turnSkip(t, new Set(), opts)).toBeUndefined();
   });
 

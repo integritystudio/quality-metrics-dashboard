@@ -5,8 +5,8 @@
  * Judge criteria and dedup are judge-evaluations.test.ts's.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { trackTaskActivity, deriveTaskCompletionPerSession, sessionTasks } from '../derive-evaluations.js';
+import { describe, it, expect } from 'vitest';
+import { deriveAll } from '../derive-evaluations.js';
 import { evaluateTurn } from '../judge-evaluations.js';
 import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { turnKeyOf } from '../judge-dedup.js';
@@ -27,18 +27,16 @@ function overTheWire(record: EvalRecord): WireRecord {
 }
 
 function derivedTaskCompletion(): EvalRecord {
-  trackTaskActivity(taskSpan('TaskCreate', { status: 'pending', id: 'task-1' }));
-  trackTaskActivity(taskSpan('TaskUpdate', { status: 'completed', id: 'task-1' }));
-  return defined(deriveTaskCompletionPerSession()[0]);
+  const spans = [
+    taskSpan('TaskCreate', { status: 'pending', id: 'task-1' }),
+    taskSpan('TaskUpdate', { status: 'completed', id: 'task-1' }),
+  ];
+  return defined(deriveAll({ spans, accounts: new Map() }).find(r => r.evaluationName === 'task_completion'));
 }
 
 function isUnitScore(value: unknown): boolean {
   return typeof value === 'number' && value >= 0 && value <= 1;
 }
-
-beforeEach(() => {
-  sessionTasks.clear();
-});
 
 describe('pipeline contract: derive → OTel', () => {
   it('sends a completed task as a rule-scored evaluation whose timestamp keys judge dedup', () => {

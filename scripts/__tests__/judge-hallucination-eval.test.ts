@@ -38,8 +38,11 @@ describe('parseArgs', () => {
     expect(parseArgs([YES_FLAG])).toEqual({ yes: true, referencePath: PRIOR_REFERENCE_PATH });
   });
 
-  it('takes an explicit reference path and refuses a missing one', () => {
+  it('takes an explicit reference path', () => {
     expect(parseArgs([YES_FLAG, REFERENCE_FLAG, 'x.json']).referencePath).toBe('x.json');
+  });
+
+  it('refuses a reference flag with no path after it', () => {
     expect(parseArgs([YES_FLAG, REFERENCE_FLAG]).error).toMatch('needs a value');
   });
 });
@@ -80,26 +83,60 @@ describe('countComplements', () => {
 });
 
 describe('closestConfiguration', () => {
-  it('picks the lowest MAE per criterion and ties when equal or only one configuration is paired', () => {
+  it('picks the configuration with the lowest MAE for a criterion', () => {
     const verdict = closestConfiguration({
-      perCriterion: summary({ [HALLUCINATION_EVAL_NAME]: 1.2, [RELEVANCE_EVAL_NAME]: 0.5, only: 0.1 }),
-      consolidated: summary({ [HALLUCINATION_EVAL_NAME]: 0.9, [RELEVANCE_EVAL_NAME]: 0.5, only: null }),
-      consolidatedDirect: summary({ [HALLUCINATION_EVAL_NAME]: 0.4, [RELEVANCE_EVAL_NAME]: 0.5 }),
+      perCriterion: summary({ [HALLUCINATION_EVAL_NAME]: 1.2 }),
+      consolidated: summary({ [HALLUCINATION_EVAL_NAME]: 0.4 }),
+      consolidatedDirect: summary({ [HALLUCINATION_EVAL_NAME]: 0.9 }),
     });
-    expect(verdict).toEqual({ [HALLUCINATION_EVAL_NAME]: 'consolidatedDirect', [RELEVANCE_EVAL_NAME]: 'tie', only: 'tie' });
+
+    expect(verdict[HALLUCINATION_EVAL_NAME]).toBe('consolidated');
+  });
+
+  it('calls a tie when the configurations share the lowest MAE', () => {
+    const verdict = closestConfiguration({
+      perCriterion: summary({ [RELEVANCE_EVAL_NAME]: 0.5 }),
+      consolidated: summary({ [RELEVANCE_EVAL_NAME]: 0.5 }),
+      consolidatedDirect: summary({ [RELEVANCE_EVAL_NAME]: 0.5 }),
+    });
+
+    expect(verdict[RELEVANCE_EVAL_NAME]).toBe('tie');
+  });
+
+  it('calls a tie when only one configuration is paired with the reference', () => {
+    const verdict = closestConfiguration({
+      perCriterion: summary({ only: 0.1 }),
+      consolidated: summary({ only: null }),
+      consolidatedDirect: summary({}),
+    });
+
+    expect(verdict.only).toBe('tie');
   });
 });
 
 describe('estimateRunSpend', () => {
-  it('prices one reference call per tool turn and none for a turn without tools', () => {
-    const noTools = estimateRunSpend([makeSizedTurn()], TEST_PRICING, TEST_PRICING);
-    expect(noTools.referenceCalls).toBe(0);
-    expect(noTools.referenceUsd).toBe(0);
+  const SHORT_TOOL_RESULT_CHARS = 400;
+  const toolTurn = () => makeSizedTurn({ toolResults: ['r'.repeat(SHORT_TOOL_RESULT_CHARS)] });
 
-    const SHORT_TOOL_RESULT_CHARS = 400;
-    const withTools = estimateRunSpend([makeSizedTurn(), makeSizedTurn({ toolResults: ['r'.repeat(SHORT_TOOL_RESULT_CHARS)] })], TEST_PRICING, TEST_PRICING);
-    expect(withTools.referenceCalls).toBe(1);
-    expect(withTools.referenceUsd).toBeGreaterThan(0);
-    expect(withTools.totalUsd).toBeCloseTo(withTools.haikuUsd + withTools.referenceUsd);
+  it('prices no reference call for a turn without tools', () => {
+    const spend = estimateRunSpend([makeSizedTurn()], TEST_PRICING, TEST_PRICING);
+
+    expect(spend.referenceCalls).toBe(0);
+    expect(spend.referenceUsd).toBe(0);
+  });
+
+  it('prices one reference call per tool turn', () => {
+    const one = estimateRunSpend([makeSizedTurn(), toolTurn()], TEST_PRICING, TEST_PRICING);
+    const two = estimateRunSpend([makeSizedTurn(), toolTurn(), toolTurn()], TEST_PRICING, TEST_PRICING);
+
+    expect(one.referenceCalls).toBe(1);
+    expect(two.referenceCalls).toBe(2);
+    expect(two.referenceUsd).toBe(2 * one.referenceUsd);
+  });
+
+  it('totals the Haiku and reference spend', () => {
+    const spend = estimateRunSpend([toolTurn()], TEST_PRICING, TEST_PRICING);
+
+    expect(spend.totalUsd).toBe(spend.haikuUsd + spend.referenceUsd);
   });
 });

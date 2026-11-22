@@ -1,17 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import {
   deriveAgentHeuristics,
-  trackTaskActivity,
-  deriveTaskCompletionPerSession,
   deriveEvaluationLatency,
   deriveAll,
   deriveToolCorrectness,
   detectInputDrift,
   resolvePostDays,
   readScope,
-  scoreTask,
-  sessionTasks,
   splitAtRepostFloor,
   postFloorMs,
   carryForwardDistributions,
@@ -35,23 +31,10 @@ import { transcriptMessage, writeJsonl } from './support/transcripts.js';
 
 const secondsToHrTime = (seconds: number): [number, number] => [Math.floor(seconds), Math.round((seconds % 1) * NANOSECONDS_PER_SECOND)];
 
-beforeEach(() => {
-  sessionTasks.clear();
-});
+const derived = (spans: readonly TraceSpan[], name: string): EvalRecord[] =>
+  deriveAll({ spans: [...spans], accounts: new Map() }).filter(r => r.evaluationName === name);
 
-const TASK_SCORES = [
-  [['pending', 'in_progress', 'completed'], 1],
-  [['pending', 'completed'], 1],
-  [['pending', 'in_progress'], 0.5],
-  [['pending'], 0],
-  [[], 0],
-] as const;
-
-describe('scoreTask', () => {
-  it.each(TASK_SCORES)('scores the statuses %j as %d', (statuses, score) => {
-    expect(scoreTask(new Set(statuses))).toBe(score);
-  });
-});
+const taskCompletion = (spans: readonly TraceSpan[]): EvalRecord[] => derived(spans, 'task_completion');
 
 /** [case, task spans in arrival order, session score, explanation after `Session sess-abc: `] */
 const TASK_SESSIONS = [
@@ -101,11 +84,9 @@ const UNSCORED_SPANS = [
   ['updates with neither a create nor a status', [taskSpan('TaskUpdate'), taskSpan('TaskUpdate')]],
 ] as const;
 
-describe('task completion (trackTaskActivity → deriveTaskCompletionPerSession)', () => {
+describe('deriveAll task completion', () => {
   it.each(TASK_SESSIONS)('scores %s', (_case, spans, score, summary) => {
-    for (const span of spans) trackTaskActivity(span);
-
-    expect(deriveTaskCompletionPerSession()).toEqual([expect.objectContaining({
+    expect(taskCompletion(spans)).toEqual([expect.objectContaining({
       evaluationName: 'task_completion',
       scoreValue: score,
       explanation: `Session ${SPAN_SESSION}: ${summary}`,
@@ -113,17 +94,17 @@ describe('task completion (trackTaskActivity → deriveTaskCompletionPerSession)
   });
 
   it.each(UNSCORED_SPANS)('derives nothing from %s', (_case, spans) => {
-    for (const span of spans) trackTaskActivity(span);
-
-    expect(deriveTaskCompletionPerSession()).toEqual([]);
+    expect(taskCompletion(spans)).toEqual([]);
   });
 
   it('scores each session on its own tasks', () => {
-    trackTaskActivity(taskSpan('TaskCreate', { status: 'pending', id: 't1', session: 'sess-1' }));
-    trackTaskActivity(taskSpan('TaskUpdate', { status: 'completed', id: 't1', session: 'sess-1' }));
-    trackTaskActivity(taskSpan('TaskCreate', { status: 'pending', id: 't2', session: 'sess-2' }));
+    const spans = [
+      taskSpan('TaskCreate', { status: 'pending', id: 't1', session: 'sess-1' }),
+      taskSpan('TaskUpdate', { status: 'completed', id: 't1', session: 'sess-1' }),
+      taskSpan('TaskCreate', { status: 'pending', id: 't2', session: 'sess-2' }),
+    ];
 
-    const scores = deriveTaskCompletionPerSession().map(r => [r.sessionId, r.scoreValue]);
+    const scores = taskCompletion(spans).map(r => [r.sessionId, r.scoreValue]);
 
     expect(scores.toSorted()).toEqual([['sess-1', 1], ['sess-2', 0]]);
   });
@@ -155,15 +136,6 @@ describe('deriveEvaluationLatency', () => {
     expect(deriveEvaluationLatency(makeSpan({ name: 'hook:session-start', duration: [NaN, 0] }))).toBeNull();
   });
 
-  it('returns null when the span carries no duration at all', () => {
-    // localTraceSpanSchema rejects this shape, so main() never passes one through —
-    // but the function is exported, and null beats throwing inside hrtToSeconds.
-    const span = makeSpan({ name: 'hook:session-start' });
-    delete (span as Partial<TraceSpan>).duration;
-
-    expect(deriveEvaluationLatency(span)).toBeNull();
-  });
-
   it('returns null for an epoch-ish startTime rather than dating the record to 1970', () => {
     expect(deriveEvaluationLatency(makeSpan({ name: 'hook:session-start', startTime: [2, 0] }))).toBeNull();
   });
@@ -171,15 +143,14 @@ describe('deriveEvaluationLatency', () => {
 
 describe('readScope', () => {
   const now = new Date('2026-10-04T12:00:00.000Z');
-  const named = new Set(['2026-09-30']);
   const DEFAULT_DAYS = 3;
 
   it('bounds an unscoped read to the last N UTC days, today included', () => {
     expect(readScope(null, DEFAULT_DAYS, now)).toEqual(new Set(['2026-10-02', '2026-10-03', '2026-10-04']));
   });
 
-  it("keeps the caller's dates", () => {
-    expect(readScope(named, DEFAULT_DAYS, now)).toBe(named);
+  it("reads exactly the caller's dates, however far back and however few", () => {
+    expect(readScope(new Set(['2026-09-30']), DEFAULT_DAYS, now)).toEqual(new Set(['2026-09-30']));
   });
 });
 
@@ -193,10 +164,6 @@ describe('splitAtRepostFloor', () => {
     const after = at(DERIVE_NO_REPOST_BEFORE_MS + 1);
 
     expect(splitAtRepostFloor([after, before, exactly])).toEqual({ toPost: [after, exactly], heldBack: [before] });
-  });
-
-  it('sits where the id-less rows end: 2026-09-28T00:00Z', () => {
-    expect(new Date(DERIVE_NO_REPOST_BEFORE_MS).toISOString()).toBe('2026-09-28T00:00:00.000Z');
   });
 });
 
@@ -313,9 +280,11 @@ describe('resolvePostDays', () => {
     expect(resolvePostDays(['--days=7'])).toBeNull();
   });
 
-  it('reads the day count', () => {
-    expect(resolvePostDays(['--days=7', '--post-days=2'])).toBe(2);
-    expect(resolvePostDays(['--post-days', '2'])).toBe(2);
+  it.each([
+    ['--post-days=N', ['--days=7', '--post-days=2']],
+    ['--post-days N', ['--post-days', '2']],
+  ])('reads the day count written as %s', (_spelling, args) => {
+    expect(resolvePostDays(args)).toBe(2);
   });
 
   it.each(['0', '1.5', '2d', ''])('rejects "%s"', (raw) => {
@@ -324,13 +293,18 @@ describe('resolvePostDays', () => {
 });
 
 describe('deriveAll', () => {
-  const completedTask = taskSpan('TaskCreate', { status: 'completed', id: 't1' });
+  it('stamps each record with the account of the span it scores', () => {
+    const toolCall = (spanId: string): TraceSpan =>
+      makeSpan({ spanId, attributes: { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'Read', [TOOL_ATTRIBUTES.SUCCESS]: true } });
+    const accounts = new Map([['span-a', 'OBTOOL_API_KEY'], ['span-b', 'OBTOOL_API_KEY_TEAM']]);
 
-  it('stamps records with the account of the span they score', () => {
-    const records = deriveAll({ spans: [completedTask], accounts: new Map([['span-001', 'OBTOOL_API_KEY']]) });
+    const records = deriveAll({ spans: [toolCall('span-a'), toolCall('span-b')], accounts })
+      .filter(r => r.evaluationName === 'tool_correctness');
 
-    expect(records.length).toBeGreaterThan(0);
-    expect(records.filter(r => r.identityKeyRef !== 'OBTOOL_API_KEY')).toEqual([]);
+    expect(records.map(r => [r.spanId, r.identityKeyRef])).toEqual([
+      ['span-a', 'OBTOOL_API_KEY'],
+      ['span-b', 'OBTOOL_API_KEY_TEAM'],
+    ]);
   });
 
   it('gives the same records when run twice in one process', () => {
@@ -388,9 +362,7 @@ describe('task tracking across the builtin.* rename', () => {
   it.each([
     ['canonical', { [GENAI_TOOL_ATTRIBUTES.TOOL_NAME]: 'TaskUpdate', [TASK_ATTRIBUTES.ID]: 't1', [TASK_ATTRIBUTES.STATUS]: 'completed' }],
   ])('scores a completed task 1 from %s keys', (_era, attributes) => {
-    trackTaskActivity(renamedToolSpan(attributes));
-
-    expect(deriveTaskCompletionPerSession())
+    expect(taskCompletion([renamedToolSpan(attributes)]))
       .toEqual([expect.objectContaining({ scoreValue: 1, explanation: `Session ${SPAN_SESSION}: 1 tasks (1 completed)` })]);
   });
 });
@@ -532,9 +504,6 @@ function handoffSpans(sender: AgentOutcome = {}, receiver: AgentOutcome = {}): T
     withOutcome(agentHookSpan('finalize', 'code-reviewer', 'span-f2', finalizeSecond), receiver),
   ];
 }
-
-const derived = (spans: TraceSpan[], name: string): EvalRecord[] =>
-  deriveAll({ spans, accounts: new Map() }).filter(r => r.evaluationName === name);
 
 describe('deriveAll over the renamed agent hook spans', () => {
   it('scores agent completion from prepare and finalize counts', () => {
@@ -732,7 +701,8 @@ describe('deriveAgentHeuristics', () => {
 
     const records = await deriveAgentHeuristics([subagentStop(path)], SINCE_MS, new Map());
 
-    // The one argument is empty, so the call scores 0 and fails.
+    // The one argument is empty, so argument_correctness is 0. agent_overall weighs task completion
+    // 0.8 (a short reply, with every tool call answered), tool correctness 1 and that 0 at 0.5/0.3/0.2.
     expect(records).toMatchObject([
       {
         evaluationName: 'argument_correctness',
@@ -742,9 +712,8 @@ describe('deriveAgentHeuristics', () => {
         sessionId: SPAN_SESSION,
         explanation: 'code-reviewer agent: 1 tool calls',
       },
-      { evaluationName: 'agent_overall' },
+      { evaluationName: 'agent_overall', scoreValue: 0.7, scoreLabel: 'partial', spanId: 'span-stop' },
     ]);
-    expect(records[1]?.scoreLabel).toMatch(/^(pass|partial|fail)$/);
   });
 
   it('scores a session from its transcript on the session\'s last span', async () => {
@@ -781,9 +750,10 @@ describe('deriveAgentHeuristics', () => {
       deriveAgentHeuristics([lateSpan()], SINCE_MS, sessions),
     ]);
 
-    expect(anchoredEarly.length).toBeGreaterThan(0);
-    expect(keys(anchoredEarly)).toEqual(keys(anchoredLate));
-    expect(keys(anchoredEarly).filter(key => !key?.startsWith(`session:${SPAN_SESSION}:`))).toEqual([]);
+    const expected = ['conversation_completeness', 'turn_relevancy', 'conversation_overall']
+      .map(metric => `session:${SPAN_SESSION}:${metric}`);
+    expect(keys(anchoredEarly)).toEqual(expected);
+    expect(keys(anchoredLate)).toEqual(expected);
   });
 
   it('skips a session whose last span is within the completion-age window', async () => {

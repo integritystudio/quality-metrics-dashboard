@@ -6,7 +6,6 @@ import {
   buildConsolidatedPrompt,
   buildStepsPrompt,
   parseConsolidatedResponse,
-  validateVerdict,
   toFivePointScale,
   toNormalizedScore,
   evaluateTurnConsolidated,
@@ -200,10 +199,10 @@ describe('buildConsolidatedPrompt', () => {
     expect(prompt).toContain(`${G_EVAL_MIN_SCORE}-${G_EVAL_MAX_SCORE}`);
   });
 
-  it('says which parts each criterion applies to', () => {
+  it('says which parts each criterion applies to, under that criterion', () => {
     const prompt = buildConsolidatedPrompt(makeTurn(), [], prepared);
-    expect(prompt).toContain('Applies to: Input, Output, Context');
-    expect(prompt).toContain('Applies to: Output');
+    expect(prompt).toContain(`Criterion: ${RELEVANCE_EVAL_NAME}\nApplies to: Input, Output, Context\n`);
+    expect(prompt).toContain(`Criterion: ${COHERENCE_EVAL_NAME}\nApplies to: Output\n`);
   });
 
   it('omits the context block when there are no tool results and includes it otherwise', () => {
@@ -217,8 +216,10 @@ describe('buildConsolidatedPrompt', () => {
     const prompt = buildConsolidatedPrompt(makeTurn(), [], prepared);
     expect(prompt).toContain(`keys are exactly: ${RELEVANCE_EVAL_NAME}, ${COHERENCE_EVAL_NAME}.`);
   });
+});
 
-  it('generates steps with the per-criterion path\'s steps prompt', () => {
+describe('buildStepsPrompt', () => {
+  it('asks for evaluation steps for the given criteria, as the per-criterion path does', () => {
     const prompt = buildStepsPrompt(RELEVANCE_CRITERIA.criteria);
     expect(prompt).toContain(`Given the criteria: ${RELEVANCE_CRITERIA.criteria}`);
     expect(prompt).toContain('Generate detailed evaluation steps');
@@ -253,8 +254,13 @@ describe('parseConsolidatedResponse', () => {
     ['zero', 0],
     ['a string', '4'],
     ['missing', undefined],
-  ])('rejects %s as a score', (_label, score) => {
-    expect(() => validateVerdict(RELEVANCE_EVAL_NAME, { [REASONING_KEY]: 'r', [SCORE_KEY]: score })).toThrow();
+  ])('records %s as a score as an invalid-score failure', (_label, score) => {
+    const text = JSON.stringify({ [RELEVANCE_EVAL_NAME]: { [REASONING_KEY]: 'r', [SCORE_KEY]: score } });
+
+    const parsed = parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME]);
+
+    expect(parsed.verdicts.has(RELEVANCE_EVAL_NAME)).toBe(false);
+    expect(parsed.failures.get(RELEVANCE_EVAL_NAME)?.message).toMatch(/Invalid normalized score/);
   });
 
   it('records a missing criterion as a failure', () => {
@@ -262,9 +268,12 @@ describe('parseConsolidatedResponse', () => {
     expect(parsed.failures.get(RELEVANCE_EVAL_NAME)?.message).toMatch(/Could not parse verdict/);
   });
 
-  it('throws when the document is not a JSON object', () => {
-    expect(() => parseConsolidatedResponse('[1,2]', [RELEVANCE_EVAL_NAME])).toThrow(/expected a JSON object/);
-    expect(() => parseConsolidatedResponse('not json', [RELEVANCE_EVAL_NAME])).toThrow();
+  it('throws when the document is a JSON array rather than an object', () => {
+    expect(() => parseConsolidatedResponse('[1,2]', [RELEVANCE_EVAL_NAME])).toThrow(/expected a JSON object, got array/);
+  });
+
+  it('throws a syntax error when the document is not JSON', () => {
+    expect(() => parseConsolidatedResponse('not json', [RELEVANCE_EVAL_NAME])).toThrow(SyntaxError);
   });
 });
 
@@ -285,18 +294,30 @@ describe('evaluateTurnConsolidated', () => {
     resetFailureTracking();
   });
 
-  it('produces the per-criterion path\'s records from one structured call', async () => {
+  it('judges every selected criterion in one structured call carrying the tool result once', async () => {
     const calls: RecordedCall[] = [];
-    const turn = toolTurn();
 
-    const records = await evaluateTurnConsolidated(createFakeProvider({}, calls), turn, new Set());
+    await evaluateTurnConsolidated(createFakeProvider({}, calls), toolTurn(), new Set());
 
     expect(schemaCallKeys(calls)).toEqual([TOOL_TURN_CRITERIA]);
     expect(occurrences(defined(calls.find(c => c.options?.schema)).prompt, TOOL_RESULT)).toBe(1);
-    // Its own producer, distinct from the per-criterion path's: the two measure
-    // faithfulness and hallucination with different instruments, and this is the
-    // only field that says which one a stored record came from.
-    expect(CONSOLIDATED_PRODUCER).not.toBe(PRODUCER);
+  });
+
+  // Its own producer, distinct from the per-criterion path's: the two measure
+  // faithfulness and hallucination with different instruments, and this is the
+  // only field that says which one a stored record came from.
+  it('stamps its records with a producer the per-criterion path does not use', async () => {
+    const records = await evaluateTurnConsolidated(createFakeProvider({}), makeTurn(), new Set());
+
+    expect(records.map(r => r.evaluator)).toEqual(PLAIN_CRITERIA.map(() => CONSOLIDATED_PRODUCER));
+    expect(records.some(r => r.evaluator === PRODUCER)).toBe(false);
+  });
+
+  it('produces the per-criterion path\'s record fields for each criterion', async () => {
+    const turn = toolTurn();
+
+    const records = await evaluateTurnConsolidated(createFakeProvider({}), turn, new Set());
+
     expect(records).toMatchObject(TOOL_TURN_CRITERIA.map(evaluationName => ({
       evaluationName,
       evaluator: CONSOLIDATED_PRODUCER,
@@ -358,13 +379,20 @@ describe('evaluateTurnConsolidated', () => {
     expect(byName[HALLUCINATION_EVAL_NAME]).toMatchObject({ scoreValue: 0, explanation: `${HALLUCINATION_EVAL_NAME} reasoning` });
   });
 
-  it('skips criteria already covered by existingKeys and emits nothing when all are', async () => {
+  it('skips criteria already covered by existingKeys', async () => {
     const turn = makeTurn();
-    const partial = await evaluateTurnConsolidated(createFakeProvider(), turn, judgedKeys(turn, [RELEVANCE_EVAL_NAME]));
-    expect(partial.map(r => r.evaluationName)).toEqual([COHERENCE_EVAL_NAME]);
 
+    const partial = await evaluateTurnConsolidated(createFakeProvider(), turn, judgedKeys(turn, [RELEVANCE_EVAL_NAME]));
+
+    expect(partial.map(r => r.evaluationName)).toEqual([COHERENCE_EVAL_NAME]);
+  });
+
+  it('emits nothing and calls no model when every criterion is already covered', async () => {
+    const turn = makeTurn();
     const calls: RecordedCall[] = [];
+
     const none = await evaluateTurnConsolidated(createFakeProvider({}, calls), turn, judgedKeys(turn, PLAIN_CRITERIA));
+
     expect(none).toEqual([]);
     expect(calls).toHaveLength(0);
   });
@@ -412,7 +440,7 @@ describe('evaluateTurnConsolidated', () => {
     const cache: EvaluationStepsCache = new Map();
     await expect(cachedEvaluationSteps(provider, RELEVANCE_CRITERIA, cache)).rejects.toThrow('Connection error.');
     expect(cache.has(RELEVANCE_CRITERIA.name)).toBe(false);
-    await expect(cachedEvaluationSteps(provider, RELEVANCE_CRITERIA, cache)).resolves.toContain('1. ');
+    await expect(cachedEvaluationSteps(provider, RELEVANCE_CRITERIA, cache)).resolves.toBe(FAKE_STEPS);
   });
 });
 
