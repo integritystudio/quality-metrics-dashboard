@@ -327,7 +327,7 @@ function EvalSummaryRow({ evalSummary }: { evalSummary: Record<string, EvalMetri
                 </span>
               </div>
               <div className="mono text-muted flex-wrap justify-between text-2xs">
-                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}\u2013{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
+                <span>{m.min.toFixed(SCORE_CHIP_PRECISION)}{'\u2013'}{m.max.toFixed(SCORE_CHIP_PRECISION)}</span>
                 <span>n={m.count}</span>
               </div>
             </div>
