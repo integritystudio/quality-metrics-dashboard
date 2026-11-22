@@ -30,7 +30,7 @@ import { LOGS_FILE_PREFIX, datedJsonlName } from './telemetry-files.js';
 import type { RoutedRecord } from './post-evaluations.js';
 import { EVALUATION_SERVICE_NAME } from './evaluation-delivery.js';
 
-type HrTime = [seconds: number, nanoseconds: number];
+export type HrTime = [seconds: number, nanoseconds: number];
 
 /** The hooks' `ExportedLog` fields this writer sets (`hooks/lib/otel/file-exporters.ts`). */
 export type EvaluationEventLine = {
@@ -49,7 +49,7 @@ export type EvaluationEventLine = {
 const EVENT_SEVERITY: OtelLogSeverity = 'INFO';
 const NANOSECONDS_PER_MILLISECOND = NANOSECONDS_PER_SECOND / TIME_MS.SECOND;
 
-function toHrTime(epochMs: number): HrTime {
+export function toHrTime(epochMs: number): HrTime {
   return [Math.floor(epochMs / TIME_MS.SECOND), (epochMs % TIME_MS.SECOND) * NANOSECONDS_PER_MILLISECOND];
 }
 
