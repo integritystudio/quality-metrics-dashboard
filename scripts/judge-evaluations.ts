@@ -64,6 +64,7 @@ import { discoverFromCloud, turnsFromCloud } from './judge-cloud-source.js';
 import { createConsolidatedTurnEvaluator, evaluateTurnsConsolidatedBatched, type ConsolidatedCriteriaOptions } from './judge-consolidated.js';
 import { readScope, resolveDateScope } from './derive-evaluations.js';
 import { selectTurns, formatTurnSelection, type TurnSelection } from './judge-selection.js';
+import { reportHallucinationGaps } from './judge-hallucination-gaps.js';
 import { formatPostSummary, postRoutedRecords, routeEvaluationRecords, undeliveredCount, type RoutedRecord } from './post-evaluations.js';
 import { JUDGE_PENDING_FILE, addPendingKeys, readPendingEvaluations, writePendingEvaluations } from './judge-pending.js';
 import {
@@ -499,9 +500,9 @@ export async function processBatch<T, R>(
 }
 
 /** --dry-run: what a run over `allTurns` would cost, and where its turns come from. */
-function printDryRun(allTurns: Turn[], judgeSpec: JudgeSpec, consolidated: boolean): void {
+function printDryRun(allTurns: Turn[], judgeSpec: JudgeSpec, consolidated: boolean, directHallucination: boolean): void {
   const batch = judgeSpec.mode === 'batch';
-  const est = estimateJudgeRun(allTurns, batch, consolidated, judgeSpec.model);
+  const est = estimateJudgeRun(allTurns, batch, consolidated, judgeSpec.model, directHallucination);
 
   console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} ${consolidated ? 'consolidated calls' : 'evals'}`);
   console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
@@ -531,9 +532,10 @@ async function judgeTurns(
   { judgeSpec, consolidated, criteria }: { judgeSpec: JudgeSpec; consolidated: boolean; criteria: ConsolidatedCriteriaOptions },
 ): Promise<EvalRecord[]> {
   const batch = judgeSpec.mode === 'batch';
-  const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated, judgeSpec.model).costUsd;
+  const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated, judgeSpec.model, criteria.directHallucination).costUsd;
   const usage = createUsageTotals();
-  const judged: ConsolidatedCriteriaOptions = { ...criteria, judge: judgeSpec };
+  const hallucinationGaps: Turn[] = [];
+  const judged: ConsolidatedCriteriaOptions = { ...criteria, judge: judgeSpec, onHallucinationGap: (turn) => { hallucinationGaps.push(turn); } };
   const batchProvider = batch
     ? await createBatchProvider({
       model: judgeSpec.model,
@@ -564,6 +566,7 @@ async function judgeTurns(
   }
 
   const flatEvals = allEvals.flat();
+  reportHallucinationGaps(hallucinationGaps, judgeSpec.model);
 
   const prevState = readRunState();
   const summary = summarizeJudgeRun(
@@ -633,7 +636,7 @@ async function main(): Promise<void> {
   if (dryRun) {
     const selection = select(existingKeys);
     console.log(`[dry-run] turns: ${formatTurnSelection(selection)}`);
-    printDryRun(selection.selected, judgeSpec, consolidated);
+    printDryRun(selection.selected, judgeSpec, consolidated, criteria.directHallucination === true);
     return;
   }
 

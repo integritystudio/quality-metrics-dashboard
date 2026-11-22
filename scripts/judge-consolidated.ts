@@ -174,6 +174,12 @@ export type ConsolidatedCriteriaOptions = {
    * in the same call. Without it the consolidated path records no hallucination.
    */
   directHallucination?: boolean;
+  /**
+   * Told of a turn whose hallucination verdict went missing while every other
+   * wanted criterion was recorded. Turn selection then counts the turn as judged,
+   * so no later run fills the score in.
+   */
+  onHallucinationGap?: (turn: Turn) => void;
 }
 
 export type ParsedConsolidatedResponse = {
@@ -506,7 +512,16 @@ export async function evaluateTurnConsolidated(
     return [];
   }
 
-  return recordsFromVerdicts(turn, wanted, parsed, { sessionPreview, judge: judgeOf(options) });
+  const records = recordsFromVerdicts(turn, wanted, parsed, { sessionPreview, judge: judgeOf(options) });
+  if (leavesHallucinationBlank(selection.recordNames, records)) options.onHallucinationGap?.(turn);
+  return records;
+}
+
+/** Hallucination was wanted and is the only wanted criterion without a record. */
+function leavesHallucinationBlank(wanted: readonly string[], records: readonly EvalRecord[]): boolean {
+  if (!wanted.includes(HALLUCINATION_EVAL_NAME)) return false;
+  const recorded = new Set(records.map(record => record.evaluationName));
+  return wanted.every(name => recorded.has(name) !== (name === HALLUCINATION_EVAL_NAME));
 }
 
 /** One criterion's normalized (0–1) score; throws the parse failure when the verdict is missing. */

@@ -117,14 +117,23 @@ function estimateCostUsd(inputTokens: number, outputTokens: number, batch: boole
   return batch ? listUsd * BATCH_PRICE_RATIO : listUsd;
 }
 
-/** Estimated tokens per evaluation response — the judge answers with a short JSON verdict. */
-export const EST_OUTPUT_TOKENS_PER_EVAL = 200;
+/**
+ * Estimated output tokens per criterion scored, thinking included: the judge
+ * thinks (JUDGE_THINKING at JUDGE_EFFORT) and answers with a short JSON verdict.
+ * Consolidated calls on 20 tool turns averaged about 237 per criterion, steps
+ * calls amortized (docs/hallucination-probes/, 2026-11-22); with thinking off
+ * the same calls used about 110.
+ */
+export const EST_OUTPUT_TOKENS_PER_EVAL = 240;
 
 /** Criteria in one consolidated prompt: relevance and coherence, always. */
 export const CONSOLIDATED_BASE_CRITERIA = 2;
 
 /** Added with tool results: faithfulness, tool_correctness and its three sub-criteria. */
 export const CONSOLIDATED_TOOL_CRITERIA = 5;
+
+/** Added to a tool turn under `directHallucination`. */
+export const CONSOLIDATED_HALLUCINATION_CRITERIA = 1;
 
 /** Per-criterion calls every turn costs: relevance and coherence. */
 const PER_CRITERION_BASE_CALLS = 2;
@@ -147,15 +156,18 @@ export type JudgeRunEstimate = {
  * the usage the API reported, which can run well above it. Pass `batch: true` when `--batch` is set — Message Batches
  * bill at BATCH_PRICE_RATIO (half list rates). Pass `consolidated: true` for
  * the default mode, which sends each turn's content once and answers every
- * criterion in that one call.
+ * criterion in that one call, and `directHallucination` when that call also
+ * judges hallucination.
  */
+// eslint-disable-next-line max-params -- positional to match its callers; the fifth only applies to the consolidated mode
 export function estimateJudgeRun(
   turns: readonly Turn[],
   batch = false,
   consolidated = false,
   model: string = HAIKU_MODEL,
+  directHallucination = false,
 ): JudgeRunEstimate {
-  if (consolidated) return estimateConsolidatedRun(turns, batch, model);
+  if (consolidated) return estimateConsolidatedRun(turns, batch, model, directHallucination);
   let evals = 0;
   let inputTokens = 0;
   for (const t of turns) {
@@ -179,12 +191,14 @@ export function estimateConsolidatedRun(
   turns: readonly Turn[],
   batch: boolean,
   model: string = HAIKU_MODEL,
+  directHallucination = false,
 ): JudgeRunEstimate {
+  const toolCriteria = CONSOLIDATED_TOOL_CRITERIA + (directHallucination ? CONSOLIDATED_HALLUCINATION_CRITERIA : 0);
   let inputTokens = 0;
   let outputTokens = 0;
   for (const t of turns) {
     inputTokens += estimateTurnTokens(t);
-    const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? CONSOLIDATED_TOOL_CRITERIA : 0);
+    const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? toolCriteria : 0);
     outputTokens += criteria * EST_OUTPUT_TOKENS_PER_EVAL;
   }
   const costUsd = estimateCostUsd(inputTokens, outputTokens, batch, model);

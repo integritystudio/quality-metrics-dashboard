@@ -35,6 +35,8 @@ const BASE = { model: MODEL, maxTokens: PROVIDER_MAX_TOKENS, pollIntervalMs: FAS
 const VERDICT_SCORE = 4;
 const VERDICT_FAITHFULNESS = (VERDICT_SCORE - G_EVAL_MIN_SCORE) / G_EVAL_SCORE_RANGE;
 const COST_CLOSE_TO_DIGITS = 10;
+/** Large enough that resending the content per criterion outweighs the consolidated reply's extra verdicts. */
+const TOOL_RESULT_CHARS = 20_000;
 const STEPS_TEXT = '1. Read the input.\n2. Read the output.\n3. Compare them.';
 const STEPS_PROMPT_MARKER = 'Generate detailed evaluation steps';
 
@@ -182,7 +184,7 @@ describe('evaluateTurnsConsolidatedBatched', () => {
 
 describe('estimateJudgeRun (consolidated)', () => {
   it('counts one call per turn and prices below the per-criterion estimate', () => {
-    const turns = [makeTurn(), makeTurn({ toolResults: ['x'.repeat(4000)] })];
+    const turns = [makeTurn(), makeTurn({ toolResults: ['x'.repeat(TOOL_RESULT_CHARS)] })];
     const consolidated = estimateJudgeRun(turns, false, true);
     const perCriterion = estimateJudgeRun(turns, false, false);
     expect(consolidated.evals).toBe(turns.length);

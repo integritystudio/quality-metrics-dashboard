@@ -717,8 +717,8 @@ describe('estimateJudgeRun', () => {
   });
 
   it('prices the estimate at the judge model list rates', () => {
-    // 600 input tokens at $0.10/M plus 400 output tokens at $0.50/M; not exact in binary floating point.
-    const expectedUsd = 0.00026;
+    // 600 input tokens at $0.10/M plus 480 output tokens at $0.50/M; not exact in binary floating point.
+    const expectedUsd = 0.0003;
 
     expect(estimateJudgeRun([makeSizedTurn()]).costUsd).toBeCloseTo(expectedUsd, COST_CLOSE_TO_DIGITS);
   });
