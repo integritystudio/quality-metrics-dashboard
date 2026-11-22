@@ -152,7 +152,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 | DASH-PERMISSION-LITERALS-FOUR-COPIES | Derive the permission and role types from one list | Done | The same literals are spelled in `types/auth.ts`, `auth-schemas.ts`, `org-rbac.ts` and `e2e/integration/setup.ts`. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | Done | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | Done | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | Done | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | Done | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | P4 | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
@@ -223,6 +223,14 @@ written twice in `App.tsx` and six times in `RoutingTelemetryPage.tsx`, with `te
 
 Acceptance: one head component for the plain tables, a `variant="tile"` on `StatDisplay` used at the
 exact-match sites, and no visual change at 1280 px.
+**Done (2026-11-21).** `MonoTableHead` takes `variant="plain"`: bare `<th>` cells, aligned only when a
+column asks, under the table's own `.data-table th` styles. All eight plain heads in the six files use it.
+`StatDisplay` takes `variant="tile"`, which `App.tsx` (2) and `RoutingTelemetryPage.tsx` (6) use; its classes
+sit in one per-variant table. Rendered markup was compared with the old hand-written markup and is
+identical for both new variants and unchanged for `mono` and `inline`, so there is no visual change. Not
+converted: the two TanStack heads (sortable cells with per-column classes, not plain tables) and the
+`text-md` tiles in `MetricCompare.tsx`, `SessionDetailPage.tsx` and `AgentSessionPage.tsx`, which are not
+exact matches.
 
 **DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH.** `scripts/judge-anthropic-client.ts` builds its own HTTP/1.1
 `fetch` from a dynamically imported `undici`. The parent's `src/lib/core/http1-fetch.ts` is the same
