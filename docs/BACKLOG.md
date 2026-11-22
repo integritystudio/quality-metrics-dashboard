@@ -87,7 +87,7 @@ No open items.
 
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
-| DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
+| DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | Done | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
 | DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | Done | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
 
 **DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE.** Files: `scripts/__tests__/judge-evaluations.test.ts`,
@@ -141,6 +141,12 @@ record rather than a defect. Two things follow from it:
   the reference, and bumping it moves every transitive copy with it. That is the point — it is what
   keeps one version in the tree — but it means the devDependency is load-bearing despite being
   imported nowhere. Do not "clean it up" as unused.
+
+**Done (2026-11-21).** A scoped override, `"jsdom": { "undici": "^8.13.1" }`, gives jsdom its own
+8.x copy (`node_modules/jsdom/node_modules/undici`) while the root `$undici` floor keeps the root and
+miniflare on 7.30.1. miniflare pins `7.29.1` exactly, so it was left on 7.x rather than forced onto a
+major it does not declare. `npm audit` lists no undici advisory; `npm test` (1296) and `typecheck` are
+green. Widen the floor to `^8` only once miniflare declares 8.x.
 
 ### Consolidation
 
