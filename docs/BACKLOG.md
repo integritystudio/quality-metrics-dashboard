@@ -156,7 +156,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 | DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | P4 | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | P4 | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-USE-TRACE-OWN-FETCH | Build `useTrace` on `useApiQuery` | P4 | It carries a "must not drift" comment about the hook it duplicates. ~215 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-USE-TRACE-OWN-FETCH | Build `useTrace` on `useApiQuery` | Done | It carries a "must not drift" comment about the hook it duplicates. ~215 tokens. Source: repomix consolidation review, session 2026-11-21 |
 
 **DASH-PERMISSION-LITERALS-FOUR-COPIES.** `DashboardPermission` (`src/types/auth.ts`),
 `DashboardPermissionSchema` (`src/lib/validation/auth-schemas.ts`) and `PERMISSION`
@@ -270,6 +270,11 @@ fetch, 404 handling and retry policy of `src/hooks/useApiQuery.ts`.
 
 Acceptance: `useTrace` as a `useApiQuery` call with `onNotFound` returning the empty trace, the
 "must not drift" comment gone, and `query-abort.test.tsx` green.
+**Done (2026-11-21).** `useTrace` is a `useApiQuery` call whose `onNotFound` returns the empty
+trace, and it now takes `useApiQuery`'s retry policy: the same two retries, but none after an auth
+failure or a 401. `QUERY_RETRY_COUNT` had no other user and is gone. A non-404 error now carries the
+response body. `useTrace.test.tsx` pins the encoded URL, the 404-as-empty path, the error message and
+the disabled state; `query-abort.test.tsx` passes unedited.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.12](changelog/3.0.12/CHANGELOG.md) (2026-10-12).
