@@ -100,6 +100,14 @@ function requireId(param: string, error: string): MiddlewareHandler<AppEnv> {
   return requireParam(param, ID_PATTERN, error);
 }
 
+const canRead = requirePermission(PERMISSION.read);
+const canReadAgents = requirePermission(PERMISSION.agents);
+const canReadTraces = requirePermission(PERMISSION.traces);
+const canReadCompliance = requirePermission(PERMISSION.compliance);
+const requireMetricName = requireId('name', ERR_INVALID_METRIC_NAME);
+const requireSessionId = requireId('sessionId', ERR_INVALID_SESSION_ID);
+const requireTraceId = requireId('traceId', ERR_INVALID_TRACE_ID);
+
 /**
  * Reads a KV entry and unwraps the `{ v, data }` envelope every KV writer uses. A version
  * mismatch reads as missing; an entry with no envelope passes through as is.
@@ -278,7 +286,7 @@ app.post('/api/activity', async (c) => {
   return c.body(null, HttpStatus.NoContent);
 });
 
-app.get('/api/dashboard', requirePermission(PERMISSION.read), validQuery(DashboardQuery), async (c) => {
+app.get('/api/dashboard', canRead, validQuery(DashboardQuery), async (c) => {
   const { period, role } = c.req.valid('query');
   if (role && !c.get('session').allowedViews.includes(role)) return forbidden(c);
   return kvOr404(c, role ? `dashboard:${period}:${role}` : `dashboard:${period}`, WORKER_ERR_NO_DATA, 'dashboard_view');
@@ -289,7 +297,7 @@ function scoreOf(row: Record<string, unknown>): number {
   return typeof row.score === 'number' ? row.score : 0;
 }
 
-app.get('/api/metrics/:name/evaluations', requirePermission(PERMISSION.read), validQuery(MetricEvaluationsQuery), requireId('name', ERR_INVALID_METRIC_NAME), async (c) => {
+app.get('/api/metrics/:name/evaluations', canRead, validQuery(MetricEvaluationsQuery), requireMetricName, async (c) => {
   const { period, limit, offset, sortBy, scoreLabel } = c.req.valid('query');
 
   const data = await getSessionKv<{ rows: Array<Record<string, unknown>> }>(c, `metric:evaluations:${c.req.param('name')}:${period}`);
@@ -305,7 +313,7 @@ app.get('/api/metrics/:name/evaluations', requirePermission(PERMISSION.read), va
   return c.json({ rows: page, total, limit, offset, hasMore: offset + limit < total });
 });
 
-app.get('/api/metrics/:name', requirePermission(PERMISSION.read), validQuery(WidePeriodQuery), requireId('name', ERR_INVALID_METRIC_NAME), async (c) => {
+app.get('/api/metrics/:name', canRead, validQuery(WidePeriodQuery), requireMetricName, async (c) => {
   const name = c.req.param('name');
   return kvOr(c, `${METRIC_DETAIL_KEY_PREFIX}${name}:${c.req.valid('query').period}`, {
     name,
@@ -320,7 +328,7 @@ app.get('/api/metrics/:name', requirePermission(PERMISSION.read), validQuery(Wid
   });
 });
 
-app.get('/api/trends/:name', requirePermission(PERMISSION.read), validQuery(PeriodQuery), requireId('name', ERR_INVALID_METRIC_NAME), async (c) => {
+app.get('/api/trends/:name', canRead, validQuery(PeriodQuery), requireMetricName, async (c) => {
   const name = c.req.param('name');
   const { period } = c.req.valid('query');
   // The empty `TrendView` of src/api/aggregates/trend.ts, restated: the page reads `trendData`.
@@ -329,24 +337,24 @@ app.get('/api/trends/:name', requirePermission(PERMISSION.read), validQuery(Peri
   });
 });
 
-app.get('/api/evaluations/trace/:traceId', requirePermission(PERMISSION.traces), requireId('traceId', ERR_INVALID_TRACE_ID), async (c) =>
+app.get('/api/evaluations/trace/:traceId', canReadTraces, requireTraceId, async (c) =>
   kvOr(c, `evaluations:trace:${c.req.param('traceId')}`, { evaluations: [] }, 'trace_view'));
 
-app.get('/api/traces/:traceId', requirePermission(PERMISSION.traces), requireId('traceId', ERR_INVALID_TRACE_ID), async (c) => {
+app.get('/api/traces/:traceId', canReadTraces, requireTraceId, async (c) => {
   const traceId = c.req.param('traceId');
   return kvOr404(c, `trace:${traceId}`, `No trace data for: ${traceId}`, 'trace_view');
 });
 
-app.get('/api/correlations', requirePermission(PERMISSION.read), validQuery(WidePeriodQuery), async (c) =>
+app.get('/api/correlations', canRead, validQuery(WidePeriodQuery), async (c) =>
   kvOr(c, `correlations:${c.req.valid('query').period}`, { correlations: [], metrics: [] }));
 
-app.get('/api/degradation-signals', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
+app.get('/api/degradation-signals', canRead, validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   // Key matches DEGRADATION_KV_KEY in src/api/aggregates/kv-entry.ts + period suffix
   return kvOr(c, `meta/dashboard/degradation-signals:${period}`, { period, reports: [], computedAt: null });
 });
 
-app.get('/api/coverage', requirePermission(PERMISSION.read), validQuery(CoverageQuery), async (c) => {
+app.get('/api/coverage', canRead, validQuery(CoverageQuery), async (c) => {
   const { period, inputKey } = c.req.valid('query');
   // The grid derives status and gaps from `counts`, so the empty matrix presents every field it reads.
   return kvOr(c, `coverage:${period}:${inputKey}`, {
@@ -373,51 +381,53 @@ async function sessionEntry(c: AppContext, sessionId: string): Promise<Record<st
     ?? abort(c.json({ error: noSessionData(sessionId) }, HttpStatus.NotFound));
 }
 
-app.get('/api/sessions/:sessionId', requirePermission(PERMISSION.sessions), requireId('sessionId', ERR_INVALID_SESSION_ID), async (c) => {
+app.get('/api/sessions/:sessionId', requirePermission(PERMISSION.sessions), requireSessionId, async (c) => {
   const sessionId = c.req.param('sessionId');
   return kvOr404(c, sessionKey(sessionId), noSessionData(sessionId), 'session_view');
 });
 
-app.get('/api/agents', requirePermission(PERMISSION.agents), validQuery(WidePeriodQuery), async (c) => {
+app.get('/api/agents', canReadAgents, validQuery(WidePeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   // The page requires `period` and `agents`; the dates are absent until a sync writes the key.
   return kvOr(c, `${AGENT_STATS_KEY_PREFIX}${period}`, { period, startDate: null, endDate: null, agents: [] });
 });
 
-app.get('/api/code-quality', requirePermission(PERMISSION.agents), async (c) =>
+app.get('/api/code-quality', canReadAgents, async (c) =>
   kvOr(c, CODE_QUALITY_KV_KEY, { survivalByAgentWindow: [], versionRollout: [], hasData: false }));
 
-app.get('/api/agents/detail/:agentId', requirePermission(PERMISSION.agents), requireId('agentId', ERR_INVALID_AGENT_ID), async (c) => {
+app.get('/api/agents/detail/:agentId', canReadAgents, requireId('agentId', ERR_INVALID_AGENT_ID), async (c) => {
   const agentId = c.req.param('agentId');
   return kvOr404(c, `agent:${agentId}`, `No data for agent: ${agentId}`);
 });
 
-app.get('/api/agents/:sessionId', requirePermission(PERMISSION.agents), requireId('sessionId', ERR_INVALID_SESSION_ID), async (c) => {
-  const sessionId = c.req.param('sessionId');
-  const session = await sessionEntry(c, sessionId);
-  return c.json({
+/** What the workflow view reads from a session entry; the agent view adds the evaluations. */
+function workflowPayload(sessionId: string, session: Record<string, unknown>): Record<string, unknown> {
+  return {
     sessionId,
-    spans: [],
     evaluation: session.multiAgentEvaluation ?? null,
-    evaluations: safeArray(session.evaluations),
-    agentMap: {},
     // Precomputed by sync-to-kv; absent on session keys written before it was added.
     graph: session.workflowGraph ?? null,
-  });
-});
+  };
+}
 
-// The workflow view's payload: the same session key, without its evaluations.
-app.get('/api/agents/:sessionId/graph', requirePermission(PERMISSION.agents), requireId('sessionId', ERR_INVALID_SESSION_ID), async (c) => {
+app.get('/api/agents/:sessionId', canReadAgents, requireSessionId, async (c) => {
   const sessionId = c.req.param('sessionId');
   const session = await sessionEntry(c, sessionId);
   return c.json({
-    sessionId,
-    evaluation: session.multiAgentEvaluation ?? null,
-    graph: session.workflowGraph ?? null,
+    ...workflowPayload(sessionId, session),
+    spans: [],
+    evaluations: safeArray(session.evaluations),
+    agentMap: {},
   });
 });
 
-app.get('/api/compliance/sla', requirePermission(PERMISSION.compliance), validQuery(PeriodQuery), async (c) => {
+app.get('/api/agents/:sessionId/graph', canReadAgents, requireSessionId, async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const session = await sessionEntry(c, sessionId);
+  return c.json(workflowPayload(sessionId, session));
+});
+
+app.get('/api/compliance/sla', canReadCompliance, validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   const dashboard = await getSessionKv<Record<string, unknown>>(c, `dashboard:${period}`);
   if (!dashboard) return c.json({ period, results: [], noSLAsConfigured: true });
@@ -430,7 +440,7 @@ app.get('/api/compliance/sla', requirePermission(PERMISSION.compliance), validQu
   });
 });
 
-app.get('/api/compliance/verifications', requirePermission(PERMISSION.compliance), validQuery(PeriodQuery), (c) => {
+app.get('/api/compliance/verifications', canReadCompliance, validQuery(PeriodQuery), (c) => {
   const { period } = c.req.valid('query');
   logActivity(c, 'compliance_view');
   return c.json({ period, count: 0, verifications: [] });
@@ -461,7 +471,7 @@ async function liveEvaluationsFor(c: AppContext, name: string): Promise<LiveEval
   return parsed.data.rows.map(({ unscored, score, ...row }) => ({ ...row, score: unscored ? null : score }));
 }
 
-app.get('/api/quality/live', requirePermission(PERMISSION.read), async (c) => {
+app.get('/api/quality/live', canRead, async (c) => {
   const summary = liveSummaryMetricsSchema.safeParse(await getSessionKv<unknown>(c, `dashboard:${QUALITY_LIVE_PERIOD}`));
   const names = summary.success ? summary.data.metrics.map((m) => m.name) : [];
   const evaluationsByMetric = await Promise.all(
@@ -470,7 +480,7 @@ app.get('/api/quality/live', requirePermission(PERMISSION.read), async (c) => {
   return c.json(summarizeQualityLive(evaluationsByMetric, new Date()));
 });
 
-app.get('/api/calibration', requirePermission(PERMISSION.read), async (c) => {
+app.get('/api/calibration', canRead, async (c) => {
   const raw = await getSessionKv<unknown>(c, 'meta:calibration');
   if (!raw) return c.json({ error: WORKER_ERR_NO_CALIBRATION_DATA }, HttpStatus.NotFound);
   // KV can hold a payload from an older derive publish; parsing surfaces the drift here
@@ -478,7 +488,7 @@ app.get('/api/calibration', requirePermission(PERMISSION.read), async (c) => {
   return c.json(parsedOrAbort(c, calibrationResponseSchema, raw, ERR_CALIBRATION_MALFORMED));
 });
 
-app.get('/api/routing-telemetry', requirePermission(PERMISSION.read), validQuery(PeriodQuery), async (c) => {
+app.get('/api/routing-telemetry', canRead, validQuery(PeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   const raw = await getSessionKv<unknown>(c, `routing-telemetry:${period}`);
   return c.json({ ...parsedOrAbort(c, routingTelemetryKvSchema, raw ?? {}, ERR_ROUTING_TELEMETRY_MALFORMED), period });
