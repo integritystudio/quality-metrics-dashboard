@@ -154,7 +154,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 | DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | Done | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | P4 | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | Done | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | P4 | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-USE-TRACE-OWN-FETCH | Build `useTrace` on `useApiQuery` | Done | It carries a "must not drift" comment about the hook it duplicates. ~215 tokens. Source: repomix consolidation review, session 2026-11-21 |
 
@@ -249,6 +249,12 @@ per stage plus the `nextStepAfter` switch over them.
 
 Acceptance: one `runStage` driven by a stage table, one `Record<PipelineStage, ReadonlySet<number>>`
 replacing the four sets and the switch, and `pipeline-stages.test.ts` green.
+**Done (2026-11-21).** `populate-dashboard.ts` runs a `STAGES` table (stage, script, whether it runs,
+args, network retry, log continuation) through one `runStage`; the four wrappers and `continueOrAbort`
+are gone and the log wording is unchanged. `SOFT_FAILURE_EXITS` in `pipeline-stages.ts` is the one
+`Record<PipelineStage, ReadonlySet<number>>`, and `nextStepAfter` is a lookup into it. The tests read
+`SOFT_FAILURE_EXITS.judge` / `.derive`, and `nextStepAfter` now also covers the hook-gap and ship-turns
+stages. `test:scripts` is green (834).
 
 **DASH-JUDGE-RECORD-TWO-BUILDERS.** `createEvalRecord` (`scripts/judge-evaluations.ts`) and
 `buildRecord` (`scripts/judge-consolidated.ts`) emit the same fields in the same order; only
