@@ -13,11 +13,12 @@ import {
   CONSOLIDATED_PRODUCER,
   REASONING_KEY,
   SCORE_KEY,
+  VerdictParseError,
   type ConsolidatedProvider,
   type ConsolidatedGenerateOptions,
   type EvaluationStepsCache,
 } from '../judge-consolidated.js';
-import { evalFailures, failureClasses, resetFailureTracking } from '../judge-failures.js';
+import { evalFailures, failureClasses, PARSE_FAILURE_PATTERN, resetFailureTracking } from '../judge-failures.js';
 import {
   RELEVANCE_EVAL_NAME,
   COHERENCE_EVAL_NAME,
@@ -46,6 +47,7 @@ const DEFAULT_RAW_SCORE = 4;
 const DEFAULT_SCORE_NORMALIZED = 0.75;
 const LOW_SCORE = 2;
 const LOW_SCORE_NORMALIZED = 0.25;
+const MID_SCORE = 3;
 const FRACTIONAL_SCORE = 3.5;
 const FIVE_POINT_SCALE = [1, 2, 3, 4, 5];
 const OUT_OF_RANGE_SCORE = G_EVAL_MAX_SCORE + 1;
@@ -273,8 +275,65 @@ describe('parseConsolidatedResponse', () => {
     expect(() => parseConsolidatedResponse('[1,2]', [RELEVANCE_EVAL_NAME])).toThrow(/expected a JSON object, got array/);
   });
 
-  it('throws a syntax error when the document is not JSON', () => {
-    expect(() => parseConsolidatedResponse('not json', [RELEVANCE_EVAL_NAME])).toThrow(SyntaxError);
+  it('throws a VerdictParseError when the reply is not JSON and names no score', () => {
+    expect(() => parseConsolidatedResponse('not json', [RELEVANCE_EVAL_NAME])).toThrow(VerdictParseError);
+  });
+
+  it('classifies an unparseable reply as a parse failure', () => {
+    expect(() => parseConsolidatedResponse('not json', [RELEVANCE_EVAL_NAME])).toThrow(PARSE_FAILURE_PATTERN);
+  });
+
+  const plainVerdicts = { [RELEVANCE_EVAL_NAME]: { [REASONING_KEY]: 'on topic', [SCORE_KEY]: 5 }, [COHERENCE_EVAL_NAME]: { [REASONING_KEY]: 'flows', [SCORE_KEY]: 3 } };
+
+  it.each([
+    ['a code fence', `\`\`\`json\n${JSON.stringify(plainVerdicts)}\n\`\`\``],
+    ['prose around the object', `Here is my evaluation:\n${JSON.stringify(plainVerdicts, null, 2)}\nLet me know if you need more.`],
+  ])('reads the JSON object through %s', (_label, text) => {
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)).toEqual({ reasoning: 'on topic', score: 5 });
+    expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)).toEqual({ reasoning: 'flows', score: 3 });
+    expect(parsed.failures.size).toBe(0);
+  });
+
+  it('recovers the complete criteria of a reply cut off mid-document and fails the cut one', () => {
+    const whole = JSON.stringify(plainVerdicts);
+    const cut = whole.slice(0, whole.indexOf('flows') + 2);
+
+    const parsed = parseConsolidatedResponse(cut, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)).toEqual({ reasoning: 'on topic', score: 5 });
+    expect(parsed.verdicts.has(COHERENCE_EVAL_NAME)).toBe(false);
+    expect(parsed.failures.get(COHERENCE_EVAL_NAME)?.message).toMatch(/Could not parse verdict for coherence/);
+  });
+
+  it('reads a prose reply by criterion, taking the last score written in each section', () => {
+    const text = [
+      `**${RELEVANCE_EVAL_NAME}**: The reply would earn score: 2 if it ignored the question, but it answers it. Score: 4`,
+      `${COHERENCE_EVAL_NAME}: Clear and ordered. Rating ${MID_SCORE}/${G_EVAL_MAX_SCORE}.`,
+    ].join('\n');
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
+    expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)?.score).toBe(MID_SCORE);
+  });
+
+  it.each([
+    ['a fraction', `${RELEVANCE_EVAL_NAME}: score: ${FRACTIONAL_SCORE}`],
+    ['a score above the scale', `${RELEVANCE_EVAL_NAME}: score: ${OUT_OF_RANGE_SCORE}`],
+    ['a two-digit score', `${RELEVANCE_EVAL_NAME}: score: 10`],
+  ])('takes no score from %s in a prose reply', (_label, text) => {
+    expect(() => parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME])).toThrow(VerdictParseError);
+  });
+
+  it('does not open a section at a criterion named inside another criterion\'s reasoning', () => {
+    const text = `${RELEVANCE_EVAL_NAME}: weighs coherence and scope together. score: 4\n${COHERENCE_EVAL_NAME}: score: 2`;
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
+    expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)?.score).toBe(LOW_SCORE);
   });
 });
 
@@ -407,12 +466,60 @@ describe('evaluateTurnConsolidated', () => {
     expect(failureClasses.parse).toBe(1);
   });
 
-  it('fails every selected metric when the response is not JSON', async () => {
-    const provider = createFakeProvider({}, [], 'Sure! Here is my evaluation.');
+  it('fails every selected metric when the response is not JSON, after asking once more', async () => {
+    const calls: RecordedCall[] = [];
+    const provider = createFakeProvider({}, calls, 'Sure! Here is my evaluation.');
     const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
 
     expect(records).toEqual([]);
+    expect(schemaCallKeys(calls)).toEqual([PLAIN_CRITERIA, PLAIN_CRITERIA]);
     expect(evalFailures).toEqual({ [RELEVANCE_EVAL_NAME]: 1, [COHERENCE_EVAL_NAME]: 1 });
+    expect(failureClasses.parse).toBe(PLAIN_CRITERIA.length);
+  });
+
+  it('records the verdicts of the retry when the first reply is not one', async () => {
+    const calls: RecordedCall[] = [];
+    const replies = ['Sure! Here is my evaluation.'];
+    const fallback = createFakeProvider({}, calls);
+    const provider: ConsolidatedProvider = {
+      generate: async (prompt, options) => {
+        const unparseable = options?.schema ? replies.shift() : undefined;
+        if (unparseable === undefined) return fallback.generate(prompt, options);
+        calls.push({ prompt, options });
+        return { text: unparseable };
+      },
+    };
+
+    const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
+
+    expect(records.map(r => r.evaluationName)).toEqual(PLAIN_CRITERIA);
+    expect(schemaCallKeys(calls)).toHaveLength(2);
+    expect(evalFailures).toEqual({});
+  });
+
+  it('does not retry a reply whose document parsed with one criterion invalid', async () => {
+    const calls: RecordedCall[] = [];
+    const provider = createFakeProvider({ [RELEVANCE_EVAL_NAME]: OUT_OF_RANGE_SCORE }, calls);
+
+    await evaluateTurnConsolidated(provider, makeTurn(), new Set());
+
+    expect(schemaCallKeys(calls)).toHaveLength(1);
+  });
+
+  it('does not retry a provider error', async () => {
+    let verdictCalls = 0;
+    const provider: ConsolidatedProvider = {
+      generate(_prompt, options) {
+        if (!options?.schema) return Promise.resolve({ text: FAKE_STEPS });
+        verdictCalls++;
+        return Promise.reject(new Error('Connection error.'));
+      },
+    };
+
+    const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
+
+    expect(records).toEqual([]);
+    expect(verdictCalls).toBe(1);
   });
 
   it('generates evaluation steps once per criterion across turns', async () => {
