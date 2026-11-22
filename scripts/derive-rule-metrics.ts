@@ -401,14 +401,19 @@ const SESSION_EVIDENCE_ATTRIBUTES: readonly string[] = [
 ];
 
 /**
- * The session evidence among `spans`, each cut down to the attributes the
- * session scorers read: small enough to carry between the steps of a
+ * The session evidence among `spans`, each cut down to the fields and attributes
+ * the session scorers read (no events, no end time): small enough to carry between the steps of a
  * partitioned read, and scored to the same records as the full spans.
  */
 export function sessionEvidence(spans: readonly LocalTraceSpan[]): LocalTraceSpan[] {
-  return spans.filter(span => isSessionEvidence(span)).map(span => ({
-    ...span,
-    attributes: Object.fromEntries(SESSION_EVIDENCE_ATTRIBUTES.flatMap(key => (key in span.attributes ? [[key, span.attributes[key]]] : []))),
+  return spans.filter(span => isSessionEvidence(span)).map(({ traceId, spanId, name, startTime, duration, status, attributes: all }) => ({
+    traceId,
+    spanId,
+    name,
+    startTime,
+    duration,
+    ...(status && { status }),
+    attributes: Object.fromEntries(SESSION_EVIDENCE_ATTRIBUTES.flatMap(key => (key in all ? [[key, all[key]]] : []))),
   }));
 }
 

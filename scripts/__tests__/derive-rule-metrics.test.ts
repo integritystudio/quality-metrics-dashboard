@@ -90,7 +90,7 @@ describe('scoring a read split by day', () => {
     const evidence = sessionEvidence(dayOne);
 
     expect(evidence.map(span => span.spanId)).toEqual(['a2', 'a3', 'a4']);
-    expect(evidence.filter(span => UNREAD_ATTRIBUTE in span.attributes)).toEqual([]);
+    expect(evidence.filter(span => UNREAD_ATTRIBUTE in span.attributes || 'events' in span || 'endTime' in span)).toEqual([]);
   });
 });
 
