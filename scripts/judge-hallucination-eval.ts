@@ -27,6 +27,7 @@
  *
  * Usage:
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-hallucination-eval.ts --yes
+ *   JUDGE_MODEL=<id> … # judge with <id> instead of Haiku (judge-spec.ts)
  */
 
 import { sum } from 'd3-array';
@@ -38,7 +39,8 @@ import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-sche
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import type { Turn } from './judge-turns.js';
 import { resetFailureTracking } from './judge-failures.js';
-import { FAITHFULNESS_EVAL_NAME, HAIKU_MODEL } from './judge-criteria.js';
+import { FAITHFULNESS_EVAL_NAME } from './judge-criteria.js';
+import { resolveJudgeSpec, type JudgeSpec } from './judge-spec.js';
 import {
   createConsolidatedProvider,
   evaluateTurnConsolidated,
@@ -124,7 +126,7 @@ const TABLE_CELL_WIDTH = 12;
 // Types
 // ---------------------------------------------------------------------------
 
-export type ParsedArgs = OneShotArgs & { referencePath: string };
+export type ParsedArgs = OneShotArgs & { referencePath: string; judge?: JudgeSpec };
 
 export type HallucinationTurn = Pick<QualityTurn, 'sessionId' | 'timestamp' | 'hasTools' | 'expected' | 'reference'>
   & Record<Configuration, Record<string, number>>;
@@ -140,9 +142,11 @@ export type ComplementCount = {
 // Arguments and files
 // ---------------------------------------------------------------------------
 
-export function parseArgs(argv: readonly string[]): ParsedArgs {
-  return parseOneShotArgs(argv, { values: [REFERENCE_FLAG] }, { referencePath: PRIOR_REFERENCE_PATH }, cli => ({
+/** The judge is JUDGE_MODEL / JUDGE_PROVIDER from `env`, else Haiku; a bad one is an argument error. */
+export function parseArgs(argv: readonly string[], env: NodeJS.ProcessEnv = process.env): ParsedArgs {
+  return parseOneShotArgs<{ referencePath: string; judge?: JudgeSpec }>(argv, { values: [REFERENCE_FLAG] }, { referencePath: PRIOR_REFERENCE_PATH }, cli => ({
     referencePath: cli.value(REFERENCE_FLAG) ?? PRIOR_REFERENCE_PATH,
+    judge: resolveJudgeSpec({ cli: {}, env, batch: false }),
   }));
 }
 
@@ -164,16 +168,16 @@ export function readPriorReference(path: string): QualityTurn[] {
 
 export function estimateRunSpend(
   turns: readonly Turn[],
-  haikuPricing: RequestPricing,
+  judgeModelPricing: RequestPricing,
   referencePricing: RequestPricing,
-): { haikuUsd: number; referenceCalls: number; referenceUsd: number; totalUsd: number } {
-  const haiku = estimateSpend(turns, haikuPricing);
+): { judgeUsd: number; referenceCalls: number; referenceUsd: number; totalUsd: number } {
+  const judged = estimateSpend(turns, judgeModelPricing);
   // The candidate is the consolidated call plus one criterion, so price it as a second consolidated run.
-  const haikuUsd = haiku.perCriterionUsd + 2 * haiku.consolidatedUsd;
+  const judgeUsd = judged.perCriterionUsd + 2 * judged.consolidatedUsd;
   const toolTurns = turns.filter(t => t.toolResults.length > 0);
   const inputTokens = sum(toolTurns, t => estimateCallInputTokens(t, HALLUCINATION_CRITERIA));
   const referenceUsd = listCostUsd(inputTokens, toolTurns.length * REFERENCE_OUTPUT_TOKENS_PER_CALL, referencePricing);
-  return { haikuUsd, referenceCalls: toolTurns.length, referenceUsd, totalUsd: haikuUsd + referenceUsd };
+  return { judgeUsd, referenceCalls: toolTurns.length, referenceUsd, totalUsd: judgeUsd + referenceUsd };
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +256,8 @@ async function main(): Promise<void> {
   const credential = admitOneShot(runGuard, args);
   if (!credential) return;
 
-  const haikuPricing = judgePricing();
+  const judgeSpec = args.judge ?? resolveJudgeSpec({ cli: {}, batch: false });
+  const judgeModelPricing = judgePricing(judgeSpec.model);
   const referencePricing = judgePricing(REFERENCE_MODEL);
 
   if (!existsSync(FROZEN_TURNS_PATH)) return refuse(`no frozen turns at ${FROZEN_TURNS_PATH}; judge-quality-eval.ts writes them`);
@@ -262,9 +267,9 @@ async function main(): Promise<void> {
   console.log(`[hallucination] ${prior.length} turns from ${args.referencePath} matched the frozen turns`);
   if (prior.length === 0) return refuse('no prior reference turn matches a frozen turn');
 
-  const estimate = estimateRunSpend(prior.map(t => getOrThrow(byKey, turnKey(t))), haikuPricing, referencePricing);
+  const estimate = estimateRunSpend(prior.map(t => getOrThrow(byKey, turnKey(t))), judgeModelPricing, referencePricing);
   console.log(
-    `[hallucination] estimate: Haiku ~${formatUsd(estimate.haikuUsd)}, `
+    `[hallucination] estimate: ${judgeSpec.model} ~${formatUsd(estimate.judgeUsd)}, `
     + `${estimate.referenceCalls} reference calls ~${formatUsd(estimate.referenceUsd)}`,
   );
   const overCap = spendCapReason(estimate.totalUsd, MAX_ESTIMATED_SPEND_USD);
@@ -279,9 +284,10 @@ async function main(): Promise<void> {
     consolidatedDirect: createCallUsageTotals(),
     reference: createCallUsageTotals(),
   };
-  const judge = createLLMJudge(await createPerCriterionProvider(credential.apiKey, usage => addCallUsage(totals.perCriterion, usage)));
-  const consolidated = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addCallUsage(totals.consolidated, u) });
-  const direct = await createConsolidatedProvider({ apiKey: credential.apiKey, onUsage: u => addCallUsage(totals.consolidatedDirect, u) });
+  const model = judgeSpec.model;
+  const judge = createLLMJudge(await createPerCriterionProvider(credential.apiKey, usage => addCallUsage(totals.perCriterion, usage), model));
+  const consolidated = await createConsolidatedProvider({ apiKey: credential.apiKey, model, onUsage: u => addCallUsage(totals.consolidated, u) });
+  const direct = await createConsolidatedProvider({ apiKey: credential.apiKey, model, onUsage: u => addCallUsage(totals.consolidatedDirect, u) });
   const reference = await createReferenceProvider(credential.apiKey, u => addCallUsage(totals.reference, u));
   const caches: Record<'consolidated' | 'consolidatedDirect' | 'reference', EvaluationStepsCache> = {
     consolidated: new Map(),
@@ -289,7 +295,7 @@ async function main(): Promise<void> {
     reference: new Map(),
   };
 
-  const spentUsd = (): number => sum(CONFIGURATIONS, c => tokenUsageCostUsd(totals[c], haikuPricing))
+  const spentUsd = (): number => sum(CONFIGURATIONS, c => tokenUsageCostUsd(totals[c], judgeModelPricing))
     + tokenUsageCostUsd(totals.reference, referencePricing);
   const canSpend = (): boolean => spentUsd() < MAX_MEASURED_SPEND_USD;
   const turnErrors: TurnErrors[] = [];
@@ -313,10 +319,12 @@ async function main(): Promise<void> {
       errors.push(`skipped, measured spend reached $${MAX_MEASURED_SPEND_USD}`);
     } else {
       try {
-        outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set()));
-        outcome.consolidated = scoresByName(await evaluateTurnConsolidated(consolidated, turn, new Set(), { stepsCache: caches.consolidated }));
+        outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set(), { judge: judgeSpec }));
+        outcome.consolidated = scoresByName(
+          await evaluateTurnConsolidated(consolidated, turn, new Set(), { stepsCache: caches.consolidated, criteria: { judge: judgeSpec } }),
+        );
         outcome.consolidatedDirect = scoresByName(
-          await evaluateTurnConsolidated(direct, turn, new Set(), { stepsCache: caches.consolidatedDirect, criteria: DIRECT_OPTIONS }),
+          await evaluateTurnConsolidated(direct, turn, new Set(), { stepsCache: caches.consolidatedDirect, criteria: { ...DIRECT_OPTIONS, judge: judgeSpec } }),
         );
         if (turn.toolResults.length > 0 && canSpend()) {
           const hallucination = await scoreReferenceHallucination(reference, turn, caches.reference);
@@ -340,7 +348,7 @@ async function main(): Promise<void> {
   ) as Record<Configuration | 'reference', ComplementCount>;
   const usage = Object.fromEntries(Object.entries(totals).map(([name, t]) => [
     name,
-    { ...t, usd: tokenUsageCostUsd(t, name === 'reference' ? referencePricing : haikuPricing) } satisfies CallUsageReport,
+    { ...t, usd: tokenUsageCostUsd(t, name === 'reference' ? referencePricing : judgeModelPricing) } satisfies CallUsageReport,
   ]));
 
   const results = {
@@ -353,7 +361,7 @@ async function main(): Promise<void> {
       method: 'hallucination: G-Eval on HALLUCINATION_CRITERIA, judged directly, one call per tool turn; '
         + 'every other criterion reused from the prior reference',
     },
-    haikuModel: HAIKU_MODEL,
+    judgeModel: judgeSpec.model,
     turnsEvaluated: scored.length,
     estimate,
     usage,

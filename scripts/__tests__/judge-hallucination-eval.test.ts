@@ -13,7 +13,8 @@ import {
 } from '../judge-hallucination-eval.js';
 import { YES_FLAG } from '../one-shot-eval.js';
 import type { ReferenceSummary } from '../judge-quality-eval.js';
-import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
+import { RELEVANCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, LEGACY_HAIKU_MODEL } from '../judge-criteria.js';
+import { DEFAULT_JUDGE_SPEC, JUDGE_MODEL_ENV } from '../judge-spec.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { makeSizedTurn, TEST_PRICING } from './support/fixtures.js';
 import { useTempDir } from './support/temp-dir.js';
@@ -35,7 +36,12 @@ function summary(maes: Record<string, number | null>): ReferenceSummary {
 
 describe('parseArgs', () => {
   it('defaults the reference to the JCP4 results file', () => {
-    expect(parseArgs([YES_FLAG])).toEqual({ yes: true, referencePath: PRIOR_REFERENCE_PATH });
+    expect(parseArgs([YES_FLAG], {})).toEqual({ yes: true, referencePath: PRIOR_REFERENCE_PATH, judge: DEFAULT_JUDGE_SPEC });
+  });
+
+  it('judges with JUDGE_MODEL when it is set, and refuses one it cannot price', () => {
+    expect(parseArgs([YES_FLAG], { [JUDGE_MODEL_ENV]: LEGACY_HAIKU_MODEL }).judge?.model).toBe(LEGACY_HAIKU_MODEL);
+    expect(parseArgs([YES_FLAG], { [JUDGE_MODEL_ENV]: 'no-such-model-0' }).error).toMatch(/no pricing row/);
   });
 
   it('takes an explicit reference path', () => {
@@ -137,6 +143,6 @@ describe('estimateRunSpend', () => {
   it('totals the Haiku and reference spend', () => {
     const spend = estimateRunSpend([toolTurn()], TEST_PRICING, TEST_PRICING);
 
-    expect(spend.totalUsd).toBe(spend.haikuUsd + spend.referenceUsd);
+    expect(spend.totalUsd).toBe(spend.judgeUsd + spend.referenceUsd);
   });
 });

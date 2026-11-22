@@ -12,6 +12,8 @@ import {
 } from '../judge-hallucination-probe.js';
 import { DEFAULT_LABELS_PATH } from '../judge-hallucination-compare.js';
 import { CliArgError } from '../cli-args.js';
+import { LEGACY_HAIKU_MODEL } from '../judge-criteria.js';
+import { DEFAULT_JUDGE_SPEC, JUDGE_MODEL_ENV } from '../judge-spec.js';
 
 function verdict(label: ClaimVerdict['label']): ClaimVerdict {
   return { claim: 'tests pass', label, evidence: 'none' };
@@ -21,7 +23,12 @@ const HALF = 0.5;
 
 describe('parseProbeArgs', () => {
   it.each(PROBE_METHODS)('accepts --method %s, defaulting the labels and the production reasoning settings', (method) => {
-    expect(parseProbeArgs([METHOD_FLAG, method])).toEqual({ method, labelsPath: DEFAULT_LABELS_PATH, reasoning: {} });
+    expect(parseProbeArgs([METHOD_FLAG, method], {})).toEqual({ method, labelsPath: DEFAULT_LABELS_PATH, reasoning: {}, judge: DEFAULT_JUDGE_SPEC });
+  });
+
+  it('judges with JUDGE_MODEL when it is set, and refuses one it cannot price', () => {
+    expect(parseProbeArgs([METHOD_FLAG, 'isolated'], { [JUDGE_MODEL_ENV]: LEGACY_HAIKU_MODEL }).judge.model).toBe(LEGACY_HAIKU_MODEL);
+    expect(() => parseProbeArgs([METHOD_FLAG, 'isolated'], { [JUDGE_MODEL_ENV]: 'no-such-model-0' })).toThrow(CliArgError);
   });
 
   it('takes thinking and effort overrides', () => {
