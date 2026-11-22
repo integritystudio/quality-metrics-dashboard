@@ -1,22 +1,18 @@
 import type { MultiAgentEvaluation } from '../../types.js';
 import type { WorkflowGraph } from '../../types/workflow-graph.js';
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
-import { PeriodEnum, ErrorMessage, type Period } from '../../lib/constants.js';
-import { HOOK_NAME, PARAM_ID_RE, isValidParam, jsonSafe } from '../api-constants.js';
+import { ERR_INVALID_SESSION_ID, ID_PATTERN } from '../../lib/query-schemas.js';
+import { HOOK_NAME, isValidParam, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
-import { handleRouteError, validQuery } from '../route-errors.js';
+import { WidePeriodQuery, handleRouteError, validQuery } from '../route-errors.js';
 import { agentStatsWindow, computeAgentStats } from '../aggregates/agent-stats.js';
 import { HOOK_ATTRIBUTES } from '../../lib/hook-attributes.js';
 import { HttpStatus } from '../../lib/http-constants.js';
 
 const LIMIT_AGENT_SPANS = 1000;
-const DEFAULT_AGENTS_PERIOD: Period = '30d';
-
-const AgentsQuery = z.object({ period: PeriodEnum.default(DEFAULT_AGENTS_PERIOD) });
 
 export const agentRoutes = new Hono();
 agentRoutes.onError(handleRouteError);
@@ -26,7 +22,7 @@ agentRoutes.onError(handleRouteError);
  * Dev-server route: a live query projected by `computeAgentStats`. Production
  * serves the `meta:agents:<period>` KV key the sync writes from the same function.
  */
-agentRoutes.get('/agents', validQuery(AgentsQuery), async (c) => {
+agentRoutes.get('/agents', validQuery(WidePeriodQuery), async (c) => {
   const { period } = c.req.valid('query');
   const now = new Date();
   const { windowStart, startDate, endDate } = agentStatsWindow(period, now);
@@ -81,8 +77,8 @@ function deriveSessionWorkflow(spans: SessionSpans, agentMap: Map<number, string
  */
 agentRoutes.get('/agents/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  if (!isValidParam(sessionId, ID_PATTERN)) {
+    return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   }
 
   const spans = await loadTracesBySessionId(sessionId);
@@ -109,8 +105,8 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
  */
 agentRoutes.get('/agents/:sessionId/graph', async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  if (!isValidParam(sessionId, ID_PATTERN)) {
+    return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   }
 
   const spans = await loadTracesBySessionId(sessionId);

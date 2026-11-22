@@ -2,14 +2,14 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
-import { PERIOD_MS, ErrorMessage } from '../../lib/constants.js';
+import { PERIOD_MS } from '../../lib/constants.js';
 import {
-  PARAM_ID_RE,
   isValidParam,
   toIsoWindowBound,
   DateBoundParamSchema,
   jsonSafe,
 } from '../api-constants.js';
+import { ERR_INVALID_SESSION_ID, ID_PATTERN } from '../../lib/query-schemas.js';
 import { computeSessionDetail } from '../session-detail.js';
 import {
   loadEvaluationsBySessionId,
@@ -54,8 +54,8 @@ const SessionQuery = z.object({ startDate: DateBoundParamSchema, endDate: DateBo
 
 sessionRoutes.get('/sessions/:sessionId', validQuery(SessionQuery), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, PARAM_ID_RE)) {
-    return c.json({ error: ErrorMessage.InvalidSessionIdFormat }, HttpStatus.BadRequest);
+  if (!isValidParam(sessionId, ID_PATTERN)) {
+    return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
   }
   const { startDate, endDate } = c.req.valid('query');
 

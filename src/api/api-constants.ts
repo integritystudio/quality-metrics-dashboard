@@ -25,11 +25,6 @@ export const COMMIT_SUBJECT_FALLBACK_MAX_CHARS = 80;
 /** Number of leading commit message lines to skip before body extraction. */
 export const COMMIT_BODY_START_LINE_INDEX = 2;
 
-/** Format validation for path parameters (session IDs, trace IDs). Min 2 chars; IDs in practice are much longer. */
-export const PARAM_ID_RE = /^[\w.:-]{2,128}$/;
-/** Format validation for metric name path parameters. Aliased to PARAM_ID_RE since both allow identical character sets. */
-export const PARAM_METRIC_NAME_RE = PARAM_ID_RE;
-
 /** Multiply/divide factor for rounding scores to 4 decimal places. */
 export const SCORE_ROUND_FACTOR = 10_000;
 

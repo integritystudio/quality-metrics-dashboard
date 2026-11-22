@@ -4,16 +4,6 @@
  * stated here rather than restated at each use site.
  */
 
-import { MAX_PAGE_LIMIT } from '../src/lib/worker-contract.js';
-import { ROLES } from '../src/lib/roles.js';
-
-const OR_LIST = new Intl.ListFormat('en', { type: 'disjunction' });
-
-/** Joins allowed values as "a, b, or c" for the 400 messages, so they follow the shared lists. */
-export function orList(values: Iterable<string>): string {
-  return OR_LIST.format(values);
-}
-
 export const ERR_AUTH_UNAVAILABLE = 'Authentication service unavailable';
 export const ERR_UNAUTHORIZED = 'Unauthorized';
 export const ERR_FORBIDDEN = 'Forbidden';
@@ -22,13 +12,7 @@ export const ERR_NO_ORG = 'No organization membership';
 export const ERR_FAILED_LOAD_USER_ROLES = 'Failed to load user roles';
 
 export const ERR_INVALID_REQUEST_BODY = 'Invalid request body';
-export const ERR_INVALID_QUERY = 'Invalid query parameters';
-export const ERR_INVALID_ROLE = `Invalid role. Must be ${orList(ROLES)}.`;
-export const ERR_INVALID_PAGINATION = `Invalid pagination params. limit must be 1–${MAX_PAGE_LIMIT}, offset must be >= 0.`;
 
-export const ERR_INVALID_METRIC_NAME = 'Invalid metric name';
-export const ERR_INVALID_TRACE_ID = 'Invalid traceId';
-export const ERR_INVALID_SESSION_ID = 'Invalid sessionId';
 export const ERR_INVALID_AGENT_ID = 'Invalid agentId';
 export const ERR_INVALID_USER_ID = 'Invalid userId';
 export const ERR_INVALID_ROLE_ID = 'Invalid roleId';

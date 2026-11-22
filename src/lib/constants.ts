@@ -5,20 +5,10 @@ import { DEFAULT_PERIOD, PeriodEnum, type Period } from './periods.js';
 export const enum ErrorMessage {
   InvalidResponseShape = 'Invalid response shape',
   MissingPeriodOrAgents = 'Invalid response: missing period or agents',
-  InvalidRole = 'Invalid role. Must be executive, operator, or auditor.',
-  InvalidMetricNameFormat = 'Invalid metric name format',
   InvalidTopN = 'Invalid topN parameter. Must be integer 1-50.',
   InvalidBucketCount = 'Invalid bucketCount parameter. Must be integer 2-20.',
-  InvalidLimit = 'Invalid limit. Must be integer 1-200.',
-  InvalidOffset = 'Invalid offset. Must be non-negative integer.',
-  InvalidSortBy = 'Invalid sortBy. Must be score_asc, score_desc, or timestamp_desc.',
-  InvalidScoreLabel = 'Invalid scoreLabel. Max 100 characters.',
   InvalidBuckets = 'Invalid buckets. Must be integer 3-30.',
-  InvalidInputKey = 'Invalid inputKey. Must be traceId or sessionId.',
-  InvalidSessionIdFormat = 'Invalid sessionId format',
-  InvalidTraceId = 'Invalid traceId',
   InvalidDateBound = 'Invalid startDate/endDate. Must be YYYY-MM-DD or an ISO 8601 datetime.',
-  InvalidQuery = 'Invalid query parameters',
 }
 
 export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);

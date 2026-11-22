@@ -20,8 +20,20 @@ import { summarizeQualityLive, type LiveEvaluation } from '../src/lib/quality-li
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { CONTENT_TYPE_HEADER, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
-import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, INVALID_PERIOD_MESSAGE } from '../src/lib/periods.js';
-import { COVERAGE_INPUT_KEYS, InputKeySchema, LimitSchema, OffsetSchema, SORT_BY_VALUES, SortBySchema, periodQuery } from '../src/lib/query-schemas.js';
+import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from '../src/lib/periods.js';
+import {
+  ERR_INVALID_METRIC_NAME,
+  ERR_INVALID_QUERY,
+  ERR_INVALID_SESSION_ID,
+  ERR_INVALID_TRACE_ID,
+  ID_PATTERN,
+  InputKeySchema,
+  LimitSchema,
+  OffsetSchema,
+  QUERY_FIELD_ERRORS,
+  SortBySchema,
+  periodQuery,
+} from '../src/lib/query-schemas.js';
 import { RoleSchema } from '../src/lib/roles.js';
 import {
   abort,
@@ -43,18 +55,8 @@ import {
   ERR_CALIBRATION_MALFORMED,
   ERR_INTERNAL,
   ERR_INVALID_AGENT_ID,
-  ERR_INVALID_METRIC_NAME,
-  ERR_INVALID_PAGINATION,
-  ERR_INVALID_QUERY,
-  ERR_INVALID_ROLE,
-  ERR_INVALID_SESSION_ID,
-  ERR_INVALID_TRACE_ID,
   ERR_ROUTING_TELEMETRY_MALFORMED,
-  orList,
 } from './error-messages.js';
-
-const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${orList(SORT_BY_VALUES)}.`;
-const ERR_INVALID_INPUT_KEY = `Invalid inputKey. Must be ${orList(COVERAGE_INPUT_KEYS)}.`;
 
 const PeriodQuery = periodQuery(DEFAULT_PERIOD);
 const WidePeriodQuery = periodQuery(DEFAULT_PERIOD_DETAIL);
@@ -72,20 +74,7 @@ const CoverageQuery = PeriodQuery.extend({
   inputKey: InputKeySchema,
 });
 
-/** The error each query field answers with; a schema reports issues in shape order. */
-const QUERY_FIELD_ERRORS: Record<string, string> = {
-  period: INVALID_PERIOD_MESSAGE,
-  role: ERR_INVALID_ROLE,
-  limit: ERR_INVALID_PAGINATION,
-  offset: ERR_INVALID_PAGINATION,
-  sortBy: ERR_INVALID_SORT_BY,
-  inputKey: ERR_INVALID_INPUT_KEY,
-};
-
 const KV_SCHEMA_VERSION = 1;
-
-const MAX_PARAM_LEN = 200;
-const ID_PATTERN = new RegExp(`^[\\w:.-]{1,${MAX_PARAM_LEN}}$`);
 
 function requireId(param: string, error: string): MiddlewareHandler<AppEnv> {
   return requireParam(param, ID_PATTERN, error);
