@@ -155,7 +155,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 | DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | Done | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | Done | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | P4 | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | Done | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-USE-TRACE-OWN-FETCH | Build `useTrace` on `useApiQuery` | Done | It carries a "must not drift" comment about the hook it duplicates. ~215 tokens. Source: repomix consolidation review, session 2026-11-21 |
 
 **DASH-PERMISSION-LITERALS-FOUR-COPIES.** `DashboardPermission` (`src/types/auth.ts`),
@@ -275,6 +275,14 @@ map / flush / all / throw-on-failure body as well.
 
 Acceptance: one `judgeRecord(turn, producer, judgeModel, scored)` beside `turnSourceFields`, and a test
 showing both paths' records are byte-identical to today's apart from `evaluator`.
+**Done (2026-11-21).** `judgeRecord` and `ScoredCriterion` live in `judge-turns.ts` beside
+`turnSourceFields`; `createEvalRecord` (with its unused `kind`/`cohort`/optional `judgeModel`) and
+`buildRecord` are gone. The batched entry points share `settleBatchedTurns` (`judge-batch-provider.ts`).
+Before the change, 12 records from both old builders (both producers, span / response-id / unanchored
+turns) were captured; `judgeRecord` reproduces them byte for byte. `judge-record.test.ts` pins that JSON text,
+and swapping two fields fails all four tests. `judge-turns.ts` now imports `judge-dedup.ts` and
+`qfe-label-ordinals.ts`; both already loaded under workerd, and the parent's
+`dashboard-pipeline-loads.workers.test.ts` passes. `test:scripts` is green (839).
 
 **DASH-USE-TRACE-OWN-FETCH.** `src/hooks/useTrace.ts` calls `useQuery` directly and re-implements the
 fetch, 404 handling and retry policy of `src/hooks/useApiQuery.ts`.
