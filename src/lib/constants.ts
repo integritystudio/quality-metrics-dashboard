@@ -1,5 +1,4 @@
 import { subMilliseconds } from 'date-fns';
-import { z } from 'zod';
 import { DEFAULT_PERIOD, PeriodEnum, type Period } from './periods.js';
 
 /** Reusable error messages for API and response validation. */
@@ -22,13 +21,6 @@ export const enum ErrorMessage {
   InvalidQuery = 'Invalid query parameters',
 }
 
-/** Zod schema for coverage input key param. Single source for type, values, and default. */
-export const InputKeySchema = z.enum(['traceId', 'sessionId']).default('traceId');
-export type InputKey = z.infer<typeof InputKeySchema>;
-export const DEFAULT_INPUT_KEY: InputKey = 'traceId';
-export const SortBySchema = z.enum(['score_asc', 'score_desc', 'timestamp_desc']).default('timestamp_desc');
-export type SortBy = z.infer<typeof SortBySchema>;
-export const DEFAULT_SORT_BY: SortBy = 'timestamp_desc';
 export const KNOWN_SOURCE_TYPES = new Set(['active', 'lazy', 'builtin', 'skill', 'settings', 'unknown']);
 
 export const TIME_MS = {

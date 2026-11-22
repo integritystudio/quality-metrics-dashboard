@@ -8,6 +8,7 @@
 import { computeCoverageMatrix, type CoverageInput } from '../parent/quality-visualization.js';
 import { RULE_EVALUATOR_TYPE } from '../api-constants.js';
 import type { EvaluationResult } from '../../types.js';
+import type { InputKey } from '../../lib/query-schemas.js';
 
 /** What the coverage matrix reads from a row; a full `EvaluationResult` qualifies. */
 export type CoverageRow = CoverageInput & Pick<EvaluationResult, 'evaluatorType'>;
@@ -37,7 +38,7 @@ export function filterJudgeEvals<Row extends Pick<EvaluationResult, 'evaluatorTy
 export function computeCoverage(
   evaluationsByMetric: Map<string, CoverageRow[]>,
   options: {
-    inputKey: 'traceId' | 'sessionId';
+    inputKey: InputKey;
     maxInputs?: number;
   },
 ): ReturnType<typeof computeCoverageMatrix> {

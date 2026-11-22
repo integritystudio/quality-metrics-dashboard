@@ -1,6 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { Period, CoverageMatrix } from '../types.js';
-import { DEFAULT_INPUT_KEY, type InputKey } from '../lib/constants.js';
+import { DEFAULT_INPUT_KEY, type InputKey } from '../lib/query-schemas.js';
 import { useApiQuery } from './useApiQuery.js';
 
 /** The columnar matrix the Worker and dev API both return (CVG-1). */

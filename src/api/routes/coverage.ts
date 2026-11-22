@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { z } from 'zod';
-import { PeriodSchema, InputKeySchema, computePeriodDates } from '../../lib/constants.js';
+import { PeriodSchema, computePeriodDates } from '../../lib/constants.js';
+import { InputKeySchema } from '../../lib/query-schemas.js';
 import { validQuery, handleRouteError } from '../route-errors.js';
 import { computeCoverage } from '../aggregates/coverage.js';
 

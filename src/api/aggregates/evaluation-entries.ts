@@ -18,11 +18,10 @@ import { projectEvaluationRow } from './evaluation-rows.js';
 import { DEGRADATION_KV_KEY, dashboardEntry, toKVValue, type KVEntry } from './kv-entry.js';
 import { computeMetricDetailFromBaseline, metricDetailKey, type QualityMetricConfig } from './metric-detail.js';
 import { computeTrend, trendKey } from './trend.js';
+import { COVERAGE_INPUT_KEYS } from '../../lib/query-schemas.js';
 
 const LOG_PREFIX = '[evaluation-entries]';
 
-/** Input axes the coverage matrix is built for — one KV key per (period, axis). */
-export const COVERAGE_INPUT_KEYS = ['traceId', 'sessionId'] as const;
 /**
  * Hard cap on the number of input columns stored per coverage key.
  * The dashboard grid renders at most `COVERAGE_GRID_MAX_INPUTS = 30`, so a few

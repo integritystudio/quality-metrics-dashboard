@@ -4,8 +4,9 @@ import { sanitizeErrorForResponse } from './parent/error-sanitizer.js';
 import { getQualityMetric } from './parent/quality-metrics.js';
 import { PARAM_METRIC_NAME_RE, isValidParam } from './api-constants.js';
 import type { QualityMetricConfig } from './aggregates/metric-detail.js';
-import { ErrorMessage, PeriodSchema } from '../lib/constants.js';
-import { INVALID_PERIOD_MESSAGE } from '../lib/periods.js';
+import { ErrorMessage } from '../lib/constants.js';
+import { DEFAULT_PERIOD, INVALID_PERIOD_MESSAGE } from '../lib/periods.js';
+import { periodQuery } from '../lib/query-schemas.js';
 import { queryValidator } from '../lib/query-validator.js';
 import { HttpStatus } from '../lib/http-constants.js';
 
@@ -31,7 +32,7 @@ export function validQuery<T extends z.ZodType>(schema: T): ReturnType<typeof qu
 }
 
 /** The query of a route that reads only `period`. */
-export const PeriodQuery = z.object({ period: PeriodSchema });
+export const PeriodQuery = periodQuery(DEFAULT_PERIOD);
 
 /** An empty `?field=` reads as absent, so an optional field takes its default. */
 export function blankAsAbsent<T extends z.ZodType>(schema: T): z.ZodPreprocess<T> {

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { CoverageGrid } from '../components/CoverageGrid.js';
 import { useCoverage } from '../hooks/useCoverage.js';
 import { PageShell } from '../components/PageShell.js';
-import { DEFAULT_INPUT_KEY, SKELETON_HEIGHT_LG, type InputKey } from '../lib/constants.js';
+import { SKELETON_HEIGHT_LG } from '../lib/constants.js';
+import { DEFAULT_INPUT_KEY, type InputKey } from '../lib/query-schemas.js';
 import type { Period } from '../types.js';
 
 export function CoveragePage({ period }: { period: Period }) {

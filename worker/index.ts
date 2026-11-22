@@ -9,8 +9,6 @@ import { PERMISSION } from '../src/lib/org-rbac.js';
 import {
   AGENT_STATS_KEY_PREFIX,
   CODE_QUALITY_KV_KEY,
-  DEFAULT_PAGE_LIMIT,
-  MAX_PAGE_LIMIT,
   METRIC_DETAIL_KEY_PREFIX,
   ORG_ID_HEADER,
   QUALITY_LIVE_PERIOD,
@@ -22,7 +20,8 @@ import { summarizeQualityLive, type LiveEvaluation } from '../src/lib/quality-li
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { CONTENT_TYPE_HEADER, HttpStatus } from '../src/lib/http-constants.js';
 import { queryValidator } from '../src/lib/query-validator.js';
-import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, INVALID_PERIOD_MESSAGE, PeriodEnum, type Period } from '../src/lib/periods.js';
+import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, INVALID_PERIOD_MESSAGE } from '../src/lib/periods.js';
+import { COVERAGE_INPUT_KEYS, InputKeySchema, LimitSchema, OffsetSchema, SORT_BY_VALUES, SortBySchema, periodQuery } from '../src/lib/query-schemas.js';
 import { RoleSchema } from '../src/lib/roles.js';
 import {
   abort,
@@ -54,19 +53,9 @@ import {
   orList,
 } from './error-messages.js';
 
-const VALID_SORT_BY = ['timestamp_desc', 'score_asc', 'score_desc'] as const;
-const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${orList(VALID_SORT_BY)}.`;
+const ERR_INVALID_SORT_BY = `Invalid sortBy. Must be ${orList(SORT_BY_VALUES)}.`;
+const ERR_INVALID_INPUT_KEY = `Invalid inputKey. Must be ${orList(COVERAGE_INPUT_KEYS)}.`;
 
-const PaginationSchema = z.object({
-  limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT),
-  offset: z.coerce.number().int().min(0).default(0),
-});
-const VALID_INPUT_KEYS = ['traceId', 'sessionId'] as const;
-const ERR_INVALID_INPUT_KEY = `Invalid inputKey. Must be ${orList(VALID_INPUT_KEYS)}.`;
-
-function periodQuery(fallback: Period): z.ZodObject<{ period: z.ZodDefault<typeof PeriodEnum> }> {
-  return z.object({ period: PeriodEnum.default(fallback) });
-}
 const PeriodQuery = periodQuery(DEFAULT_PERIOD);
 const WidePeriodQuery = periodQuery(DEFAULT_PERIOD_DETAIL);
 const DashboardQuery = PeriodQuery.extend({
@@ -74,12 +63,13 @@ const DashboardQuery = PeriodQuery.extend({
   role: RoleSchema.or(z.literal('')).optional(),
 });
 const MetricEvaluationsQuery = PeriodQuery.extend({
-  ...PaginationSchema.shape,
-  sortBy: z.enum(VALID_SORT_BY).default('timestamp_desc'),
+  limit: LimitSchema,
+  offset: OffsetSchema,
+  sortBy: SortBySchema,
   scoreLabel: z.string().optional(),
 });
 const CoverageQuery = PeriodQuery.extend({
-  inputKey: z.enum(VALID_INPUT_KEYS).default('traceId'),
+  inputKey: InputKeySchema,
 });
 
 /** The error each query field answers with; a schema reports issues in shape order. */

@@ -1,7 +1,8 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { EvalRow } from '../components/EvaluationTable.js';
 import type { Period } from '../types.js';
-import { DEFAULT_PERIOD, DEFAULT_SORT_BY, type SortBy } from '../lib/constants.js';
+import { DEFAULT_PERIOD } from '../lib/constants.js';
+import { DEFAULT_SORT_BY, type SortBy } from '../lib/query-schemas.js';
 import { DEFAULT_PAGE_LIMIT } from '../lib/worker-contract.js';
 import { useApiQuery } from './useApiQuery.js';
 
