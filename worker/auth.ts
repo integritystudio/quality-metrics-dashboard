@@ -17,6 +17,7 @@ import {
   factory,
   forbidden,
   internalError,
+  parseRows,
   safeArray,
   unauthorized,
   type AppContext,
@@ -121,19 +122,13 @@ export function orgGrant(
 }
 
 function parseMemberships(raw: unknown): OrgMembershipSummary[] {
-  const memberships: OrgMembershipSummary[] = [];
-  for (const row of safeArray(raw)) {
-    const parsed = OrgMembershipRowSchema.safeParse(row);
-    if (!parsed.success || !parsed.data.organizations) continue;
-    memberships.push({
-      orgId: parsed.data.organizations.id,
-      slug: parsed.data.organizations.slug,
-      name: parsed.data.organizations.name,
-      membershipRole: parsed.data.role,
-      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
-    });
-  }
-  return memberships;
+  return parseRows(OrgMembershipRowSchema, raw).flatMap(({ role, organizations }) => organizations ? [{
+    orgId: organizations.id,
+    slug: organizations.slug,
+    name: organizations.name,
+    membershipRole: role,
+    dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[role],
+  }] : []);
 }
 
 const AUTH_TIMEOUT_MS = 5000;
@@ -249,11 +244,8 @@ async function fetchGrants(supabase: PostgrestClient, appUserId: string, signal:
 type MembershipsResult = Awaited<ReturnType<typeof fetchGrants>>[1];
 
 /** The session lists a user's role names; permissions come from the active org's membership alone. */
-function parseRoleNames(rows: unknown[]): string[] {
-  return rows.flatMap((row) => {
-    const parsed = UserRoleRowSchema.safeParse(row);
-    return parsed.success && parsed.data.roles ? [parsed.data.roles.name] : [];
-  });
+function parseRoleNames(rows: unknown): string[] {
+  return parseRows(UserRoleRowSchema, rows).flatMap(({ roles }) => roles ? [roles.name] : []);
 }
 
 /**
@@ -328,6 +320,6 @@ export const authenticate = factory.createMiddleware(async (c, next) => {
     console.error('[auth] role fetch failed for user', user.appUserId, 'status:', rolesRes.status || NO_RESPONSE_STATUS);
     return c.json({ error: ERR_FAILED_LOAD_USER_ROLES }, HttpStatus.InternalServerError);
   }
-  orgScopedSession(c, { authUserId: auth0Id, user, roles: parseRoleNames(safeArray(rolesRes.data)), membershipsRes });
+  orgScopedSession(c, { authUserId: auth0Id, user, roles: parseRoleNames(rolesRes.data), membershipsRes });
   return next();
 });

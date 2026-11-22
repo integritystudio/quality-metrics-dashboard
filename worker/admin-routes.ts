@@ -14,6 +14,7 @@ import {
   ApiKeySchema,
   AssignRoleRequestSchema,
   UpdateMemberRoleRequestSchema,
+  type AdminUser,
 } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSION } from '../src/lib/org-rbac.js';
 import { UUID_PATTERN } from '../src/lib/worker-contract.js';
@@ -23,6 +24,7 @@ import {
   factory,
   forbidden,
   hasPermission,
+  parseRows,
   readJsonBody,
   requireParam,
   safeArray,
@@ -61,6 +63,9 @@ const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   c.set('orgId', session.activeOrgId);
   return next();
 });
+
+/** A `users` row as selected; its roles are joined in from `user_roles`. */
+const AdminUserRowSchema = AdminUserSchema.omit({ roles: true });
 
 /** Only owners (or staff) may grant, downgrade, or remove an `owner` membership. */
 function canTouchOwnerRole(session: WorkerSession): boolean {
@@ -112,18 +117,12 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       .eq('organization_id', c.get('orgId'));
     if (error) return c.json({ error: ERR_FETCH_MEMBERS }, HttpStatus.InternalServerError);
 
-    const members = [];
-    for (const row of safeArray(data)) {
-      const parsed = AdminMemberRowSchema.safeParse(row);
-      if (!parsed.success) continue;
-      members.push({
-        userId: parsed.data.user_id,
-        ...(parsed.data.users?.email ? { email: parsed.data.users.email } : {}),
-        membershipRole: parsed.data.role,
-        dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[parsed.data.role],
-      });
-    }
-    return c.json(members);
+    return c.json(parseRows(AdminMemberRowSchema, data).map((row) => ({
+      userId: row.user_id,
+      ...(row.users?.email ? { email: row.users.email } : {}),
+      membershipRole: row.role,
+      dashboardRole: DASHBOARD_ROLE_BY_MEMBERSHIP[row.role],
+    })));
   });
 
   app.post('/api/admin/members/:userId/role', requireOrgAdmin, requireUserId, async (c) => {
@@ -179,30 +178,17 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
 
     if (usersRes.error) return c.json({ error: ERR_FETCH_USERS }, HttpStatus.InternalServerError);
     if (roleRowsRes.error) return c.json({ error: ERR_FETCH_ROLE_ASSIGNMENTS }, HttpStatus.InternalServerError);
-    const rawUsers = safeArray(usersRes.data);
-    const rawRoleRows = safeArray(roleRowsRes.data);
 
-    const rolesByUser = new Map<string, Array<{ id: string; name: string }>>();
-    for (const row of rawRoleRows) {
-      const parsed = AdminUserRoleRowSchema.safeParse(row);
-      if (!parsed.success || !parsed.data.roles) continue;
-      const existing = rolesByUser.get(parsed.data.user_id) ?? [];
-      existing.push({ id: parsed.data.roles.id, name: parsed.data.roles.name });
-      rolesByUser.set(parsed.data.user_id, existing);
+    const rolesByUser = new Map<string, AdminUser['roles']>();
+    for (const { user_id, roles } of parseRows(AdminUserRoleRowSchema, roleRowsRes.data)) {
+      if (!roles) continue;
+      const existing = rolesByUser.get(user_id) ?? [];
+      existing.push({ id: roles.id, name: roles.name });
+      rolesByUser.set(user_id, existing);
     }
 
-    const users = [];
-    for (const raw of rawUsers) {
-      const r = raw as Record<string, unknown>;
-      const parsed = AdminUserSchema.safeParse({
-        id: r.id,
-        email: r.email,
-        created_at: r.created_at,
-        roles: rolesByUser.get(r.id as string) ?? [],
-      });
-      if (parsed.success) users.push(parsed.data);
-    }
-
+    const users: AdminUser[] = parseRows(AdminUserRowSchema, usersRes.data)
+      .map((user) => ({ ...user, roles: rolesByUser.get(user.id) ?? [] }));
     return c.json(users);
   });
 
@@ -212,12 +198,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       .order('name', { ascending: true });
     if (error) return c.json({ error: ERR_FETCH_ROLES }, HttpStatus.InternalServerError);
 
-    const rows = safeArray(data);
-    const roles = rows.flatMap((row) => {
-      const parsed = AdminRoleSchema.safeParse(row);
-      return parsed.success ? [parsed.data] : [];
-    });
-    return c.json(roles);
+    return c.json(parseRows(AdminRoleSchema, data));
   });
 
   app.post('/api/admin/users/:userId/roles', requireGlobalAdmin, requireUserId, async (c) => {
@@ -254,11 +235,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
       .order('created_at', { ascending: false });
     if (error) return c.json({ error: ERR_FETCH_KEYS }, HttpStatus.InternalServerError);
 
-    const keys = safeArray(data).flatMap((row) => {
-      const parsed = ApiKeySchema.safeParse(row);
-      return parsed.success ? [parsed.data] : [];
-    });
-    return c.json(keys);
+    return c.json(parseRows(ApiKeySchema, data));
   });
 
   app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, requireUuid('keyId', ERR_INVALID_KEY_ID), async (c) => {

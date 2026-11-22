@@ -52,6 +52,14 @@ export function safeArray<T>(val: unknown): T[] {
   return Array.isArray(val) ? val as T[] : [];
 }
 
+/** The rows of `data` that satisfy `schema`; a row that does not is dropped. */
+export function parseRows<T extends z.ZodType>(schema: T, data: unknown): Array<z.output<T>> {
+  return safeArray(data).flatMap((row) => {
+    const parsed = schema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 export function hasPermission(session: AppSession, permission: DashboardPermission): boolean {
   return session.permissions.includes(PERMISSION.admin) || session.permissions.includes(permission);
 }
