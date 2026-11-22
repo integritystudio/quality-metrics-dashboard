@@ -84,13 +84,11 @@ Failures are reported to Sentry (`SENTRY_DSN` from Doppler) via `e2e/integration
 |------|--------|--------|
 | 1. Derive | `derive-evaluations.ts` | Rule-based: tool_correctness, evaluation_latency, task_completion, over spans the cloud holds for the last 7 days (`--days=7 --post-days=2`, cloud-read Phase 1) — the last 2 days POSTed straight to ingest (Phase 3). No file since Phase 6, and never a record before 2026-09-28, whose D1 copies carry no id |
 | 2. Judge | `judge-evaluations.ts` | LLM-based: relevance, coherence, faithfulness, hallucination, over turns the cloud lists for the last 7 days (`--days=7`; turn text is the redacted turns `ship-turn-content.ts` posted, read back from `GET /v1/turns`, never a local transcript) — POSTed straight to ingest (Phase 4); a failed post waits in `.judge-pending.jsonl` for the next run |
-| 3. Sync | `sync-to-kv.ts` | Delta sync aggregates to Cloudflare KV (budget-based, priority: meta/agent > metrics > trends > traces) |
 
 ```bash
 npm run populate                    # full (needs a judge API key, see below)
 npm run populate -- --dry-run      # preview only, no writes
-npm run populate -- --skip-judge    # rule-based + sync
-npm run populate -- --skip-sync     # derive + judge
+npm run populate -- --skip-judge    # rule-based only
 npm run populate -- --limit 5      # judge at most 5 turns
 npm run populate -- --batch         # judge through the Message Batches API: 50% off, minutes not seconds
 npm run populate -- --per-criterion # one call per criterion (~10x cost)
@@ -207,8 +205,6 @@ npm run build                          # Build frontend (served by the Worker vi
 npx wrangler deploy                    # obs-toolkit-quality-metrics-api
 npx wrangler deploy --name quality-metrics-api   # production (integritystudio.dev)
 doppler run --project integrity-studio --config dev -- npx wrangler deploy --env dev
-npx tsx scripts/sync-to-kv.ts \
-  --budget=5000                        # Bulk sync to KV (default 450)
 ```
 
 **KV sync notes:**

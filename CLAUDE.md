@@ -15,7 +15,6 @@ npm run lint         # ESLint (src/, scripts/, worker/)
 npm run build        # Production build
 npm run populate             # Data pipeline (real judge; needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY)
 npm run test:e2e             # Playwright, chromium project (Auth0 stubbed; see E2E)
-npm run sync                 # KV sync only (--budget=3000 default)
 npm run deploy:worker        # Deploy Cloudflare Worker
 doppler run --project integrity-studio --config dev -- npm run test:e2e:integration  # Auth0 integration tests
 ```
@@ -67,7 +66,7 @@ Score display precision constants (use these, never raw `.toFixed()` literals):
 
 ## Data Pipeline (`scripts/`)
 
-`npm run populate` runs: hook-gap-check → derive → ship-turn-content → judge → sync-to-kv
+`npm run populate` runs: hook-gap-check → derive → ship-turn-content → judge. It writes no dashboard KV aggregate: the parent's `kv-sync` Workflow does, hourly
 
 Per-stage detail, exit codes and history: [`docs/data-pipeline.md`](docs/data-pipeline.md). The rules:
 
@@ -76,7 +75,7 @@ Per-stage detail, exit codes and history: [`docs/data-pipeline.md`](docs/data-pi
 - **`ship-turn-content.ts`** — redacts each judge turn from this machine's transcripts (R10 rules, tool results included) and POSTs it to ingest `/v1/turns` with the turn's own account key, skipping turns the cloud already holds. A turn with no account, or whose redaction was truncated, never leaves. Runs before the judge unless `--skip-judge`/`--skip-ship-turns`; exits 13/14 are soft. Ingest keeps 30 days; an org opts out with a row in D1 `turn_content_opt_out` (403 `turn_content_opted_out`, then purged).
 - **`hook-gap-check.ts`** — reads this machine's transcripts over the judge's window and flags background sessions (`sessionKind: 'bg'`) that closed turns of 5 s or more without a `stop_hook_summary`: their hooks did not run, so their spans, logs and metrics were never written and cannot be recovered. Exit 15 (soft) for a session not yet acknowledged; acknowledge one in `scripts/hook-gap-known.json` (session id, `through` = its last gap turn, reason) and those turns are still printed, as known, without failing the run; a later gap in the same session fails it again. On CLI 2.1.330 every background session launched from `~` ran no hooks (2026-11-20). Skipped with `--skip-judge`/`--skip-hook-gap-check`.
 - **No upload stage.** Hook records (`hook:stop-session-summary`, `hook:stop-quality-evaluation`, `survival-fitness`) ship as log events through the span shipper. The judge backs up each account-stamped record as a log event in `logs-*.jsonl` (`evaluation-events.ts`), which the shipper delivers at the next session Stop, and a failed post keeps every record in `.judge-pending.jsonl` for its next run (`judge-pending.ts`). Mapping, routing and sending to ingest live in `evaluation-delivery.ts`. `--skip-upload` fails as a removed flag.
-- **`sync-to-kv.ts`** — delta sync aggregates to Cloudflare KV (priority: every non-trace key > traces), minus the keys another writer owns: the families in `WORKFLOW_OWNED_FAMILIES` (`src/api/aggregates/kv-entry.ts`; `correlations:`, `coverage:`, `pipeline:`, `dashboard:`, `metric:`, `trend:`, `meta/dashboard/degradation-signals:` since 2026-11-21; `session:`, `trace:`, `evaluations:trace:`, `agent:`, `meta:agents:` and the heartbeats `meta:lastSync` and `system:lastSync` since 2026-11-22), which the parent's Workflow writes hourly, and `meta:calibration`, which derive publishes. It also forgets those keys' hashes, or its prune step would delete them. The KV client is `scripts/kv-client.ts`. Every entry it writes is computed by `src/api/aggregates/org-kv-entries.ts` (`computeOrgKvEntries`), which reads no file or env; the evaluation, session, agent and trace family values come from the single-partition builders in `src/api/aggregates/evaluation-entries.ts`, `session-entries.ts` and `trace-entries.ts` (serialisation and the per-trace TTL in `kv-entry.ts`), which the parent's Workflow port calls one partition per step and must stay hash-equal to. The script keeps the delta state and the Cloudflare writes; it holds no owner-local input now that derive publishes `meta:calibration` and the Workflow keeps the degradation breach history in KV.
+- **No KV sync stage** (removed 2026-11-22, with `scripts/sync-to-kv.ts` and `npm run sync`). The parent's Workflow (`services/kv-sync-workflow/`) writes every key in `WORKFLOW_OWNED_FAMILIES` (`src/api/aggregates/kv-entry.ts`) hourly, from D1; derive publishes `meta:calibration` (`scripts/kv-client.ts`). `--skip-sync` and `--sync-budget` fail as removed flags. The whole-org build the CLI wrote from stays in `src/api/aggregates/org-kv-entries.ts` (`computeOrgKvEntries`) as the reference the Workflow's parity tests and parity gate compare against; the Workflow calls the same single-partition builders (`evaluation-entries.ts`, `session-entries.ts`, `trace-entries.ts`, serialisation and the per-trace TTL in `kv-entry.ts`) one partition per step and must stay hash-equal to it. **Nothing writes the `/api/code-quality` key now**: it keeps the CLI's last value until the Workflow ports it (parent `KV-CODE-QUALITY-SUMMARY-PORT`).
 - **Exit codes 6–10 and 12–15 are soft**: `populate` retries network failures (~30 min) and carries on to the next stage. Re-running any stage is safe; ingest drops ids the org already has.
 
 **Segment judge series on producer, judge model and date.** `dashboard:judge-consolidated` and `dashboard:judge-evaluations` (the record's `evaluator` field) score faithfulness and hallucination differently, and everything else on the record is identical. Records before 2026-09-22 all carry `dashboard:judge-evaluations` whichever path produced them. The judge model is a top-level `judgeModel` field since 2026-09-30.
@@ -86,14 +85,6 @@ Full run with its Doppler env: `bash ../scripts/run-dashboard-pipeline.sh`. **A 
 **Never loop the wrapper to clear a backlog.** Ingest drains hours behind derive's re-post, so a run that reads the cloud too soon re-judges turns and stores duplicate rows. Clear a backlog with one `--skip-derive --limit N` run, then trust the next dry run's `pending` only once the `dashboard:judge-consolidated` row count is flat across two polls.
 
 Requires parent `dist/` — run `npm run build` in observability-toolkit first.
-
-**`sync-to-kv.ts` notes** (the three former gotchas were fixed 2026-07-28/29 — see the parent's [v3.1.5 changelog](../docs/changelog/3.1.5/CHANGELOG.md), not BACKLOG):
-- It reads the **cloud API**, not local files — `new CloudBackend()` → `/v1/traces` + `/v1/logs`. Needs `OBTOOL_API_URL`/`OBTOOL_API_KEY` or it exits 1. (Still true.)
-- Reads auto-paginate past the 1000-row server cap — `CloudBackend.fetchAllPages` follows cursors until exhausted or the caller's `limit` is hit, so aggregates are **not** capped at 1000 (`CLOUD-PAGE-CAP`). Consequence: a `count >= 1000` means "more than one page", **not** "rows were dropped" — test truncation against the `limit` you passed.
-- Logs a run summary (computed/changed/unchanged/written/deferred, per-signal row counts, page-cap warning) (`SYNC-SILENT`).
-- `--dry-run` no longer mutates state: `saveSyncState`, `saveLastCoverage`, and degradation writes are gated on `!dryRun`, and all three sidecars are gitignored (`SYNC-DRYRUN-STATE`).
-
-The parent repo's Workflow (`services/kv-sync-workflow/`) is deployed and writes the families above; it also keeps the degradation breach history in KV, so `scripts/.degradation-state.json` is no longer read or written.
 
 **Test note**: `npm test` runs `src/__tests__` **and** `worker/__tests__` (Vite context). Script tests (`scripts/*.test.ts`) require parent `dist/` and are run separately with `npm run test:scripts`. CI runs `npm test src/ worker/` in both `.github/workflows/ci.yml` and `deploy.yml`; the parent is cloned and symlinked before that step so both suites have `@parent` available.
 
