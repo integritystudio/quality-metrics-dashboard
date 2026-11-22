@@ -1,3 +1,10 @@
+import { MonoTableHead, type TableColumn } from './MonoTableHead.js';
+
+const FRAMEWORK_ARTICLE_COLUMNS: readonly TableColumn[] = [
+  { label: 'Reference', align: 'left' },
+  { label: 'Dashboard Feature', align: 'left' },
+];
+
 const FRAMEWORKS = [
   {
     name: 'EU AI Act',
@@ -26,12 +33,7 @@ export function ComplianceFrameworkMap() {
         <div key={fw.name} className="card mb-3">
           <h4 className="mb-3 text-base">{fw.name}</h4>
           <table className="data-table eval-table w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Reference</th>
-                <th className="text-left">Dashboard Feature</th>
-              </tr>
-            </thead>
+            <MonoTableHead variant="plain" columns={FRAMEWORK_ARTICLE_COLUMNS} />
             <tbody>
               {fw.articles.map(a => (
                 <tr key={a.ref}>

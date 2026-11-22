@@ -46,6 +46,7 @@ import { INITIAL_PERIOD } from './lib/periods.js';
 import { ROUTE_PATHS, ROUTE_PATTERNS, routes } from './lib/routes.js';
 import { ROLES } from './lib/roles.js';
 import { lazyWithReload, retryFailedLazyLoads } from './lib/lazy-with-reload.js';
+import { StatDisplay } from './components/StatDisplay.js';
 import type {
   Period,
   QualityDashboardSummary,
@@ -223,17 +224,9 @@ function MetricDetailPage({ name, period }: { name: string; period: Period }) {
           {(['avg', 'min', 'max', 'p50', 'p95', 'p99'] as const)
             .filter((key) => detail.values[key] != null)
             .map((key) => (
-              <div key={key} className="text-center">
-                <div className="mono-xl font-semibold">
-                  {formatScore(detail.values[key])}
-                </div>
-                <div className="text-secondary text-xs uppercase">{key}</div>
-              </div>
+              <StatDisplay key={key} variant="tile" value={formatScore(detail.values[key])} label={key} />
             ))}
-          <div className="text-center">
-            <div className="mono-xl font-semibold">{detail.sampleCount}</div>
-            <div className="text-secondary text-xs uppercase">samples</div>
-          </div>
+          <StatDisplay variant="tile" value={detail.sampleCount} label="samples" />
         </div>
         <div className="flex-center gap-4 mt-3">
           <TrendIndicator trend={detail.trend} />

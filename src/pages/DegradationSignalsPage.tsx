@@ -3,6 +3,19 @@ import { PageShell } from '../components/PageShell.js';
 import { StatusBadge } from '../components/Indicators.js';
 import { SKELETON_HEIGHT_MD, SCORE_DISPLAY_PRECISION, PERCENT_MULTIPLIER } from '../lib/constants.js';
 import type { Period } from '../types.js';
+import { MonoTableHead, type TableColumn } from '../components/MonoTableHead.js';
+
+const SIGNAL_COLUMNS: readonly TableColumn[] = [
+  { label: 'Metric' },
+  { label: 'Status' },
+  { label: 'EWMA Drift' },
+  { label: 'Variance Trend' },
+  { label: 'Variance Ratio' },
+  { label: 'Consecutive Breaches' },
+  { label: 'Confirmed' },
+  { label: 'Coverage Dropout' },
+  { label: 'Latency Skew' },
+];
 
 const COVERAGE_DROPOUT_PRECISION = 1;
 
@@ -70,19 +83,7 @@ export function DegradationSignalsPage({ period }: { period: Period }) {
 
           <div className="card mb-3">
             <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th>Status</th>
-                  <th>EWMA Drift</th>
-                  <th>Variance Trend</th>
-                  <th>Variance Ratio</th>
-                  <th>Consecutive Breaches</th>
-                  <th>Confirmed</th>
-                  <th>Coverage Dropout</th>
-                  <th>Latency Skew</th>
-                </tr>
-              </thead>
+              <MonoTableHead variant="plain" columns={SIGNAL_COLUMNS} />
               <tbody>
                 {data.reports.map(r => (
                   <ReportRow key={r.metricName} report={r} />

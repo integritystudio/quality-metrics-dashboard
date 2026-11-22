@@ -3,6 +3,22 @@ import { useCodeQuality } from '../hooks/useCodeQuality.js';
 import { PageShell } from '../components/PageShell.js';
 import { CODE_QUALITY_WARN_THRESHOLD, CONTENT_KIND, SKELETON_HEIGHT_MD, SURVIVAL_COHORT, type SurvivalCohort, PERCENT_MULTIPLIER } from '../lib/constants.js';
 import type { AgentWindowStats, AgentVersionStats } from '../api/routes/code-quality.js';
+import { MonoTableHead, type TableColumn } from '../components/MonoTableHead.js';
+
+const SURVIVAL_COLUMNS: readonly TableColumn[] = [
+  { label: 'Agent' },
+  { label: 'Version' },
+  { label: 'Survival' },
+  { label: 'Churn' },
+  { label: 'Deletion' },
+  { label: 'Checkpoints' },
+];
+const VERSION_ROLLOUT_COLUMNS: readonly TableColumn[] = [
+  { label: 'Agent' },
+  { label: 'Version' },
+  { label: 'Invocations' },
+  { label: 'Last Seen' },
+];
 
 const RATE_PRECISION = 1;
 /** The window D7 and Tier 3 fitness read; earlier windows are progress only. */
@@ -36,16 +52,7 @@ function SurvivalTable({ title, note, rows, warnBelowThreshold }: SurvivalTableP
       <h3 className="text-base mb-1">{title}</h3>
       <p className="text-secondary text-xs mb-2">{note}</p>
       <table className="data-table">
-        <thead>
-          <tr>
-            <th>Agent</th>
-            <th>Version</th>
-            <th>Survival</th>
-            <th>Churn</th>
-            <th>Deletion</th>
-            <th>Checkpoints</th>
-          </tr>
-        </thead>
+        <MonoTableHead variant="plain" columns={SURVIVAL_COLUMNS} />
         <tbody>
           {rows.map(r => (
             <tr key={`${r.agentName}-${r.agentVersion}-${r.cohort}-${r.contentKind}`}>
@@ -112,14 +119,7 @@ function VersionRolloutTable({ rows }: { rows: AgentVersionStats[] }) {
     <div className="card">
       <h3 className="text-base mb-2">Candidate Versions (last 90 days)</h3>
       <table className="data-table">
-        <thead>
-          <tr>
-            <th>Agent</th>
-            <th>Version</th>
-            <th>Invocations</th>
-            <th>Last Seen</th>
-          </tr>
-        </thead>
+        <MonoTableHead variant="plain" columns={VERSION_ROLLOUT_COLUMNS} />
         <tbody>
           {rows.map(r => (
             <tr key={`${r.agentName}-${r.agentVersion}-${r.cohort}`}>

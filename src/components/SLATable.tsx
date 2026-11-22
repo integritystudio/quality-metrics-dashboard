@@ -1,21 +1,22 @@
 import { formatScore } from '../lib/quality-utils.js';
 import type { SLAComplianceResult } from '../types.js';
 import { StatusBadge } from './Indicators.js';
+import { MonoTableHead, type TableColumn } from './MonoTableHead.js';
+
+const SLA_COLUMNS: readonly TableColumn[] = [
+  { label: 'Metric' },
+  { label: 'Target' },
+  { label: 'Actual' },
+  { label: 'Gap' },
+  { label: 'Status' },
+];
 
 export function SLATable({ slas }: { slas: SLAComplianceResult[] }) {
   if (slas.length === 0) return null;
 
   return (
     <table className="data-table sla-table">
-      <thead>
-        <tr>
-          <th>Metric</th>
-          <th>Target</th>
-          <th>Actual</th>
-          <th>Gap</th>
-          <th>Status</th>
-        </tr>
-      </thead>
+      <MonoTableHead variant="plain" columns={SLA_COLUMNS} />
       <tbody>
         {slas.map((sla) => (
           <tr key={`${sla.sla.metric}-${sla.sla.aggregation}`}>

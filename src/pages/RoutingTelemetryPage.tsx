@@ -3,6 +3,13 @@ import { PageShell } from '../components/PageShell.js';
 import { PERCENT_MULTIPLIER, SKELETON_HEIGHT_MD, USD_DISPLAY_PRECISION } from '../lib/constants.js';
 import { formatPercent, byValueDesc, percentOf } from '../lib/quality-utils.js';
 import type { Period } from '../types.js';
+import { MonoTableHead, type TableColumn } from '../components/MonoTableHead.js';
+import { StatDisplay } from '../components/StatDisplay.js';
+
+const DISTRIBUTION_COUNT_COLUMNS: readonly TableColumn[] = [{ label: 'Count' }, { label: 'Share' }];
+const STRATEGY_COLUMNS: readonly TableColumn[] = [
+  { label: 'Strategy' }, { label: 'Count' }, { label: 'Fallbacks' }, { label: 'Fallback Rate' },
+];
 
 function isStrategyGroup(g: object): g is RoutingTelemetryStrategyGroup {
   return 'strategy' in g && 'fallbackRate' in g;
@@ -18,13 +25,7 @@ function DistributionTable({ label, distribution, routedSpans }: {
     <div className="card mb-3">
       <h3 className="text-base font-semibold mb-3">{label} Distribution</h3>
       <table className="data-table">
-        <thead>
-          <tr>
-            <th>{label}</th>
-            <th>Count</th>
-            <th>Share</th>
-          </tr>
-        </thead>
+        <MonoTableHead variant="plain" columns={[{ label }, ...DISTRIBUTION_COUNT_COLUMNS]} />
         <tbody>
           {Object.entries(distribution)
             .toSorted(byValueDesc)
@@ -57,24 +58,10 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
 
           <div className="card mb-3">
             <div className="flex-wrap gap-8">
-              <div className="text-center">
-                <div className="mono-xl font-semibold">{data.summary.routedSpans}</div>
-                <div className="text-secondary text-xs uppercase">Routed Spans</div>
-              </div>
-              <div className="text-center">
-                <div className="mono-xl font-semibold">
-                  {formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)}
-                </div>
-                <div className="text-secondary text-xs uppercase">Fallback Rate</div>
-              </div>
-              <div className="text-center">
-                <div className="mono-xl font-semibold">${data.costSavings.toFixed(USD_DISPLAY_PRECISION)}</div>
-                <div className="text-secondary text-xs uppercase">Cost Savings</div>
-              </div>
-              <div className="text-center">
-                <div className="mono-xl font-semibold">{data.totalSpansScanned}</div>
-                <div className="text-secondary text-xs uppercase">Spans Scanned</div>
-              </div>
+              <StatDisplay variant="tile" value={data.summary.routedSpans} label="Routed Spans" />
+              <StatDisplay variant="tile" value={formatPercent(data.summary.fallbackRate * PERCENT_MULTIPLIER)} label="Fallback Rate" />
+              <StatDisplay variant="tile" value={`$${data.costSavings.toFixed(USD_DISPLAY_PRECISION)}`} label="Cost Savings" />
+              <StatDisplay variant="tile" value={data.totalSpansScanned} label="Spans Scanned" />
             </div>
           </div>
 
@@ -85,14 +72,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
             <div className="card mb-3">
               <h3 className="text-base font-semibold mb-3">Strategy Breakdown</h3>
               <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Strategy</th>
-                    <th>Count</th>
-                    <th>Fallbacks</th>
-                    <th>Fallback Rate</th>
-                  </tr>
-                </thead>
+                <MonoTableHead variant="plain" columns={STRATEGY_COLUMNS} />
                 <tbody>
                   {data.groups
                     .filter(isStrategyGroup)
@@ -119,14 +99,8 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
                 </span>
               </h3>
               <div className="flex-wrap gap-8">
-                <div className="text-center">
-                  <div className="mono-xl font-semibold">{Math.round(data.routingLatency.p50)}ms</div>
-                  <div className="text-secondary text-xs uppercase">p50</div>
-                </div>
-                <div className="text-center">
-                  <div className="mono-xl font-semibold">{Math.round(data.routingLatency.p99)}ms</div>
-                  <div className="text-secondary text-xs uppercase">p99</div>
-                </div>
+                <StatDisplay variant="tile" value={`${Math.round(data.routingLatency.p50)}ms`} label="p50" />
+                <StatDisplay variant="tile" value={`${Math.round(data.routingLatency.p99)}ms`} label="p99" />
               </div>
             </div>
           )}

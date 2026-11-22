@@ -6,6 +6,14 @@ import { ViewSection } from '../components/Section.js';
 import { SLATable } from '../components/SLATable.js';
 import { TimestampCell } from '../components/TimestampCell.js';
 import type { Period } from '../types.js';
+import { MonoTableHead, type TableColumn } from '../components/MonoTableHead.js';
+
+const VERIFICATION_COLUMNS: readonly TableColumn[] = [
+  { label: 'Timestamp', align: 'left' },
+  { label: 'Type', align: 'left' },
+  { label: 'Session', align: 'left' },
+  { label: 'Verifier', align: 'left' },
+];
 
 type SLAData = ReturnType<typeof useComplianceSLA>['data'];
 type VerificationData = ReturnType<typeof useComplianceVerifications>['data'];
@@ -42,14 +50,7 @@ function VerificationEvents({ data }: { data: VerificationData }): ReactNode {
   return (
     <div className="card">
       <table className="data-table eval-table w-full">
-        <thead>
-          <tr>
-            <th className="text-left">Timestamp</th>
-            <th className="text-left">Type</th>
-            <th className="text-left">Session</th>
-            <th className="text-left">Verifier</th>
-          </tr>
-        </thead>
+        <MonoTableHead variant="plain" columns={VERIFICATION_COLUMNS} />
         <tbody>
           {data.verifications.map((v) => (
             <tr key={`${v.sessionId}-${v.timestamp}`}>
