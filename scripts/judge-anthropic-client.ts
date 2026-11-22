@@ -1,41 +1,17 @@
 /**
- * The one place judge scripts construct an Anthropic client.
- *
- * Every client gets an HTTP/1.1 `fetch`. Node's built-in fetch (Node 26,
- * bundled undici 8) multiplexes all requests over one HTTP/2 session per
- * origin, and once that session is destroyed it keeps handing out the dead
- * session: every later request fails at once with `fetch failed <-
- * ERR_HTTP2_INVALID_SESSION`, which the SDK reports only as "Connection
- * error.", and no socket is opened. Over HTTP/1.1 a dead connection is dropped
- * from the pool and the next request opens a new one.
- *
- * Both imports are dynamic so that a `--dry-run` never loads the SDK.
+ * The one place judge scripts construct an Anthropic client. Every client gets
+ * the parent's HTTP/1.1 `http1Fetch` (NODE-FETCH-HTTP2-DEAD-SESSION). The SDK
+ * import is dynamic so that a `--dry-run` never loads it.
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ClientOptions } from '@anthropic-ai/sdk';
+import { http1Fetch } from '../../src/lib/core/http1-fetch.js';
 import { JUDGE_EFFORT } from './judge-criteria.js';
-
-type SdkFetch = NonNullable<ClientOptions['fetch']>;
-
-let http1Fetch: SdkFetch | undefined;
-
-async function getHttp1Fetch(): Promise<SdkFetch> {
-  if (http1Fetch) return http1Fetch;
-  const { fetch, Agent } = await import('undici');
-  const dispatcher = new Agent({ allowH2: false });
-  // The cast covers one method: the parent's `@types/node` types the global
-  // `Response` from `undici-types` 8, which has `textStream()`, and this app's
-  // undici 7 `Response` does not. No caller uses it. Drop it with undici 8.
-  const wrapped: SdkFetch = async (input, init) =>
-    fetch(input, { ...init, dispatcher }) as Promise<Response>;
-  http1Fetch = wrapped;
-  return wrapped;
-}
 
 export async function createJudgeAnthropicClient(options: ClientOptions = {}): Promise<Anthropic> {
   const { default: AnthropicClient } = await import('@anthropic-ai/sdk');
-  return new AnthropicClient({ ...options, fetch: await getHttp1Fetch() });
+  return new AnthropicClient({ ...options, fetch: http1Fetch });
 }
 
 export const MAX_TOKENS_STOP_REASON = 'max_tokens';

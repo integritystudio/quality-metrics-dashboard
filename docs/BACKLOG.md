@@ -129,7 +129,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 | DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | P4 | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | P4 | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | P4 | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | P4 | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | P4 | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-USE-TRACE-OWN-FETCH | Build `useTrace` on `useApiQuery` | P4 | It carries a "must not drift" comment about the hook it duplicates. ~215 tokens. Source: repomix consolidation review, session 2026-11-21 |
@@ -198,6 +198,9 @@ thing, and `cloud-trace-source.ts`, `kv-client.ts`, `evaluation-delivery.ts` and
 
 Acceptance: the parent's `http1Fetch` passed to the SDK client, the local builder and cast gone, and a
 real (non-dry-run) judge call succeeding.
+**Done (2026-11-21).** The client passes the parent's `http1Fetch`; it typechecks against
+`ClientOptions['fetch']` with no cast. The unit test still sees HTTP/1.1 ALPN, and a real Haiku call
+through `createJudgeAnthropicClient` returned `end_turn`.
 
 **DASH-POPULATE-STAGE-WRAPPERS.** `runDerive`, `runHookGapCheck`, `runShipTurns` and `runJudge` in
 `scripts/populate-dashboard.ts` each build arguments, call `runStep` or `runWithNetworkRetry`, and hand
