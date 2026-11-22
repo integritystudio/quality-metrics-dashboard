@@ -3,15 +3,17 @@ import {
   DERIVE_EXIT_INPUT_DRIFT,
   DERIVE_EXIT_POST_FAILED,
   DERIVE_EXIT_READ_FAILED,
-  DERIVE_SOFT_FAILURE_EXITS,
+  HOOK_GAP_EXIT_FOUND,
   JUDGE_EXIT_BATCH_WALL_CLOCK,
   JUDGE_EXIT_BILLING,
   JUDGE_EXIT_DISCOVERY_FAILED,
   JUDGE_EXIT_HIGH_FAILURE_RATE,
   JUDGE_EXIT_NO_SCORES,
   JUDGE_EXIT_POST_FAILED,
-  JUDGE_SOFT_FAILURE_EXITS,
   NETWORK_RETRY_DELAYS_MS,
+  SHIP_TURNS_EXIT_DISCOVERY_FAILED,
+  SHIP_TURNS_EXIT_POST_FAILED,
+  SOFT_FAILURE_EXITS,
   deriveScopeArgs,
   isTransientNetworkFailure,
   judgeScopeArgs,
@@ -114,16 +116,16 @@ describe('runWithRetry', () => {
 
 describe('pipeline exit-code contract', () => {
   it('treats a failed derive post as soft, so a network blip no longer stops judge, upload and sync', () => {
-    expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_POST_FAILED)).toBe(true);
-    expect(DERIVE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
+    expect(SOFT_FAILURE_EXITS.derive.has(DERIVE_EXIT_POST_FAILED)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.derive.has(1)).toBe(false);
   });
 
   it('treats a failed derive cloud read as soft, so reading /v1/traces first does not reopen that failure', () => {
-    expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_READ_FAILED)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.derive.has(DERIVE_EXIT_READ_FAILED)).toBe(true);
   });
 
   it('treats input drift as soft, so the run completes but still exits non-zero', () => {
-    expect(DERIVE_SOFT_FAILURE_EXITS.has(DERIVE_EXIT_INPUT_DRIFT)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.derive.has(DERIVE_EXIT_INPUT_DRIFT)).toBe(true);
   });
 
   it('gives every soft code its own number, none of them 0 or the generic 1', () => {
@@ -145,19 +147,19 @@ describe('pipeline exit-code contract', () => {
   });
 
   it('treats the judge\'s own codes as soft failures and nothing else', () => {
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BILLING)).toBe(true);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_NO_SCORES)).toBe(true);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_POST_FAILED)).toBe(true);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_DISCOVERY_FAILED)).toBe(true);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(1)).toBe(false);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(0)).toBe(false);
+    expect(SOFT_FAILURE_EXITS.judge.has(JUDGE_EXIT_BILLING)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.judge.has(JUDGE_EXIT_NO_SCORES)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.judge.has(JUDGE_EXIT_POST_FAILED)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.judge.has(JUDGE_EXIT_DISCOVERY_FAILED)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.judge.has(1)).toBe(false);
+    expect(SOFT_FAILURE_EXITS.judge.has(0)).toBe(false);
   });
 
   // Regression: the 06:00 runs on 2026-09-29 and 09-30 hit the judge's batch
   // wall clock, exited 1, and lost their sync
   // (JUDGE-BATCH-WALLCLOCK-ABORTS-RUN).
   it('treats the judge\'s batch wall clock as soft, so sync still runs', () => {
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.judge.has(JUDGE_EXIT_BATCH_WALL_CLOCK)).toBe(true);
   });
 
   it('bounds the network retry window to between fifteen and thirty minutes', () => {
@@ -170,6 +172,9 @@ describe('pipeline exit-code contract', () => {
 
 describe('nextStepAfter', () => {
   it.each([
+    ['hook-gap-check', HOOK_GAP_EXIT_FOUND],
+    ['ship-turns', SHIP_TURNS_EXIT_DISCOVERY_FAILED],
+    ['ship-turns', SHIP_TURNS_EXIT_POST_FAILED],
     ['derive', DERIVE_EXIT_POST_FAILED],
     ['derive', DERIVE_EXIT_READ_FAILED],
     ['derive', DERIVE_EXIT_INPUT_DRIFT],
@@ -184,7 +189,11 @@ describe('nextStepAfter', () => {
   });
 
   it.each([
+    ['hook-gap-check', 1],
+    ['ship-turns', 1],
+    ['ship-turns', DERIVE_EXIT_POST_FAILED],
     ['derive', 1],
+    ['derive', JUDGE_EXIT_POST_FAILED],
     ['judge', 1],
     ['judge', 0],
   ] as const)('returns false for hard %s exit %i', (stage, code) => {

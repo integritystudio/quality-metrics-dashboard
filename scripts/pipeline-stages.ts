@@ -82,43 +82,33 @@ export const SHIP_TURNS_EXIT_POST_FAILED = 14;
  * but the launchd wrapper should log it.
  */
 export const HOOK_GAP_EXIT_FOUND = 15;
-export const HOOK_GAP_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([HOOK_GAP_EXIT_FOUND]);
 
-/**
- * Judge exits populate-dashboard.ts forwards to its own exit instead of
- * aborting: the judge already said why, and the rule-based evaluations from
- * derive still deserve to reach the cloud.
- */
-export const JUDGE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([
-  JUDGE_EXIT_BILLING,
-  JUDGE_EXIT_NO_SCORES,
-  JUDGE_EXIT_HIGH_FAILURE_RATE,
-  JUDGE_EXIT_POST_FAILED,
-  JUDGE_EXIT_DISCOVERY_FAILED,
-  JUDGE_EXIT_BATCH_WALL_CLOCK,
-]);
-
-/** Derive exits populate forwards to its own exit instead of aborting, for the same reason. */
-export const DERIVE_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]);
-
-/** Shipping exits populate forwards: the judge still runs, on the turns already in the cloud. */
-export const SHIP_TURNS_SOFT_FAILURE_EXITS: ReadonlySet<number> = new Set([SHIP_TURNS_EXIT_DISCOVERY_FAILED, SHIP_TURNS_EXIT_POST_FAILED]);
-
-/** Stage name used in `nextStepAfter`. */
+/** A stage populate-dashboard.ts runs. */
 export type PipelineStage = 'hook-gap-check' | 'derive' | 'ship-turns' | 'judge';
 
 /**
- * Returns true when the pipeline should continue to the next step after
- * `stage` exits with `exitCode`. Centralises the per-stage soft-failure sets so
- * callers do not take a direct dependency on them.
+ * Each stage's exits populate-dashboard.ts forwards to its own exit instead of
+ * aborting: the stage already said why on its stderr, and the stages after it
+ * still deserve to run (the judge on the turns already in the cloud, derive's
+ * rule-based records still reaching it).
  */
+export const SOFT_FAILURE_EXITS: Readonly<Record<PipelineStage, ReadonlySet<number>>> = {
+  'hook-gap-check': new Set([HOOK_GAP_EXIT_FOUND]),
+  derive: new Set([DERIVE_EXIT_POST_FAILED, DERIVE_EXIT_READ_FAILED, DERIVE_EXIT_INPUT_DRIFT]),
+  'ship-turns': new Set([SHIP_TURNS_EXIT_DISCOVERY_FAILED, SHIP_TURNS_EXIT_POST_FAILED]),
+  judge: new Set([
+    JUDGE_EXIT_BILLING,
+    JUDGE_EXIT_NO_SCORES,
+    JUDGE_EXIT_HIGH_FAILURE_RATE,
+    JUDGE_EXIT_POST_FAILED,
+    JUDGE_EXIT_DISCOVERY_FAILED,
+    JUDGE_EXIT_BATCH_WALL_CLOCK,
+  ]),
+};
+
+/** True when the pipeline should go on to the next stage after `stage` exits with `exitCode`. */
 export function nextStepAfter(stage: PipelineStage, exitCode: number): boolean {
-  switch (stage) {
-    case 'hook-gap-check': return HOOK_GAP_SOFT_FAILURE_EXITS.has(exitCode);
-    case 'derive': return DERIVE_SOFT_FAILURE_EXITS.has(exitCode);
-    case 'ship-turns': return SHIP_TURNS_SOFT_FAILURE_EXITS.has(exitCode);
-    case 'judge': return JUDGE_SOFT_FAILURE_EXITS.has(exitCode);
-  }
+  return SOFT_FAILURE_EXITS[stage].has(exitCode);
 }
 
 /** The `--source=` family chose between local telemetry files and the cloud; only the cloud remains. */

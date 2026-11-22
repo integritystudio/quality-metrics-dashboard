@@ -25,7 +25,7 @@ import { type Turn } from '../judge-turns.js';
 import { evaluateTurnsConsolidatedBatched } from '../judge-consolidated.js';
 import { LLMJudge } from '../../../src/lib/judge/llm-judge-config.js';
 import { DEFAULT_API_KEY_ENV } from '../judge-credentials.js';
-import { JUDGE_EXIT_BATCH_WALL_CLOCK, JUDGE_SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
+import { JUDGE_EXIT_BATCH_WALL_CLOCK, SOFT_FAILURE_EXITS } from '../pipeline-stages.js';
 import { makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
@@ -586,7 +586,7 @@ describe('a consolidated --batch run cut short by the wall clock', () => {
       { usage: createUsageTotals(), estimatedUsd: 0, keySource: DEFAULT_API_KEY_ENV },
     );
     expect(summary.exitCode).toBe(JUDGE_EXIT_BATCH_WALL_CLOCK);
-    expect(JUDGE_SOFT_FAILURE_EXITS.has(summary.exitCode)).toBe(true);
+    expect(SOFT_FAILURE_EXITS.judge.has(summary.exitCode)).toBe(true);
     expect(summary.line).toContain('attempted=4 succeeded=2 failed=2 classes: wall-clock=2');
   });
 });

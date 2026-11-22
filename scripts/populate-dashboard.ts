@@ -147,7 +147,7 @@ type StepOutcome =
  * caller can classify the failure. The judge runs for an hour, so only the
  * short stages opt in.
  */
-function runStep(name: string, script: string, extraArgs: string[] = [], captureStderr = false): StepOutcome {
+function runStep(name: string, script: string, extraArgs: readonly string[] = [], captureStderr = false): StepOutcome {
   const start = performance.now();
   const child = spawnSync('npx', ['tsx', join(SCRIPTS_DIR, script), ...extraArgs], {
     stdio: ['inherit', 'inherit', captureStderr ? 'pipe' : 'inherit'],
@@ -173,7 +173,7 @@ function runStep(name: string, script: string, extraArgs: string[] = [], capture
  * Run a stage that needs the network, waiting out transient failures (DNS,
  * reset connections) on the schedule sized for the evening outages.
  */
-async function runWithNetworkRetry(name: string, script: string, extraArgs: string[] = []): Promise<StepOutcome> {
+async function runWithNetworkRetry(name: string, script: string, extraArgs: readonly string[] = []): Promise<StepOutcome> {
   return runWithRetry<StepOutcome>({
     attempt: () => runStep(name, script, extraArgs, true),
     shouldRetry: outcome => !outcome.ok && isTransientNetworkFailure(outcome.stderr),
@@ -191,84 +191,87 @@ function abort(name: string, outcome: Extract<StepOutcome, { ok: false }>): neve
 
 let pipelineExitCode = 0;
 
-/**
- * Carry a stage's soft-failure exit code to the pipeline's and go on to the next
- * stage; anything else stops the run here.
- */
-function continueOrAbort(
-  stage: PipelineStage,
-  name: string,
-  outcome: Extract<StepOutcome, { ok: false }>,
-  message: (status: number) => string,
-): void {
+type StageSpec = {
+  stage: PipelineStage;
+  /** Script basename under scripts/, without `.ts`; also the stage's name in the log. */
+  script: string;
+  runs: boolean;
+  args: readonly string[];
+  networkRetry: boolean;
+  /** Log wording after a soft failure, before `exiting <code>`. */
+  continuation: string;
+};
+
+const dryRunArgs = dryRun ? [DRY_RUN_FLAG] : [];
+const CONTINUE_TO_JUDGE = 'continuing to the judge, then ';
+
+/** The stages in run order. A soft failure carries its code to the exit, so the launchd wrapper logs FAILED. */
+const STAGES: readonly StageSpec[] = [
+  // Read-only, local and quick, so it runs first.
+  {
+    stage: 'hook-gap-check',
+    script: 'hook-gap-check',
+    runs: !skipJudge && !skipHookGapCheck,
+    args: judgeScope,
+    networkRetry: false,
+    continuation: 'continuing, then ',
+  },
+  // The first stage that needs the network. A failed read or post loses nothing:
+  // the next run covers the same window (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
+  {
+    stage: 'derive',
+    script: 'derive-evaluations',
+    runs: !dryRun && !skipDerive,
+    args: deriveScope,
+    networkRetry: true,
+    continuation: CONTINUE_TO_JUDGE,
+  },
+  // Over the judge's scope, so the cloud holds the text the judge is about to read.
+  {
+    stage: 'ship-turns',
+    script: 'ship-turn-content',
+    runs: !skipJudge && !skipShipTurns,
+    args: [...judgeScope, ...dryRunArgs],
+    networkRetry: true,
+    continuation: CONTINUE_TO_JUDGE,
+  },
+  {
+    stage: 'judge',
+    script: 'judge-evaluations',
+    runs: !skipJudge,
+    args: [
+      ...judgeScope,
+      ...dryRunArgs,
+      ...(limit ? [JUDGE_LIMIT_FLAG, limit] : []),
+      ...(batch ? [JUDGE_BATCH_FLAG] : []),
+      ...(perCriterion ? [JUDGE_PER_CRITERION_FLAG] : []),
+    ],
+    networkRetry: false,
+    continuation: '',
+  },
+];
+
+/** Run one stage; a soft-failure exit goes to the pipeline's code, anything else stops the run here. */
+async function runStage({ stage, script, args, networkRetry, continuation }: StageSpec): Promise<void> {
+  const file = `${script}.ts`;
+  const outcome = networkRetry
+    ? await runWithNetworkRetry(script, file, args)
+    : runStep(script, file, args);
+  if (outcome.ok) return;
   if (outcome.status !== null && nextStepAfter(stage, outcome.status)) {
-    console.error(message(outcome.status));
+    console.error(`[populate] ${script} exited ${outcome.status}; ${continuation}exiting ${outcome.status}`);
     pipelineExitCode = outcome.status;
     return;
   }
-  abort(name, outcome);
-}
-
-/**
- * Derive reads /v1/traces and posts to ingest, so it is the first stage that
- * needs the network. A failed read or post loses nothing — the next run covers
- * the same window — so once the retries are spent the run carries on
- * (DERIVE-POST-FAILURE-ABORTS-PIPELINE).
- */
-async function runDerive(): Promise<void> {
-  const derive = await runWithNetworkRetry('derive-evaluations', 'derive-evaluations.ts', deriveScope);
-  if (derive.ok) return;
-  continueOrAbort('derive', 'derive-evaluations', derive,
-    status => `[populate] derive-evaluations exited ${status}; continuing to the judge, then exiting ${status}`);
-}
-
-/**
- * Read-only, local and quick, so it runs first; a gap it finds is reported
- * through the pipeline's exit code and the rest of the run carries on.
- */
-const HOOK_GAP_STAGE = 'hook-gap-check';
-function runHookGapCheck(): void {
-  const check = runStep(HOOK_GAP_STAGE, `${HOOK_GAP_STAGE}.ts`, [...judgeScope]);
-  if (check.ok) return;
-  continueOrAbort(HOOK_GAP_STAGE, HOOK_GAP_STAGE, check,
-    status => `[populate] ${HOOK_GAP_STAGE} exited ${status}; continuing, then exiting ${status}`);
-}
-
-/**
- * Ship redacted turns before the judge, over the judge's scope, so the cloud
- * holds the text the judge is about to read. Losing it costs nothing the next
- * run cannot redo, so a soft failure carries on to the judge.
- */
-async function runShipTurns(): Promise<void> {
-  const shipArgs: string[] = [...judgeScope];
-  if (dryRun) shipArgs.push(DRY_RUN_FLAG);
-  const ship = await runWithNetworkRetry('ship-turn-content', 'ship-turn-content.ts', shipArgs);
-  if (ship.ok) return;
-  continueOrAbort('ship-turns', 'ship-turn-content', ship,
-    status => `[populate] ship-turn-content exited ${status}; continuing to the judge, then exiting ${status}`);
-}
-
-/**
- * The judge says on its own stderr why it produced nothing. A soft failure
- * carries its code to the exit, so the launchd wrapper logs FAILED.
- */
-function runJudge(): void {
-  const judgeArgs: string[] = [...judgeScope];
-  if (dryRun) judgeArgs.push(DRY_RUN_FLAG);
-  if (limit) judgeArgs.push(JUDGE_LIMIT_FLAG, limit);
-  if (batch) judgeArgs.push(JUDGE_BATCH_FLAG);
-  if (perCriterion) judgeArgs.push(JUDGE_PER_CRITERION_FLAG);
-  const judge = runStep('judge-evaluations', 'judge-evaluations.ts', judgeArgs);
-  if (judge.ok) return;
-  continueOrAbort('judge', 'judge-evaluations', judge,
-    status => `[populate] judge-evaluations exited ${status}; exiting ${status}`);
+  abort(script, outcome);
 }
 
 async function main(): Promise<void> {
-  if (!skipJudge && !skipHookGapCheck) runHookGapCheck();
-  if (!dryRun && !skipDerive) await runDerive();
-  if (!skipJudge && !skipShipTurns) await runShipTurns();
-  if (!skipJudge) runJudge();
+  for (const spec of STAGES.filter(s => s.runs)) {
+    // Stages run in order: each reads what the one before it wrote.
+    // eslint-disable-next-line no-await-in-loop -- see above
+    await runStage(spec);
+  }
 
   const total = sum(results, r => r.ms);
   console.log(`[populate] steps: ${results.map(r => `${r.name}=${r.ms}ms`).join(' ')} total=${total}ms exit=${pipelineExitCode}`);
