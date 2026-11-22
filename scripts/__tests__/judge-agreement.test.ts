@@ -31,9 +31,9 @@ describe('parseArgs', () => {
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, 'ten']).error).toMatch(/positive integer/);
   });
 
-  it('takes the judge model from --judge-model, and refuses one it cannot price', () => {
+  it('takes the judge model from --judge-model, and refuses one with no pricing row', () => {
     expect(parseArgs([YES_FLAG, JUDGE_MODEL_FLAG, LEGACY_HAIKU_MODEL]).judge?.model).toBe(LEGACY_HAIKU_MODEL);
-    expect(parseArgs([YES_FLAG, JUDGE_MODEL_FLAG, 'no-such-model-0']).error).toMatch(/cannot be priced/);
+    expect(parseArgs([YES_FLAG, JUDGE_MODEL_FLAG, 'no-such-model-0']).error).toMatch(/no pricing row/);
   });
 });
 

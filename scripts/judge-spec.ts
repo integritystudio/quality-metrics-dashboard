@@ -4,10 +4,9 @@
  * § Judge spec and resolution, Phase 0).
  */
 
-import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
+import { listEffectiveModels } from '../../src/lib/cost/pricing-cache.js';
 import { CliArgError } from './cli-args.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
-import { judgePricing } from './judge-usage.js';
 
 /** Providers with an adapter; the OpenAI-compatible one is Phase 1. */
 export const JUDGE_PROVIDERS = ['anthropic'] as const;
@@ -58,6 +57,20 @@ function isJudgeProvider(value: string): value is JudgeProvider {
   return (JUDGE_PROVIDERS as readonly string[]).includes(value);
 }
 
+/**
+ * Refuse a model the judge could not run or price exactly: one with no pricing row
+ * of its own (the family-prefix fallback would price a typo at its family's rate)
+ * or one whose row names another provider, which that provider's API would refuse
+ * on every call.
+ */
+function assertPricedForProvider(model: string, provider: JudgeProvider): void {
+  const row = listEffectiveModels().find(entry => entry.model === model);
+  if (!row) throw new CliArgError(`judge model "${model}" has no pricing row of its own`);
+  if (row.provider !== provider) {
+    throw new CliArgError(`judge model "${model}" is priced for ${row.provider}, not ${provider}`);
+  }
+}
+
 export type JudgeSpecInputs = {
   /** `--judge-provider` / `--judge-model`, which win over the environment. */
   cli: { provider?: string | undefined; model?: string | undefined };
@@ -67,8 +80,8 @@ export type JudgeSpecInputs = {
 
 /**
  * The run's judge, most explicit source first: flag, then environment, then
- * the default. A provider without an adapter
- * or a model with no pricing row is refused here, before anything is spent.
+ * the default. A provider without an adapter, or a model without an exact pricing
+ * row for that provider, is refused here, before anything is spent.
  */
 export function resolveJudgeSpec({ cli, env = process.env, batch }: JudgeSpecInputs): JudgeSpec {
   const provider = cli.provider ?? envValue(env, JUDGE_PROVIDER_ENV) ?? DEFAULT_JUDGE_SPEC.provider;
@@ -76,10 +89,6 @@ export function resolveJudgeSpec({ cli, env = process.env, batch }: JudgeSpecInp
     throw new CliArgError(`judge provider "${provider}" is not supported (supported: ${JUDGE_PROVIDERS.join(', ')})`);
   }
   const model = cli.model ?? envValue(env, JUDGE_MODEL_ENV) ?? DEFAULT_JUDGE_SPEC.model;
-  try {
-    judgePricing(model);
-  } catch (err) {
-    throw new CliArgError(`judge model "${model}" cannot be priced: ${describeUnknown(err)}`);
-  }
+  assertPricedForProvider(model, provider);
   return { ...DEFAULT_JUDGE_SPEC, provider, model, mode: batch ? 'batch' : 'sync' };
 }

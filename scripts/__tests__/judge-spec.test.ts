@@ -5,6 +5,10 @@ import { HAIKU_MODEL, LEGACY_HAIKU_MODEL } from '../judge-criteria.js';
 import { DEFAULT_JUDGE_SPEC, JUDGE_MODEL_ENV, JUDGE_PROVIDER_ENV, resolveJudgeSpec } from '../judge-spec.js';
 
 const UNPRICED_MODEL = 'no-such-model-0';
+/** Priced only through the family-prefix fallback, at claude-haiku-5-5's rate. */
+const FAMILY_TYPO_MODEL = `${HAIKU_MODEL}-x`;
+/** An OpenAI row in MODEL_PRICING. */
+const OTHER_PROVIDER_MODEL = 'gpt-5.5';
 
 describe('resolveJudgeSpec', () => {
   it('is the default spec when nothing names a judge', () => {
@@ -35,5 +39,13 @@ describe('resolveJudgeSpec', () => {
 
   it('refuses a model it cannot price, rather than reporting the run at $0', () => {
     expect(() => resolveJudgeSpec({ cli: { model: UNPRICED_MODEL }, env: {}, batch: false })).toThrow(CliArgError);
+  });
+
+  it('refuses a model priced only by its family, so a typo is not priced at the family rate', () => {
+    expect(() => resolveJudgeSpec({ cli: { model: FAMILY_TYPO_MODEL }, env: {}, batch: false })).toThrow(/no pricing row of its own/);
+  });
+
+  it('refuses a model another provider prices, which every call to this provider would fail', () => {
+    expect(() => resolveJudgeSpec({ cli: { model: OTHER_PROVIDER_MODEL }, env: {}, batch: false })).toThrow(/priced for openai, not anthropic/);
   });
 });
