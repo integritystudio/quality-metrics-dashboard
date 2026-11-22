@@ -44,7 +44,6 @@ The worker refuses to serve (500) if `HOME_ORG_ID` is empty.
 - **`src/contexts/OrgContext.tsx`** + **`src/lib/api-client.ts`** — active org state; every API request sends `X-Org-Id` through the shared api-client
 - **`src/components/RequireAuth.tsx`** — route guard: unauthenticated → `/login`, unauthorized → access denied
 - **`src/pages/LoginPage.tsx`** — Auth0 Universal Login redirect
-- **`src/contexts/RoleContext.tsx`** — selected dashboard view mode, validated against `allowedViews` from authenticated session
 - **`src/lib/validation/auth-schemas.ts`** — Zod schemas for auth request/response types
 
 ### RBAC Model

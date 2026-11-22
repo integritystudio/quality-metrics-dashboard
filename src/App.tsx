@@ -41,7 +41,6 @@ import { formatScore } from './lib/quality-utils.js';
 import { useDashboard, isNoDataSummary } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
-import { RoleProvider } from './contexts/RoleContext.js';
 import { CalibrationProvider } from './contexts/CalibrationContext.js';
 import { ROLES, INITIAL_PERIOD } from './lib/constants.js';
 import { lazyWithReload, retryFailedLazyLoads } from './lib/lazy-with-reload.js';
@@ -440,165 +439,163 @@ export function App() {
         <AuthProvider>
           <OrgProvider>
             <KeyboardNavProvider>
-              <RoleProvider>
-                <CalibrationProvider>
-                  <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
-                  <Switch>
-                    <Route path="/login">
-                      <LoginPage />
-                    </Route>
-                    <Route path="/callback">
-                      <CallbackHandler />
-                    </Route>
-                    <RequireAuth>
-                      <Layout period={period} onPeriodChange={setPeriod}>
-                        <RoleSelector />
-                        <OrgSwitcher />
-                        <AdminLink />
-                        <StaffCustomersLink />
-                        <Switch>
-                          <Route path="/">
+              <CalibrationProvider>
+                <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
+                <Switch>
+                  <Route path="/login">
+                    <LoginPage />
+                  </Route>
+                  <Route path="/callback">
+                    <CallbackHandler />
+                  </Route>
+                  <RequireAuth>
+                    <Layout period={period} onPeriodChange={setPeriod}>
+                      <RoleSelector />
+                      <OrgSwitcher />
+                      <AdminLink />
+                      <StaffCustomersLink />
+                      <Switch>
+                        <Route path="/">
+                          <RouteBoundary>
+                            <DashboardPage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/role/:roleName">
+                          {(params) => {
+                            const role = VALID_ROLES.find(r => r === params.roleName);
+                            if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
+                            return (
+                              <RouteBoundary>
+                                <RolePage role={role} period={period} />
+                              </RouteBoundary>
+                            );
+                          }}
+                        </Route>
+                        <Route path="/metrics/:metricName">
+                          {(params) => (
                             <RouteBoundary>
-                              <DashboardPage period={period} />
+                              <MetricDetailPage name={params.metricName} period={period} />
                             </RouteBoundary>
-                          </Route>
-                          <Route path="/role/:roleName">
-                            {(params) => {
-                              const role = VALID_ROLES.find(r => r === params.roleName);
-                              if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
-                              return (
-                                <RouteBoundary>
-                                  <RolePage role={role} period={period} />
-                                </RouteBoundary>
-                              );
-                            }}
-                          </Route>
-                          <Route path="/metrics/:metricName">
-                            {(params) => (
-                              <RouteBoundary>
-                                <MetricDetailPage name={params.metricName} period={period} />
-                              </RouteBoundary>
-                            )}
-                          </Route>
-                          <Route path="/evaluations/trace/:traceId">
-                            {(params) => (
-                              <RouteBoundary>
-                                <EvaluationDetailPage traceId={params.traceId} />
-                              </RouteBoundary>
-                            )}
-                          </Route>
-                          <Route path="/correlations">
+                          )}
+                        </Route>
+                        <Route path="/evaluations/trace/:traceId">
+                          {(params) => (
                             <RouteBoundary>
-                              <Suspense fallback={<Skeleton card size="md" />}>
-                                <CorrelationsPage period={period} />
+                              <EvaluationDetailPage traceId={params.traceId} />
+                            </RouteBoundary>
+                          )}
+                        </Route>
+                        <Route path="/correlations">
+                          <RouteBoundary>
+                            <Suspense fallback={<Skeleton card size="md" />}>
+                              <CorrelationsPage period={period} />
+                            </Suspense>
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/coverage">
+                          <RouteBoundary>
+                            <CoveragePage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/pipeline">
+                          <RouteBoundary>
+                            <PipelinePage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/quality-live">
+                          <RouteBoundary>
+                            <QualityLivePage />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/compliance">
+                          <RouteBoundary>
+                            <CompliancePage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/agents">
+                          <RouteBoundary>
+                            <AgentsPage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/traces/:traceId">
+                          {(params) => (
+                            <RouteBoundary>
+                              <TraceDetailPage traceId={params.traceId} />
+                            </RouteBoundary>
+                          )}
+                        </Route>
+                        <Route path="/agents/:sessionId">
+                          {(params) => (
+                            <RouteBoundary>
+                              <AgentSessionPage sessionId={params.sessionId} />
+                            </RouteBoundary>
+                          )}
+                        </Route>
+                        <Route path="/sessions/:sessionId">
+                          {(params) => (
+                            <RouteBoundary>
+                              <SessionDetailPage sessionId={params.sessionId} />
+                            </RouteBoundary>
+                          )}
+                        </Route>
+                        <Route path="/workflows/:sessionId">
+                          {(params) => (
+                            <RouteBoundary>
+                              <Suspense fallback={<Skeleton card size="xl" />}>
+                                <WorkflowPage sessionId={params.sessionId} />
                               </Suspense>
                             </RouteBoundary>
-                          </Route>
-                          <Route path="/coverage">
-                            <RouteBoundary>
-                              <CoveragePage period={period} />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/pipeline">
-                            <RouteBoundary>
-                              <PipelinePage period={period} />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/quality-live">
-                            <RouteBoundary>
-                              <QualityLivePage />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/compliance">
-                            <RouteBoundary>
-                              <CompliancePage period={period} />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/agents">
-                            <RouteBoundary>
-                              <AgentsPage period={period} />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/traces/:traceId">
-                            {(params) => (
-                              <RouteBoundary>
-                                <TraceDetailPage traceId={params.traceId} />
-                              </RouteBoundary>
-                            )}
-                          </Route>
-                          <Route path="/agents/:sessionId">
-                            {(params) => (
-                              <RouteBoundary>
-                                <AgentSessionPage sessionId={params.sessionId} />
-                              </RouteBoundary>
-                            )}
-                          </Route>
-                          <Route path="/sessions/:sessionId">
-                            {(params) => (
-                              <RouteBoundary>
-                                <SessionDetailPage sessionId={params.sessionId} />
-                              </RouteBoundary>
-                            )}
-                          </Route>
-                          <Route path="/workflows/:sessionId">
-                            {(params) => (
-                              <RouteBoundary>
-                                <Suspense fallback={<Skeleton card size="xl" />}>
-                                  <WorkflowPage sessionId={params.sessionId} />
-                                </Suspense>
-                              </RouteBoundary>
-                            )}
-                          </Route>
-                          <Route path="/routing-telemetry">
-                            <RouteBoundary>
-                              <RoutingTelemetryPage period={period} />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/degradation-signals">
-                            <RouteBoundary>
-                              <DegradationSignalsPage period={period} />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/code-quality">
-                            <RouteBoundary>
-                              <AgentCodeQualityPage />
-                            </RouteBoundary>
-                          </Route>
-                          <Route path="/admin">
-                            <RouteBoundary>
-                              <AdminGuard>
-                                <AdminPage />
-                              </AdminGuard>
-                            </RouteBoundary>
-                          </Route>
-                          {/* The admin customer view: staff only, org id in the path (ADMIN-CV-LAYOUT-NAV). */}
-                          <Route path="/admin/customers">
-                            <StaffRoute><AdminCustomerHubPage /></StaffRoute>
-                          </Route>
-                          <Route path="/admin/customers/:orgId/billing">
-                            {(params) => <StaffRoute><AdminCustomerBillingPage orgId={params.orgId} /></StaffRoute>}
-                          </Route>
-                          <Route path="/admin/customers/:orgId/usage">
-                            {(params) => <StaffRoute><AdminCustomerUsagePage orgId={params.orgId} /></StaffRoute>}
-                          </Route>
-                          <Route path="/admin/customers/:orgId/quota">
-                            {(params) => <StaffRoute><AdminCustomerQuotaPage orgId={params.orgId} /></StaffRoute>}
-                          </Route>
-                          <Route path="/admin/customers/:orgId/entitlements">
-                            {(params) => <StaffRoute><AdminCustomerEntitlementsPage orgId={params.orgId} /></StaffRoute>}
-                          </Route>
-                          <Route>
-                            <div className="empty-state">
-                              <h2>Page Not Found</h2>
-                              <p><Link href="/">Go to dashboard</Link></p>
-                            </div>
-                          </Route>
-                        </Switch>
-                      </Layout>
-                    </RequireAuth>
-                  </Switch>
-                </CalibrationProvider>
-              </RoleProvider>
+                          )}
+                        </Route>
+                        <Route path="/routing-telemetry">
+                          <RouteBoundary>
+                            <RoutingTelemetryPage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/degradation-signals">
+                          <RouteBoundary>
+                            <DegradationSignalsPage period={period} />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/code-quality">
+                          <RouteBoundary>
+                            <AgentCodeQualityPage />
+                          </RouteBoundary>
+                        </Route>
+                        <Route path="/admin">
+                          <RouteBoundary>
+                            <AdminGuard>
+                              <AdminPage />
+                            </AdminGuard>
+                          </RouteBoundary>
+                        </Route>
+                        {/* The admin customer view: staff only, org id in the path (ADMIN-CV-LAYOUT-NAV). */}
+                        <Route path="/admin/customers">
+                          <StaffRoute><AdminCustomerHubPage /></StaffRoute>
+                        </Route>
+                        <Route path="/admin/customers/:orgId/billing">
+                          {(params) => <StaffRoute><AdminCustomerBillingPage orgId={params.orgId} /></StaffRoute>}
+                        </Route>
+                        <Route path="/admin/customers/:orgId/usage">
+                          {(params) => <StaffRoute><AdminCustomerUsagePage orgId={params.orgId} /></StaffRoute>}
+                        </Route>
+                        <Route path="/admin/customers/:orgId/quota">
+                          {(params) => <StaffRoute><AdminCustomerQuotaPage orgId={params.orgId} /></StaffRoute>}
+                        </Route>
+                        <Route path="/admin/customers/:orgId/entitlements">
+                          {(params) => <StaffRoute><AdminCustomerEntitlementsPage orgId={params.orgId} /></StaffRoute>}
+                        </Route>
+                        <Route>
+                          <div className="empty-state">
+                            <h2>Page Not Found</h2>
+                            <p><Link href="/">Go to dashboard</Link></p>
+                          </div>
+                        </Route>
+                      </Switch>
+                    </Layout>
+                  </RequireAuth>
+                </Switch>
+              </CalibrationProvider>
             </KeyboardNavProvider>
           </OrgProvider>
         </AuthProvider>
