@@ -51,7 +51,7 @@ function SurvivalTable({ title, note, rows, warnBelowThreshold }: SurvivalTableP
             <tr key={`${r.agentName}-${r.agentVersion}-${r.cohort}-${r.contentKind}`}>
               <td className="mono">
                 {warnBelowThreshold && r.avgSurvivalRate < CODE_QUALITY_WARN_THRESHOLD && (
-                  <span className="warn-indicator" aria-label="Below survival threshold">&#9888; </span>
+                  <span className="text-warning" aria-label="Below survival threshold">&#9888; </span>
                 )}
                 {r.agentName}
                 <CohortBadge cohort={r.cohort} />

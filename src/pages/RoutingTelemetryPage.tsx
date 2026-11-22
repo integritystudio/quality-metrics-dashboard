@@ -16,7 +16,7 @@ function DistributionTable({ label, distribution, routedSpans }: {
   if (Object.keys(distribution).length === 0) return null;
   return (
     <div className="card mb-3">
-      <h3 className="text-sm font-semibold mb-3">{label} Distribution</h3>
+      <h3 className="text-base font-semibold mb-3">{label} Distribution</h3>
       <table className="data-table">
         <thead>
           <tr>
@@ -83,7 +83,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
 
           {data.groups.length > 0 && data.groups.some(g => isStrategyGroup(g)) && (
             <div className="card mb-3">
-              <h3 className="text-sm font-semibold mb-3">Strategy Breakdown</h3>
+              <h3 className="text-base font-semibold mb-3">Strategy Breakdown</h3>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -112,7 +112,7 @@ export function RoutingTelemetryPage({ period }: { period: Period }) {
 
           {data.routingLatency && (
             <div className="card">
-              <h3 className="text-sm font-semibold mb-3">
+              <h3 className="text-base font-semibold mb-3">
                 Routing Latency
                 <span className="text-secondary text-xs font-normal ml-2">
                   ({data.routingLatency.source === 'classification_time' ? 'classification time' : 'span duration'})

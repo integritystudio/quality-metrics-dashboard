@@ -71,7 +71,7 @@ function RoleChip({
     <span className="chip">
       {role.name}
       <button
-        className="chip-remove"
+        className="btn-reset cursor-pointer text-secondary ml-1"
         onClick={() => onRevoke(role.id, role.name)}
         disabled={revoking}
         aria-label={`Remove role ${role.name}`}
@@ -183,21 +183,21 @@ function UserRow({
   return (
     <tr className="border-b">
       <td className="cell-pad text-left">
-        <span className="mono-sm">{user.email ?? <span className="text-muted">(no email)</span>}</span>
+        <span className="mono">{user.email ?? <span className="text-muted">(no email)</span>}</span>
       </td>
       <td className="cell-pad text-left">
-        <div className="chip-list">
+        <div className="flex-wrap gap-1">
           {user.roles.length === 0 && <span className="text-muted text-xs">No roles</span>}
           {user.roles.map((r) => (
             <RoleChip key={r.id} role={r} onRevoke={(id, name) => handleRevoke(id, name)} revoking={busy} />
           ))}
         </div>
-        {error && <div className="text-xs text-error mt-1">{error}</div>}
+        {error && <div className="text-xs text-critical mt-1">{error}</div>}
       </td>
       <td className="cell-pad text-left">
         <div className="inline-flex-center gap-4">
           <select
-            className="select-sm"
+            className="text-xs form-select"
             value={selectedRoleId}
             onChange={(e) => setSelectedRoleId(e.target.value)}
             disabled={busy || assignableRoles.length === 0}
@@ -254,12 +254,12 @@ function MemberRow({
   return (
     <tr className="border-b">
       <td className="cell-pad text-left">
-        <span className="mono-sm">{member.email ?? <span className="text-muted">(no email)</span>}</span>
-        {error && <div className="text-xs text-error mt-1">{error}</div>}
+        <span className="mono">{member.email ?? <span className="text-muted">(no email)</span>}</span>
+        {error && <div className="text-xs text-critical mt-1">{error}</div>}
       </td>
       <td className="cell-pad text-left">
         <select
-          className="select-sm"
+          className="text-xs form-select"
           value={selectedRole}
           onChange={(e) => setSelectedRole(e.target.value as OrgMembershipRoleValue)}
           disabled={busy || (member.membershipRole === 'owner' && !canTouchOwner)}
@@ -271,7 +271,7 @@ function MemberRow({
         </select>
       </td>
       <td className="cell-pad text-left">
-        <span className="mono-sm">{member.dashboardRole}</span>
+        <span className="mono">{member.dashboardRole}</span>
       </td>
       <td className="cell-pad text-right">
         <div className="inline-flex-center gap-4">
@@ -312,7 +312,7 @@ function NewKeyPanel({ rotated, onDismiss }: { rotated: RotatedKey; onDismiss: (
   return (
     <div className="card new-key-panel mb-4" role="status">
       <div className="text-xs mb-3">
-        New key replacing <span className="mono-sm">{rotated.previousPrefix}…</span>. {NEW_KEY_NOTICE}
+        New key replacing <span className="mono">{rotated.previousPrefix}…</span>. {NEW_KEY_NOTICE}
       </div>
       <code className="new-key-token">{rotated.token}</code>
       <div className="inline-flex-center gap-4 mt-2">
@@ -321,7 +321,7 @@ function NewKeyPanel({ rotated, onDismiss }: { rotated: RotatedKey; onDismiss: (
         </button>
         <button className="btn-sm" onClick={onDismiss}>Done</button>
       </div>
-      {copyState === 'failed' && <div className="text-xs text-error mt-1">{ERR_COPY_FAILED}</div>}
+      {copyState === 'failed' && <div className="text-xs text-critical mt-1">{ERR_COPY_FAILED}</div>}
     </div>
   );
 }
@@ -354,7 +354,7 @@ function KeyRow({
   return (
     <tr className="border-b">
       <td className="cell-pad text-left">
-        <span className="mono-sm">{apiKey.prefix}…</span>
+        <span className="mono">{apiKey.prefix}…</span>
       </td>
       <td className="cell-pad text-left">
         <span className="text-xs">{apiKey.name ?? <span className="text-muted">—</span>}</span>
@@ -372,7 +372,7 @@ function KeyRow({
         <button className="btn-sm" onClick={() => handleRotate()} disabled={busy}>
           Rotate
         </button>
-        {error && <div className="text-xs text-error mt-1">{error}</div>}
+        {error && <div className="text-xs text-critical mt-1">{error}</div>}
       </td>
     </tr>
   );
@@ -400,8 +400,8 @@ function ApiKeysSection() {
         {!keys || keys.length === 0 ? (
           <div className="empty-state text-secondary">No active keys found.</div>
         ) : (
-          <div className="table-scroll">
-            <table className="mono-table">
+          <div className="overflow-x-auto">
+            <table className="data-table mono-xs">
               <MonoTableHead columns={KEY_TABLE_COLUMNS} />
               <tbody>
                 {keys.map((k) => (
@@ -440,8 +440,8 @@ function OrgMembersSection() {
         {!members || members.length === 0 ? (
           <div className="empty-state text-secondary">No members found.</div>
         ) : (
-          <div className="table-scroll">
-            <table className="mono-table">
+          <div className="overflow-x-auto">
+            <table className="data-table mono-xs">
               <MonoTableHead columns={MEMBER_TABLE_COLUMNS} />
               <tbody>
                 {members.map((member) => (
@@ -497,8 +497,8 @@ export function AdminPage() {
         {!users || users.length === 0 ? (
           <div className="empty-state text-secondary">No users found.</div>
         ) : (
-          <div className="table-scroll">
-            <table className="mono-table">
+          <div className="overflow-x-auto">
+            <table className="data-table mono-xs">
               <MonoTableHead columns={ADMIN_TABLE_COLUMNS} />
               <tbody>
                 {users.map((user) => (

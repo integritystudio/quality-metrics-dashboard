@@ -72,7 +72,7 @@ export function EvaluationDetailPage({ traceId }: { traceId: string }) {
 
               {ev.stepScores && ev.stepScores.length > 0 && (
                 <div className="mt-3">
-                  <div className="section-label mb-1">Step Scores</div>
+                  <div className="text-secondary text-xs uppercase font-semibold mb-1">Step Scores</div>
                   <div className="gap-1-5 mt-1 flex-wrap">
                     {ev.stepScores.map(s => (
                       <StepScoreChip key={`${s.step}`} step={s.step} score={s.score} explanation={s.explanation} />

@@ -240,7 +240,7 @@ export function AgentWorkflowView({
       <div
         role="tablist"
         aria-label="Workflow view"
-        className="flex-center gap-0 workflow-tabs"
+        className="flex-center workflow-tabs"
       >
         {TABS.map(tab => (
           <button

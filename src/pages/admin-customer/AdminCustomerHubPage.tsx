@@ -67,7 +67,7 @@ export function AdminCustomerHubPage() {
               <label htmlFor={ORG_SELECT_ID} className="customer-org-picker__label">{CUSTOMER_VIEW.hub.orgLabel}</label>
               <select
                 id={ORG_SELECT_ID}
-                className="select-sm"
+                className="text-xs form-select"
                 value={activeOrg?.id ?? ''}
                 onChange={(e) => chooseOrg(e.target.value)}
               >

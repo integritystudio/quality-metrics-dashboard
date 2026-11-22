@@ -27,7 +27,7 @@ function AgentSessionBody({ sessionId, evaluation, focusedAgent }: {
         <span className="text-secondary text-xs">
           {plural(evaluation.totalTurns, 'turn')} &middot; {plural(agentNames.length, 'agent')}
         </span>
-        <Link href={routes.workflow(sessionId)} className="text-xs text-link">View Workflow</Link>
+        <Link href={routes.workflow(sessionId)} className="text-xs link-accent">View Workflow</Link>
       </DetailPageHeader>
 
       <div className="card flex-wrap gap-6 p-4 mb-4 align-start">

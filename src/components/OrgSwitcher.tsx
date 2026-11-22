@@ -30,7 +30,7 @@ export function OrgSwitcher() {
   return (
     <div className="org-switcher">
       <select
-        className="select-sm"
+        className="text-xs form-select"
         value={activeOrgId ?? ''}
         onChange={(e) => handleChange(e.target.value)}
         disabled={isPending}
@@ -40,7 +40,7 @@ export function OrgSwitcher() {
           <option key={m.orgId} value={m.orgId}>{m.name}</option>
         ))}
       </select>
-      {isError && <span className="text-xs text-error">{SWITCH_FAILED_MESSAGE}</span>}
+      {isError && <span className="text-xs text-critical">{SWITCH_FAILED_MESSAGE}</span>}
     </div>
   );
 }
