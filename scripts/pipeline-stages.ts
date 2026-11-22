@@ -83,8 +83,33 @@ export const SHIP_TURNS_EXIT_POST_FAILED = 14;
  */
 export const HOOK_GAP_EXIT_FOUND = 15;
 
-/** A stage populate-dashboard.ts runs. */
-export type PipelineStage = 'hook-gap-check' | 'derive' | 'ship-turns' | 'judge';
+/** The stages populate-dashboard.ts runs, in run order. */
+export const PIPELINE_STAGES = ['hook-gap-check', 'derive', 'ship-turns', 'judge'] as const;
+export type PipelineStage = typeof PIPELINE_STAGES[number];
+
+/** The switches of a populate run that decide which stages it runs. */
+export type StageSwitches = {
+  dryRun: boolean;
+  skipDerive: boolean;
+  /** Leaves out the judge and the two stages that only feed it. */
+  skipJudge: boolean;
+  /** Leaves out the judge alone: turns are still checked for hook gaps and shipped, for a judge that runs elsewhere. */
+  skipJudgeScoring: boolean;
+  skipShipTurns: boolean;
+  skipHookGapCheck: boolean;
+}
+
+/** The stages a populate run with these switches runs, in run order. */
+export function stagesToRun(switches: StageSwitches): PipelineStage[] {
+  const { dryRun, skipDerive, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck } = switches;
+  const runs: Record<PipelineStage, boolean> = {
+    'hook-gap-check': !skipJudge && !skipHookGapCheck,
+    derive: !dryRun && !skipDerive,
+    'ship-turns': !skipJudge && !skipShipTurns,
+    judge: !skipJudge && !skipJudgeScoring,
+  };
+  return PIPELINE_STAGES.filter(stage => runs[stage]);
+}
 
 /**
  * Each stage's exits populate-dashboard.ts forwards to its own exit instead of

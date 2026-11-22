@@ -20,6 +20,8 @@ import {
   nextStepAfter,
   rejectRemovedFlags,
   runWithRetry,
+  stagesToRun,
+  type StageSwitches,
 } from '../pipeline-stages.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
@@ -198,6 +200,34 @@ describe('nextStepAfter', () => {
     ['judge', 0],
   ] as const)('returns false for hard %s exit %i', (stage, code) => {
     expect(nextStepAfter(stage, code)).toBe(false);
+  });
+});
+
+describe('stagesToRun', () => {
+  const NONE: StageSwitches = { dryRun: false, skipDerive: false, skipJudge: false, skipJudgeScoring: false, skipShipTurns: false, skipHookGapCheck: false };
+
+  it('runs every stage in order when nothing is skipped', () => {
+    expect(stagesToRun(NONE)).toEqual(['hook-gap-check', 'derive', 'ship-turns', 'judge']);
+  });
+
+  it('leaves out only the judge under skipJudgeScoring, so turns are still shipped for a judge that runs elsewhere', () => {
+    expect(stagesToRun({ ...NONE, skipJudgeScoring: true })).toEqual(['hook-gap-check', 'derive', 'ship-turns']);
+  });
+
+  it('leaves out the judge and the two stages that feed it under skipJudge', () => {
+    expect(stagesToRun({ ...NONE, skipJudge: true })).toEqual(['derive']);
+  });
+
+  it('never runs derive on a dry run, which has no dry mode of its own here', () => {
+    expect(stagesToRun({ ...NONE, dryRun: true })).toEqual(['hook-gap-check', 'ship-turns', 'judge']);
+  });
+
+  it.each([
+    [{ skipDerive: true }, 'derive'],
+    [{ skipShipTurns: true }, 'ship-turns'],
+    [{ skipHookGapCheck: true }, 'hook-gap-check'],
+  ] as const)('leaves out one stage for %o', (switches, stage) => {
+    expect(stagesToRun({ ...NONE, ...switches })).toEqual(stagesToRun(NONE).filter(name => name !== stage));
   });
 });
 

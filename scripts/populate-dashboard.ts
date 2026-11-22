@@ -5,7 +5,7 @@
  *
  * Steps:
  *   0. hook-gap-check      → flags background sessions whose turns ran without hooks
- *                            (local transcripts, read-only; runs with the judge,
+ *                            (local transcripts, read-only; skipped by `--skip-judge`,
  *                            `--skip-hook-gap-check` skips it)
  *   1. derive-evaluations  → rule-based (tool_correctness, evaluation_latency, task_completion,
  *                            handoff_correctness) plus the five agent heuristics from local transcripts
@@ -25,6 +25,7 @@
  *   npm run populate                          # full pipeline (needs LLM_JUDGE_ANTHROPIC_KEY or ANTHROPIC_API_KEY; exits 1 without one)
  *   npm run populate -- --dry-run             # preview only, no writes
  *   npm run populate -- --skip-judge          # rule-based only
+ *   npm run populate -- --skip-judge-scoring  # everything but the judge itself: turns are still shipped, for a judge that runs elsewhere
  *   npm run populate -- --skip-derive-rules   # derive posts the agent heuristics only (the rule metrics are the Workflow's)
  *   npm run populate -- --limit 5             # judge at most 5 turns
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
@@ -59,6 +60,7 @@ import {
   judgeScopeArgs,
   nextStepAfter,
   runWithRetry,
+  stagesToRun,
   type PipelineStage,
 } from './pipeline-stages.js';
 import { DEFAULT_API_KEY_ENV, JUDGE_API_KEY_ENV, resolveJudgeApiKey } from './judge-credentials.js';
@@ -72,12 +74,14 @@ const STDERR_CAPTURE_MAX_BYTES = 16 * BYTES.MB;
 
 const SKIP_DERIVE_FLAG = '--skip-derive';
 const SKIP_JUDGE_FLAG = '--skip-judge';
+/** Skips judge-evaluations alone; `--skip-judge` also skips the two stages that feed it. */
+const SKIP_JUDGE_SCORING_FLAG = '--skip-judge-scoring';
 const SKIP_SHIP_TURNS_FLAG = '--skip-ship-turns';
 const SKIP_HOOK_GAP_CHECK_FLAG = '--skip-hook-gap-check';
 const POPULATE_CLI: CliSpec = {
   values: [JUDGE_LIMIT_FLAG],
   switches: [
-    SKIP_DERIVE_FLAG, DERIVE_SKIP_RULES_FLAG, SKIP_JUDGE_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
+    SKIP_DERIVE_FLAG, DERIVE_SKIP_RULES_FLAG, SKIP_JUDGE_FLAG, SKIP_JUDGE_SCORING_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
     JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG,
   ],
 };
@@ -91,6 +95,7 @@ type PopulateArgs = {
   skipDerive: boolean;
   skipDeriveRules: boolean;
   skipJudge: boolean;
+  skipJudgeScoring: boolean;
   skipShipTurns: boolean;
   skipHookGapCheck: boolean;
   dryRun: boolean;
@@ -109,6 +114,7 @@ function readArgs(argv: readonly string[]): PopulateArgs {
     skipDerive: cli.has(SKIP_DERIVE_FLAG),
     skipDeriveRules: cli.has(DERIVE_SKIP_RULES_FLAG),
     skipJudge: cli.has(SKIP_JUDGE_FLAG),
+    skipJudgeScoring: cli.has(SKIP_JUDGE_SCORING_FLAG),
     skipShipTurns: cli.has(SKIP_SHIP_TURNS_FLAG),
     skipHookGapCheck: cli.has(SKIP_HOOK_GAP_CHECK_FLAG),
     dryRun: cli.has(DRY_RUN_FLAG),
@@ -120,15 +126,16 @@ function readArgs(argv: readonly string[]): PopulateArgs {
   };
 }
 
-const { skipDerive, skipDeriveRules, skipJudge, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, limit, deriveScope, judgeScope } =
+const { skipDerive, skipDeriveRules, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, limit, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
+const stagesRun: ReadonlySet<PipelineStage> = new Set(stagesToRun({ dryRun, skipDerive, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck }));
 
 // Fail closed when the judge would run with no key: never fall back to
 // synthetic scores, which fill the dashboard with plausible numbers while every
-// stage reports success. --skip-judge leaves judge metrics out.
+// stage reports success. --skip-judge and --skip-judge-scoring leave judge metrics out.
 // resolveJudgeApiKey counts both credential names.
 // Dry runs are exempt: the judge's own --dry-run spends nothing.
-if (!skipJudge && !dryRun && !resolveJudgeApiKey()) {
+if (stagesRun.has('judge') && !dryRun && !resolveJudgeApiKey()) {
   console.error(
     `[populate] Error: neither ${JUDGE_API_KEY_ENV} nor ${DEFAULT_API_KEY_ENV} is set, so the ` +
     'judge cannot run. Refusing to fall back to synthetic scores: a seeded dashboard looks ' +
@@ -199,7 +206,6 @@ type StageSpec = {
   stage: PipelineStage;
   /** Script basename under scripts/, without `.ts`; also the stage's name in the log. */
   script: string;
-  runs: boolean;
   args: readonly string[];
   networkRetry: boolean;
   /** Log wording after a soft failure, before `exiting <code>`. */
@@ -215,7 +221,6 @@ const STAGES: readonly StageSpec[] = [
   {
     stage: 'hook-gap-check',
     script: 'hook-gap-check',
-    runs: !skipJudge && !skipHookGapCheck,
     args: judgeScope,
     networkRetry: false,
     continuation: 'continuing, then ',
@@ -225,7 +230,6 @@ const STAGES: readonly StageSpec[] = [
   {
     stage: 'derive',
     script: 'derive-evaluations',
-    runs: !dryRun && !skipDerive,
     args: [...deriveScope, ...(skipDeriveRules ? [DERIVE_SKIP_RULES_FLAG] : [])],
     networkRetry: true,
     continuation: CONTINUE_TO_JUDGE,
@@ -234,7 +238,6 @@ const STAGES: readonly StageSpec[] = [
   {
     stage: 'ship-turns',
     script: 'ship-turn-content',
-    runs: !skipJudge && !skipShipTurns,
     args: [...judgeScope, ...dryRunArgs],
     networkRetry: true,
     continuation: CONTINUE_TO_JUDGE,
@@ -242,7 +245,6 @@ const STAGES: readonly StageSpec[] = [
   {
     stage: 'judge',
     script: 'judge-evaluations',
-    runs: !skipJudge,
     args: [
       ...judgeScope,
       ...dryRunArgs,
@@ -271,7 +273,7 @@ async function runStage({ stage, script, args, networkRetry, continuation }: Sta
 }
 
 async function main(): Promise<void> {
-  for (const spec of STAGES.filter(s => s.runs)) {
+  for (const spec of STAGES.filter(s => stagesRun.has(s.stage))) {
     // Stages run in order: each reads what the one before it wrote.
     // eslint-disable-next-line no-await-in-loop -- see above
     await runStage(spec);
