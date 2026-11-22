@@ -29,7 +29,6 @@ export const UUID_PREFIX_REGEX = /^[0-9a-f]{8}-/;
 export type TranscriptInfo = {
   path: string;
   sessionId: string;
-  traceId: string;
 }
 
 export type Turn = {
@@ -129,11 +128,11 @@ export function resolveTranscriptPath(originalPath: string): string | null {
 
 /**
  * Transcripts found by listing `<dir>/<slug>/<sessionId>.jsonl` under each of
- * `dirs`, first directory winning. Session ids already in `seen` are skipped;
- * the rest are added to it. The cloud source uses it to find the transcript of
- * a session the cloud named.
+ * `dirs`, first directory winning. The cloud source uses it to find the
+ * transcript of a session the cloud named.
  */
-export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, seen = new Set<string>()): TranscriptInfo[] {
+export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS): TranscriptInfo[] {
+  const seen = new Set<string>();
   const transcripts: TranscriptInfo[] = [];
   for (const dir of dirs) {
     if (!existsSync(dir)) continue;
@@ -158,7 +157,7 @@ export function scanTranscriptDirs(dirs: readonly string[] = TRANSCRIPT_DIRS, se
         if (!UUID_PREFIX_REGEX.test(sessionId)) continue;
         if (seen.has(sessionId)) continue;
         seen.add(sessionId);
-        transcripts.push({ path: join(slugPath, f), sessionId, traceId: '' });
+        transcripts.push({ path: join(slugPath, f), sessionId });
       }
     }
   }
@@ -274,8 +273,7 @@ function completedTurn(
   if (!assistantText) return null;
   return {
     sessionId: info.sessionId,
-    // Anchoring (`anchorTurns`) gives each turn its own trace; `info.traceId` is
-    // one prompt's trace for the whole transcript, so it is not copied (TKR8).
+    // Anchoring (`anchorTurns`) gives each turn its own trace.
     traceId: '',
     timestamp: pendingUser.timestamp,
     userText: pendingUser.text,

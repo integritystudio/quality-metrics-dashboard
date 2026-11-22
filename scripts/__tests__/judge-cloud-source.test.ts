@@ -155,7 +155,7 @@ describe('transcriptsForSessions', () => {
 
     const found = transcriptsForSessions([SESSION, '9f9f9f9f-0000-4000-8000-000000000009'], [join(root, 'projects')]);
 
-    expect(found.transcripts).toEqual([{ path, sessionId: SESSION, traceId: '' }]);
+    expect(found.transcripts).toEqual([{ path, sessionId: SESSION }]);
     expect(found.missing).toBe(1);
   });
 

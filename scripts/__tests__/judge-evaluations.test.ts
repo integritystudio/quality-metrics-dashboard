@@ -158,7 +158,6 @@ describe('transcript content', () => {
 describe('extractTurns', () => {
   const dir = useTempDir('judge-turns-');
   const SESSION = 'sess-1';
-  const TRACE = 'trace-1';
   const START_MS = Date.parse('2026-02-09T01:00:00Z');
 
   const user = (content: string | object[]): object =>
@@ -169,7 +168,7 @@ describe('extractTurns', () => {
   /** The turns of a transcript holding `entries`, a second apart, in one session. */
   async function extract(...entries: object[]): Promise<Turn[]> {
     const stamped = entries.map((entry, i) => ({ sessionId: SESSION, timestamp: new Date(START_MS + i * TIME_MS.SECOND).toISOString(), ...entry }));
-    return extractTurns({ path: writeJsonl(join(dir(), 'session.jsonl'), stamped), sessionId: SESSION, traceId: TRACE });
+    return extractTurns({ path: writeJsonl(join(dir(), 'session.jsonl'), stamped), sessionId: SESSION });
   }
 
   it('pairs a user prompt with the assistant reply', async () => {
@@ -252,7 +251,7 @@ describe('extractTurns', () => {
     const lines = [user('Hello'), assistant('Hi')].map(entry => JSON.stringify({ sessionId: SESSION, timestamp: new Date(START_MS).toISOString(), ...entry }));
     writeFileSync(path, ['not json', ...lines].join('\n'));
 
-    expect((await extractTurns({ path, sessionId: SESSION, traceId: TRACE })).map(t => t.userText)).toEqual(['Hello']);
+    expect((await extractTurns({ path, sessionId: SESSION })).map(t => t.userText)).toEqual(['Hello']);
   });
 });
 
