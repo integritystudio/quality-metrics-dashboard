@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 import { z } from 'zod';
-import { PeriodSchema, RoleSchema, computePeriodDates } from '../../lib/constants.js';
+import { PeriodSchema, computePeriodDates } from '../../lib/constants.js';
+import { RoleSchema } from '../../lib/roles.js';
 import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
 import { computeDashboardFull, computeDashboardRoleView } from '../aggregates/dashboard-summary.js';
 

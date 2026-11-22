@@ -11,7 +11,7 @@ import { computeDashboardSummary } from '../parent/quality-metrics.js';
 import { computeRoleView } from '../parent/quality-views.js';
 import { computeCQI } from '../parent/qfe-cqi.js';
 import { NANOS_TO_MS } from '../api-constants.js';
-import { ROLES, type Role } from '../../lib/constants.js';
+import { ROLES, type Role } from '../../lib/roles.js';
 import type { EvaluationResult, CompositeQualityIndex } from '../../types.js';
 
 /** Sparklines bucket count: 24 ≈ one data point per hour over a 24 h view. */

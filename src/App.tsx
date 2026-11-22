@@ -42,7 +42,8 @@ import { useDashboard, isNoDataSummary } from './hooks/useDashboard.js';
 import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { CalibrationProvider } from './contexts/CalibrationContext.js';
-import { ROLES, INITIAL_PERIOD } from './lib/constants.js';
+import { INITIAL_PERIOD } from './lib/constants.js';
+import { ROLES } from './lib/roles.js';
 import { lazyWithReload, retryFailedLazyLoads } from './lib/lazy-with-reload.js';
 import type {
   Period,
