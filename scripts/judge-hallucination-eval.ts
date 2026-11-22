@@ -8,7 +8,7 @@
  * written before the per-criterion path stopped inverting, and its reference
  * derives hallucination as 1 - faithfulness too. This script fixes both:
  *
- * - Haiku is scored LIVE, three ways, on the same turns: the per-criterion path
+ * - The judge (JUDGE_MODEL, else Haiku) is scored LIVE, three ways, on the same turns: the per-criterion path
  *   (QAG faithfulness + fabrication), the consolidated default (inverted), and
  *   the consolidated candidate with `directHallucination` (its own criterion).
  * - The reference judges hallucination DIRECTLY: one REFERENCE_MODEL call per
