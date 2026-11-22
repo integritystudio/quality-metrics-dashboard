@@ -40,8 +40,15 @@ parity tests' `it.each` period lists do not cover `90d`.
   `D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window` and the run
   errored after 7 min. `computeSessionsStep` reads each session's spans by
   `attributeFilter: { session.id }` over the whole window, 25 sessions a step, and at 90 days one step
-  exceeds D1's per-window budget. Raising the cap needs that read bounded first (an indexed
-  session-id column, the session's own time range instead of the window, or fewer sessions a step).
+  exceeds D1's per-window budget.
+- **Cause: the planner's index choice, not a missing index.** `EXPLAIN QUERY PLAN` on prod showed the
+  per-session span read and both trace-batch reads (`queryTraceSpans`, `queryTraceEvaluations`)
+  taking `(org_id, time)` and walking the org's whole window per session or per 90-id chunk:
+  216,859 rows per session read at 90 days (32,418 at 30) against 778 through
+  `idx_traces_session_time`, and 216,859 / 158,264 per trace chunk against 6,998 / 6,040 by
+  `trace_id`. The parent's `d1-read-backend.ts` now steers all three (`INDEXED BY` for sessions,
+  unary-`+` org and window for trace batches), with plan tests that fail on the old choice. With the
+  session fix alone a 90-day dry run passed every `sessions:` step and failed at `traces:2`.
   A first attempt ran 30d and 90d concurrently and both hit the same error on prod D1 between
   20:05 and 20:14 local; the 20:00 production run had already finished. Never run two syncs at once.
 
