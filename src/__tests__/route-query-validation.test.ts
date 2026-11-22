@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { blankAsAbsent, validQuery } from '../api/route-errors.js';
-import { ErrorMessage, INVALID_PERIOD_MESSAGE, PeriodSchema } from '../lib/constants.js';
+import { ErrorMessage, PeriodSchema } from '../lib/constants.js';
+import { INVALID_PERIOD_MESSAGE } from '../lib/periods.js';
 import { RoleSchema } from '../lib/roles.js';
 import { HttpStatus } from '../lib/http-constants.js';
 

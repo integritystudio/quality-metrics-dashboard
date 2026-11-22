@@ -40,8 +40,7 @@ export const TIME_MS = {
 export const MINUTES_PER_HOUR = 60;
 export const HOURS_PER_DAY = 24;
 export const DAYS_PER_WEEK = 7;
-// Periods live in the worker-safe `periods.ts` module, re-exported here like the roles.
-export { PERIOD_KEYS, PeriodEnum, DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL, INITIAL_PERIOD, INVALID_PERIOD_MESSAGE } from './periods.js';
+export { PeriodEnum, DEFAULT_PERIOD } from './periods.js';
 export type { Period } from './periods.js';
 /** Period string → day count. */
 export const VALID_PERIODS = { '24h': 1, '7d': 7, '30d': 30, '90d': 90 } satisfies Record<Period, number>;

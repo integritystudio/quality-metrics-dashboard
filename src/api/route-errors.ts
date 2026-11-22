@@ -4,7 +4,8 @@ import { sanitizeErrorForResponse } from './parent/error-sanitizer.js';
 import { getQualityMetric } from './parent/quality-metrics.js';
 import { PARAM_METRIC_NAME_RE, isValidParam } from './api-constants.js';
 import type { QualityMetricConfig } from './aggregates/metric-detail.js';
-import { ErrorMessage, INVALID_PERIOD_MESSAGE, PeriodSchema } from '../lib/constants.js';
+import { ErrorMessage, PeriodSchema } from '../lib/constants.js';
+import { INVALID_PERIOD_MESSAGE } from '../lib/periods.js';
 import { queryValidator } from '../lib/query-validator.js';
 import { HttpStatus } from '../lib/http-constants.js';
 

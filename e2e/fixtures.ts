@@ -2,7 +2,8 @@ import { test as base, expect, type Page } from '@playwright/test';
 
 import { API_HOST, API_PORT } from '../src/api/config.js';
 import { ContentType, HttpStatus } from '../src/lib/http-constants.js';
-import { INITIAL_PERIOD, TIME_MS } from '../src/lib/constants.js';
+import { TIME_MS } from '../src/lib/constants.js';
+import { INITIAL_PERIOD } from '../src/lib/periods.js';
 
 // Must match TEST_TOKEN in src/stubs/auth0-e2e.ts
 export const MOCK_ME_RESPONSE = {

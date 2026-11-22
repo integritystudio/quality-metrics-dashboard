@@ -15,7 +15,8 @@ import type { DegradationState, PreparedDegradation } from '../parent/qfe-backte
 import type { CalibrationState } from '../parent/qfe-percentiles.js';
 import type { EvaluationResult, TraceSpan } from '../../types.js';
 import type { CalibrationResponse } from '../../lib/validation/dashboard-schemas.js';
-import { PERIOD_KEYS, PERIOD_MS, TIME_MS, type Period } from '../../lib/constants.js';
+import { PERIOD_MS, TIME_MS, type Period } from '../../lib/constants.js';
+import { PERIOD_KEYS } from '../../lib/periods.js';
 import { pushTo } from '../../lib/collections.js';
 import { extractFiniteScores, msToNs } from '../api-constants.js';
 import {

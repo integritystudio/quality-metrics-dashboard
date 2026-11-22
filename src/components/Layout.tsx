@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import type { Period } from '../types.js';
-import { DATA_GATED_PERIOD, PERIOD_KEYS } from '../lib/constants.js';
+import { DATA_GATED_PERIOD } from '../lib/constants.js';
+import { PERIOD_KEYS } from '../lib/periods.js';
 import { ShortcutOverlay } from './ShortcutOverlay.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useShortcut } from '../contexts/KeyboardNavContext.js';

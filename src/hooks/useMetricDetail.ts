@@ -1,6 +1,7 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { MetricDetailResult, Period } from '../types.js';
-import { DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT, DEFAULT_PERIOD_DETAIL } from '../lib/constants.js';
+import { DEFAULT_TOP_N, DEFAULT_BUCKET_COUNT } from '../lib/constants.js';
+import { DEFAULT_PERIOD_DETAIL } from '../lib/periods.js';
 import { useApiQuery } from './useApiQuery.js';
 
 export function useMetricDetail(name: string | undefined, period: Period = DEFAULT_PERIOD_DETAIL): UseQueryResult<MetricDetailResult> {
