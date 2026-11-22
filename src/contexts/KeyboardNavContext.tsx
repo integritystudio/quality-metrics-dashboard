@@ -39,6 +39,20 @@ export function useShortcut(key: ShortcutKey, description: string, scope: string
   useEffect(() => register(key, description, scope, stableAction), [register, key, description, scope, stableAction]);
 }
 
+/** The headings the overlay groups shortcuts under. */
+export const SHORTCUT_SCOPE = { PERIOD: 'Period', NAVIGATION: 'Navigation' } as const;
+
+/** One shortcut, registered while mounted; a table of shortcuts renders one of these per row. */
+export function Shortcut({ shortcutKey, description, scope, action }: {
+  shortcutKey: ShortcutKey;
+  description: string;
+  scope: string;
+  action: () => void;
+}) {
+  useShortcut(shortcutKey, description, scope, action);
+  return null;
+}
+
 export function useKeyboardNav() {
   const ctx = use(KeyboardNavContext);
   if (!ctx) throw new Error('useKeyboardNav must be used within KeyboardNavProvider');

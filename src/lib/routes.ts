@@ -1,11 +1,46 @@
 const ADMIN_PATH = '/admin';
-const ADMIN_CUSTOMERS_PATH = `${ADMIN_PATH}/customers`;
+const ADMIN_CUSTOMERS_PATH = `${ADMIN_PATH}/customers` as const;
 /** The hub's query key for the org to reselect on return (Flutter's `DashboardArgs.initialOrgId`). */
 export const ADMIN_CUSTOMERS_ORG_PARAM = 'org';
 /** The agent session page's query key for the agent to focus (a workflow graph node click). */
 export const AGENT_SESSION_AGENT_PARAM = 'agent';
 
+/** Paths with no parameter: the route pattern and the link are the same string. */
+export const ROUTE_PATHS = {
+  home: '/',
+  login: '/login',
+  callback: '/callback',
+  correlations: '/correlations',
+  coverage: '/coverage',
+  pipeline: '/pipeline',
+  qualityLive: '/quality-live',
+  compliance: '/compliance',
+  agents: '/agents',
+  routingTelemetry: '/routing-telemetry',
+  degradationSignals: '/degradation-signals',
+  codeQuality: '/code-quality',
+  admin: ADMIN_PATH,
+  adminCustomers: ADMIN_CUSTOMERS_PATH,
+} as const;
+
+/** Route patterns whose parameters the `routes` builders below fill in. */
+export const ROUTE_PATTERNS = {
+  role: '/role/:roleName',
+  metric: '/metrics/:metricName',
+  evaluationDetail: '/evaluations/trace/:traceId',
+  trace: '/traces/:traceId',
+  agentSession: '/agents/:sessionId',
+  session: '/sessions/:sessionId',
+  workflow: '/workflows/:sessionId',
+  adminCustomerBilling: `${ADMIN_CUSTOMERS_PATH}/:orgId/billing`,
+  adminCustomerUsage: `${ADMIN_CUSTOMERS_PATH}/:orgId/usage`,
+  adminCustomerQuota: `${ADMIN_CUSTOMERS_PATH}/:orgId/quota`,
+  adminCustomerEntitlements: `${ADMIN_CUSTOMERS_PATH}/:orgId/entitlements`,
+} as const;
+
 export const routes = {
+  role: (role: string) => `/role/${role}`,
+  metric: (name: string) => `/metrics/${name}`,
   agentSession: (sessionId: string, agentId?: string) =>
     agentId
       ? `/agents/${encodeURIComponent(sessionId)}?${AGENT_SESSION_AGENT_PARAM}=${encodeURIComponent(agentId)}`

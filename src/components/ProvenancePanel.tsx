@@ -54,7 +54,7 @@ export function ProvenancePanel(props: ProvenancePanelProps) {
 
   const handleCopyTraceLink = useCallback(() => {
     if (traceId) {
-      const link = `${window.location.origin}/traces/${traceId}`;
+      const link = `${window.location.origin}${routes.trace(traceId)}`;
       navigator.clipboard.writeText(link).catch(() => {});
     }
   }, [traceId]);

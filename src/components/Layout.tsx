@@ -4,15 +4,11 @@ import { DATA_GATED_PERIOD } from '../lib/constants.js';
 import { PERIOD_KEYS } from '../lib/periods.js';
 import { ShortcutOverlay } from './ShortcutOverlay.js';
 import { useAuth } from '../contexts/AuthContext.js';
-import { useShortcut } from '../contexts/KeyboardNavContext.js';
+import { Shortcut, SHORTCUT_SCOPE } from '../contexts/KeyboardNavContext.js';
 import { useOfferPeriod } from '../hooks/useDashboard.js';
 import { AccountBadge } from './AccountBadge.js';
 
-/** Registered only while the gated period's button is shown, so the key never selects a hidden period. */
-function GatedPeriodShortcut({ onPeriodChange }: { onPeriodChange: (p: Period) => void }) {
-  useShortcut('4', `Switch to ${DATA_GATED_PERIOD}`, 'Period', useCallback(() => onPeriodChange(DATA_GATED_PERIOD), [onPeriodChange]));
-  return null;
-}
+const GATED_PERIOD_SHORTCUT_KEY = '4';
 
 export function Layout({
   period,
@@ -57,7 +53,15 @@ export function Layout({
         </div>
       </div>
       {children}
-      {showGatedPeriod && <GatedPeriodShortcut onPeriodChange={onPeriodChange} />}
+      {/* Registered only while the gated period's button is shown, so the key never selects a hidden period. */}
+      {showGatedPeriod && (
+        <Shortcut
+          shortcutKey={GATED_PERIOD_SHORTCUT_KEY}
+          description={`Switch to ${DATA_GATED_PERIOD}`}
+          scope={SHORTCUT_SCOPE.PERIOD}
+          action={() => onPeriodChange(DATA_GATED_PERIOD)}
+        />
+      )}
       <ShortcutOverlay />
     </div>
   );

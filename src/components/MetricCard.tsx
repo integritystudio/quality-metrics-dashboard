@@ -6,6 +6,7 @@ import { ScoreBadge } from './ScoreBadge.js';
 import { Sparkline } from './Sparkline.js';
 import { inferScoreDirection, truncateText, plural, formatScore } from '../lib/quality-utils.js';
 import { EXPLANATION_INLINE_CHARS, SCORE_CHIP_PRECISION } from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
 
 type MetricStatus = QualityMetricResult['status'];
 
@@ -55,7 +56,7 @@ function MetricCardInner({ metric, sparklineData }: {
   const glowClass = GLOW_CLASS[status] ?? '';
 
   return (
-    <Link href={`/metrics/${name}`} className="card-link" aria-label={`View ${displayName} metric details`}>
+    <Link href={routes.metric(name)} className="card-link" aria-label={`View ${displayName} metric details`}>
       <div className={`card ${glowClass}`}>
         <div className="metric-card-header flex-center">
           <h3>{displayName}</h3>

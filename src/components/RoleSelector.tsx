@@ -1,20 +1,21 @@
 import { useLocation } from 'wouter';
 import type { RoleViewType } from '../types.js';
 import { useAuth } from '../contexts/AuthContext.js';
+import { ROUTE_PATHS, routes } from '../lib/routes.js';
 
 const ROLE_TABS: Array<{ path: string; label: string; role: RoleViewType }> = [
-  { path: '/role/executive', label: 'Executive', role: 'executive' },
-  { path: '/role/operator', label: 'Operator', role: 'operator' },
-  { path: '/role/auditor', label: 'Auditor', role: 'auditor' },
+  { path: routes.role('executive'), label: 'Executive', role: 'executive' },
+  { path: routes.role('operator'), label: 'Operator', role: 'operator' },
+  { path: routes.role('auditor'), label: 'Auditor', role: 'auditor' },
 ];
 
-const HOME_TAB = { path: '/', label: 'Dashboard' };
+const HOME_TAB = { path: ROUTE_PATHS.home, label: 'Dashboard' };
 
 const TRAILING_STATIC_TABS: Array<{ path: string; label: string }> = [
-  { path: '/correlations', label: 'Correlations' },
-  { path: '/coverage', label: 'Coverage' },
-  { path: '/pipeline', label: 'Pipeline' },
-  { path: '/quality-live', label: 'Live Quality' },
+  { path: ROUTE_PATHS.correlations, label: 'Correlations' },
+  { path: ROUTE_PATHS.coverage, label: 'Coverage' },
+  { path: ROUTE_PATHS.pipeline, label: 'Pipeline' },
+  { path: ROUTE_PATHS.qualityLive, label: 'Live Quality' },
 ];
 
 export function RoleSelector() {

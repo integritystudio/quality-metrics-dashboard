@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { formatScore, percentOf } from '../lib/quality-utils.js';
 import type { TriggeredAlert } from '../types.js';
 import { PERCENT_MAX } from '../lib/constants.js';
+import { routes } from '../lib/routes.js';
 
 /** Bar scale headroom above the larger of actual and threshold. */
 const THRESHOLD_BAR_HEADROOM = 1.2;
@@ -77,7 +78,7 @@ function CompoundAlertCard({ alert }: { alert: AlertWithMeta }) {
         <div className="alert-related flex-center">
           <span className="text-secondary text-xs">Related:</span>
           {alert.relatedMetrics.map((m) => (
-            <Link key={m} href={`/metrics/${m}`} className="alert-metric-link text-xs">
+            <Link key={m} href={routes.metric(m)} className="alert-metric-link text-xs">
               {m}
             </Link>
           ))}

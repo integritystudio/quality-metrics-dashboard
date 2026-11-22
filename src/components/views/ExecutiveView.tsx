@@ -8,6 +8,7 @@ import { SimpleAlertList } from '../SimpleAlertList.js';
 import { ViewSection } from '../Section.js';
 import { HealthBanner } from '../HealthBanner.js';
 import { plural } from '../../lib/quality-utils.js';
+import { routes } from '../../lib/routes.js';
 
 type ExtendedExecutiveView = {
   cqi?: CompositeQualityIndex | undefined;
@@ -44,7 +45,7 @@ export function ExecutiveView({ data }: { data: ExtendedExecutiveView }) {
       <ViewSection title="Metric Statuses">
         <MetricGrid>
           {data.metricStatuses.map((m: { name: string; displayName: string; status: string }) => (
-            <Link key={m.name} href={`/metrics/${m.name}`} className="card card-link d-flex justify-between flex-center p-4">
+            <Link key={m.name} href={routes.metric(m.name)} className="card card-link d-flex justify-between flex-center p-4">
               <span>{m.displayName}</span>
               <StatusBadge status={m.status} />
             </Link>

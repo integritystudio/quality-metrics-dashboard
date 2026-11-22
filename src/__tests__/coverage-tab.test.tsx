@@ -221,11 +221,10 @@ describe('App wiring (src/App.tsx source scan)', () => {
   const appSource = readFileSync(join(process.cwd(), 'src', 'App.tsx'), 'utf8');
 
   it('routes /coverage to CoveragePage', () => {
-    expect(appSource).toMatch(/^[ \t]*<Route path="\/coverage">/m);
-    expect(appSource).toMatch(/^[ \t]*<CoveragePage period=\{period\} \/>/m);
+    expect(appSource).toMatch(/^[ \t]*appRoute\(ROUTE_PATHS\.coverage, \(_params, period\) => <CoveragePage period=\{period\} \/>\),/m);
   });
 
   it('registers the "g v" shortcut, uncommented', () => {
-    expect(appSource).toMatch(/^[ \t]*useShortcut\('g v', 'Go to coverage'/m);
+    expect(appSource).toMatch(/^[ \t]*\{ key: 'g v', destination: 'coverage', path: ROUTE_PATHS\.coverage \},/m);
   });
 });

@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect, Suspense, type ReactNode } from 'react';
-import { Route, Switch, Link, useLocation, Router } from 'wouter';
+import { useState, useCallback, useEffect, Suspense, type ComponentType, type ReactElement, type ReactNode } from 'react';
+import { Route, Switch, Link, useLocation, Router, type StringRouteParams } from 'wouter';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { Layout } from './components/Layout.js';
 import { RoleSelector } from './components/RoleSelector.js';
-import { KeyboardNavProvider, useShortcut } from './contexts/KeyboardNavContext.js';
+import { KeyboardNavProvider, Shortcut, SHORTCUT_SCOPE } from './contexts/KeyboardNavContext.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { OrgProvider } from './contexts/OrgContext.js';
 import { OrgSwitcher } from './components/OrgSwitcher.js';
@@ -43,6 +43,7 @@ import { useMetricDetail } from './hooks/useMetricDetail.js';
 import { useTrend } from './hooks/useTrend.js';
 import { CalibrationProvider } from './contexts/CalibrationContext.js';
 import { INITIAL_PERIOD } from './lib/periods.js';
+import { ROUTE_PATHS, ROUTE_PATTERNS, routes } from './lib/routes.js';
 import { ROLES } from './lib/roles.js';
 import { lazyWithReload, retryFailedLazyLoads } from './lib/lazy-with-reload.js';
 import type {
@@ -162,7 +163,7 @@ export function RolePage({ role, period }: { role: RoleViewType; period: Period 
 
 function snapshotToEvalRow(s: {
   // ISO string, not bigint: these arrive via JSON from KV, which cannot carry
-  // a bigint at all. sync-to-kv now converts at write time (see
+  // a bigint at all. the KV sync Workflow now converts at write time (see
   // evaluationSnapshotSchema); this used to declare bigint and re-divide,
   // which could never have run against real KV data.
   timestamp: string;
@@ -331,7 +332,7 @@ function StaffRoute({ children }: { children: ReactNode }) {
 function AdminLink() {
   const { session } = useAuth();
   if (!session?.permissions.includes('dashboard.admin')) return null;
-  return <Link href="/admin" className="admin-link text-xs text-muted">Admin</Link>;
+  return <Link href={routes.admin()} className="admin-link text-xs text-muted">Admin</Link>;
 }
 
 function AdminGuard({ children }: { children: ReactNode }) {
@@ -341,23 +342,94 @@ function AdminGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+const PERIOD_SHORTCUTS: ReadonlyArray<{ key: string; period: Period }> = [
+  { key: '1', period: '24h' },
+  { key: '2', period: '7d' },
+  { key: '3', period: '30d' },
+];
+
+const NAVIGATION_SHORTCUTS: ReadonlyArray<{ key: string; destination: string; path: string }> = [
+  { key: 'g h', destination: 'home', path: ROUTE_PATHS.home },
+  { key: 'g c', destination: 'correlations', path: ROUTE_PATHS.correlations },
+  { key: 'g p', destination: 'pipeline', path: ROUTE_PATHS.pipeline },
+  { key: 'g v', destination: 'coverage', path: ROUTE_PATHS.coverage },
+  { key: 'g a', destination: 'agents', path: ROUTE_PATHS.agents },
+  { key: 'g r', destination: 'routing telemetry', path: ROUTE_PATHS.routingTelemetry },
+  { key: 'g d', destination: 'degradation signals', path: ROUTE_PATHS.degradationSignals },
+  { key: 'g q', destination: 'code quality', path: ROUTE_PATHS.codeQuality },
+];
+
 function GlobalShortcuts({ setPeriod, navigate }: {
   setPeriod: (p: Period) => void;
   navigate: (path: string) => void;
 }) {
-  useShortcut('1', 'Switch to 24h', 'Period', useCallback(() => setPeriod('24h'), [setPeriod]));
-  useShortcut('2', 'Switch to 7d', 'Period', useCallback(() => setPeriod('7d'), [setPeriod]));
-  useShortcut('3', 'Switch to 30d', 'Period', useCallback(() => setPeriod('30d'), [setPeriod]));
-  useShortcut('g h', 'Go to home', 'Navigation', useCallback(() => navigate('/'), [navigate]));
-  useShortcut('g c', 'Go to correlations', 'Navigation', useCallback(() => navigate('/correlations'), [navigate]));
-  useShortcut('g p', 'Go to pipeline', 'Navigation', useCallback(() => navigate('/pipeline'), [navigate]));
-  useShortcut('g v', 'Go to coverage', 'Navigation', useCallback(() => navigate('/coverage'), [navigate]));
-  useShortcut('g a', 'Go to agents', 'Navigation', useCallback(() => navigate('/agents'), [navigate]));
-  useShortcut('g r', 'Go to routing telemetry', 'Navigation', useCallback(() => navigate('/routing-telemetry'), [navigate]));
-  useShortcut('g d', 'Go to degradation signals', 'Navigation', useCallback(() => navigate('/degradation-signals'), [navigate]));
-  useShortcut('g q', 'Go to code quality', 'Navigation', useCallback(() => navigate('/code-quality'), [navigate]));
-  return null;
+  return (
+    <>
+      {PERIOD_SHORTCUTS.map(({ key, period }) => (
+        <Shortcut key={key} shortcutKey={key} description={`Switch to ${period}`} scope={SHORTCUT_SCOPE.PERIOD} action={() => setPeriod(period)} />
+      ))}
+      {NAVIGATION_SHORTCUTS.map(({ key, destination, path }) => (
+        <Shortcut key={key} shortcutKey={key} description={`Go to ${destination}`} scope={SHORTCUT_SCOPE.NAVIGATION} action={() => navigate(path)} />
+      ))}
+    </>
+  );
 }
+
+function UnknownRole() {
+  return <div className="empty-state"><h2>Unknown Role</h2><p><Link href={ROUTE_PATHS.home}>Go to dashboard</Link></p></div>;
+}
+
+type RouteFrame = ComponentType<{ children: ReactNode }>;
+
+/**
+ * One authenticated route: its page inside `Frame`, and inside a Suspense when the page is
+ * lazy. The pattern stays a literal type, so `render` receives that pattern's own params.
+ */
+function appRoute<P extends string>(
+  path: P,
+  render: (params: StringRouteParams<P>, period: Period) => ReactNode,
+  { lazy, Frame = RouteBoundary }: { lazy?: SkeletonSize; Frame?: RouteFrame } = {},
+): (period: Period) => ReactElement {
+  return (period) => (
+    <Route key={path} path={path}>
+      {(params) => {
+        // wouter types these params with a conditional on P that stays unresolved while P is generic.
+        const page = render(params as StringRouteParams<P>, period);
+        return <Frame>{lazy ? <Suspense fallback={<Skeleton card size={lazy} />}>{page}</Suspense> : page}</Frame>;
+      }}
+    </Route>
+  );
+}
+
+/** Matched in order by the Switch in `App`. */
+const APP_ROUTES = [
+  appRoute(ROUTE_PATHS.home, (_params, period) => <DashboardPage period={period} />),
+  appRoute(ROUTE_PATTERNS.role, (params, period) => {
+    const role = VALID_ROLES.find(r => r === params.roleName);
+    return role ? <RolePage role={role} period={period} /> : <UnknownRole />;
+  }),
+  appRoute(ROUTE_PATTERNS.metric, (params, period) => <MetricDetailPage name={params.metricName} period={period} />),
+  appRoute(ROUTE_PATTERNS.evaluationDetail, (params) => <EvaluationDetailPage traceId={params.traceId} />),
+  appRoute(ROUTE_PATHS.correlations, (_params, period) => <CorrelationsPage period={period} />, { lazy: 'md' }),
+  appRoute(ROUTE_PATHS.coverage, (_params, period) => <CoveragePage period={period} />),
+  appRoute(ROUTE_PATHS.pipeline, (_params, period) => <PipelinePage period={period} />),
+  appRoute(ROUTE_PATHS.qualityLive, () => <QualityLivePage />),
+  appRoute(ROUTE_PATHS.compliance, (_params, period) => <CompliancePage period={period} />),
+  appRoute(ROUTE_PATHS.agents, (_params, period) => <AgentsPage period={period} />),
+  appRoute(ROUTE_PATTERNS.trace, (params) => <TraceDetailPage traceId={params.traceId} />),
+  appRoute(ROUTE_PATTERNS.agentSession, (params) => <AgentSessionPage sessionId={params.sessionId} />),
+  appRoute(ROUTE_PATTERNS.session, (params) => <SessionDetailPage sessionId={params.sessionId} />),
+  appRoute(ROUTE_PATTERNS.workflow, (params) => <WorkflowPage sessionId={params.sessionId} />, { lazy: 'xl' }),
+  appRoute(ROUTE_PATHS.routingTelemetry, (_params, period) => <RoutingTelemetryPage period={period} />),
+  appRoute(ROUTE_PATHS.degradationSignals, (_params, period) => <DegradationSignalsPage period={period} />),
+  appRoute(ROUTE_PATHS.codeQuality, () => <AgentCodeQualityPage />),
+  appRoute(ROUTE_PATHS.admin, () => <AdminGuard><AdminPage /></AdminGuard>),
+  appRoute(ROUTE_PATHS.adminCustomers, () => <AdminCustomerHubPage />, { Frame: StaffRoute }),
+  appRoute(ROUTE_PATTERNS.adminCustomerBilling, (params) => <AdminCustomerBillingPage orgId={params.orgId} />, { Frame: StaffRoute }),
+  appRoute(ROUTE_PATTERNS.adminCustomerUsage, (params) => <AdminCustomerUsagePage orgId={params.orgId} />, { Frame: StaffRoute }),
+  appRoute(ROUTE_PATTERNS.adminCustomerQuota, (params) => <AdminCustomerQuotaPage orgId={params.orgId} />, { Frame: StaffRoute }),
+  appRoute(ROUTE_PATTERNS.adminCustomerEntitlements, (params) => <AdminCustomerEntitlementsPage orgId={params.orgId} />, { Frame: StaffRoute }),
+];
 
 function CallbackHandler() {
   const { isLoading, isAuthenticated, loginWithRedirect, error } = useAuth0();
@@ -443,10 +515,10 @@ export function App() {
               <CalibrationProvider>
                 <GlobalShortcuts setPeriod={setPeriod} navigate={navigate} />
                 <Switch>
-                  <Route path="/login">
+                  <Route path={ROUTE_PATHS.login}>
                     <LoginPage />
                   </Route>
-                  <Route path="/callback">
+                  <Route path={ROUTE_PATHS.callback}>
                     <CallbackHandler />
                   </Route>
                   <RequireAuth>
@@ -456,136 +528,7 @@ export function App() {
                       <AdminLink />
                       <StaffCustomersLink />
                       <Switch>
-                        <Route path="/">
-                          <RouteBoundary>
-                            <DashboardPage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/role/:roleName">
-                          {(params) => {
-                            const role = VALID_ROLES.find(r => r === params.roleName);
-                            if (!role) return <div className="empty-state"><h2>Unknown Role</h2><p><Link href="/">Go to dashboard</Link></p></div>;
-                            return (
-                              <RouteBoundary>
-                                <RolePage role={role} period={period} />
-                              </RouteBoundary>
-                            );
-                          }}
-                        </Route>
-                        <Route path="/metrics/:metricName">
-                          {(params) => (
-                            <RouteBoundary>
-                              <MetricDetailPage name={params.metricName} period={period} />
-                            </RouteBoundary>
-                          )}
-                        </Route>
-                        <Route path="/evaluations/trace/:traceId">
-                          {(params) => (
-                            <RouteBoundary>
-                              <EvaluationDetailPage traceId={params.traceId} />
-                            </RouteBoundary>
-                          )}
-                        </Route>
-                        <Route path="/correlations">
-                          <RouteBoundary>
-                            <Suspense fallback={<Skeleton card size="md" />}>
-                              <CorrelationsPage period={period} />
-                            </Suspense>
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/coverage">
-                          <RouteBoundary>
-                            <CoveragePage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/pipeline">
-                          <RouteBoundary>
-                            <PipelinePage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/quality-live">
-                          <RouteBoundary>
-                            <QualityLivePage />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/compliance">
-                          <RouteBoundary>
-                            <CompliancePage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/agents">
-                          <RouteBoundary>
-                            <AgentsPage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/traces/:traceId">
-                          {(params) => (
-                            <RouteBoundary>
-                              <TraceDetailPage traceId={params.traceId} />
-                            </RouteBoundary>
-                          )}
-                        </Route>
-                        <Route path="/agents/:sessionId">
-                          {(params) => (
-                            <RouteBoundary>
-                              <AgentSessionPage sessionId={params.sessionId} />
-                            </RouteBoundary>
-                          )}
-                        </Route>
-                        <Route path="/sessions/:sessionId">
-                          {(params) => (
-                            <RouteBoundary>
-                              <SessionDetailPage sessionId={params.sessionId} />
-                            </RouteBoundary>
-                          )}
-                        </Route>
-                        <Route path="/workflows/:sessionId">
-                          {(params) => (
-                            <RouteBoundary>
-                              <Suspense fallback={<Skeleton card size="xl" />}>
-                                <WorkflowPage sessionId={params.sessionId} />
-                              </Suspense>
-                            </RouteBoundary>
-                          )}
-                        </Route>
-                        <Route path="/routing-telemetry">
-                          <RouteBoundary>
-                            <RoutingTelemetryPage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/degradation-signals">
-                          <RouteBoundary>
-                            <DegradationSignalsPage period={period} />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/code-quality">
-                          <RouteBoundary>
-                            <AgentCodeQualityPage />
-                          </RouteBoundary>
-                        </Route>
-                        <Route path="/admin">
-                          <RouteBoundary>
-                            <AdminGuard>
-                              <AdminPage />
-                            </AdminGuard>
-                          </RouteBoundary>
-                        </Route>
-                        {/* The admin customer view: staff only, org id in the path (ADMIN-CV-LAYOUT-NAV). */}
-                        <Route path="/admin/customers">
-                          <StaffRoute><AdminCustomerHubPage /></StaffRoute>
-                        </Route>
-                        <Route path="/admin/customers/:orgId/billing">
-                          {(params) => <StaffRoute><AdminCustomerBillingPage orgId={params.orgId} /></StaffRoute>}
-                        </Route>
-                        <Route path="/admin/customers/:orgId/usage">
-                          {(params) => <StaffRoute><AdminCustomerUsagePage orgId={params.orgId} /></StaffRoute>}
-                        </Route>
-                        <Route path="/admin/customers/:orgId/quota">
-                          {(params) => <StaffRoute><AdminCustomerQuotaPage orgId={params.orgId} /></StaffRoute>}
-                        </Route>
-                        <Route path="/admin/customers/:orgId/entitlements">
-                          {(params) => <StaffRoute><AdminCustomerEntitlementsPage orgId={params.orgId} /></StaffRoute>}
-                        </Route>
+                        {APP_ROUTES.map(route => route(period))}
                         <Route>
                           <div className="empty-state">
                             <h2>Page Not Found</h2>
