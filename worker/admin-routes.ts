@@ -6,7 +6,6 @@
 
 import type { Hono, MiddlewareHandler } from 'hono';
 import type { PostgrestClient } from '@supabase/postgrest-js';
-import type { AppSession } from '../src/types/auth.js';
 import {
   AdminMemberRowSchema,
   AdminRoleSchema,
@@ -24,12 +23,12 @@ import {
   factory,
   forbidden,
   hasPermission,
-  internalError,
   readJsonBody,
   requireParam,
   safeArray,
   type AppContext,
   type AppEnv,
+  type WorkerSession,
 } from './app-context.js';
 import { db, logAuditEvent, serviceRoleHeaders, SUPABASE_REST_TIMEOUT_MS, type SupabaseEnv } from './supabase.js';
 import {
@@ -58,16 +57,14 @@ import {
  */
 const requireOrgAdmin = factory.createMiddleware(async (c, next) => {
   const session = c.get('session');
-  if (!hasPermission(session, PERMISSION.admin) || !session.activeOrgId) {
-    return forbidden(c);
-  }
+  if (!hasPermission(session, PERMISSION.admin)) return forbidden(c);
   c.set('orgId', session.activeOrgId);
   return next();
 });
 
 /** Only owners (or staff) may grant, downgrade, or remove an `owner` membership. */
-function canTouchOwnerRole(session: AppSession): boolean {
-  return session.isStaff === true || session.role === 'owner';
+function canTouchOwnerRole(session: WorkerSession): boolean {
+  return session.isStaff || session.role === 'owner';
 }
 
 function requireUuid(param: string, error: string): MiddlewareHandler<AppEnv> {
@@ -91,7 +88,7 @@ async function targetMemberRole(c: AppContext, supabase: PostgrestClient, userId
 // The global user/role routes are staff-only: dashboard.admin is an org-scoped grant and
 // must not reach cross-org user_roles mutation.
 const requireGlobalAdmin = factory.createMiddleware(async (c, next) => {
-  if (c.get('session').isStaff !== true) return forbidden(c);
+  if (!c.get('session').isStaff) return forbidden(c);
   return next();
 });
 
@@ -252,7 +249,6 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
   app.get('/api/admin/keys', requireOrgAdmin, async (c) => {
     const orgId = c.get('orgId');
     const appUserId = c.get('session').appUserId;
-    if (!appUserId) return internalError(c);
 
     const { data, error } = await activeOrgKeys(c.env, appUserId, orgId, 'id,prefix,name,tier,status,created_at,last_used_at')
       .order('created_at', { ascending: false });
@@ -268,7 +264,6 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
   app.post('/api/admin/keys/:keyId/rotate', requireOrgAdmin, requireUuid('keyId', ERR_INVALID_KEY_ID), async (c) => {
     const orgId = c.get('orgId');
     const appUserId = c.get('session').appUserId;
-    if (!appUserId) return internalError(c);
 
     const keyId = c.req.param('keyId');
 

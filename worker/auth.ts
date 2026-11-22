@@ -5,7 +5,7 @@
 
 import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose';
 import type { PostgrestClient } from '@supabase/postgrest-js';
-import type { AppSession, OrgMembershipSummary } from '../src/types/auth.js';
+import type { OrgMembershipSummary } from '../src/types/auth.js';
 import { OrgMembershipRowSchema, PublicUserSchema, UserRoleRowSchema } from '../src/lib/validation/auth-schemas.js';
 import { DASHBOARD_ROLE_BY_MEMBERSHIP, PERMISSION, PERMISSIONS_BY_DASHBOARD_ROLE, viewsForPermissions } from '../src/lib/org-rbac.js';
 import { ORG_ID_HEADER, UUID_PATTERN } from '../src/lib/worker-contract.js';
@@ -21,6 +21,7 @@ import {
   unauthorized,
   type AppContext,
   type Bindings,
+  type WorkerSession,
 } from './app-context.js';
 import { BEARER_PREFIX, db } from './supabase.js';
 import { ERR_FAILED_LOAD_USER_ROLES, ERR_NO_ORG, NO_RESPONSE_STATUS } from './error-messages.js';
@@ -112,7 +113,7 @@ export function orgGrant(
   isStaff: boolean,
   memberships: readonly OrgMembershipSummary[],
   orgId: string,
-): Pick<AppSession, 'role' | 'permissions' | 'allowedViews'> {
+): Pick<WorkerSession, 'role' | 'permissions' | 'allowedViews'> {
   const membership = memberships.find(m => m.orgId === orgId);
   const role = isStaff ? 'owner' : membership?.dashboardRole ?? 'read';
   const permissions = [...PERMISSIONS_BY_DASHBOARD_ROLE[role]];
@@ -196,7 +197,7 @@ async function verifiedAuth0Id(c: AppContext, jwt: string): Promise<string> {
   return typeof jwtPayload.sub === 'string' && jwtPayload.sub ? jwtPayload.sub : abort(unauthorized(c));
 }
 
-export function noOrg(c: AppContext): Response {
+function noOrg(c: AppContext): Response {
   return c.json({ error: ERR_NO_ORG }, HttpStatus.Forbidden);
 }
 

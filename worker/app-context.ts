@@ -34,8 +34,11 @@ export type Bindings = {
   ORG_KV_FALLBACK_DISABLED?: string;
 };
 
+/** The client's `AppSession` leaves the ids and org fields optional; the auth middleware sets them all. */
+export type WorkerSession = Required<AppSession>;
+
 type Variables = {
-  session: AppSession;
+  session: WorkerSession;
   // Set by requireOrgAdmin: the active org every org-admin route is bound to.
   orgId: string;
 };

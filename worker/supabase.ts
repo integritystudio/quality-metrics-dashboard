@@ -59,7 +59,6 @@ type AuditDetails = { roleId?: string; keyId?: string; organizationId?: string }
 // organizationId, so an audit row can never claim a scope the mutation did not have.
 export function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: string, { roleId, keyId, organizationId }: AuditDetails = {}): void {
   const actorUserId = c.get('session').appUserId;
-  if (!actorUserId) return;
   const metadata = {
     ...(roleId !== undefined && { role_id: roleId }),
     ...(keyId !== undefined && { key_id: keyId }),
@@ -79,6 +78,5 @@ export function logAuditEvent(c: AppContext, action: AuditAction, targetUserId: 
 // waitUntil keeps the Worker runtime from cancelling the in-flight write after the response is sent.
 export function logActivity(c: AppContext, activityType: UserActivityEvent): void {
   const appUserId = c.get('session').appUserId;
-  if (!appUserId) return;
   c.executionCtx.waitUntil(insertAndForget(c.env, 'user_activity', { user_id: appUserId, activity_type: activityType }));
 }

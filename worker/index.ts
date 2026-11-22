@@ -2,7 +2,6 @@ import type { MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
-import type { AppSession } from '../src/types/auth.js';
 import type { UserActivityEvent } from '../src/types/activity.js';
 import { MeResponseSchema, ActivityRequestSchema, OrgSwitchRequestSchema } from '../src/lib/validation/auth-schemas.js';
 import { PERMISSION } from '../src/lib/org-rbac.js';
@@ -35,9 +34,10 @@ import {
   safeArray,
   type AppContext,
   type AppEnv,
+  type WorkerSession,
 } from './app-context.js';
 import { db, logActivity } from './supabase.js';
-import { authenticate, canEnterOrg, noOrg, orgGrant } from './auth.js';
+import { authenticate, canEnterOrg, orgGrant } from './auth.js';
 import { registerAdminRoutes } from './admin-routes.js';
 import {
   ERR_CALIBRATION_MALFORMED,
@@ -202,8 +202,7 @@ function validQuery<T extends z.ZodType>(schema: T): ReturnType<typeof queryVali
 
 /** Session-scoped KV read used by every /api/* data route. */
 async function getSessionKv<T>(c: AppContext, key: string): Promise<T | null> {
-  const orgId = c.get('session').activeOrgId ?? abort(noOrg(c));
-  return getKv<T>(c.env.DASHBOARD, orgId, key, c.env);
+  return getKv<T>(c.env.DASHBOARD, c.get('session').activeOrgId, key, c.env);
 }
 
 /** The session's KV entry as JSON, or `missing()` when the key holds nothing; `activity` is logged on a hit. */
@@ -232,20 +231,20 @@ function parsedOrAbort<T extends z.ZodType>(c: AppContext, schema: T, raw: unkno
 }
 
 // Built field by field so the internal ids (authUserId, appUserId) never leave the worker.
-function buildMePayload(session: AppSession): Record<string, unknown> {
+function buildMePayload(session: WorkerSession): Record<string, unknown> {
   return {
     email: session.email,
     roles: session.roles,
     permissions: session.permissions,
     allowedViews: session.allowedViews,
-    ...(session.activeOrgId !== undefined && { activeOrg: session.activeOrgId }),
-    ...(session.memberships !== undefined && { memberships: session.memberships }),
-    ...(session.role !== undefined && { role: session.role }),
-    ...(session.isStaff !== undefined && { isStaff: session.isStaff }),
+    activeOrg: session.activeOrgId,
+    memberships: session.memberships,
+    role: session.role,
+    isStaff: session.isStaff,
   };
 }
 
-function respondMe(c: AppContext, session: AppSession): Response {
+function respondMe(c: AppContext, session: WorkerSession): Response {
   return c.json(parsedOrAbort(c, MeResponseSchema, buildMePayload(session), ERR_INTERNAL));
 }
 
@@ -259,15 +258,12 @@ app.post('/api/org/switch', async (c) => {
   if (!body) return c.json({ error: ERR_INVALID_REQUEST_BODY }, HttpStatus.BadRequest);
   const { orgId } = body;
 
-  const isStaff = session.isStaff === true;
-  const memberships = session.memberships ?? [];
+  const { isStaff, memberships } = session;
   if (!canEnterOrg(isStaff, memberships, orgId)) return forbidden(c);
-  if (session.appUserId) {
-    const { error } = await db(c.env).from('users')
-      .update({ default_organization_id: orgId })
-      .eq('id', session.appUserId);
-    if (error) return internalError(c);
-  }
+  const { error } = await db(c.env).from('users')
+    .update({ default_organization_id: orgId })
+    .eq('id', session.appUserId);
+  if (error) return internalError(c);
 
   // The next request re-resolves fully at the middleware.
   return respondMe(c, { ...session, activeOrgId: orgId, ...orgGrant(isStaff, memberships, orgId) });
