@@ -22,8 +22,8 @@ const SPARKLINE_COLOR: Partial<Record<MetricStatus, string>> = {
 };
 
 const SPARKLINE_MIN_POINTS = 2;
-const SPARKLINE_WIDTH = 120;
-const SPARKLINE_HEIGHT = 24;
+const METRIC_CARD_SPARKLINE_WIDTH = 120;
+const METRIC_CARD_SPARKLINE_HEIGHT = 24;
 
 /** A single point cannot show a trend, so the strip is dropped below two. */
 function MetricSparkline({ data, status, displayName }: {
@@ -36,8 +36,8 @@ function MetricSparkline({ data, status, displayName }: {
     <div className="mt-2">
       <Sparkline
         data={data}
-        width={SPARKLINE_WIDTH}
-        height={SPARKLINE_HEIGHT}
+        width={METRIC_CARD_SPARKLINE_WIDTH}
+        height={METRIC_CARD_SPARKLINE_HEIGHT}
         color={SPARKLINE_COLOR[status] ?? 'var(--accent)'}
         label={`${displayName} score trend`}
       />
