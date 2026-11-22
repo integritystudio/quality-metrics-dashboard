@@ -55,6 +55,9 @@
   },
   "overrides": {
     "undici": "$undici",
+    "jsdom": {
+      "undici": "^8.13.1"
+    },
     "sharp": "^0.35.5",
     "shell-quote": "^1.12.0"
   },
