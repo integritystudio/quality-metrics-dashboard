@@ -20,27 +20,6 @@ export const UuidSchema = z.string().regex(UUID_PATTERN);
  */
 export const SupabaseTimestampSchema = z.iso.datetime({ offset: true });
 
-/**
- * Auth0 JWT payload — result of jwtVerify() in the worker.
- * The `sub` claim is the Auth0 subject identifier (e.g. "auth0|abc123").
- */
-export const Auth0JwtPayloadSchema = z.object({
-  sub: z.string(),
-  email: z.email().optional(),
-  email_verified: z.boolean().optional(),
-  name: z.string().optional(),
-  picture: z.string().optional(),
-  iss: z.string(),
-  aud: z.union([z.string(), z.array(z.string())]),
-  iat: z.number(),
-  exp: z.number(),
-});
-
-export type Auth0JwtPayload = z.infer<typeof Auth0JwtPayloadSchema>;
-
-/**
- * public.users table row — app-level user record linked to auth.users
- */
 export const PublicUserSchema = z.object({
   id: UuidSchema,
   email: z.email(),

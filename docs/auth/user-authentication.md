@@ -113,7 +113,6 @@ All schemas in `src/lib/validation/auth-schemas.ts`.
 
 | Schema | Validates |
 |---|---|
-| `Auth0JwtPayloadSchema` | Auth0 JWT payload shape (`sub`, `iss`, `aud`, `iat`, `exp`) — defined but not currently used; the worker reads `sub` from the `jwtVerify()` payload directly |
 | `PublicUserSchema` | `public.users` rows — lookup by `auth0_id` |
 | `UserRoleRowSchema` | `user_roles` joined with `roles` (name + permissions[]) — legacy path |
 | `OrgMembershipRoleSchema`, `DashboardRoleSchema` | membership role and derived dashboard role enums |
