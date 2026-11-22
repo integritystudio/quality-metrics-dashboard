@@ -12,6 +12,7 @@ import { coverageRoutes } from '../api/routes/coverage.js';
 import type { CoverageResponse, ErrorResponse } from './support/api-responses.js';
 import { PERCENT_MULTIPLIER } from '../lib/constants.js';
 import { HttpStatus } from '../lib/http-constants.js';
+import { COVERAGE_EXCLUDED_METRICS } from '../api/api-constants.js';
 
 let fixture: FixtureServer;
 
@@ -26,6 +27,7 @@ afterAll(async () => {
 });
 
 const JUDGE_EVALUATOR_TYPE = 'llm';
+const EXCLUDED_METRIC_TRACE = 'trace-4';
 /** Rule-based per-span evaluations, which the route drops from the coverage universe. */
 const RULE_EVALUATOR_TYPE = 'rule';
 
@@ -36,6 +38,9 @@ function serveCoverageEvals(): void {
     { evaluationName: 'relevance', traceId: 'trace-2', sessionId: 'sess-1', evaluatorType: JUDGE_EVALUATOR_TYPE },
     { evaluationName: 'coherence', traceId: 'trace-1', sessionId: 'sess-1', evaluatorType: JUDGE_EVALUATOR_TYPE },
     { evaluationName: 'tool_correctness', traceId: 'trace-3', sessionId: 'sess-2', evaluatorType: RULE_EVALUATOR_TYPE },
+    ...[...COVERAGE_EXCLUDED_METRICS].map(evaluationName => (
+      { evaluationName, traceId: EXCLUDED_METRIC_TRACE, sessionId: 'sess-3', evaluatorType: JUDGE_EVALUATOR_TYPE }
+    )),
   ].map((e, i) => evalToWire(e, i + 1)));
 }
 
@@ -79,6 +84,14 @@ describe('GET /coverage', () => {
     const body = await res.json<CoverageResponse>();
     expect(body.metrics).not.toContain('tool_correctness');
     expect(body.inputs).not.toContain('trace-3');
+  });
+
+  it('drops the survival-fitness metrics and the inputs only they cover', async () => {
+    const res = await coverageRoutes.request('/coverage?period=7d');
+    const body = await res.json<CoverageResponse>();
+    expect(body.metrics).not.toContain('code_survival_tier3');
+    expect(body.metrics).not.toContain('doc_survival_tier3');
+    expect(body.inputs).not.toContain(EXCLUDED_METRIC_TRACE);
   });
 
   it('keys inputs by session with inputKey=sessionId', async () => {

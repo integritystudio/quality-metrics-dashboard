@@ -6,7 +6,7 @@
  */
 
 import { computeCoverageMatrix, type CoverageInput } from '../parent/quality-visualization.js';
-import { RULE_EVALUATOR_TYPE } from '../api-constants.js';
+import { COVERAGE_EXCLUDED_METRICS, RULE_EVALUATOR_TYPE } from '../api-constants.js';
 import type { EvaluationResult } from '../../types.js';
 import type { InputKey } from '../../lib/query-schemas.js';
 
@@ -17,13 +17,15 @@ export type CoverageRow = CoverageInput & Pick<EvaluationResult, 'evaluatorType'
  * Remove rule-based evaluations before computing the coverage matrix.
  * Rule evals have per-span traceId granularity that inflates the input universe
  * (CVG-RULE-FILTER). Keeps LLM judge evals and seed evals (evaluatorType
- * undefined or any non-rule value).
+ * undefined or any non-rule value), and drops every metric in
+ * `COVERAGE_EXCLUDED_METRICS`.
  */
 export function filterJudgeEvals<Row extends Pick<EvaluationResult, 'evaluatorType'>>(
   byMetric: Map<string, Row[]>,
 ): Map<string, Row[]> {
   const filtered = new Map<string, Row[]>();
   for (const [metric, evals] of byMetric) {
+    if (COVERAGE_EXCLUDED_METRICS.has(metric)) continue;
     const judgeEvals = evals.filter(e => e.evaluatorType !== RULE_EVALUATOR_TYPE);
     if (judgeEvals.length > 0) filtered.set(metric, judgeEvals);
   }

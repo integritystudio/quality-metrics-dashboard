@@ -221,3 +221,10 @@ export function extractFiniteScores(evals: Array<{ scoreValue?: number | null | 
  * coverage filter (`src/api/aggregates/coverage.ts`) and the evaluation record
  * writer (`scripts/eval-record.ts`). */
 export const RULE_EVALUATOR_TYPE = 'rule';
+
+/**
+ * Evaluation names kept out of the coverage matrix: the survival-fitness
+ * checkpoints score code and docs, not a judged turn, so they are no row of a
+ * metrics x inputs grid.
+ */
+export const COVERAGE_EXCLUDED_METRICS: ReadonlySet<string> = new Set(['code_survival_tier3', 'doc_survival_tier3']);
