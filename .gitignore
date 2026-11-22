@@ -9,7 +9,6 @@ repomix-output.xml
 docs/repomix/
 
 scripts/.degradation-incidents.json
-scripts/.degradation-state.json
 worker-configuration.d.ts
 playwright-report/
 test-results/
