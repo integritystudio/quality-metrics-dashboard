@@ -116,6 +116,119 @@ record rather than a defect. Two things follow from it:
   keeps one version in the tree — but it means the devDependency is load-bearing despite being
   imported nowhere. Do not "clean it up" as unused.
 
+### Consolidation
+
+Small duplications found by the 2026-11-21 review of `docs/repomix/repomix.xml`. Each saves a few
+hundred tokens at most; none is a defect. Savings are chars/4 estimates.
+
+| ID | Title | Priority | Notes |
+|----|-------|----------|-------|
+| DASH-PERMISSION-LITERALS-FOUR-COPIES | Derive the permission and role types from one list | P4 | The same literals are spelled in `types/auth.ts`, `auth-schemas.ts`, `org-rbac.ts` and `e2e/integration/setup.ts`. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | P4 | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | P4 | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | P4 | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | P4 | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-JUDGE-RECORD-TWO-BUILDERS | Build the judge record in one place | P4 | `createEvalRecord` and `buildRecord` differ only in `evaluator`. ~200 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-USE-TRACE-OWN-FETCH | Build `useTrace` on `useApiQuery` | P4 | It carries a "must not drift" comment about the hook it duplicates. ~215 tokens. Source: repomix consolidation review, session 2026-11-21 |
+
+**DASH-PERMISSION-LITERALS-FOUR-COPIES.** `DashboardPermission` (`src/types/auth.ts`),
+`DashboardPermissionSchema` (`src/lib/validation/auth-schemas.ts`) and `PERMISSION`
+(`src/lib/org-rbac.ts`) each list the permissions, and `E2E_PERMISSIONS` in
+`e2e/integration/setup.ts` restates the nine that `PERMISSIONS_BY_DASHBOARD_ROLE['e2e-dashboard-reader']`
+already holds. `OrgMembershipRole`, `DashboardRole` and `OrgMembershipSummary` in `types/auth.ts`
+likewise restate the enums and schema beside them in `auth-schemas.ts`.
+- `auth-schemas.ts` and `org-rbac.ts` import types from `types/auth.ts` today, so the direction flips;
+  keep the new imports type-only to avoid a cycle.
+- `setup.ts` writes its list into the dev database's role, so after the change it writes whatever
+  `org-rbac.ts` says.
+
+Acceptance: one list per concept with the types derived by `z.infer` (or from `PERMISSION`), `setup.ts`
+importing the role's permissions, and typecheck green.
+
+**DASH-API-ROUTER-SCAFFOLDING.** Every file under `src/api/routes/` opens with
+`export const xRoutes = new Hono(); xRoutes.onError(handleRouteError);`, and `src/api/server.ts`
+imports and mounts each one by hand. The four-line id guard (`isValidParam(id, ID_PATTERN)` then a 400)
+appears in `traces.ts`, `evaluations.ts`, `sessions.ts` and twice in `agents.ts`; the Worker already has
+the middleware form (`requireParam` in `worker/app-context.ts`).
+- A full route table is not worth it: `metrics.ts` and `trends.ts` use `resolveMetric` and a
+  `now`-anchored window, three routes read spans, and `/dashboard` branches on `role`.
+- The route tests mount the individual `xRoutes` exports, so those stay.
+
+Acceptance: a `createRouter()`, one loop in `server.ts`, and one runtime-neutral id middleware beside
+`query-validator.ts` used by both the dev routes and the Worker.
+
+**DASH-WORKFLOW-GRAPH-REPEATS.** In `src/components/WorkflowGraph.tsx` the
+`<div ref={containerRef} className="workflow-graph-container" …>` wrapper is written at each of the four
+return sites; the agent and cluster nodes repeat `role`/`tabIndex`/`onKeyDown` and the error badge with
+its two `Handle`s; `buildNodeDataMap` is `new Map(nodes.map(n => [n.id, n]))` with two callers. A set
+toggle is hand-rolled in both `WorkflowGraph.tsx` and `AgentWorkflowView.tsx`, and `filteredNodeIds` in
+`AgentWorkflowView.tsx` builds five intermediate sets where one `.filter` with three predicates gives
+the same result. `isWorkflowNode` and `isClusterNodeData` were judged not worth replacing in the
+2026-10-12 library audit; leave them.
+
+Acceptance: the wrapper rendered once, a `toggleInSet` in `src/lib/collections.ts`, and
+`WorkflowGraph.test.tsx` and `WorkflowTimeline.test.tsx` green without edits.
+
+**DASH-DATA-TABLE-AND-STAT-TILE.** Plain `<table className="data-table">` with a hand-written
+`<thead>` appears in `DegradationSignalsPage.tsx`, `RoutingTelemetryPage.tsx`,
+`AgentCodeQualityPage.tsx`, `SLATable.tsx`, `CompliancePage.tsx` and `ComplianceFrameworkMap.tsx`; the
+two TanStack heads in `AgentActivityPanel.tsx` and `EvaluationTable.tsx` are the same loop. The stat
+tile (`text-center` > `mono-xl font-semibold` value > `text-secondary text-xs uppercase` label) is
+written twice in `App.tsx` and six times in `RoutingTelemetryPage.tsx`, with `text-md` variants in
+`MetricCompare.tsx`, `SessionDetailPage.tsx` and `AgentSessionPage.tsx`.
+- Start with the cheap step: let `MonoTableHead` take a plain variant. A column-driven `DataTable<T>`
+  can cost more than it saves on the two-column tables.
+- `StatDisplay`'s existing `.summary-count .value` is 2xl/bold, so the tile needs its own variant or
+  the look changes. The sr-only tables in `CQIHero.tsx` and `PipelineFunnel.tsx` stay as they are.
+
+Acceptance: one head component for the plain tables, a `variant="tile"` on `StatDisplay` used at the
+exact-match sites, and no visual change at 1280 px.
+
+**DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH.** `scripts/judge-anthropic-client.ts` builds its own HTTP/1.1
+`fetch` from a dynamically imported `undici`. The parent's `src/lib/core/http1-fetch.ts` is the same
+thing, and `cloud-trace-source.ts`, `kv-client.ts`, `evaluation-delivery.ts` and
+`backtest-degradation.ts` already import it.
+- The local copy resolves this app's undici 7; the parent's resolves undici 8. The cast and its comment
+  exist for that type gap, so check the parent's `fetch` against the Anthropic SDK's
+  `ClientOptions['fetch']` before swapping.
+- Keep the SDK's own dynamic import: it is what keeps `--dry-run` from loading the SDK.
+
+Acceptance: the parent's `http1Fetch` passed to the SDK client, the local builder and cast gone, and a
+real (non-dry-run) judge call succeeding.
+
+**DASH-POPULATE-STAGE-WRAPPERS.** `runDerive`, `runHookGapCheck`, `runShipTurns` and `runJudge` in
+`scripts/populate-dashboard.ts` each build arguments, call `runStep` or `runWithNetworkRetry`, and hand
+the outcome to `continueOrAbort` with a message that differs only in the stage name; each script name
+is spelled three times per wrapper. `scripts/pipeline-stages.ts` holds one `*_SOFT_FAILURE_EXITS` set
+per stage plus the `nextStepAfter` switch over them.
+- Log wording changes unless the message is templated from the table.
+- Tests import `JUDGE_SOFT_FAILURE_EXITS` and `DERIVE_SOFT_FAILURE_EXITS` by name.
+
+Acceptance: one `runStage` driven by a stage table, one `Record<PipelineStage, ReadonlySet<number>>`
+replacing the four sets and the switch, and `pipeline-stages.test.ts` green.
+
+**DASH-JUDGE-RECORD-TWO-BUILDERS.** `createEvalRecord` (`scripts/judge-evaluations.ts`) and
+`buildRecord` (`scripts/judge-consolidated.ts`) emit the same fields in the same order; only
+`evaluator` differs (`PRODUCER` against `CONSOLIDATED_PRODUCER`). `createEvalRecord`'s `kind`, `cohort`
+and optional `judgeModel` have one call site, which always passes LLM / normal / Haiku. The batched
+entry points (`evaluateTurnsBatched`, `evaluateTurnsConsolidatedBatched`) share their
+map / flush / all / throw-on-failure body as well.
+- ⚠️ Field order is part of a record's identity when it has no `stableEvaluationKey`
+  (`eval-record.ts`), so the merged builder must keep it. Judge records do carry the key.
+
+Acceptance: one `judgeRecord(turn, producer, judgeModel, scored)` beside `turnSourceFields`, and a test
+showing both paths' records are byte-identical to today's apart from `evaluator`.
+
+**DASH-USE-TRACE-OWN-FETCH.** `src/hooks/useTrace.ts` calls `useQuery` directly and re-implements the
+fetch, 404 handling and retry policy of `src/hooks/useApiQuery.ts`.
+- With `useApiQuery`, a non-404 error message gains the response body (`API error: 500 – <body>`),
+  which `PageShell` displays.
+- `query-abort.test.tsx` imports this hook.
+
+Acceptance: `useTrace` as a `useApiQuery` call with `onNotFound` returning the empty trace, the
+"must not drift" comment gone, and `query-abort.test.tsx` green.
+
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
 [v3.0.12](changelog/3.0.12/CHANGELOG.md) (2026-10-12).
 
