@@ -12,10 +12,11 @@ Open items from code reviews and deferred work.
 | DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS | The judge sees a turn's oldest tool results, not its newest | Done | Fixed 2026-10-22: `fitContextForJudge` keeps the latest. Found by the judge-suite audit's mutation check. Source: session 2026-10-22 |
 
 **DASH-SYNC-90D-PERIOD.** `DEFAULT_LOOKBACK_90D` is `PERIOD_MS['90d']`: `'90d'` is a full period
-(`PERIOD_KEYS`, `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and `org-kv-entries`,
-which iterates `PERIOD_KEYS` instead of its own copy of the list). ⚠️ **The parent's `kv-sync` Workflow caps `maxDays` at 30** (the
-deleted `sync-to-kv` defaulted to `--days=30`), and a period longer than the window is skipped, so no
-`:90d` KV entry is written. The cap was left alone deliberately: the whole-org build held
+(`PERIOD_KEYS`, `VALID_PERIODS`, `PERIOD_MS`, the header selector, shortcut `4`, and the Workflow's
+`periodWindows`, which filters `PERIOD_KEYS` instead of keeping its own copy of the list). ⚠️ **The
+parent's `kv-sync` Workflow caps `maxDays` at `LONGEST_PERIOD_DAYS` (30)**
+(`services/kv-sync-workflow/src/index.ts`), and `periodWindows` skips a period longer than the window,
+so no `:90d` KV entry is written. The cap was left alone deliberately: the whole-org build held
 ~1.65 GB in memory at 30 days, and the evaluation read spans `METRIC_DETAIL_WINDOWS` × the window. The
 parity tests' `it.each` period lists do not cover `90d`.
 - **So the header hides 90d until it has data.** `DATA_GATED_PERIOD` (`constants.ts`) names it;
@@ -27,12 +28,12 @@ parity tests' `it.each` period lists do not cover `90d`.
   re-checks every `DATA_GATE_POLL_INTERVAL_MS` (an hour, the KV refresh cadence) rather than the
   page's 30 s; react-query polls at the shortest interval among a key's observers, so it drops to
   30 s only while the 90d page itself is open.
-- **Memory is the blocker, not the flag.** The CLI holds a whole org in memory per period read, so a
-  `--days=90` default needs either the partitioned design in the parent's
-  `docs/roadmap/kv-sync-in-worker.md` or a measured run showing 90 days fits; measure before flipping
-  the launchd wrapper's arguments.
+- **The Workflow's limits are the blocker, not the flag.** Raising `LONGEST_PERIOD_DAYS` triples each
+  evaluation partition's read; a step gets 128 MB and its output 1 MiB (parent
+  `docs/roadmap/kv-sync-in-worker.md`). Measure a 90-day run against the dev Workflow before raising
+  the cap. The prune step's `config.maxDays < LONGEST_PERIOD_DAYS` guard moves with it.
 
-Acceptance: a scheduled sync writes the `:90d` entries, the `it.each` period lists in the parity tests
+Acceptance: the scheduled Workflow writes the `:90d` entries, the `it.each` period lists in the parity tests
 cover `90d`, `DATA_GATED_PERIOD` and `useOfferPeriod` are deleted, and e2e asserts all four periods
 (today it asserts only the three always-offered ones, since the fourth depends on the environment's data).
 
@@ -71,8 +72,9 @@ No open items.
 | DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | P3 | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
 
 **DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE.** Files: `scripts/__tests__/judge-evaluations.test.ts`,
-`pipeline-integration.test.ts`, `derive-evaluations.test.ts`, `sync-prioritization.test.ts`,
-`judge-hallucination-eval.test.ts`, `judge-consolidated.test.ts`, `judge-selection.test.ts`. The
+`pipeline-integration.test.ts`, `derive-evaluations.test.ts`, `judge-hallucination-eval.test.ts`,
+`judge-consolidated.test.ts`, `judge-selection.test.ts`, and `sync-prioritization.test.ts`, deleted
+with `sync-to-kv.ts` in `3a2c319`, so six remain. The
 magic-number sweep (666 literals named across 74 files, six agents in parallel) and its review fixes
 rewrote these seven most heavily, and the read-only review hunted only for assertions that had come to
 track their own source constant or lost a boundary; it ran no mutation and did not judge the tests on
