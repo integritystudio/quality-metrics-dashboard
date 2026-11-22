@@ -7,7 +7,7 @@ Per-test verdict and mutation spot-check for DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE
 real collaborators, assertions that can fail, fixtures earn their constants).
 
 **Every test not listed below is _keep_.** Listed tests are _rewrite_ or _delete_; **Landed** marks the
-ones changed on branch `test/judge-suite-mutation-check`.
+ones changed on branch `test/judge-suite-mutation-check`; **Landed 2026-11-21** the rest.
 
 ## Mutation spot-check
 
@@ -69,13 +69,13 @@ One mutant at a time, run against the seven files only; the source restored afte
 | extractTurns | rewrite — the 20-result cap was never exercised | Landed (keeps-the-latest test) |
 | seedEvaluations | rewrite — canary share never bounded | Landed (minority test) |
 | fitContextForJudge › keeps at most the item limit | rewrite — asserts only length | Landed with the context-order fix below |
-| summarizeJudgeRun › carries the usage totals … | rewrite — `toBeCloseTo` where exact may hold | Remaining |
-| estimateJudgeRun › counts two evals … four for one with tools | rewrite — `inputTokens > 0` cannot fail usefully | Remaining |
-| estimateJudgeRun › list rates, no discount by default | rewrite — two behaviours; `toBeCloseTo` | Remaining |
-| estimateJudgeRun › batch discount only on cost | rewrite — `toBeCloseTo` on an exact halving | Remaining |
-| evaluateTurn in concurrent mode › issues every criterion first | rewrite — fixed `SETTLE_MS` sleep; use `vi.waitFor` | Remaining |
-| evaluateTurnsBatched › throws on flush reject / recorded failure | rewrite — two behaviours; `it.each` | Remaining |
-| toOTelRecord › flat OTel format | rewrite — model literal instead of `HAIKU_MODEL` | Remaining |
+| summarizeJudgeRun › carries the usage totals … | rewrite — `toBeCloseTo` where exact may hold | Landed 2026-11-21 |
+| estimateJudgeRun › counts two evals … four for one with tools | rewrite — `inputTokens > 0` cannot fail usefully | Landed 2026-11-21 |
+| estimateJudgeRun › list rates, no discount by default | rewrite — two behaviours; `toBeCloseTo` | Landed 2026-11-21 |
+| estimateJudgeRun › batch discount only on cost | rewrite — `toBeCloseTo` on an exact halving | Landed 2026-11-21 |
+| evaluateTurn in concurrent mode › issues every criterion first | rewrite — fixed `SETTLE_MS` sleep; use `vi.waitFor` | Landed 2026-11-21 |
+| evaluateTurnsBatched › throws on flush reject / recorded failure | rewrite — two behaviours; `it.each` | Landed 2026-11-21 |
+| toOTelRecord › flat OTel format | rewrite — model literal instead of `HAIKU_MODEL` | Landed 2026-11-21 |
 
 ### judge-consolidated.test.ts (40 tests)
 
@@ -84,13 +84,13 @@ One mutant at a time, run against the seven files only; the source restored afte
 | selectCriteria › skips the tool sub-criteria when tool_correctness exists | rewrite — filter then `toEqual([])` passes on an empty selection | Landed |
 | selectCriteria › under directHallucination, drops faithfulness … | rewrite — name did not match the fixture; loose `toContain` | Landed |
 | createConsolidatedProvider (new) | — `max_tokens` path had no test; seam is `ANTHROPIC_BASE_URL` + the recording server | Landed |
-| buildConsolidatedPrompt › which parts each criterion applies to | rewrite — label not tied to its criterion | Remaining |
-| buildConsolidatedPrompt › steps prompt matches the per-criterion path | rewrite — tests `buildStepsPrompt` under the wrong describe | Remaining |
-| parseConsolidatedResponse › rejects fraction/zero/string/missing | rewrite — drive through `parseConsolidatedResponse`, qualify `toThrow` | Remaining |
-| parseConsolidatedResponse › throws when not a JSON object | rewrite — two cases, unqualified `toThrow()` | Remaining |
-| evaluateTurnConsolidated › per-criterion path's records from one call | rewrite — compares two constants; split | Remaining |
-| evaluateTurnConsolidated › skips existing keys; nothing when all exist | rewrite — two behaviours | Remaining |
-| evaluateTurnConsolidated › retries steps after a failure | rewrite — `toContain('1. ')` is weak | Remaining |
+| buildConsolidatedPrompt › which parts each criterion applies to | rewrite — label not tied to its criterion | Landed 2026-11-21 |
+| buildConsolidatedPrompt › steps prompt matches the per-criterion path | rewrite — tests `buildStepsPrompt` under the wrong describe | Landed 2026-11-21 |
+| parseConsolidatedResponse › rejects fraction/zero/string/missing | rewrite — drive through `parseConsolidatedResponse`, qualify `toThrow` | Landed 2026-11-21 |
+| parseConsolidatedResponse › throws when not a JSON object | rewrite — two cases, unqualified `toThrow()` | Landed 2026-11-21 |
+| evaluateTurnConsolidated › per-criterion path's records from one call | rewrite — compares two constants; split | Landed 2026-11-21 |
+| evaluateTurnConsolidated › skips existing keys; nothing when all exist | rewrite — two behaviours | Landed 2026-11-21 |
+| evaluateTurnConsolidated › retries steps after a failure | rewrite — `toContain('1. ')` is weak | Landed 2026-11-21 |
 
 Rejected: deleting `selects nothing when every key exists` (it is the empty-result boundary, not a
 duplicate) and dropping the `cache.has` assertion (the cache is a caller-supplied parameter).
@@ -107,15 +107,15 @@ duplicate) and dropping the `cache.has` assertion (the cache is a caller-supplie
 | Test | Verdict | Status |
 |---|---|---|
 | countComplements › counts turns whose scores sum to 1 | rewrite — symmetric fixture hid an inverted comparison | Landed |
-| parseArgs › explicit path; refuses missing | rewrite — happy and error path in one test | Remaining |
-| closestConfiguration › lowest MAE, ties … | rewrite — three behaviours | Remaining |
-| estimateRunSpend › one reference call per tool turn | rewrite — one tool turn cannot show "per"; `toBeCloseTo` | Remaining |
+| parseArgs › explicit path; refuses missing | rewrite — happy and error path in one test | Landed 2026-11-21 |
+| closestConfiguration › lowest MAE, ties … | rewrite — three behaviours | Landed 2026-11-21 |
+| estimateRunSpend › one reference call per tool turn | rewrite — one tool turn cannot show "per"; `toBeCloseTo` | Landed 2026-11-21 |
 
 ### judge-selection.test.ts (10 tests)
 
 | Test | Verdict | Status |
 |---|---|---|
-| turnSkip › holds an unstamped turn when the webhook secret is missing | rewrite — also asserts the opposite case | Remaining |
+| turnSkip › holds an unstamped turn when the webhook secret is missing | rewrite — also asserts the opposite case | Landed 2026-11-21 |
 
 ### derive-evaluations.test.ts (84 tests)
 
@@ -126,22 +126,22 @@ duplicate) and dropping the `cache.has` assertion (the cache is a caller-supplie
 | detectInputDrift › tolerates hooks … up to half the day | rewrite — `half` named 24 of 48 | Landed (renamed) |
 | deriveAll › gives the same records when run twice | rewrite — vacuous; removing the agent reset passed | Landed (fails with the reset removed) |
 | renamed agent hook spans › attaches session records … whatever order | rewrite — passed if both runs returned `[]` | Landed |
-| scoreTask | delete — pins a test-only export | Remaining (with the move below) |
-| task completion › TASK_SESSIONS, UNSCORED_SPANS, each session on its own tasks; task tracking builtin rename | rewrite — drive through `deriveAll`, then drop the test-only accumulator exports | Remaining |
-| deriveEvaluationLatency › no duration at all | delete — same path as the non-finite case | Remaining |
-| readScope › keeps the caller's dates | rewrite — pins reference identity | Remaining |
-| splitAtRepostFloor › sits at 2026-09-28T00:00Z | delete — restates the constant | Remaining |
-| resolvePostDays › reads the day count | rewrite — two spellings; `it.each` | Remaining |
-| deriveAll › stamps records with the account | rewrite — one span and one account cannot tell them apart | Remaining |
-| deriveAgentHeuristics › subagent run with labels | rewrite — `agent_overall` score never asserted | Remaining |
-| deriveAgentHeuristics › stable session keys | rewrite — `> 0` plus prefix filter; assert the three keys | Remaining |
+| scoreTask | delete — pins a test-only export | Landed 2026-11-21 |
+| task completion › TASK_SESSIONS, UNSCORED_SPANS, each session on its own tasks; task tracking builtin rename | rewrite — drive through `deriveAll`, then drop the test-only accumulator exports | Landed 2026-11-21 |
+| deriveEvaluationLatency › no duration at all | delete — same path as the non-finite case | Landed 2026-11-21 |
+| readScope › keeps the caller's dates | rewrite — pins reference identity | Landed 2026-11-21 |
+| splitAtRepostFloor › sits at 2026-09-28T00:00Z | delete — restates the constant | Landed 2026-11-21 |
+| resolvePostDays › reads the day count | rewrite — two spellings; `it.each` | Landed 2026-11-21 |
+| deriveAll › stamps records with the account | rewrite — one span and one account cannot tell them apart | Landed 2026-11-21 |
+| deriveAgentHeuristics › subagent run with labels | rewrite — `agent_overall` score never asserted | Landed 2026-11-21 |
+| deriveAgentHeuristics › stable session keys | rewrite — `> 0` plus prefix filter; assert the three keys | Landed 2026-11-21 |
 
 ### pipeline-integration.test.ts (2 tests)
 
 | Test | Verdict | Status |
 |---|---|---|
 | derive → OTel › completed task as rule-scored evaluation | rewrite — expected timestamp came from the code under test | Landed |
-| derivedTaskCompletion helper | rewrite — build from `deriveAll` | Remaining (with the derive move) |
+| derivedTaskCompletion helper | rewrite — build from `deriveAll` | Landed 2026-11-21 |
 
 ## Findings outside the tests
 
@@ -151,3 +151,12 @@ duplicate) and dropping the `cache.has` assertion (the cache is a caller-supplie
   `fitContextForJudge` now keeps the latest.
 - **`isThisScriptsRecord` (`judge-dedup.ts`) was dead** since `88e69e4` dropped the local source.
   Deleted, with the two `eval-record.ts` constants only it read.
+
+## Follow-up (2026-11-21)
+
+Every Remaining row has landed. The task-completion tests and `pipeline-integration`'s helper now
+go through `deriveAll`, so `sessionTasks`, `STATUS_SCORES`, `trackTaskActivity`, `scoreTask` and
+`deriveTaskCompletionPerSession` are no longer exported from `derive-evaluations.ts`. Each rewritten
+assertion was checked against a seeded mutant. One `toBeCloseTo` stays in `judge-evaluations.test.ts`
+(the list-rate estimate is not exact in binary), at 10 digits; that precision constant now has four
+copies across `scripts/__tests__/` and belongs in `support/`.

@@ -69,7 +69,7 @@ No open items.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | DASH-UNDICI-OVERRIDE-MAJOR | The `undici` override holds jsdom a major version back | P4 | Pre-existing; surfaced while reviewing the `$undici` repoint. Source: session 2026-10-17 |
-| DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | P3 | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
+| DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE | Audit the seven `scripts/__tests__` judge and sync files for test quality | Done | The magic-number sweep's review pass touched them twice in one day (`9663020`); the review checked only for semantic drift, never whether each test fails when its implementation is wrong. Source: session 2026-10-19 |
 
 **DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE.** Files: `scripts/__tests__/judge-evaluations.test.ts`,
 `pipeline-integration.test.ts`, `derive-evaluations.test.ts`, `judge-hallucination-eval.test.ts`,
@@ -104,6 +104,11 @@ The rewrites that let a mutant through or could pass for the wrong reason have l
 `test:scripts` is green (872). **What remains is the review's _Remaining_ rows:**
 - the `it.each` splits and `toBeCloseTo` → `toBe` changes; and
 - moving the derive task-completion tests onto `deriveAll`, so the test-only accumulator exports can go.
+
+**Done (2026-11-21).** Both landed: every Remaining row in the review is now Landed, the derive
+task-completion tests run through `deriveAll`, and the five test-only exports are gone.
+`test:scripts` is green (823). The one leftover is the 10-digit `toBeCloseTo` precision constant,
+now copied in four `scripts/__tests__` files, which belongs in `support/`.
 
 **DASH-UNDICI-OVERRIDE-MAJOR.** `jsdom@30.1.2` declares `undici: ^8.11.2`, but the root `overrides`
 entry forces 7.30.0 onto every copy, so `npm ls undici` shows jsdom's edge as `deduped` to a version
