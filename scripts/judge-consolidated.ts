@@ -391,18 +391,37 @@ export class VerdictParseError extends Error {
   override readonly name = 'VerdictParseError';
 }
 
+/**
+ * The reply stopped at max_tokens. `text` is what came back, for the verdicts
+ * it completed. Not a VerdictParseError: asked again at the same budget, it
+ * would most likely stop at the same place.
+ */
+export class TruncatedReplyError extends Error {
+  override readonly name = 'TruncatedReplyError';
+  constructor(message: string, readonly text: string) {
+    super(message);
+  }
+}
+
 const VERDICT_PARSE_FAILURE = 'Could not parse consolidated verdict';
 const JSON_OBJECT_OPEN = '{';
 const JSON_OBJECT_CLOSE = '}';
-/** The last of these in a criterion's section is its score; reasoning comes first, so an earlier match is prose. */
-const TEXT_SCORE_PATTERN = new RegExp(
-  `["']?${SCORE_KEY}["']?\\s*[:=]\\s*\\**\\s*([${G_EVAL_MIN_SCORE}-${G_EVAL_MAX_SCORE}])(?![.\\d])`
-  + `|\\b([${G_EVAL_MIN_SCORE}-${G_EVAL_MAX_SCORE}])\\s*(?:\\/|out of)\\s*${G_EVAL_MAX_SCORE}\\b`,
+/** A 1-5 digit not followed by more digits or a decimal part; a full stop after it ends a sentence. */
+const SCORE_DIGIT = `([${G_EVAL_MIN_SCORE}-${G_EVAL_MAX_SCORE}])(?!\\.?\\d)`;
+/** A `"score":` key outside any JSON string: inside one its quotes would be escaped. */
+const JSON_SCORE_PATTERN = new RegExp(`(?<!\\\\)"${SCORE_KEY}"\\s*:\\s*${SCORE_DIGIT}`, 'g');
+/** A labelled prose score (`Score: 4`, `Rating 3/5`); a bare `2/5` is a comparison, not a verdict. */
+const PROSE_SCORE_PATTERN = new RegExp(
+  `\\b(?:${SCORE_KEY}|rating)\\b[ \\t]*[:=]?[ \\t]*\\**[ \\t]*${SCORE_DIGIT}(?:[ \\t]*(?:\\/|out of)[ \\t]*${G_EVAL_MAX_SCORE}\\b)?`,
   'gi',
 );
-const TEXT_REASONING_PATTERN = new RegExp(`"${REASONING_KEY}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
+const TEXT_REASONING_PATTERN = new RegExp(`(?<!\\\\)"${REASONING_KEY}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
+/** A prose section ends at a blank line, so a closing summary is not read as the last criterion's score. */
+const BLANK_LINE_PATTERN = /\n[ \t]*\n/;
 
 type JsonDocument = { object: Record<string, unknown> } | { shape: string };
+type SectionKind = 'json' | 'prose';
+type SectionStart = { name: string; kind: SectionKind; start: number; body: number };
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -433,23 +452,28 @@ function escapeRegExp(text: string): string {
 }
 
 /**
- * Where `name` opens a section: its quoted JSON key when there is one, else a
- * prose key (`name:`, `**name**:`) — never a word inside another criterion's reasoning.
+ * Where `name` opens a section: its JSON key (`"name":`, outside any string)
+ * when there is one, else a prose header at the start of a line (`name:`,
+ * `**name**:`, `**name:**`, `## name:`). A name inside another criterion's
+ * reasoning, `name:` included, opens nothing.
  */
-function sectionStart(text: string, name: string): { start: number; body: number } | undefined {
+function sectionStart(text: string, name: string): SectionStart | undefined {
   const escaped = escapeRegExp(name);
-  const match = new RegExp(`"${escaped}"\\s*:`).exec(text)
-    ?? new RegExp(`(?:^|[\\s{,])[*#]*${escaped}\\**\\s*:`).exec(text);
-  return match === null ? undefined : { start: match.index, body: match.index + match[0].length };
+  const json = new RegExp(`(?<!\\\\)"${escaped}"\\s*:`).exec(text);
+  if (json !== null) return { name, kind: 'json', start: json.index, body: json.index + json[0].length };
+  const prose = new RegExp(`^[ \\t>#*-]*${escaped}\\**[ \\t]*:\\**`, 'im').exec(text);
+  return prose === null ? undefined : { name, kind: 'prose', start: prose.index, body: prose.index + prose[0].length };
 }
 
-function lastScore(section: string): number | undefined {
-  let score: number | undefined;
-  for (const match of section.matchAll(TEXT_SCORE_PATTERN)) score = Number(match[1] ?? match[2]);
-  return score;
+/** The one score a section states; undefined when it states none, or two that differ. */
+function soleScore(section: string, kind: SectionKind): number | undefined {
+  const pattern = kind === 'json' ? JSON_SCORE_PATTERN : PROSE_SCORE_PATTERN;
+  const scores = new Set(Array.from(section.matchAll(pattern), match => Number(match[1])));
+  return scores.size === 1 ? [...scores][0] : undefined;
 }
 
-function reasoningIn(section: string): string {
+function reasoningIn(section: string, kind: SectionKind): string {
+  if (kind === 'prose') return section.trim();
   const quoted = TEXT_REASONING_PATTERN.exec(section)?.[1];
   if (quoted === undefined) return '';
   try {
@@ -459,41 +483,50 @@ function reasoningIn(section: string): string {
   }
 }
 
+function sectionText(text: string, entry: SectionStart, next: SectionStart | undefined): string {
+  const section = text.slice(entry.body, next?.start ?? text.length);
+  if (entry.kind === 'json') return section;
+  const blank = BLANK_LINE_PATTERN.exec(section);
+  return blank === null ? section : section.slice(0, blank.index);
+}
+
 /**
- * The text fallback for a reply that is no JSON object: a reply cut off mid-document,
- * or one that answered in prose. Each criterion's section runs from its key to the
- * next criterion's, and its score is the last one written there. A criterion with
- * no section or no score is a failure; scores are 1-5 integers by construction.
+ * The text fallback for a reply that is no JSON verdict object: a reply cut off
+ * mid-document, or one that answered in prose. Each criterion's section runs
+ * from its key to the next criterion's (a prose one also stops at a blank
+ * line). A section must state exactly one score: none, or two that differ, is
+ * a failure rather than a guess. Scores are 1-5 integers by construction.
  */
 function verdictsFromText(text: string, criterionNames: readonly string[]): ParsedConsolidatedResponse {
   const starts = criterionNames
-    .map(name => ({ name, at: sectionStart(text, name) }))
-    .filter((entry): entry is { name: string; at: { start: number; body: number } } => entry.at !== undefined)
-    .toSorted((a, b) => a.at.start - b.at.start);
+    .map(name => sectionStart(text, name))
+    .filter((entry): entry is SectionStart => entry !== undefined)
+    .toSorted((a, b) => a.start - b.start);
   const verdicts = new Map<string, CriterionVerdict>();
   const failures = new Map<string, Error>();
   for (const name of criterionNames) {
     const index = starts.findIndex(entry => entry.name === name);
     const entry = starts[index];
-    const section = entry === undefined ? undefined : text.slice(entry.at.body, starts[index + 1]?.at.start ?? text.length);
-    const score = section === undefined ? undefined : lastScore(section);
-    if (section === undefined || score === undefined) {
-      failures.set(name, new Error(`Could not parse verdict for ${name}: the reply is not JSON and names no score for it`));
+    const section = entry === undefined ? undefined : sectionText(text, entry, starts[index + 1]);
+    const score = entry === undefined || section === undefined ? undefined : soleScore(section, entry.kind);
+    if (entry === undefined || section === undefined || score === undefined) {
+      failures.set(name, new Error(`Could not parse verdict for ${name}: the reply is not JSON and states no single score for it`));
       continue;
     }
-    verdicts.set(name, { reasoning: reasoningIn(section), score });
+    verdicts.set(name, { reasoning: reasoningIn(section, entry.kind), score });
   }
   return { verdicts, failures };
 }
 
 /**
  * The model's verdicts: from the JSON object (code fence and surrounding prose
- * tolerated), else from the text fallback. A bad criterion lands in `failures`;
- * a reply that yields no verdict at all throws VerdictParseError.
+ * tolerated) when it holds any criterion's key, else from the text fallback. A
+ * bad criterion lands in `failures`; a reply that yields no verdict at all
+ * throws VerdictParseError.
  */
 export function parseConsolidatedResponse(text: string, criterionNames: readonly string[]): ParsedConsolidatedResponse {
   const document = jsonDocument(text);
-  if (document !== undefined && 'object' in document) {
+  if (document !== undefined && 'object' in document && criterionNames.some(name => name in document.object)) {
     const verdicts = new Map<string, CriterionVerdict>();
     const failures = new Map<string, Error>();
     for (const name of criterionNames) {
@@ -507,7 +540,7 @@ export function parseConsolidatedResponse(text: string, criterionNames: readonly
   }
   const fromText = verdictsFromText(text, criterionNames);
   if (fromText.verdicts.size > 0) return fromText;
-  const got = document === undefined ? 'text that is not JSON' : document.shape;
+  const got = document === undefined ? 'text that is not JSON' : 'object' in document ? 'an object with no criterion key' : document.shape;
   throw new VerdictParseError(`${VERDICT_PARSE_FAILURE}: expected a JSON object, got ${got}`);
 }
 
@@ -607,26 +640,39 @@ function recordsFromVerdicts(
   return records;
 }
 
+/** One verdict call. A reply cut off at max_tokens keeps the verdicts it completed; with none, its TruncatedReplyError stands. */
+async function askOnce(provider: ConsolidatedProvider, prompt: string, names: readonly string[]): Promise<ParsedConsolidatedResponse> {
+  let text: string;
+  try {
+    ({ text } = await provider.generate(prompt, { schema: buildConsolidatedSchema(names) }));
+  } catch (err) {
+    if (!(err instanceof TruncatedReplyError)) throw err;
+    try {
+      return parseConsolidatedResponse(err.text, names);
+    } catch {
+      throw err;
+    }
+  }
+  return parseConsolidatedResponse(text, names);
+}
+
 /**
  * One verdict call, asked once more when the reply yields no verdict at all
- * (VerdictParseError: unparseable, or cut off at max_tokens). Provider errors
- * are not retried here, and neither is a reply whose document parsed with some
- * criteria invalid: those keep their verdicts and track the rest as failures.
+ * (VerdictParseError). Not retried: a provider error, a reply cut off at
+ * max_tokens (the same budget would cut it again), or a document that parsed
+ * with some criteria invalid, which keeps its verdicts and tracks the rest.
+ * On the batch path the retry is one more batch round.
  */
 async function askForVerdicts(
   provider: ConsolidatedProvider,
   prompt: string,
   names: readonly string[],
 ): Promise<ParsedConsolidatedResponse> {
-  const ask = async (): Promise<ParsedConsolidatedResponse> => {
-    const response = await provider.generate(prompt, { schema: buildConsolidatedSchema(names) });
-    return parseConsolidatedResponse(response.text, names);
-  };
   try {
-    return await ask();
+    return await askOnce(provider, prompt, names);
   } catch (err) {
     if (!(err instanceof VerdictParseError)) throw err;
-    return ask();
+    return askOnce(provider, prompt, names);
   }
 }
 
@@ -717,7 +763,7 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
       options.onUsage?.(usage);
 
       if (response.stop_reason === MAX_TOKENS_STOP_REASON) {
-        throw new VerdictParseError(`${VERDICT_PARSE_FAILURE}: response truncated at ${MAX_TOKENS_STOP_REASON}`);
+        throw new TruncatedReplyError(`${VERDICT_PARSE_FAILURE}: response truncated at ${MAX_TOKENS_STOP_REASON}`, responseText(response.content));
       }
       const text = responseText(response.content);
       return { text, usage };

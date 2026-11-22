@@ -14,6 +14,7 @@ import {
   REASONING_KEY,
   SCORE_KEY,
   VerdictParseError,
+  TruncatedReplyError,
   type ConsolidatedProvider,
   type ConsolidatedGenerateOptions,
   type EvaluationStepsCache,
@@ -267,8 +268,15 @@ describe('parseConsolidatedResponse', () => {
   });
 
   it('records a missing criterion as a failure', () => {
-    const parsed = parseConsolidatedResponse(JSON.stringify({}), [RELEVANCE_EVAL_NAME]);
+    const text = JSON.stringify({ [COHERENCE_EVAL_NAME]: { [REASONING_KEY]: 'flows', [SCORE_KEY]: 3 } });
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
     expect(parsed.failures.get(RELEVANCE_EVAL_NAME)?.message).toMatch(/Could not parse verdict/);
+  });
+
+  it('throws a VerdictParseError for an object that holds no criterion key', () => {
+    expect(() => parseConsolidatedResponse(JSON.stringify({}), [RELEVANCE_EVAL_NAME])).toThrow(/an object with no criterion key/);
   });
 
   it('throws when the document is a JSON array rather than an object', () => {
@@ -307,9 +315,9 @@ describe('parseConsolidatedResponse', () => {
     expect(parsed.failures.get(COHERENCE_EVAL_NAME)?.message).toMatch(/Could not parse verdict for coherence/);
   });
 
-  it('reads a prose reply by criterion, taking the last score written in each section', () => {
+  it('reads a prose reply by criterion from each section\'s labelled score', () => {
     const text = [
-      `**${RELEVANCE_EVAL_NAME}**: The reply would earn score: 2 if it ignored the question, but it answers it. Score: 4`,
+      `**${RELEVANCE_EVAL_NAME}**: The reply answers the question directly. Score: 4`,
       `${COHERENCE_EVAL_NAME}: Clear and ordered. Rating ${MID_SCORE}/${G_EVAL_MAX_SCORE}.`,
     ].join('\n');
 
@@ -317,6 +325,70 @@ describe('parseConsolidatedResponse', () => {
 
     expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
     expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)?.score).toBe(MID_SCORE);
+  });
+
+  it('fails a prose section that states two different scores rather than pick one', () => {
+    const text = `${RELEVANCE_EVAL_NAME}: It would earn score: 2 if it ignored the question, but it answers it. Score: 4`;
+
+    expect(() => parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME])).toThrow(VerdictParseError);
+  });
+
+  it('does not read a bare N/5 comparison as a section\'s score', () => {
+    const text = `${RELEVANCE_EVAL_NAME}: Score: 4. Unlike a 2/${G_EVAL_MAX_SCORE} reply, this one is direct.`;
+
+    const parsed = parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME]);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
+  });
+
+  it('ends the last prose section at a blank line, so a closing summary is not its score', () => {
+    const text = `${RELEVANCE_EVAL_NAME}: Score: 5\n${COHERENCE_EVAL_NAME}: Clear. Score: 4\n\nOverall rating: 3`;
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(COHERENCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
+  });
+
+  it('opens no section at a criterion named with a colon inside another criterion\'s reasoning', () => {
+    const text = `**${RELEVANCE_EVAL_NAME}**: Answers directly; ${COHERENCE_EVAL_NAME}: fine. Score: 4\n**${COHERENCE_EVAL_NAME}**: Clear and ordered.`;
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
+    expect(parsed.verdicts.has(COHERENCE_EVAL_NAME)).toBe(false);
+  });
+
+  it('takes no score from inside the reasoning string of a cut-off criterion', () => {
+    const text = `{"${RELEVANCE_EVAL_NAME}":{"${REASONING_KEY}":"ok","${SCORE_KEY}":5},"${COHERENCE_EVAL_NAME}":{"${REASONING_KEY}":"Score: 2 would be too low, \\"${SCORE_KEY}\\": 2 too, but the flow`;
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(G_EVAL_MAX_SCORE);
+    expect(parsed.verdicts.has(COHERENCE_EVAL_NAME)).toBe(false);
+  });
+
+  it('decodes JSON escapes in a recovered reasoning string', () => {
+    const text = `{"${RELEVANCE_EVAL_NAME}":{"${REASONING_KEY}":"says \\"done\\"\\nthen stops","${SCORE_KEY}":4},"${COHERENCE_EVAL_NAME}":{"${REASONING_KEY}":"cut`;
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.reasoning).toBe('says "done"\nthen stops');
+  });
+
+  it('reads prose verdicts past a JSON object that holds no criterion key', () => {
+    const text = `{"note":"see below"}\n${RELEVANCE_EVAL_NAME}: Score: 4`;
+
+    const parsed = parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME]);
+
+    expect(parsed.verdicts.get(RELEVANCE_EVAL_NAME)?.score).toBe(DEFAULT_RAW_SCORE);
+  });
+
+  it('classifies a criterion the fallback could not score as a parse failure', () => {
+    const text = `${RELEVANCE_EVAL_NAME}: Score: 4\n${COHERENCE_EVAL_NAME}: no verdict given`;
+
+    const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
+
+    expect(parsed.failures.get(COHERENCE_EVAL_NAME)?.message).toMatch(PARSE_FAILURE_PATTERN);
   });
 
   it.each([
@@ -327,7 +399,7 @@ describe('parseConsolidatedResponse', () => {
     expect(() => parseConsolidatedResponse(text, [RELEVANCE_EVAL_NAME])).toThrow(VerdictParseError);
   });
 
-  it('does not open a section at a criterion named inside another criterion\'s reasoning', () => {
+  it('does not open a section at a criterion named as a word in another criterion\'s reasoning', () => {
     const text = `${RELEVANCE_EVAL_NAME}: weighs coherence and scope together. score: 4\n${COHERENCE_EVAL_NAME}: score: 2`;
 
     const parsed = parseConsolidatedResponse(text, PLAIN_CRITERIA);
@@ -506,6 +578,41 @@ describe('evaluateTurnConsolidated', () => {
     expect(schemaCallKeys(calls)).toHaveLength(1);
   });
 
+  it('keeps the verdicts a reply cut off at max_tokens completed, without asking again', async () => {
+    let verdictCalls = 0;
+    const cut = `{"${RELEVANCE_EVAL_NAME}":{"${REASONING_KEY}":"on topic","${SCORE_KEY}":4},"${COHERENCE_EVAL_NAME}":{"${REASONING_KEY}":"fl`;
+    const provider: ConsolidatedProvider = {
+      generate(_prompt, options) {
+        if (!options?.schema) return Promise.resolve({ text: FAKE_STEPS });
+        verdictCalls++;
+        return Promise.reject(new TruncatedReplyError('Could not parse consolidated verdict: response truncated at max_tokens', cut));
+      },
+    };
+
+    const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
+
+    expect(records.map(r => r.evaluationName)).toEqual([RELEVANCE_EVAL_NAME]);
+    expect(verdictCalls).toBe(1);
+    expect(evalFailures).toEqual({ [COHERENCE_EVAL_NAME]: 1 });
+  });
+
+  it('does not ask again when a reply cut off at max_tokens completed no verdict', async () => {
+    let verdictCalls = 0;
+    const provider: ConsolidatedProvider = {
+      generate(_prompt, options) {
+        if (!options?.schema) return Promise.resolve({ text: FAKE_STEPS });
+        verdictCalls++;
+        return Promise.reject(new TruncatedReplyError('Could not parse consolidated verdict: response truncated at max_tokens', `{"${RELEVANCE_EVAL_NAME}":{"${REASONING_KEY}":"cut`));
+      },
+    };
+
+    const records = await evaluateTurnConsolidated(provider, makeTurn(), new Set());
+
+    expect(records).toEqual([]);
+    expect(verdictCalls).toBe(1);
+    expect(failureClasses.parse).toBe(PLAIN_CRITERIA.length);
+  });
+
   it('does not retry a provider error', async () => {
     let verdictCalls = 0;
     const provider: ConsolidatedProvider = {
@@ -598,5 +705,15 @@ describe('createConsolidatedProvider', () => {
     const provider = await createConsolidatedProvider({ apiKey: API_KEY });
 
     await expect(provider.generate('prompt')).rejects.toThrow(`truncated at ${MAX_TOKENS_STOP_REASON}`);
+  });
+
+  it('hands the cut-off text over on the error, for the verdicts it completed', async () => {
+    answerWith(MAX_TOKENS_STOP_REASON);
+    const provider = await createConsolidatedProvider({ apiKey: API_KEY });
+
+    const error: unknown = await provider.generate('prompt').catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(TruncatedReplyError);
+    expect((error as TruncatedReplyError).text).toBe(REPLY_TEXT);
   });
 });
