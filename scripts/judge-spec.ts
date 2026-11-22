@@ -8,9 +8,19 @@ import { listEffectiveModels } from '../../src/lib/cost/pricing-cache.js';
 import { CliArgError } from './cli-args.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
 
-/** Providers with an adapter; the OpenAI-compatible one is Phase 1. */
-export const JUDGE_PROVIDERS = ['anthropic'] as const;
+/** Providers a record may name. */
+export const JUDGE_PROVIDERS = ['anthropic', 'workers-ai'] as const;
 export type JudgeProvider = typeof JUDGE_PROVIDERS[number];
+
+/**
+ * Providers this CLI has an adapter for. `workers-ai` runs only behind the judge
+ * route (the parent's `services/obtool-judge`); the OpenAI-compatible adapter
+ * that would run it here is Phase 1.
+ */
+const CLI_JUDGE_PROVIDERS: readonly JudgeProvider[] = ['anthropic'];
+
+/** Workers AI names every model under this prefix. */
+const WORKERS_AI_MODEL_PREFIX = '@cf/';
 
 /** `specified`: the org names the judge and runs it with its own key. `hosted` is Phase 3. */
 export const JUDGE_TIERS = ['hosted', 'specified'] as const;
@@ -53,8 +63,8 @@ function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
   return value === '' ? undefined : value;
 }
 
-function isJudgeProvider(value: string): value is JudgeProvider {
-  return (JUDGE_PROVIDERS as readonly string[]).includes(value);
+function isCliJudgeProvider(value: string): value is JudgeProvider {
+  return (CLI_JUDGE_PROVIDERS as readonly string[]).includes(value);
 }
 
 /**
@@ -85,10 +95,29 @@ export type JudgeSpecInputs = {
  */
 export function resolveJudgeSpec({ cli, env = process.env, batch }: JudgeSpecInputs): JudgeSpec {
   const provider = cli.provider ?? envValue(env, JUDGE_PROVIDER_ENV) ?? DEFAULT_JUDGE_SPEC.provider;
-  if (!isJudgeProvider(provider)) {
-    throw new CliArgError(`judge provider "${provider}" is not supported (supported: ${JUDGE_PROVIDERS.join(', ')})`);
+  if (!isCliJudgeProvider(provider)) {
+    throw new CliArgError(`judge provider "${provider}" is not supported (supported: ${CLI_JUDGE_PROVIDERS.join(', ')})`);
   }
   const model = cli.model ?? envValue(env, JUDGE_MODEL_ENV) ?? DEFAULT_JUDGE_SPEC.model;
   assertPricedForProvider(model, provider);
   return { ...DEFAULT_JUDGE_SPEC, provider, model, mode: batch ? 'batch' : 'sync' };
+}
+
+/**
+ * The judge a batch through the judge route is: the hosted open-weight model on
+ * Workers AI, or the org's named Claude model on the key the route holds for it.
+ * A model without an exact pricing row for its provider is refused, as in
+ * `resolveJudgeSpec`.
+ */
+export function routedJudgeSpec(model: string): JudgeSpec {
+  const hosted = model.startsWith(WORKERS_AI_MODEL_PREFIX);
+  const provider: JudgeProvider = hosted ? 'workers-ai' : DEFAULT_JUDGE_SPEC.provider;
+  assertPricedForProvider(model, provider);
+  return {
+    tier: hosted ? 'hosted' : DEFAULT_JUDGE_SPEC.tier,
+    provider,
+    model,
+    promptVersion: JUDGE_PROMPT_VERSION,
+    mode: 'batch',
+  };
 }

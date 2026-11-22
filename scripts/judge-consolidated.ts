@@ -457,6 +457,36 @@ async function prepareCriteria(
   return prepared;
 }
 
+/**
+ * One record per wanted criterion whose verdict parsed, and the names of the
+ * rest. Touches no run state, so the parent's judge Workflow builds its records
+ * here too.
+ */
+export function verdictRecords(
+  turn: Turn,
+  wanted: readonly string[],
+  parsed: ParsedConsolidatedResponse,
+  judge: JudgeSpec,
+): { records: EvalRecord[]; missing: string[] } {
+  const sessionPreview = turn.sessionId.slice(0, SESSION_ID_PREVIEW_LEN);
+  const records: EvalRecord[] = [];
+  const missing: string[] = [];
+  for (const name of wanted) {
+    const verdict = parsed.verdicts.get(name);
+    if (!verdict) {
+      missing.push(name);
+      continue;
+    }
+    const normalized = toNormalizedScore(verdict.score);
+    // Hallucination is stored higher-is-worse; HALLUCINATION_CRITERIA grades 5 = no fabrication.
+    const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
+    const explanation = verdict.reasoning.trim()
+      || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${sessionPreview}`;
+    records.push(judgeRecord(turn, CONSOLIDATED_PRODUCER, judge, { evaluationName: name, scoreValue: score, explanation }));
+  }
+  return { records, missing };
+}
+
 /** One record per wanted criterion whose verdict parsed; the rest are tracked as failures. */
 function recordsFromVerdicts(
   turn: Turn,
@@ -464,19 +494,9 @@ function recordsFromVerdicts(
   parsed: ParsedConsolidatedResponse,
   ctx: { sessionPreview: string; judge: JudgeSpec },
 ): EvalRecord[] {
-  const records: EvalRecord[] = [];
-  for (const name of wanted) {
-    const verdict = parsed.verdicts.get(name);
-    if (!verdict) {
-      trackFailure(name, parsed.failures.get(name) ?? new Error(`Could not parse verdict for ${name}`), ctx.sessionPreview);
-      continue;
-    }
-    const normalized = toNormalizedScore(verdict.score);
-    // Hallucination is stored higher-is-worse; HALLUCINATION_CRITERIA grades 5 = no fabrication.
-    const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
-    const explanation = verdict.reasoning.trim()
-      || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${ctx.sessionPreview}`;
-    records.push(judgeRecord(turn, CONSOLIDATED_PRODUCER, ctx.judge, { evaluationName: name, scoreValue: score, explanation }));
+  const { records, missing } = verdictRecords(turn, wanted, parsed, ctx.judge);
+  for (const name of missing) {
+    trackFailure(name, parsed.failures.get(name) ?? new Error(`Could not parse verdict for ${name}`), ctx.sessionPreview);
   }
   return records;
 }
