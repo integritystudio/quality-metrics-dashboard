@@ -127,7 +127,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 |----|-------|----------|-------|
 | DASH-PERMISSION-LITERALS-FOUR-COPIES | Derive the permission and role types from one list | Done | The same literals are spelled in `types/auth.ts`, `auth-schemas.ts`, `org-rbac.ts` and `e2e/integration/setup.ts`. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | Done | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | P4 | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | Done | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-POPULATE-STAGE-WRAPPERS | Drive `populate-dashboard`'s stages from a table | P4 | Four near-identical `run*` wrappers and four soft-exit sets. ~350 tokens. Source: repomix consolidation review, session 2026-11-21 |
@@ -180,6 +180,10 @@ the same result. `isWorkflowNode` and `isClusterNodeData` were judged not worth 
 
 Acceptance: the wrapper rendered once, a `toggleInSet` in `src/lib/collections.ts`, and
 `WorkflowGraph.test.tsx` and `WorkflowTimeline.test.tsx` green without edits.
+**Done (2026-11-21).** `WorkflowGraphView` renders the container once around a `renderGraphBody()`;
+`NodeShell` holds the shared node semantics, error badge and handles; `buildNodeDataMap` is inlined;
+`toggleInSet` (`src/lib/collections.ts`) serves both toggles; `filteredNodeIds` is one `.filter`. Both
+test files pass unedited.
 
 **DASH-DATA-TABLE-AND-STAT-TILE.** Plain `<table className="data-table">` with a hand-written
 `<thead>` appears in `DegradationSignalsPage.tsx`, `RoutingTelemetryPage.tsx`,
