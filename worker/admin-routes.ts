@@ -79,17 +79,12 @@ const requireUserId = requireUuid('userId', ERR_INVALID_USER_ID);
 
 const MEMBERSHIPS_TABLE = 'organization_memberships';
 
-/** The `.match()` filter for `userId`'s membership row in the active org. */
-function memberOf(c: AppContext, userId: string): { organization_id: string; user_id: string } {
-  return { organization_id: c.get('orgId'), user_id: userId };
-}
-
 /**
  * Refuses unless the caller may change the target's membership: granting `owner`, or touching
  * an existing owner, is owner-only. A failed read is a 500, a non-member a 404.
  */
 async function assertMayChangeMember(c: AppContext, supabase: PostgrestClient, userId: string, newRole?: string): Promise<void> {
-  const current = await supabase.from(MEMBERSHIPS_TABLE).select('role').match(memberOf(c, userId)).limit(1);
+  const current = await supabase.from(MEMBERSHIPS_TABLE).select('role').eq('organization_id', c.get('orgId')).eq('user_id', userId).limit(1);
   if (current.error) abort(internalError(c, ERR_FETCH_MEMBER));
   const [row] = safeArray<{ role?: string }>(current.data);
   if (!row) abort(c.json({ error: ERR_INVALID_USER_ID }, HttpStatus.NotFound));
@@ -139,7 +134,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
 
     const supabase = db(c.env);
     await assertMayChangeMember(c, supabase, userId, membershipRole);
-    const { error } = await supabase.from(MEMBERSHIPS_TABLE).update({ role: membershipRole }).match(memberOf(c, userId));
+    const { error } = await supabase.from(MEMBERSHIPS_TABLE).update({ role: membershipRole }).eq('organization_id', c.get('orgId')).eq('user_id', userId);
     if (error) return internalError(c, ERR_UPDATE_MEMBER_ROLE);
     logAuditEvent(c, 'member.role_change', userId, { organizationId: orgId });
     return c.body(null, HttpStatus.NoContent);
@@ -151,7 +146,7 @@ export function registerAdminRoutes(app: Hono<AppEnv>): void {
 
     const supabase = db(c.env);
     await assertMayChangeMember(c, supabase, userId);
-    const { error } = await supabase.from(MEMBERSHIPS_TABLE).delete().match(memberOf(c, userId));
+    const { error } = await supabase.from(MEMBERSHIPS_TABLE).delete().eq('organization_id', c.get('orgId')).eq('user_id', userId);
     if (error) return internalError(c, ERR_REMOVE_MEMBER);
     logAuditEvent(c, 'member.remove', userId, { organizationId: orgId });
     return c.body(null, HttpStatus.NoContent);
