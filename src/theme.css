@@ -1255,7 +1255,6 @@ details[open] > .cot-summary::before {
 .mt-3   { margin-top: var(--space-3); }
 .mt-4   { margin-top: var(--space-4); }
 /* Margin-y (top + bottom) */
-.my-2   { margin-top: var(--space-2); margin-bottom: var(--space-2); }
 
 /* Padding */
 .p-4    { padding: var(--space-4); }

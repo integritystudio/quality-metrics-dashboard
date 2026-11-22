@@ -12,8 +12,6 @@ type BarIndicatorProps = {
   /** Track background (default: CSS var(--bg-surface)) */
   trackColor?: string;
   className?: string;
-  /** Extra inline styles on the track div (merged with internal overrides) */
-  style?: CSSProperties;
 }
 
 export function BarIndicator({
@@ -23,10 +21,8 @@ export function BarIndicator({
   height,
   trackColor,
   className,
-  style,
 }: BarIndicatorProps) {
   const trackStyle: CSSProperties = {
-    ...style,
     '--bar-fill-width': `${value}%`,
     ...(height != null && { '--bar-h': `${height}px` } as CSSProperties),
     ...(trackColor && { '--bar-track-color': trackColor } as CSSProperties),
