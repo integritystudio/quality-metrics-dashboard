@@ -28,13 +28,14 @@
  *
  * Usage:
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-quality-eval.ts --yes
+ *   … --reference-model <id>   # score against another reference (default REFERENCE_MODEL)
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
-import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import type { RequestPricing } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import {
   fitContextForJudge,
@@ -97,6 +98,7 @@ import {
   type JudgeTokenUsage,
 } from './judge-usage.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
+import { CliArgError } from './cli-args.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -120,6 +122,7 @@ export const OUTPUT_TOKENS_PER_CALL_ESTIMATE = 1_500;
 /** Estimate only: criterion text, steps and anchoring added to the turn content. */
 export const PROMPT_OVERHEAD_TOKENS_ESTIMATE = 600;
 export const AGREEMENT_FLAG = '--agreement';
+export const REFERENCE_MODEL_FLAG = '--reference-model';
 export const MARKER_FILENAME = '.judge-quality.started';
 export const RESULTS_PREFIX = 'judge-quality-';
 export const FROZEN_TURNS_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'local', 'judge-quality-turns.json');
@@ -133,7 +136,7 @@ const CLOSER_CELL_WIDTH = TABLE_CELL_WIDTH + 2;
 // Types
 // ---------------------------------------------------------------------------
 
-export type ParsedArgs = OneShotArgs & { agreementPath?: string };
+export type ParsedArgs = OneShotArgs & { agreementPath?: string; referenceModel?: string };
 
 /** One turn of a judge-agreement results file. */
 export type AgreementTurn = {
@@ -174,9 +177,20 @@ export type ReferenceSummary = {
 // ---------------------------------------------------------------------------
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  return parseOneShotArgs<{ agreementPath?: string }>(argv, { values: [AGREEMENT_FLAG] }, {}, cli => {
+  return parseOneShotArgs<{ agreementPath?: string; referenceModel?: string }>(argv, { values: [AGREEMENT_FLAG, REFERENCE_MODEL_FLAG] }, {}, cli => {
     const agreementPath = cli.value(AGREEMENT_FLAG);
-    return agreementPath === undefined ? {} : { agreementPath };
+    const referenceModel = cli.value(REFERENCE_MODEL_FLAG);
+    if (referenceModel !== undefined) {
+      try {
+        judgePricing(referenceModel);
+      } catch (err) {
+        throw new CliArgError(`${REFERENCE_MODEL_FLAG} ${referenceModel} cannot be priced: ${describeUnknown(err)}`);
+      }
+    }
+    return {
+      ...(agreementPath !== undefined && { agreementPath }),
+      ...(referenceModel !== undefined && { referenceModel }),
+    };
   });
 }
 
@@ -243,7 +257,7 @@ export function estimateCallInputTokens(turn: Turn, config: GEvalConfig): number
 
 export function estimateReferenceSpend(
   turns: readonly Turn[],
-  pricing: ModelPricingEntry,
+  pricing: RequestPricing,
 ): { calls: number; inputTokens: number; outputTokens: number; usd: number } {
   let calls = 0;
   let inputTokens = 0;
@@ -339,12 +353,13 @@ export function closerConfiguration(
 export async function createReferenceProvider(
   apiKey: string,
   onUsage: (usage: JudgeTokenUsage) => void,
+  model: string = REFERENCE_MODEL,
 ): Promise<ConsolidatedProvider> {
   const client = await createJudgeAnthropicClient({ apiKey });
   return {
     async generate(prompt: string, options: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {
       const response = await client.messages.create({
-        model: REFERENCE_MODEL,
+        model,
         max_tokens: REFERENCE_MAX_TOKENS,
         thinking: { type: 'adaptive' },
         output_config: {
@@ -443,8 +458,9 @@ function printTable(
   consolidated: ReferenceSummary,
   verdict: Record<string, Side | 'tie'>,
   reference: CallUsageReport,
+  referenceModel: string,
 ): void {
-  console.log(`\n[quality] distance from ${REFERENCE_MODEL} (1–5 scale; bias > 0 = more lenient)`);
+  console.log(`\n[quality] distance from ${referenceModel} (1–5 scale; bias > 0 = more lenient)`);
   console.log(
     tableRow(TABLE_CELL_WIDTH, 'criterion', 'n', 'pc exact', 'pc mae', 'pc bias', 'cons exact', 'cons mae', 'cons bias')
     + padCell('closer', CLOSER_CELL_WIDTH),
@@ -471,7 +487,8 @@ async function main(): Promise<void> {
   const credential = admitOneShot(runGuard, args);
   if (!credential) return;
 
-  const pricing = judgePricing(REFERENCE_MODEL);
+  const referenceModel = args.referenceModel ?? REFERENCE_MODEL;
+  const pricing = judgePricing(referenceModel);
 
   const agreementPath = resolveAgreementPath(DOCS_DIR, args.agreementPath);
   if (!agreementPath) return refuse('no judge-agreement results file to evaluate; run judge-agreement.ts first');
@@ -498,7 +515,7 @@ async function main(): Promise<void> {
   if (!startedAt) return;
 
   const totals: CallUsageTotals = createCallUsageTotals();
-  const provider = await createReferenceProvider(credential.apiKey, usage => addCallUsage(totals, usage));
+  const provider = await createReferenceProvider(credential.apiKey, usage => addCallUsage(totals, usage), referenceModel);
   const canSpend = (): boolean => tokenUsageCostUsd(totals, pricing) < MAX_MEASURED_SPEND_USD;
   const stepsCache: EvaluationStepsCache = new Map();
   const referenceJudge: ReferenceJudge = { provider, stepsCache, canSpend };
@@ -523,7 +540,7 @@ async function main(): Promise<void> {
     startedAt: startedAt.toISOString(),
     agreementSource: agreementPath,
     reference: {
-      model: REFERENCE_MODEL,
+      model: referenceModel,
       effort: REFERENCE_EFFORT,
       method: 'G-Eval, one call per criterion, reference-generated steps; hallucination = 1 - faithfulness',
       pricingUsdPerMillion: { input: pricing.input, output: pricing.output },
@@ -540,7 +557,7 @@ async function main(): Promise<void> {
   };
 
   const outPath = writeResults(runGuard, startedAt, results);
-  printTable(perCriterion, consolidated, verdict, referenceUsage);
+  printTable(perCriterion, consolidated, verdict, referenceUsage, referenceModel);
   console.log(`\n[quality] results written: ${outPath}`);
 }
 

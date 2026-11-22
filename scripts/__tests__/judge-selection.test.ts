@@ -4,6 +4,7 @@ import { selectTurns, turnSkip, WEBHOOK_SECRET_ENV } from '../judge-selection.js
 import { COHERENCE_EVAL_NAME, RELEVANCE_EVAL_NAME } from '../judge-criteria.js';
 import { turnKeyOf } from '../judge-dedup.js';
 import { type Turn } from '../judge-turns.js';
+import { DEFAULT_JUDGE_SPEC } from '../judge-spec.js';
 import { judgedKeys, makeTurn } from './support/fixtures.js';
 
 const KEY_REF = 'OBTOOL_API_KEY_TEST';
@@ -36,6 +37,14 @@ describe('selectTurns', () => {
 
     expect(s.selected).toEqual([c]);
     expect(s).toMatchObject({ discovered: 4, judged: 2, pending: 2 });
+  });
+
+  it('re-selects a turn another model judged when the run names a different judge', () => {
+    const t = turn('1');
+    const haikuJudged = judged(t);
+
+    expect(selectTurns([t], haikuJudged, opts).selected).toEqual([]);
+    expect(selectTurns([t], haikuJudged, { ...opts, judge: { ...DEFAULT_JUDGE_SPEC, model: 'claude-opus-5' } }).selected).toEqual([t]);
   });
 
   it('selects a turn with any criterion still missing', () => {

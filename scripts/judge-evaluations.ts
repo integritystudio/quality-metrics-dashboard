@@ -42,7 +42,7 @@ import { TIME_MS } from '../../src/lib/core/units.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
 import {
   JUDGE_EXIT_POST_FAILED, JUDGE_EXIT_DISCOVERY_FAILED, JUDGE_BATCH_FLAG, JUDGE_DEFAULT_DAYS, JUDGE_LIMIT_FLAG,
-  JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG, DRY_RUN_FLAG, rejectRemovedFlags,
+  JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG, JUDGE_PROVIDER_FLAG, JUDGE_MODEL_FLAG, DRY_RUN_FLAG, rejectRemovedFlags,
 } from './pipeline-stages.js';
 import { exitOnCliArgError, parseCli, positiveIntArg, type CliSpec } from './cli-args.js';
 import { runIfMain } from './cli-main.js';
@@ -77,7 +77,6 @@ import {
 import {
   COHERENCE_EVAL_NAME,
   FAITHFULNESS_EVAL_NAME,
-  HAIKU_MODEL,
   JUDGE_MAX_TOKENS,
   QAG_MODE_RECORDS,
   RELEVANCE_EVAL_NAME,
@@ -87,6 +86,7 @@ import {
   TOOL_SELECTION_CRITERIA,
 } from './judge-criteria.js';
 import { turnJudgedKey } from './judge-dedup.js';
+import { DEFAULT_JUDGE_SPEC, resolveJudgeSpec, type JudgeSpec } from './judge-spec.js';
 import {
   anchorTurns,
   fitContextForJudge,
@@ -145,8 +145,9 @@ export async function createAnthropicProvider(
   apiKey: string,
   usage: JudgeTokenUsage = createUsageTotals(),
   onUsage?: (usage: JudgeTokenUsage) => void,
+  model: string = DEFAULT_JUDGE_SPEC.model,
 ): Promise<LLMProvider> {
-  return anthropicProviderFor(await createJudgeAnthropicClient({ apiKey }), usage, onUsage);
+  return anthropicProviderFor(await createJudgeAnthropicClient({ apiKey }), usage, onUsage, model);
 }
 
 /** The judge's provider over an SDK client, or a fake one in tests. */
@@ -154,6 +155,7 @@ export function anthropicProviderFor(
   client: JudgeMessagesClient,
   usage: JudgeTokenUsage = createUsageTotals(),
   onUsage?: (usage: JudgeTokenUsage) => void,
+  model: string = DEFAULT_JUDGE_SPEC.model,
 ): LLMProvider {
   return {
     async generate(
@@ -161,7 +163,7 @@ export function anthropicProviderFor(
       options?: { logprobs?: boolean; jsonSchema?: ResponseJsonSchema }
     ): Promise<{ text: string; logprobs?: Array<{ token: string; logprob: number }> }> {
       const response = await client.messages.create({
-        model: HAIKU_MODEL,
+        model,
         // The backstop for a schema-constrained reply (reasoning plus score); never below 512.
         max_tokens: JUDGE_MAX_TOKENS,
         messages: [{ role: 'user', content: prompt }],
@@ -205,6 +207,8 @@ export type EvaluateTurnOptions = {
    * cannot ship until the second is queued.
    */
   concurrent?: boolean;
+  /** The judge the dedup keys and records name; defaults to DEFAULT_JUDGE_SPEC. */
+  judge?: JudgeSpec;
 }
 
 export async function evaluateTurn(
@@ -225,9 +229,10 @@ export async function evaluateTurn(
     return Promise.resolve();
   };
 
-  const isJudged = (evalName: string): boolean => existingKeys.has(turnJudgedKey(turn, evalName, HAIKU_MODEL));
+  const judgeSpec = options.judge ?? DEFAULT_JUDGE_SPEC;
+  const isJudged = (evalName: string): boolean => existingKeys.has(turnJudgedKey(turn, evalName, judgeSpec.model));
   const record = (evalName: string, value: number, reason: string): void => {
-    evals.push(judgeRecord(turn, PRODUCER, HAIKU_MODEL, { evaluationName: evalName, scoreValue: value, explanation: reason }));
+    evals.push(judgeRecord(turn, PRODUCER, judgeSpec, { evaluationName: evalName, scoreValue: value, explanation: reason }));
   };
   const fail = (evalName: string, err: unknown): void => trackFailure(evalName, err, sessionPreview);
   const fallbackReason = (label: string, value: number): string =>
@@ -308,8 +313,9 @@ export async function evaluateTurnsBatched(
   judge: LLMJudge,
   turns: Turn[],
   existingKeys: Set<string>,
+  judgeSpec: JudgeSpec = DEFAULT_JUDGE_SPEC,
 ): Promise<EvalRecord[][]> {
-  return settleBatchedTurns(provider, turns.map(async turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true })));
+  return settleBatchedTurns(provider, turns.map(async turn => evaluateTurn(judge, turn, existingKeys, { concurrent: true, judge: judgeSpec })));
 }
 
 export type TurnDiscovery = {
@@ -493,8 +499,9 @@ export async function processBatch<T, R>(
 }
 
 /** --dry-run: what a run over `allTurns` would cost, and where its turns come from. */
-function printDryRun(allTurns: Turn[], batch: boolean, consolidated: boolean): void {
-  const est = estimateJudgeRun(allTurns, batch, consolidated);
+function printDryRun(allTurns: Turn[], judgeSpec: JudgeSpec, consolidated: boolean): void {
+  const batch = judgeSpec.mode === 'batch';
+  const est = estimateJudgeRun(allTurns, batch, consolidated, judgeSpec.model);
 
   console.log(`[dry-run] ${allTurns.length} turns → ${est.evals} ${consolidated ? 'consolidated calls' : 'evals'}`);
   console.log(`[dry-run] ~${est.inputTokens.toLocaleString()} input tokens, ~${est.outputTokens.toLocaleString()} output tokens`);
@@ -521,18 +528,20 @@ async function judgeTurns(
   allTurns: Turn[],
   existingKeys: Set<string>,
   judgeKey: JudgeApiKey,
-  { batch, consolidated, criteria }: { batch: boolean; consolidated: boolean; criteria: ConsolidatedCriteriaOptions },
+  { judgeSpec, consolidated, criteria }: { judgeSpec: JudgeSpec; consolidated: boolean; criteria: ConsolidatedCriteriaOptions },
 ): Promise<EvalRecord[]> {
-  const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated).costUsd;
+  const batch = judgeSpec.mode === 'batch';
+  const estimatedUsd = estimateJudgeRun(allTurns, batch, consolidated, judgeSpec.model).costUsd;
   const usage = createUsageTotals();
+  const judged: ConsolidatedCriteriaOptions = { ...criteria, judge: judgeSpec };
   const batchProvider = batch
     ? await createBatchProvider({
-      model: HAIKU_MODEL,
+      model: judgeSpec.model,
       maxTokens: JUDGE_MAX_TOKENS,
       onUsage: (u) => addUsage(usage, u),
     })
     : undefined;
-  const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage);
+  const llm = batchProvider ?? await createAnthropicProvider(judgeKey.apiKey, usage, undefined, judgeSpec.model);
   const judge = createLLMJudge(llm, batchProvider !== undefined);
   // Consolidated (the default): one call per turn, judge-consolidated.ts. Its
   // synchronous provider gets the judge key and the run's usage totals, so it
@@ -541,15 +550,16 @@ async function judgeTurns(
   let allEvals: EvalRecord[][];
   if (batchProvider) {
     allEvals = consolidated
-      ? await evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys, criteria)
-      : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys);
+      ? await evaluateTurnsConsolidatedBatched(batchProvider, allTurns, existingKeys, judged)
+      : await evaluateTurnsBatched(batchProvider, judge, allTurns, existingKeys, judgeSpec);
   } else {
     const evaluate = consolidated
       ? await createConsolidatedTurnEvaluator(existingKeys, {
         apiKey: judgeKey.apiKey,
+        model: judgeSpec.model,
         onUsage: (u) => addUsage(usage, u),
-      }, criteria)
-      : async (turn: Turn): Promise<EvalRecord[]> => evaluateTurn(judge, turn, existingKeys);
+      }, judged)
+      : async (turn: Turn): Promise<EvalRecord[]> => evaluateTurn(judge, turn, existingKeys, { judge: judgeSpec });
     allEvals = await processBatch(allTurns, CONCURRENCY, BATCH_DELAY_MS, evaluate);
   }
 
@@ -559,7 +569,7 @@ async function judgeTurns(
   const summary = summarizeJudgeRun(
     flatEvals.length,
     { byMetric: evalFailures, byClass: failureClasses },
-    { usage, estimatedUsd, keySource: judgeKey.source },
+    { usage, estimatedUsd, keySource: judgeKey.source, model: judgeSpec.model, batch },
     prevState,
   );
   (summary.exitCode === 0 ? console.log : console.error)(summary.line);
@@ -576,22 +586,26 @@ async function judgeTurns(
 
 /** Flags judge-evaluations reads itself; --days=/--date= are read by derive's resolvers. */
 const JUDGE_CLI: CliSpec = {
-  values: [JUDGE_LIMIT_FLAG],
+  values: [JUDGE_LIMIT_FLAG, JUDGE_PROVIDER_FLAG, JUDGE_MODEL_FLAG],
   switches: [DRY_RUN_FLAG, JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG],
 };
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const { cli, requestedLimit } = exitOnCliArgError('Error:', () => {
+  const { cli, requestedLimit, judgeSpec } = exitOnCliArgError('Error:', () => {
     rejectRemovedFlags(args);
     const parsed = parseCli(args, JUDGE_CLI);
     return {
       cli: parsed,
       requestedLimit: positiveIntArg(JUDGE_LIMIT_FLAG, parsed.value(JUDGE_LIMIT_FLAG)),
+      judgeSpec: resolveJudgeSpec({
+        cli: { provider: parsed.value(JUDGE_PROVIDER_FLAG), model: parsed.value(JUDGE_MODEL_FLAG) },
+        batch: parsed.has(JUDGE_BATCH_FLAG),
+      }),
     };
   });
+  console.log(`[judge] judge: ${judgeSpec.provider}/${judgeSpec.model} tier=${judgeSpec.tier} prompt=${judgeSpec.promptVersion} mode=${judgeSpec.mode}`);
   const dryRun = cli.has(DRY_RUN_FLAG);
-  const batch = cli.has(JUDGE_BATCH_FLAG);
   // Consolidated is the default (JCP4); --per-criterion opts out.
   const consolidated = !cli.has(JUDGE_PER_CRITERION_FLAG);
   // Turn selection deliberately ignores this: a tool turn already judged without
@@ -614,12 +628,12 @@ async function main(): Promise<void> {
   if (dropped > 0) console.warn(`[judge] ${dropped} unreadable lines in ${JUDGE_PENDING_FILE} ignored`);
   if (pending.length > 0) console.log(`[judge] ${pending.length} records from a failed post are posted before this run's`);
   addPendingKeys(existingKeys, pending);
-  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit });
+  const select = (keys: Set<string>): TurnSelection => selectTurns(turns, keys, { limit, judge: judgeSpec });
 
   if (dryRun) {
     const selection = select(existingKeys);
     console.log(`[dry-run] turns: ${formatTurnSelection(selection)}`);
-    printDryRun(selection.selected, batch, consolidated);
+    printDryRun(selection.selected, judgeSpec, consolidated);
     return;
   }
 
@@ -640,7 +654,7 @@ async function main(): Promise<void> {
 
     resetFailureTracking();
 
-    const flatEvals = await judgeTurns(allTurns, existingKeys, judgeKey, { batch, consolidated, criteria });
+    const flatEvals = await judgeTurns(allTurns, existingKeys, judgeKey, { judgeSpec, consolidated, criteria });
     if (flatEvals.length > 0 || pending.length > 0) await deliverEvaluations(flatEvals, pending, accounts);
   } finally {
     releaseLock();

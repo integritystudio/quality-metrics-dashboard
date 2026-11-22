@@ -221,16 +221,28 @@ function idFields(r: Record<string, unknown>, attrs: Record<string, unknown>): P
   return fields;
 }
 
+/** The judge identity the webhook has no top-level field for, under the metadata key each is sent as. */
+const JUDGE_METADATA_ATTRS = {
+  judgeProvider: EVALUATION_ATTRS.JUDGE_PROVIDER,
+  judgeTier: EVALUATION_ATTRS.JUDGE_TIER,
+  judgePromptVersion: EVALUATION_ATTRS.JUDGE_PROMPT_VERSION,
+  judgeMode: EVALUATION_ATTRS.JUDGE_MODE,
+} as const;
+
 /**
  * Fields the webhook has no slot for ride in `metadata`, which the flush keeps
  * in the row's `attributes`. evaluatedAt keeps the ISO string form for auditability.
  */
-function recordMetadata(r: Record<string, unknown>): Record<string, unknown> | undefined {
+function recordMetadata(r: Record<string, unknown>, attrs: Record<string, unknown>): Record<string, unknown> | undefined {
   const metadata: Record<string, unknown> = {};
   const timestamp = asString(r.timestamp);
   if (timestamp) metadata.evaluatedAt = timestamp;
   const schemaUrl = asString(r[SCHEMA_URL_FIELD]);
   if (schemaUrl) metadata.schemaUrl = schemaUrl;
+  for (const [field, attr] of Object.entries(JUDGE_METADATA_ATTRS)) {
+    const value = asString(attrs[attr]);
+    if (value) metadata[field] = truncate(value, WEBHOOK_MAX_NAME_LENGTH);
+  }
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
@@ -264,7 +276,7 @@ function buildPayload(core: RecordCore, r: Record<string, unknown>, attrs: Recor
   // Supply evaluatedAtMs so the flush dates the row to when the evaluation
   // was produced, not when this batch arrived (EVAL-WEBHOOK-EVENT-TIME).
   if (!Number.isNaN(core.tMs)) payload.evaluatedAtMs = core.tMs;
-  const metadata = recordMetadata(r);
+  const metadata = recordMetadata(r, attrs);
   if (metadata) payload.metadata = metadata;
   payload.evaluationId = evaluationId(r);
   return payload;

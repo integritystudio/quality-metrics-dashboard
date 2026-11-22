@@ -22,6 +22,7 @@
 import { ascending } from 'd3-array';
 import { asString } from './account-index.js';
 import { selectCriteria } from './judge-consolidated.js';
+import type { JudgeSpec } from './judge-spec.js';
 import type { Turn } from './judge-turns.js';
 import { increment } from './collections.js';
 
@@ -34,6 +35,8 @@ export type SelectOptions = {
   /** Most turns to select; applied after every skip. */
   limit: number;
   env?: NodeJS.ProcessEnv;
+  /** The run's judge: a turn counts as judged only for its model. Defaults to DEFAULT_JUDGE_SPEC. */
+  judge?: JudgeSpec;
 }
 
 export type TurnSelection = {
@@ -57,9 +60,9 @@ function deliverySecret(turn: Turn): string | null {
 export function turnSkip(
   turn: Turn,
   existingKeys: Set<string>,
-  opts: Pick<SelectOptions, 'env'>,
+  opts: Pick<SelectOptions, 'env' | 'judge'>,
 ): TurnSkip | undefined {
-  if (selectCriteria(turn, existingKeys).recordNames.length === 0) return 'judged';
+  if (selectCriteria(turn, existingKeys, opts.judge ? { judge: opts.judge } : {}).recordNames.length === 0) return 'judged';
   const secret = deliverySecret(turn);
   if (secret === null) return 'withheld';
   return asString((opts.env ?? process.env)[secret]) ? undefined : 'held-for-key';

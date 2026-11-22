@@ -15,6 +15,7 @@ import {
   type EvalRecord,
 } from './eval-record.js';
 import { turnJudgedKey } from './judge-dedup.js';
+import type { JudgeSpec } from './judge-spec.js';
 import { scoreLabelForMetric } from '../../src/lib/quality/qfe-label-ordinals.js';
 import { turnContentKey } from '../../src/lib/validation/api-schemas.js';
 
@@ -64,7 +65,7 @@ export type ScoredCriterion = { evaluationName: string; scoreValue: number; expl
 export function judgeRecord(
   turn: Turn,
   producer: string,
-  judgeModel: string,
+  judge: JudgeSpec,
   { evaluationName, scoreValue, explanation }: ScoredCriterion,
 ): EvalRecord {
   return {
@@ -77,8 +78,12 @@ export function judgeRecord(
     ...legacyEvaluatorTypeField(LLM_EVALUATOR_KIND),
     evaluatorKind: LLM_EVALUATOR_KIND,
     cohort: NORMAL_COHORT,
-    judgeModel,
-    stableEvaluationKey: turnJudgedKey(turn, evaluationName, judgeModel),
+    judgeModel: judge.model,
+    judgeProvider: judge.provider,
+    judgeTier: judge.tier,
+    judgePromptVersion: judge.promptVersion,
+    judgeMode: judge.mode,
+    stableEvaluationKey: turnJudgedKey(turn, evaluationName, judge.model),
     traceId: turn.traceId,
     sessionId: turn.sessionId,
     ...turnSourceFields(turn),

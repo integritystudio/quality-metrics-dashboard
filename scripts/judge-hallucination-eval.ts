@@ -33,7 +33,7 @@ import { sum } from 'd3-array';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HALLUCINATION_CRITERIA } from '../../src/lib/judge/llm-judge-config.js';
-import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import type { RequestPricing } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import type { Turn } from './judge-turns.js';
@@ -164,8 +164,8 @@ export function readPriorReference(path: string): QualityTurn[] {
 
 export function estimateRunSpend(
   turns: readonly Turn[],
-  haikuPricing: ModelPricingEntry,
-  referencePricing: ModelPricingEntry,
+  haikuPricing: RequestPricing,
+  referencePricing: RequestPricing,
 ): { haikuUsd: number; referenceCalls: number; referenceUsd: number; totalUsd: number } {
   const haiku = estimateSpend(turns, haikuPricing);
   // The candidate is the consolidated call plus one criterion, so price it as a second consolidated run.

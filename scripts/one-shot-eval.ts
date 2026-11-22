@@ -216,6 +216,10 @@ export function scoresByName(records: readonly EvalRecord[]): Record<string, num
 }
 
 /** The pipeline's own provider (structured score output included), with the usage hook. */
-export async function createPerCriterionProvider(apiKey: string, onUsage: (usage: JudgeTokenUsage) => void): Promise<LLMProvider> {
-  return createAnthropicProvider(apiKey, createUsageTotals(), onUsage);
+export async function createPerCriterionProvider(
+  apiKey: string,
+  onUsage: (usage: JudgeTokenUsage) => void,
+  model?: string,
+): Promise<LLMProvider> {
+  return createAnthropicProvider(apiKey, createUsageTotals(), onUsage, model);
 }

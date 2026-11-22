@@ -10,7 +10,8 @@ import {
   type TurnScores,
   type TurnOutcome,
 } from '../judge-agreement.js';
-import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
+import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME, LEGACY_HAIKU_MODEL } from '../judge-criteria.js';
+import { JUDGE_MODEL_FLAG } from '../pipeline-stages.js';
 import { YES_FLAG } from '../one-shot-eval.js';
 import { estimateTurnTokens } from '../judge-usage.js';
 import { makeTurn, TEST_PRICING } from './support/fixtures.js';
@@ -28,6 +29,11 @@ describe('parseArgs', () => {
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, String(MAX_LIMIT + 1)]).error).toMatch(/hard maximum/);
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, '0']).error).toMatch(/positive integer/);
     expect(parseArgs([YES_FLAG, LIMIT_FLAG, 'ten']).error).toMatch(/positive integer/);
+  });
+
+  it('takes the judge model from --judge-model, and refuses one it cannot price', () => {
+    expect(parseArgs([YES_FLAG, JUDGE_MODEL_FLAG, LEGACY_HAIKU_MODEL]).judge?.model).toBe(LEGACY_HAIKU_MODEL);
+    expect(parseArgs([YES_FLAG, JUDGE_MODEL_FLAG, 'no-such-model-0']).error).toMatch(/cannot be priced/);
   });
 });
 

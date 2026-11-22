@@ -8,7 +8,7 @@
  * docs/judge-agreement-<YYYY-MM-DD>.json with the per-criterion exact-match
  * rate and mean absolute difference on the 1–5 scale, plus each
  * configuration's token totals (from `response.usage`) and USD at
- * MODEL_PRICING[HAIKU_MODEL]. Prints a one-screen table.
+ * the judge model's list rates. Prints a one-screen table.
  *
  * Safety rules, all mandatory:
  * - `--yes` is required.
@@ -20,22 +20,21 @@
  *
  * Usage:
  *   doppler run -p integrity-studio -c prd -- npx tsx scripts/judge-agreement.ts --limit 30 --yes
+ *   … --judge-model <id>   # compare the two configurations of another model (default: JUDGE_MODEL, else Haiku)
  */
 
 import { ascending } from 'd3-array';
-import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import type { RequestPricing } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
 import { type Turn } from './judge-turns.js';
 import { extractTurns, type TranscriptInfo } from './transcript-turns.js';
 import { discoverCloudSessions, type CloudSessions } from './judge-cloud-source.js';
 import { readScope } from './derive-evaluations.js';
-import { JUDGE_DEFAULT_DAYS } from './pipeline-stages.js';
+import { JUDGE_DEFAULT_DAYS, JUDGE_MODEL_FLAG } from './pipeline-stages.js';
 import { createLLMJudge, evaluateTurn, processBatch } from './judge-evaluations.js';
 import { resetFailureTracking } from './judge-failures.js';
-import {
-  HAIKU_MODEL,
-  FAITHFULNESS_EVAL_NAME,
-} from './judge-criteria.js';
+import { FAITHFULNESS_EVAL_NAME } from './judge-criteria.js';
+import { resolveJudgeSpec, type JudgeSpec } from './judge-spec.js';
 import {
   createConsolidatedProvider,
   evaluateTurnConsolidated,
@@ -108,7 +107,7 @@ const OVERALL_ROW = 'overall';
 // Types
 // ---------------------------------------------------------------------------
 
-export type ParsedArgs = OneShotArgs & { limit: number };
+export type ParsedArgs = OneShotArgs & { limit: number; judge?: JudgeSpec };
 
 /** Normalized (0–1) scores by evaluation name, one entry per configuration. */
 export type TurnScores = {
@@ -161,10 +160,10 @@ export type SpendEstimate = {
 // ---------------------------------------------------------------------------
 
 export function parseArgs(argv: readonly string[]): ParsedArgs {
-  return parseOneShotArgs(argv, { values: [LIMIT_FLAG] }, { limit: DEFAULT_LIMIT }, cli => {
+  return parseOneShotArgs<{ limit: number; judge?: JudgeSpec }>(argv, { values: [LIMIT_FLAG, JUDGE_MODEL_FLAG] }, { limit: DEFAULT_LIMIT }, cli => {
     const limit = positiveIntArg(LIMIT_FLAG, cli.value(LIMIT_FLAG)) ?? DEFAULT_LIMIT;
     if (limit > MAX_LIMIT) throw new CliArgError(`${LIMIT_FLAG} ${limit} exceeds the hard maximum of ${MAX_LIMIT}`);
-    return { limit };
+    return { limit, judge: resolveJudgeSpec({ cli: { model: cli.value(JUDGE_MODEL_FLAG) }, batch: false }) };
   });
 }
 
@@ -209,7 +208,7 @@ async function sampleTurns(transcripts: readonly TranscriptInfo[], limit: number
  * faithfulness sends the output once plus the context once per statement.
  * Consolidated: the content once per turn plus one steps call per criterion.
  */
-export function estimateSpend(turns: readonly Turn[], pricing: ModelPricingEntry): SpendEstimate {
+export function estimateSpend(turns: readonly Turn[], pricing: RequestPricing): SpendEstimate {
   let perCriterionInputTokens = 0;
   let perCriterionCalls = 0;
   let consolidatedInputTokens = 0;
@@ -330,8 +329,13 @@ function ratio(numerator: number, denominator: number): number | null {
   return denominator > 0 ? numerator / denominator : null;
 }
 
-function printTable(summary: AgreementSummary, configurations: Record<Configuration, CallUsageReport>, turnsEvaluated: number): void {
-  console.log(`\n[agreement] ${turnsEvaluated} turns, model ${HAIKU_MODEL}`);
+function printTable(
+  summary: AgreementSummary,
+  configurations: Record<Configuration, CallUsageReport>,
+  turnsEvaluated: number,
+  model: string,
+): void {
+  console.log(`\n[agreement] ${turnsEvaluated} turns, model ${model}`);
   console.log(tableRow(TABLE_CELL_WIDTH, ...AGREEMENT_HEADER));
   for (const [name, entry] of [...Object.entries(summary.byCriterion), [OVERALL_ROW, summary.overall] as const]) {
     console.log(tableRow(
@@ -359,7 +363,8 @@ async function main(): Promise<void> {
   const credential = admitOneShot(runGuard, args);
   if (!credential) return;
 
-  const pricing = judgePricing();
+  const judgeSpec = args.judge ?? resolveJudgeSpec({ cli: {}, batch: false });
+  const pricing = judgePricing(judgeSpec.model);
 
   console.log(`[agreement] discovering the last ${JUDGE_DEFAULT_DAYS} days' sessions from the cloud…`);
   let discovered: CloudSessions;
@@ -391,10 +396,11 @@ async function main(): Promise<void> {
 
   const perCriterionTotals = createCallUsageTotals();
   const consolidatedTotals = createCallUsageTotals();
-  const llm = await createPerCriterionProvider(credential.apiKey, usage => addCallUsage(perCriterionTotals, usage));
+  const llm = await createPerCriterionProvider(credential.apiKey, usage => addCallUsage(perCriterionTotals, usage), judgeSpec.model);
   const judge = createLLMJudge(llm);
   const provider = await createConsolidatedProvider({
     apiKey: credential.apiKey,
+    model: judgeSpec.model,
     onUsage: usage => addCallUsage(consolidatedTotals, usage),
   });
   const stepsCache: EvaluationStepsCache = new Map();
@@ -406,13 +412,13 @@ async function main(): Promise<void> {
       sessionId: turn.sessionId,
       timestamp: turn.timestamp,
       hasTools: turn.toolResults.length > 0,
-      expected: selectCriteria(turn, new Set()).recordNames,
+      expected: selectCriteria(turn, new Set(), { judge: judgeSpec }).recordNames,
       perCriterion: {},
       consolidated: {},
     };
     try {
-      outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set()));
-      outcome.consolidated = scoresByName(await evaluateTurnConsolidated(provider, turn, new Set(), { stepsCache }));
+      outcome.perCriterion = scoresByName(await evaluateTurn(judge, turn, new Set(), { judge: judgeSpec }));
+      outcome.consolidated = scoresByName(await evaluateTurnConsolidated(provider, turn, new Set(), { stepsCache, criteria: { judge: judgeSpec } }));
     } catch (err) {
       outcome.error = describeUnknown(err);
     }
@@ -428,7 +434,7 @@ async function main(): Promise<void> {
   const results = {
     generatedAt: new Date().toISOString(),
     startedAt: startedAt.toISOString(),
-    model: HAIKU_MODEL,
+    model: judgeSpec.model,
     pricingUsdPerMillion: { input: pricing.input, output: pricing.output },
     limitRequested: args.limit,
     turnsEvaluated: outcomes.length,
@@ -456,7 +462,7 @@ async function main(): Promise<void> {
   };
 
   const outPath = writeResults(runGuard, startedAt, results);
-  printTable(summary, configurations, outcomes.length);
+  printTable(summary, configurations, outcomes.length, judgeSpec.model);
   console.log(`\n[agreement] results written: ${outPath}`);
 }
 

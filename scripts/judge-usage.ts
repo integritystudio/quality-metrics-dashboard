@@ -1,7 +1,8 @@
 /** Token accounting, list pricing and pre-run cost estimates for the judge. */
 
 import { sum } from 'd3-array';
-import { MODEL_PRICING, TOKENS_PER_CHAR, TOKENS_PER_MILLION, type ModelPricingEntry } from '../../src/lib/core/constants-models.js';
+import { TOKENS_PER_CHAR, TOKENS_PER_MILLION, type RequestPricing } from '../../src/lib/core/constants-models.js';
+import { getEffectivePricing } from '../../src/lib/cost/pricing-cache.js';
 import { HAIKU_MODEL } from './judge-criteria.js';
 import { fitContextForJudge, type Turn } from './judge-turns.js';
 
@@ -68,9 +69,12 @@ export function addCallUsage(totals: CallUsageTotals, usage: JudgeTokenUsage): v
   addUsage(totals, usage);
 }
 
-/** List pricing for `model` (the judge's by default); throws rather than pricing a run at $0. */
-export function judgePricing(model: string = HAIKU_MODEL): ModelPricingEntry {
-  const pricing = Object.hasOwn(MODEL_PRICING, model) ? MODEL_PRICING[model] : undefined;
+/**
+ * List pricing for `model` (the judge's by default), from the pricing cache when it
+ * holds the model, else the static table by family; throws rather than pricing a run at $0.
+ */
+export function judgePricing(model: string = HAIKU_MODEL): RequestPricing {
+  const pricing = getEffectivePricing(model);
   if (!pricing) throw new Error(`No pricing data for model ${model}`);
   return pricing;
 }
@@ -79,7 +83,7 @@ export function judgePricing(model: string = HAIKU_MODEL): ModelPricingEntry {
  * USD a usage implies at list rates: input and output as billed, cache reads
  * and writes at their ratios. The one place judge spend is priced.
  */
-export function tokenUsageCostUsd(usage: JudgeTokenUsage, pricing: ModelPricingEntry): number {
+export function tokenUsageCostUsd(usage: JudgeTokenUsage, pricing: RequestPricing): number {
   const perToken = (tokens: number, rate: number): number => (tokens / TOKENS_PER_MILLION) * rate;
   return perToken(usage.inputTokens, pricing.input)
     + perToken(usage.outputTokens, pricing.output)
@@ -88,7 +92,7 @@ export function tokenUsageCostUsd(usage: JudgeTokenUsage, pricing: ModelPricingE
 }
 
 /** List cost of token counts with no cache traffic — how every pre-run estimate is priced. */
-export function listCostUsd(inputTokens: number, outputTokens: number, pricing: ModelPricingEntry): number {
+export function listCostUsd(inputTokens: number, outputTokens: number, pricing: RequestPricing): number {
   return tokenUsageCostUsd({ inputTokens, outputTokens, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 }, pricing);
 }
 
@@ -107,9 +111,9 @@ export function estimateTurnTokens(turn: Turn): number {
   return charsToTokens(turn.userText.length + turn.assistantText.length + totalChars(fitContextForJudge(turn.toolResults)));
 }
 
-/** List cost of an estimate's tokens, at the batch rate when `batch`. */
-function estimateCostUsd(inputTokens: number, outputTokens: number, batch: boolean): number {
-  const listUsd = listCostUsd(inputTokens, outputTokens, judgePricing());
+/** List cost of an estimate's tokens at `model`'s rates, at the batch rate when `batch`. */
+function estimateCostUsd(inputTokens: number, outputTokens: number, batch: boolean, model: string): number {
+  const listUsd = listCostUsd(inputTokens, outputTokens, judgePricing(model));
   return batch ? listUsd * BATCH_PRICE_RATIO : listUsd;
 }
 
@@ -145,8 +149,13 @@ export type JudgeRunEstimate = {
  * the default mode, which sends each turn's content once and answers every
  * criterion in that one call.
  */
-export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolidated = false): JudgeRunEstimate {
-  if (consolidated) return estimateConsolidatedRun(turns, batch);
+export function estimateJudgeRun(
+  turns: readonly Turn[],
+  batch = false,
+  consolidated = false,
+  model: string = HAIKU_MODEL,
+): JudgeRunEstimate {
+  if (consolidated) return estimateConsolidatedRun(turns, batch, model);
   let evals = 0;
   let inputTokens = 0;
   for (const t of turns) {
@@ -157,7 +166,7 @@ export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolid
     inputTokens += charsToTokens(contentChars) * turnEvals;
   }
   const outputTokens = evals * EST_OUTPUT_TOKENS_PER_EVAL;
-  const costUsd = estimateCostUsd(inputTokens, outputTokens, batch);
+  const costUsd = estimateCostUsd(inputTokens, outputTokens, batch, model);
   return { evals, inputTokens, outputTokens, costUsd };
 }
 
@@ -166,7 +175,11 @@ export function estimateJudgeRun(turns: readonly Turn[], batch = false, consolid
  * The per-criterion steps calls (one per criterion per run) are left out —
  * at most seven short calls, noise beside the verdicts.
  */
-export function estimateConsolidatedRun(turns: readonly Turn[], batch: boolean): JudgeRunEstimate {
+export function estimateConsolidatedRun(
+  turns: readonly Turn[],
+  batch: boolean,
+  model: string = HAIKU_MODEL,
+): JudgeRunEstimate {
   let inputTokens = 0;
   let outputTokens = 0;
   for (const t of turns) {
@@ -174,6 +187,6 @@ export function estimateConsolidatedRun(turns: readonly Turn[], batch: boolean):
     const criteria = CONSOLIDATED_BASE_CRITERIA + (t.toolResults.length > 0 ? CONSOLIDATED_TOOL_CRITERIA : 0);
     outputTokens += criteria * EST_OUTPUT_TOKENS_PER_EVAL;
   }
-  const costUsd = estimateCostUsd(inputTokens, outputTokens, batch);
+  const costUsd = estimateCostUsd(inputTokens, outputTokens, batch, model);
   return { evals: turns.length, inputTokens, outputTokens, costUsd };
 }

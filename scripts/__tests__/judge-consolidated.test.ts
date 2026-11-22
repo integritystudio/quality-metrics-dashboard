@@ -25,6 +25,7 @@ import {
   TOOL_CORRECTNESS_CRITERIA,
   HAIKU_MODEL,
 } from '../judge-criteria.js';
+import { DEFAULT_JUDGE_SPEC } from '../judge-spec.js';
 import { PRODUCER, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { evaluationId } from '../evaluation-delivery.js';
 import { type Turn } from '../judge-turns.js';
@@ -126,7 +127,7 @@ describe('selectCriteria', () => {
     const otherModel = judgedKeys(turn, [RELEVANCE_EVAL_NAME], OTHER_JUDGE_MODEL);
 
     expect(selectCriteria(turn, otherModel).recordNames).toContain(RELEVANCE_EVAL_NAME);
-    expect(selectCriteria(turn, otherModel, { judgeModel: OTHER_JUDGE_MODEL }).recordNames).not.toContain(RELEVANCE_EVAL_NAME);
+    expect(selectCriteria(turn, otherModel, { judge: { ...DEFAULT_JUDGE_SPEC, model: OTHER_JUDGE_MODEL } }).recordNames).not.toContain(RELEVANCE_EVAL_NAME);
   });
 
   it('treats a tool turn as judged when only hallucination is missing, so it is not re-selected every run', () => {
@@ -334,7 +335,7 @@ describe('evaluateTurnConsolidated', () => {
 
   it('stamps records with the run\'s judge model, so they dedup under the key selection checked', async () => {
     const turn = makeTurn();
-    const criteria = { judgeModel: OTHER_JUDGE_MODEL };
+    const criteria = { judge: { ...DEFAULT_JUDGE_SPEC, model: OTHER_JUDGE_MODEL } };
 
     const records = await evaluateTurnConsolidated(createFakeProvider({}), turn, new Set(), { criteria });
 

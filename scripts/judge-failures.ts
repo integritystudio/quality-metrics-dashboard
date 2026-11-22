@@ -9,7 +9,7 @@ import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE,
 import type { JudgeApiKeySource } from './judge-credentials.js';
 import { EVAL_SCORE_PRECISION } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
-import { judgePricing, tokenUsageCostUsd, type JudgeTokenUsage } from './judge-usage.js';
+import { BATCH_PRICE_RATIO, judgePricing, tokenUsageCostUsd, type JudgeTokenUsage } from './judge-usage.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
 import { increment } from './collections.js';
 
@@ -109,6 +109,10 @@ export type JudgeSpend = {
   estimatedUsd: number;
   /** Environment variable NAME the key came from — never the value. */
   keySource: JudgeApiKeySource;
+  /** The judge model the usage is priced at; defaults to judgePricing's. */
+  model?: string;
+  /** Whether the run went through Message Batches, billed at BATCH_PRICE_RATIO. */
+  batch?: boolean;
 }
 
 export type JudgeRunSummary = {
@@ -210,8 +214,8 @@ export function summarizeJudgeRun(
   const prevRate = prev && prev.attempted > 0 ? prev.succeeded / prev.attempted : undefined;
   const classes = JUDGE_FAILURE_CLASSES.filter(c => byClass[c] > 0).map(c => `${c}=${byClass[c]}`).join(' ') || 'none';
   const { exitCode, verdict } = judgeVerdict({ succeeded, failed, attempted, successRate, prev, prevRate, byClass });
-  const { usage, estimatedUsd, keySource } = spend;
-  const actualUsd = tokenUsageCostUsd(usage, judgePricing());
+  const { usage, estimatedUsd, keySource, model, batch = false } = spend;
+  const actualUsd = tokenUsageCostUsd(usage, judgePricing(model)) * (batch ? BATCH_PRICE_RATIO : 1);
   const spent = `usage: in=${usage.inputTokens} out=${usage.outputTokens} cache_read=${usage.cacheReadInputTokens} cache_creation=${usage.cacheCreationInputTokens} est=$${estimatedUsd.toFixed(EVAL_SCORE_PRECISION)} actual=$${actualUsd.toFixed(EVAL_SCORE_PRECISION)} key=${keySource}`;
   const line = `[judge] summary: attempted=${attempted} succeeded=${succeeded} failed=${failed} classes: ${classes} ${spent} — ${verdict}`;
   return { attempted, succeeded, failed, byClass: { ...byClass }, usage: { ...usage }, estimatedUsd, actualUsd, keySource, exitCode, line };

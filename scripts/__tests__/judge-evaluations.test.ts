@@ -635,6 +635,16 @@ describe('summarizeJudgeRun', () => {
     );
   });
 
+  it('prices a batched run at the batch rate, as Message Batches bill it', () => {
+    const usage: JudgeTokenUsage = { inputTokens: 5_000_000, outputTokens: 1_000_000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
+    const spend: JudgeSpend = { usage, estimatedUsd: 0, keySource: JUDGE_API_KEY_ENV };
+
+    const sync = summarize({ succeeded: 1 }, spend);
+    const batched = summarize({ succeeded: 1 }, { ...spend, batch: true });
+
+    expect(batched.actualUsd).toBeCloseTo(sync.actualUsd * BATCH_PRICE_RATIO);
+  });
+
   it('copies the totals rather than sharing the accumulator', () => {
     const usage = createUsageTotals();
     const summary = summarize({ succeeded: 0 }, { ...noSpend, usage });

@@ -262,6 +262,9 @@ export const JUDGE_PER_CRITERION_FLAG = '--per-criterion';
 export const JUDGE_DIRECT_HALLUCINATION_FLAG = '--direct-hallucination';
 /** judge-evaluations flag populate forwards: a cap on turns judged. */
 export const JUDGE_LIMIT_FLAG = '--limit';
+/** judge-evaluations flags populate forwards: the judge's provider and model, over JUDGE_PROVIDER / JUDGE_MODEL (judge-spec.ts). */
+export const JUDGE_PROVIDER_FLAG = '--judge-provider';
+export const JUDGE_MODEL_FLAG = '--judge-model';
 /** Every stage's preview switch: compute and report, write nothing. */
 export const DRY_RUN_FLAG = '--dry-run';
 /**

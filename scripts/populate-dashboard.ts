@@ -31,6 +31,7 @@
  *   npm run populate -- --batch               # judge through the Message Batches API (half price, unattended)
  *   npm run populate -- --per-criterion       # one call per criterion (~10x cost, opt-out of consolidated)
  *   npm run populate -- --direct-hallucination # the consolidated call also judges hallucination
+ *   npm run populate -- --judge-model <id>    # judge with <id> instead of the default (or JUDGE_MODEL)
  *   npm run populate -- --judge-days=30       # judge turns from the last 30 days instead of 7
  *   npm run populate -- --derive-days=14      # derive over the last 14 days instead of 7
  *
@@ -55,6 +56,8 @@ import {
   JUDGE_LIMIT_FLAG,
   JUDGE_PER_CRITERION_FLAG,
   JUDGE_DIRECT_HALLUCINATION_FLAG,
+  JUDGE_PROVIDER_FLAG,
+  JUDGE_MODEL_FLAG,
   rejectRemovedFlags,
   NETWORK_RETRY_DELAYS_MS,
   deriveScopeArgs,
@@ -81,7 +84,7 @@ const SKIP_JUDGE_SCORING_FLAG = '--skip-judge-scoring';
 const SKIP_SHIP_TURNS_FLAG = '--skip-ship-turns';
 const SKIP_HOOK_GAP_CHECK_FLAG = '--skip-hook-gap-check';
 const POPULATE_CLI: CliSpec = {
-  values: [JUDGE_LIMIT_FLAG],
+  values: [JUDGE_LIMIT_FLAG, JUDGE_PROVIDER_FLAG, JUDGE_MODEL_FLAG],
   switches: [
     SKIP_DERIVE_FLAG, DERIVE_SKIP_RULES_FLAG, SKIP_JUDGE_FLAG, SKIP_JUDGE_SCORING_FLAG, SKIP_SHIP_TURNS_FLAG, SKIP_HOOK_GAP_CHECK_FLAG, DRY_RUN_FLAG,
     JUDGE_BATCH_FLAG, JUDGE_PER_CRITERION_FLAG, JUDGE_DIRECT_HALLUCINATION_FLAG,
@@ -105,6 +108,9 @@ type PopulateArgs = {
   perCriterion: boolean;
   directHallucination: boolean;
   limit: string | undefined;
+  /** Forwarded to the judge as given; judge-spec.ts validates them. */
+  judgeProvider: string | undefined;
+  judgeModel: string | undefined;
   deriveScope: string[];
   judgeScope: string[];
 };
@@ -125,12 +131,14 @@ function readArgs(argv: readonly string[]): PopulateArgs {
     perCriterion: cli.has(JUDGE_PER_CRITERION_FLAG),
     directHallucination: cli.has(JUDGE_DIRECT_HALLUCINATION_FLAG),
     limit: limit === undefined ? undefined : String(limit),
+    judgeProvider: cli.value(JUDGE_PROVIDER_FLAG),
+    judgeModel: cli.value(JUDGE_MODEL_FLAG),
     deriveScope: deriveScopeArgs(argv),
     judgeScope: judgeScopeArgs(argv),
   };
 }
 
-const { skipDerive, skipDeriveRules, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, directHallucination, limit, deriveScope, judgeScope } =
+const { skipDerive, skipDeriveRules, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck, dryRun, batch, perCriterion, directHallucination, limit, judgeProvider, judgeModel, deriveScope, judgeScope } =
   exitOnCliArgError('[populate] Error:', () => readArgs(process.argv.slice(2)));
 const stagesRun: ReadonlySet<PipelineStage> = new Set(stagesToRun({ dryRun, skipDerive, skipJudge, skipJudgeScoring, skipShipTurns, skipHookGapCheck }));
 
@@ -256,6 +264,8 @@ const STAGES: readonly StageSpec[] = [
       ...(batch ? [JUDGE_BATCH_FLAG] : []),
       ...(perCriterion ? [JUDGE_PER_CRITERION_FLAG] : []),
       ...(directHallucination ? [JUDGE_DIRECT_HALLUCINATION_FLAG] : []),
+      ...(judgeProvider ? [JUDGE_PROVIDER_FLAG, judgeProvider] : []),
+      ...(judgeModel ? [JUDGE_MODEL_FLAG, judgeModel] : []),
     ],
     networkRetry: false,
     continuation: '',

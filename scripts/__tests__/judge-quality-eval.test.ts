@@ -12,6 +12,7 @@ import {
   closerConfiguration,
   turnKey,
   AGREEMENT_FLAG,
+  REFERENCE_MODEL_FLAG,
   PROMPT_OVERHEAD_TOKENS_ESTIMATE,
   OUTPUT_TOKENS_PER_CALL_ESTIMATE,
   type QualityTurn,
@@ -52,6 +53,11 @@ function makeQualityTurn(overrides: Partial<QualityTurn>): QualityTurn {
 describe('parseArgs', () => {
   it('accepts --yes with an agreement path', () => {
     expect(parseArgs([YES_FLAG, AGREEMENT_FLAG, 'a.json'])).toEqual({ yes: true, agreementPath: 'a.json' });
+  });
+
+  it('takes the reference model from --reference-model, and refuses one it cannot price', () => {
+    expect(parseArgs([YES_FLAG, REFERENCE_MODEL_FLAG, 'claude-haiku-5-5'])).toEqual({ yes: true, referenceModel: 'claude-haiku-5-5' });
+    expect(parseArgs([YES_FLAG, REFERENCE_MODEL_FLAG, 'no-such-model-0']).error).toMatch(/cannot be priced/);
   });
 
   it('rejects --agreement without a value', () => {

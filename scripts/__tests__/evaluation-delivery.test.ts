@@ -93,6 +93,20 @@ describe('mapRecord', () => {
     expect(payload?.metadata).not.toHaveProperty('judgeModel');
   });
 
+  it('sends the rest of the judge identity in metadata, and none for a record without it', () => {
+    const { payload } = mapRecord(record({
+      [EVALUATION_ATTRS.JUDGE_MODEL]: 'claude-haiku-5-5',
+      [EVALUATION_ATTRS.JUDGE_PROVIDER]: 'anthropic',
+      [EVALUATION_ATTRS.JUDGE_TIER]: 'specified',
+      [EVALUATION_ATTRS.JUDGE_PROMPT_VERSION]: '1',
+      [EVALUATION_ATTRS.JUDGE_MODE]: 'batch',
+    }));
+    const { payload: unjudged } = mapRecord(record({}));
+
+    expect(payload?.metadata).toMatchObject({ judgeProvider: 'anthropic', judgeTier: 'specified', judgePromptVersion: '1', judgeMode: 'batch' });
+    expect(Object.keys(unjudged?.metadata ?? {}).filter(key => key.startsWith('judge'))).toEqual([]);
+  });
+
   it('maps a derive record that carries only the legacy overloaded evaluator.type', () => {
     const { payload } = mapRecord(record({
       [GENAI_EVALUATION_ATTRIBUTES.EVALUATOR]: 'derive-evaluations',

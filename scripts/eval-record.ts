@@ -72,6 +72,11 @@ export const EVALUATION_ATTRS = {
   COHORT: 'integritystudio.evaluation.cohort',
   PRODUCER: 'integritystudio.evaluation.producer',
   JUDGE_MODEL: 'integritystudio.evaluation.judge.model',
+  /** The rest of the judge's identity (judge-spec.ts), written beside JUDGE_MODEL. */
+  JUDGE_PROVIDER: 'integritystudio.evaluation.judge.provider',
+  JUDGE_TIER: 'integritystudio.evaluation.judge.tier',
+  JUDGE_PROMPT_VERSION: 'integritystudio.evaluation.judge.prompt_version',
+  JUDGE_MODE: 'integritystudio.evaluation.judge.mode',
   SESSION_ID: SESSION_ATTRIBUTES.ID,
   /** Semconv fallback link to the scored response when no span id is known (TKR8 Phase 2). */
   RESPONSE_ID: GENAI_RESPONSE_ATTRIBUTES.ID,
@@ -121,6 +126,11 @@ export type EvalRecord = {
   cohort: EvaluationCohort;
   /** Judge model — omitted for any score no model produced. */
   judgeModel?: string;
+  /** The rest of the judge's `JudgeSpec`, set with `judgeModel`. */
+  judgeProvider?: string;
+  judgeTier?: string;
+  judgePromptVersion?: string;
+  judgeMode?: string;
   traceId: string;
   sessionId: string;
   /**
@@ -156,6 +166,10 @@ export function toOTelRecord(ev: EvalRecord): object {
     [EVALUATION_ATTRS.COHORT]: ev.cohort,
     [EVALUATION_ATTRS.PRODUCER]: ev.evaluator,
     ...(ev.judgeModel && { [EVALUATION_ATTRS.JUDGE_MODEL]: ev.judgeModel }),
+    ...(ev.judgeProvider && { [EVALUATION_ATTRS.JUDGE_PROVIDER]: ev.judgeProvider }),
+    ...(ev.judgeTier && { [EVALUATION_ATTRS.JUDGE_TIER]: ev.judgeTier }),
+    ...(ev.judgePromptVersion && { [EVALUATION_ATTRS.JUDGE_PROMPT_VERSION]: ev.judgePromptVersion }),
+    ...(ev.judgeMode && { [EVALUATION_ATTRS.JUDGE_MODE]: ev.judgeMode }),
   };
   if (ev.scoreUnit) attrs[EVALUATION_ATTRS.SCORE_UNIT] = ev.scoreUnit;
   if (ev.scoreLabel) attrs[EVALUATION_ATTRS.SCORE_LABEL] = knownLabelSchema.parse(ev.scoreLabel);

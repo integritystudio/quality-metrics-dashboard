@@ -59,9 +59,9 @@ import {
   TOOL_SELECTION_CRITERIA,
   TOOL_ARGUMENTS_CRITERIA,
   TOOL_INTEGRATION_CRITERIA,
-  HAIKU_MODEL,
   JUDGE_MAX_TOKENS,
 } from './judge-criteria.js';
+import { DEFAULT_JUDGE_SPEC, type JudgeSpec } from './judge-spec.js';
 import { turnJudgedKey } from './judge-dedup.js';
 import { trackFailure } from './judge-failures.js';
 import {
@@ -164,11 +164,11 @@ export type ConsolidatedSelection = {
  */
 export type ConsolidatedCriteriaOptions = {
   /**
-   * Model this run judges with. The dedup check skips only the criteria this
+   * The judge this run scores with. The dedup check skips only the criteria its
    * model already scored (`turnJudgedKey`), so a second model re-scores what Haiku
-   * judged. Defaults to HAIKU_MODEL, the only judge so far.
+   * judged, and every record is stamped with it. Defaults to DEFAULT_JUDGE_SPEC.
    */
-  judgeModel?: string;
+  judge?: JudgeSpec;
   /**
    * Judge `hallucination` with HALLUCINATION_CRITERIA as a criterion of its own
    * in the same call. Without it the consolidated path records no hallucination.
@@ -220,9 +220,9 @@ function toolGroundedCriteria(
   return { criteria, recordNames };
 }
 
-/** The model a run's dedup keys and records name: the option, else Haiku. */
-function judgeModelOf(options: ConsolidatedCriteriaOptions): string {
-  return options.judgeModel ?? HAIKU_MODEL;
+/** The judge a run's dedup keys and records name: the option, else the default. */
+function judgeOf(options: ConsolidatedCriteriaOptions): JudgeSpec {
+  return options.judge ?? DEFAULT_JUDGE_SPEC;
 }
 
 export function selectCriteria(
@@ -230,7 +230,7 @@ export function selectCriteria(
   existingKeys: Set<string>,
   options: ConsolidatedCriteriaOptions = {},
 ): ConsolidatedSelection {
-  const judgeModel = judgeModelOf(options);
+  const judgeModel = judgeOf(options).model;
   const missing = (name: string): boolean => !existingKeys.has(turnJudgedKey(turn, name, judgeModel));
   const criteria: GEvalConfig[] = [];
   const recordNames: string[] = [];
@@ -456,7 +456,7 @@ function recordsFromVerdicts(
   turn: Turn,
   wanted: readonly string[],
   parsed: ParsedConsolidatedResponse,
-  ctx: { sessionPreview: string; judgeModel: string },
+  ctx: { sessionPreview: string; judge: JudgeSpec },
 ): EvalRecord[] {
   const records: EvalRecord[] = [];
   for (const name of wanted) {
@@ -470,7 +470,7 @@ function recordsFromVerdicts(
     const score = name === HALLUCINATION_EVAL_NAME ? 1 - normalized : normalized;
     const explanation = verdict.reasoning.trim()
       || `${name}: ${score.toFixed(SCORE_PREVIEW_DECIMALS)} for session ${ctx.sessionPreview}`;
-    records.push(judgeRecord(turn, CONSOLIDATED_PRODUCER, ctx.judgeModel, { evaluationName: name, scoreValue: score, explanation }));
+    records.push(judgeRecord(turn, CONSOLIDATED_PRODUCER, ctx.judge, { evaluationName: name, scoreValue: score, explanation }));
   }
   return records;
 }
@@ -506,7 +506,7 @@ export async function evaluateTurnConsolidated(
     return [];
   }
 
-  return recordsFromVerdicts(turn, wanted, parsed, { sessionPreview, judgeModel: judgeModelOf(options) });
+  return recordsFromVerdicts(turn, wanted, parsed, { sessionPreview, judge: judgeOf(options) });
 }
 
 /** One criterion's normalized (0–1) score; throws the parse failure when the verdict is missing. */
@@ -536,6 +536,8 @@ export type ConsolidatedProviderOptions = {
   onUsage?: (usage: JudgeTokenUsage) => void;
   /** Thinking and effort for every call; unset is the production setting. */
   reasoning?: JudgeReasoningSettings;
+  /** Model every call names; defaults to DEFAULT_JUDGE_SPEC's. */
+  model?: string;
 }
 
 export async function createConsolidatedProvider(options: ConsolidatedProviderOptions = {}): Promise<ConsolidatedProvider> {
@@ -545,7 +547,7 @@ export async function createConsolidatedProvider(options: ConsolidatedProviderOp
     async generate(prompt: string, generateOptions: ConsolidatedGenerateOptions = {}): Promise<ConsolidatedResponse> {
       const { schema } = generateOptions;
       const response = await client.messages.create({
-        model: HAIKU_MODEL,
+        model: options.model ?? DEFAULT_JUDGE_SPEC.model,
         max_tokens: schema ? CONSOLIDATED_MAX_TOKENS : JUDGE_MAX_TOKENS,
         messages: [{ role: 'user', content: prompt }],
         ...judgeRequestSettings(schema, options.reasoning),
