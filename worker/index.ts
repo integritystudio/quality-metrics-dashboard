@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import type { UserActivityEvent } from '../src/types/activity.js';
+import type { TrendView } from '../src/api/aggregates/trend.js';
 import { MeResponseSchema, ActivityRequestSchema, OrgSwitchRequestSchema } from '../src/lib/validation/auth-schemas.js';
 import { PERMISSION } from '../src/lib/org-rbac.js';
 import {
@@ -331,10 +332,11 @@ app.get('/api/metrics/:name', canRead, validQuery(WidePeriodQuery), requireMetri
 app.get('/api/trends/:name', canRead, validQuery(PeriodQuery), requireMetricName, async (c) => {
   const name = c.req.param('name');
   const { period } = c.req.valid('query');
-  // The empty `TrendView` of src/api/aggregates/trend.ts, restated: the page reads `trendData`.
-  return kvOr(c, `${TREND_KEY_PREFIX}${name}:${period}`, {
-    metric: name, period, bucketCount: 0, totalEvaluations: 0, overallPercentiles: null, trendData: [], narrowed: false,
-  });
+  // `overallPercentiles` is undefined below the minimum sample, so JSON omits it, as the synced value does.
+  const emptyTrend: TrendView = {
+    metric: name, period, bucketCount: 0, totalEvaluations: 0, overallPercentiles: undefined, trendData: [], narrowed: false,
+  };
+  return kvOr(c, `${TREND_KEY_PREFIX}${name}:${period}`, emptyTrend);
 });
 
 app.get('/api/evaluations/trace/:traceId', canReadTraces, requireTraceId, async (c) =>

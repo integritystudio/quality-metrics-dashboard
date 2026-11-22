@@ -20,7 +20,7 @@ function correlationsPayload(period: string) {
   return { correlations: [{ period }], metrics: [] };
 }
 
-const TREND_24H = { metric: 'm', period: '24h', bucketCount: 1, totalEvaluations: 1, overallPercentiles: null, trendData: [], narrowed: false };
+const TREND_24H = { metric: 'm', period: '24h', bucketCount: 1, totalEvaluations: 1, trendData: [], narrowed: false };
 const DASHBOARD_7D = { overallStatus: 'healthy', metrics: [] };
 const EVALUATIONS_30D = { rows: [{ score: 3, label: 'pass' }, { score: 1, label: 'pass' }, { score: 2, label: 'fail' }] };
 const EVALUATIONS_7D = { rows: [{ score: 9, label: 'pass' }] };
