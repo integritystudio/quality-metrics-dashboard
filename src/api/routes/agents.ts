@@ -1,21 +1,18 @@
 import type { MultiAgentEvaluation } from '../../types.js';
 import type { WorkflowGraph } from '../../types/workflow-graph.js';
-import { Hono } from 'hono';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { loadTracesBySessionId, loadEvaluationsByTraceIds, loadTracesByFilter } from '../data-loader.js';
-import { ERR_INVALID_SESSION_ID, ID_PATTERN } from '../../lib/query-schemas.js';
-import { HOOK_NAME, isValidParam, jsonSafe } from '../api-constants.js';
+import { ERR_INVALID_SESSION_ID } from '../../lib/query-schemas.js';
+import { HOOK_NAME, jsonSafe } from '../api-constants.js';
 import { buildWorkflowGraph } from '../../lib/workflow-graph.js';
 import { sessionAgentMap, sessionStepScores } from '../session-detail.js';
-import { WidePeriodQuery, handleRouteError, validQuery } from '../route-errors.js';
+import { WidePeriodQuery, createRouter, requireId, validQuery } from '../route-errors.js';
 import { agentStatsWindow, computeAgentStats } from '../aggregates/agent-stats.js';
 import { HOOK_ATTRIBUTES } from '../../lib/hook-attributes.js';
-import { HttpStatus } from '../../lib/http-constants.js';
 
 const LIMIT_AGENT_SPANS = 1000;
 
-export const agentRoutes = new Hono();
-agentRoutes.onError(handleRouteError);
+export const agentRoutes = createRouter();
 
 /**
  * GET /api/agents
@@ -75,11 +72,8 @@ function deriveSessionWorkflow(spans: SessionSpans, agentMap: Map<number, string
  * GET /api/agents/:sessionId
  * Loads spans for a session, builds agentMap, computes multi-agent evaluation.
  */
-agentRoutes.get('/agents/:sessionId', async (c) => {
+agentRoutes.get('/agents/:sessionId', requireId('sessionId', ERR_INVALID_SESSION_ID), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, ID_PATTERN)) {
-    return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
-  }
 
   const spans = await loadTracesBySessionId(sessionId);
   const { agentMap, traceIds } = indexSessionSpans(spans);
@@ -103,11 +97,8 @@ agentRoutes.get('/agents/:sessionId', async (c) => {
  * The workflow view's payload: the graph, and the evaluation its timeline tab
  * reads. Skips the evaluations lookup and omits spans and agentMap.
  */
-agentRoutes.get('/agents/:sessionId/graph', async (c) => {
+agentRoutes.get('/agents/:sessionId/graph', requireId('sessionId', ERR_INVALID_SESSION_ID), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, ID_PATTERN)) {
-    return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
-  }
 
   const spans = await loadTracesBySessionId(sessionId);
   const { evaluation, graph } = deriveSessionWorkflow(spans, indexSessionSpans(spans).agentMap);

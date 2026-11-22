@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { sanitizeErrorForResponse } from './parent/error-sanitizer.js';
 import { getQualityMetric } from './parent/quality-metrics.js';
@@ -7,7 +7,7 @@ import type { QualityMetricConfig } from './aggregates/metric-detail.js';
 import { ErrorMessage } from '../lib/constants.js';
 import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from '../lib/periods.js';
 import { ERR_INVALID_METRIC_NAME, ERR_INVALID_QUERY, ID_PATTERN, QUERY_FIELD_ERRORS, periodQuery } from '../lib/query-schemas.js';
-import { queryValidator } from '../lib/query-validator.js';
+import { queryValidator, requireParam } from '../lib/query-validator.js';
 import { HttpStatus } from '../lib/http-constants.js';
 
 /** The shared fields' messages, plus the fields only this server reads. */
@@ -52,3 +52,13 @@ export function resolveMetric(c: Context, name: string): { name: string; config:
 export function handleRouteError(err: Error, c: Context): Response {
   return c.json({ error: sanitizeErrorForResponse(err) }, HttpStatus.InternalServerError);
 }
+
+/** A dev API router that answers thrown errors through `handleRouteError`. */
+export function createRouter(): Hono {
+  const router = new Hono();
+  router.onError(handleRouteError);
+  return router;
+}
+
+/** 400s with `error` unless the `name` path param matches `ID_PATTERN`. */
+export const requireId = (name: string, error: string): ReturnType<typeof requireParam> => requireParam(name, ID_PATTERN, error);

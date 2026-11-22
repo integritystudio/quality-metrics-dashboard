@@ -19,7 +19,7 @@ import {
 import { summarizeQualityLive, type LiveEvaluation } from '../src/lib/quality-live.js';
 import { routingTelemetryKvSchema, calibrationResponseSchema } from '../src/lib/validation/dashboard-schemas.js';
 import { CONTENT_TYPE_HEADER, HttpStatus } from '../src/lib/http-constants.js';
-import { queryValidator } from '../src/lib/query-validator.js';
+import { queryValidator, requireParam } from '../src/lib/query-validator.js';
 import { DEFAULT_PERIOD, DEFAULT_PERIOD_DETAIL } from '../src/lib/periods.js';
 import {
   ERR_INVALID_METRIC_NAME,
@@ -41,7 +41,6 @@ import {
   forbidden,
   internalError,
   readJsonBody,
-  requireParam,
   requirePermission,
   safeArray,
   type AppContext,
@@ -77,7 +76,7 @@ const CoverageQuery = PeriodQuery.extend({
 const KV_SCHEMA_VERSION = 1;
 
 function requireId(param: string, error: string): MiddlewareHandler<AppEnv> {
-  return requireParam(param, ID_PATTERN, error);
+  return requireParam<AppEnv>(param, ID_PATTERN, error);
 }
 
 const canRead = requirePermission(PERMISSION.read);

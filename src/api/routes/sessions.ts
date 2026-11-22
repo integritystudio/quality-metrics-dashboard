@@ -1,15 +1,13 @@
-import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds, formatISO } from 'date-fns';
 import { computeMultiAgentEvaluation } from '../parent/quality-multi-agent.js';
 import { PERIOD_MS } from '../../lib/constants.js';
 import {
-  isValidParam,
   toIsoWindowBound,
   DateBoundParamSchema,
   jsonSafe,
 } from '../api-constants.js';
-import { ERR_INVALID_SESSION_ID, ID_PATTERN } from '../../lib/query-schemas.js';
+import { ERR_INVALID_SESSION_ID } from '../../lib/query-schemas.js';
 import { computeSessionDetail } from '../session-detail.js';
 import {
   loadEvaluationsBySessionId,
@@ -19,12 +17,10 @@ import {
   type LoadedSpan,
 } from '../data-loader.js';
 import { MAX_QUERY_LIMIT } from '../parent/constants.js';
-import { handleRouteError, validQuery } from '../route-errors.js';
+import { createRouter, requireId, validQuery } from '../route-errors.js';
 import { SESSION_ATTRIBUTES } from '../../lib/otel-attributes.js';
-import { HttpStatus } from '../../lib/http-constants.js';
 
-export const sessionRoutes = new Hono();
-sessionRoutes.onError(handleRouteError);
+export const sessionRoutes = createRouter();
 
 /**
  * Most spans read for one session. The probe row past it must fit under the
@@ -52,11 +48,8 @@ async function loadSessionSpans(
 
 const SessionQuery = z.object({ startDate: DateBoundParamSchema, endDate: DateBoundParamSchema });
 
-sessionRoutes.get('/sessions/:sessionId', validQuery(SessionQuery), async (c) => {
+sessionRoutes.get('/sessions/:sessionId', requireId('sessionId', ERR_INVALID_SESSION_ID), validQuery(SessionQuery), async (c) => {
   const sessionId = c.req.param('sessionId');
-  if (!isValidParam(sessionId, ID_PATTERN)) {
-    return c.json({ error: ERR_INVALID_SESSION_ID }, HttpStatus.BadRequest);
-  }
   const { startDate, endDate } = c.req.valid('query');
 
   const [{ spans, truncated: spansTruncated }, logs, { evaluations, truncated: evaluationsTruncated }] = await Promise.all([

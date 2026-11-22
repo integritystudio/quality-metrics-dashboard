@@ -1,4 +1,3 @@
-import { Hono } from 'hono';
 import {
   computeRollingDegradationSignals,
   type DegradationState,
@@ -14,10 +13,9 @@ import { loadEvaluationsByMetric } from '../data-loader.js';
 import { LIVE_WINDOW_MS, computePeriodDates } from '../../lib/constants.js';
 import { timestampToMs } from '../../lib/timestamps.js';
 import { summarizeQualityLive } from '../../lib/quality-live.js';
-import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
+import { PeriodQuery, validQuery, createRouter } from '../route-errors.js';
 
-export const qualityRoutes = new Hono();
-qualityRoutes.onError(handleRouteError);
+export const qualityRoutes = createRouter();
 
 /**
  * GET /api/quality/live

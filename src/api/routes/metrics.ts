@@ -1,4 +1,3 @@
-import { Hono } from 'hono';
 import { z } from 'zod';
 import { subMilliseconds } from 'date-fns';
 import { resolveScoreLabel } from '../parent/qfe-label-ordinals.js';
@@ -6,7 +5,7 @@ import { loadEvaluationsForMetric } from '../data-loader.js';
 import { jsonSafe } from '../api-constants.js';
 import { PeriodSchema, PERIOD_MS, DEFAULT_TOP_N, MAX_TOP_N, DEFAULT_BUCKET_COUNT, MAX_BUCKET_COUNT, computePeriodDates } from '../../lib/constants.js';
 import { LimitSchema, OffsetSchema, SortBySchema } from '../../lib/query-schemas.js';
-import { WidePeriodQuery, blankAsAbsent, validQuery, handleRouteError, resolveMetric } from '../route-errors.js';
+import { WidePeriodQuery, blankAsAbsent, validQuery, createRouter, resolveMetric } from '../route-errors.js';
 import { projectEvaluationRow } from '../aggregates/evaluation-rows.js';
 import { computeMetricDetailView, previousWindow } from '../aggregates/metric-detail.js';
 
@@ -23,8 +22,7 @@ const MetricEvaluationsQuery = z.object({
   scoreLabel: blankAsAbsent(ScoreLabelSchema),
 });
 
-export const metricsRoutes = new Hono();
-metricsRoutes.onError(handleRouteError);
+export const metricsRoutes = createRouter();
 
 metricsRoutes.get('/metrics/:name', validQuery(MetricDetailQuery), async (c) => {
   const metric = resolveMetric(c, c.req.param('name'));

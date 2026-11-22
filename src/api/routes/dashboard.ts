@@ -1,13 +1,11 @@
-import { Hono } from 'hono';
 import { loadEvaluationsByMetric, checkHealth } from '../data-loader.js';
 import { z } from 'zod';
 import { PeriodSchema, computePeriodDates } from '../../lib/constants.js';
 import { RoleSchema } from '../../lib/roles.js';
-import { blankAsAbsent, validQuery, handleRouteError } from '../route-errors.js';
+import { blankAsAbsent, validQuery, createRouter } from '../route-errors.js';
 import { computeDashboardFull, computeDashboardRoleView } from '../aggregates/dashboard-summary.js';
 
-export const dashboardRoutes = new Hono();
-dashboardRoutes.onError(handleRouteError);
+export const dashboardRoutes = createRouter();
 
 const DashboardQuery = z.object({ period: PeriodSchema, role: blankAsAbsent(RoleSchema.optional()) });
 

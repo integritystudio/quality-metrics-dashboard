@@ -1,4 +1,3 @@
-import { Hono } from 'hono';
 import { loadTracesByFilter, loadSpansByFilterUnbounded } from '../data-loader.js';
 import { TIME_MS } from '../../lib/constants.js';
 import {
@@ -16,15 +15,14 @@ export type {
   ContentKind,
   SurvivalCohort,
 } from '../code-quality-summary.js';
-import { handleRouteError } from '../route-errors.js';
+import { createRouter } from '../route-errors.js';
 import { CODE_ATTRIBUTES } from '../../lib/hook-attributes.js';
 
 /**
  * Dev-server route: a live query. Production never reaches this — the Worker
  * serves `/api/code-quality` from the `code-quality` KV key.
  */
-export const codeQualityRoutes = new Hono();
-codeQualityRoutes.onError(handleRouteError);
+export const codeQualityRoutes = createRouter();
 
 codeQualityRoutes.get('/code-quality', async (c) => {
   const now = new Date();

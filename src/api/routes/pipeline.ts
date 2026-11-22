@@ -1,11 +1,9 @@
-import { Hono } from 'hono';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { computePeriodDates } from '../../lib/constants.js';
-import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
+import { PeriodQuery, validQuery, createRouter } from '../route-errors.js';
 import { computePipeline } from '../aggregates/pipeline.js';
 
-export const pipelineRoutes = new Hono();
-pipelineRoutes.onError(handleRouteError);
+export const pipelineRoutes = createRouter();
 
 /**
  * GET /api/pipeline

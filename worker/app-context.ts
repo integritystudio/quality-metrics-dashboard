@@ -94,14 +94,6 @@ export function requirePermission(permission: DashboardPermission): MiddlewareHa
   });
 }
 
-/** Route guard: 400 with `error` unless the path parameter `name` matches `pattern`. */
-export function requireParam(name: string, pattern: RegExp, error: string): MiddlewareHandler<AppEnv> {
-  return factory.createMiddleware(async (c, next) => {
-    if (!pattern.test(c.req.param(name) ?? '')) return c.json({ error }, HttpStatus.BadRequest);
-    return next();
-  });
-}
-
 /**
  * The request's JSON body parsed by `schema`; an absent, malformed or invalid one ends the
  * request with a 400. Called inside the handler, after its permission and path checks, so a caller

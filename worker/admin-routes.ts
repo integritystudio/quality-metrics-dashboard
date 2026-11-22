@@ -27,7 +27,6 @@ import {
   internalError,
   parseRows,
   readJsonBody,
-  requireParam,
   safeArray,
   type AppContext,
   type AppEnv,
@@ -52,6 +51,7 @@ import {
   ERR_UPDATE_MEMBER_ROLE,
   NO_RESPONSE_STATUS,
 } from './error-messages.js';
+import { requireParam } from '../src/lib/query-validator.js';
 
 /**
  * Org-admin gate: dashboard.admin + an org-scoped session. Binds the route to
@@ -73,7 +73,7 @@ function canTouchOwnerRole(session: WorkerSession): boolean {
 }
 
 function requireUuid(param: string, error: string): MiddlewareHandler<AppEnv> {
-  return requireParam(param, UUID_PATTERN, error);
+  return requireParam<AppEnv>(param, UUID_PATTERN, error);
 }
 const requireUserId = requireUuid('userId', ERR_INVALID_USER_ID);
 

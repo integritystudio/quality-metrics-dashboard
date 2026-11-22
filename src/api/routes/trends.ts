@@ -1,14 +1,12 @@
-import { Hono } from 'hono';
 import { z } from 'zod';
 import { loadEvaluationsForMetric } from '../data-loader.js';
 import { PeriodSchema, PERIOD_MS, DEFAULT_TREND_BUCKETS, MIN_TREND_BUCKETS, MAX_TREND_BUCKETS } from '../../lib/constants.js';
-import { validQuery, handleRouteError, resolveMetric } from '../route-errors.js';
+import { validQuery, createRouter, resolveMetric } from '../route-errors.js';
 import { computeTrend } from '../aggregates/trend.js';
 
 const BucketsSchema = z.coerce.number().int().min(MIN_TREND_BUCKETS).max(MAX_TREND_BUCKETS).default(DEFAULT_TREND_BUCKETS);
 
-export const trendRoutes = new Hono();
-trendRoutes.onError(handleRouteError);
+export const trendRoutes = createRouter();
 
 const TrendQuery = z.object({ period: PeriodSchema, buckets: BucketsSchema });
 

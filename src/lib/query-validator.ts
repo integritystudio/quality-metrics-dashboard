@@ -1,3 +1,5 @@
+import type { Env, MiddlewareHandler } from 'hono';
+import { createMiddleware } from 'hono/factory';
 import { validator } from 'hono/validator';
 import type { z } from 'zod';
 import { HttpStatus } from './http-constants.js';
@@ -27,5 +29,13 @@ export function queryValidator<T extends z.ZodType>(
       return c.json({ error: fieldErrors[field] ?? fallbackError }, HttpStatus.BadRequest);
     }
     return result.data;
+  });
+}
+
+/** Path-param guard shared by the Worker and the dev API server: answers 400 with `error` unless `pattern` matches. */
+export function requireParam<E extends Env = Env>(name: string, pattern: RegExp, error: string): MiddlewareHandler<E> {
+  return createMiddleware<E>(async (c, next) => {
+    if (!pattern.test(c.req.param(name) ?? '')) return c.json({ error }, HttpStatus.BadRequest);
+    return next();
   });
 }

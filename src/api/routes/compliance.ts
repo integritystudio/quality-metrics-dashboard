@@ -1,11 +1,9 @@
-import { Hono } from 'hono';
 import { computeDashboardSummary } from '../parent/quality-metrics.js';
 import { loadEvaluationsByMetric, loadVerifications } from '../data-loader.js';
 import { computePeriodDates } from '../../lib/constants.js';
-import { PeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
+import { PeriodQuery, validQuery, createRouter } from '../route-errors.js';
 
-export const complianceRoutes = new Hono();
-complianceRoutes.onError(handleRouteError);
+export const complianceRoutes = createRouter();
 
 /**
  * GET /api/compliance/sla

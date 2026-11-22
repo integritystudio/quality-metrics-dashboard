@@ -23,18 +23,21 @@ setCloudBackendFetch(http1Fetch);
 
 const app = new Hono();
 
-app.route('/api', dashboardRoutes);
-app.route('/api', metricsRoutes);
-app.route('/api', correlationRoutes);
-app.route('/api', evaluationRoutes);
-app.route('/api', trendRoutes);
-app.route('/api', coverageRoutes);
-app.route('/api', pipelineRoutes);
-app.route('/api', complianceRoutes);
-app.route('/api', traceRoutes);
-app.route('/api', agentRoutes);
-app.route('/api', sessionRoutes);
-app.route('/api', qualityRoutes);
-app.route('/api', codeQualityRoutes);
+const ROUTERS = [
+  dashboardRoutes,
+  metricsRoutes,
+  correlationRoutes,
+  evaluationRoutes,
+  trendRoutes,
+  coverageRoutes,
+  pipelineRoutes,
+  complianceRoutes,
+  traceRoutes,
+  agentRoutes,
+  sessionRoutes,
+  qualityRoutes,
+  codeQualityRoutes,
+];
+for (const router of ROUTERS) app.route('/api', router);
 
 serve({ fetch: app.fetch, hostname: API_HOST, port: API_PORT });

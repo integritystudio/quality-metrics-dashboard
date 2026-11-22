@@ -1,11 +1,9 @@
-import { Hono } from 'hono';
 import { loadEvaluationsByMetric } from '../data-loader.js';
 import { computePeriodDates } from '../../lib/constants.js';
-import { WidePeriodQuery, validQuery, handleRouteError } from '../route-errors.js';
+import { WidePeriodQuery, validQuery, createRouter } from '../route-errors.js';
 import { computeCorrelations } from '../aggregates/correlations.js';
 
-export const correlationRoutes = new Hono();
-correlationRoutes.onError(handleRouteError);
+export const correlationRoutes = createRouter();
 
 correlationRoutes.get('/correlations', validQuery(WidePeriodQuery), async (c) => {
   const { period } = c.req.valid('query');

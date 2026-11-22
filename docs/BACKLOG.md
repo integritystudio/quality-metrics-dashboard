@@ -126,7 +126,7 @@ hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 | ID | Title | Priority | Notes |
 |----|-------|----------|-------|
 | DASH-PERMISSION-LITERALS-FOUR-COPIES | Derive the permission and role types from one list | Done | The same literals are spelled in `types/auth.ts`, `auth-schemas.ts`, `org-rbac.ts` and `e2e/integration/setup.ts`. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
-| DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | P4 | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
+| DASH-API-ROUTER-SCAFFOLDING | Share the dev API's router setup and id-param guard | Done | 13 route files repeat `new Hono()` + `onError`; the id guard is written five times. ~300 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-WORKFLOW-GRAPH-REPEATS | Remove the repeated wrapper and set-building in the workflow views | P4 | `WorkflowGraph` writes its container four times; `AgentWorkflowView` builds five sets for one filter. ~400 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-DATA-TABLE-AND-STAT-TILE | Give plain tables and stat tiles one component each | P4 | Plain `data-table` markup with a hand-written head in six files; the stat tile is hand-written eight times, plus `text-md` variants. ~450 tokens. Source: repomix consolidation review, session 2026-11-21 |
 | DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH | Use the parent's `http1Fetch` in `judge-anthropic-client.ts` | Done | It re-implements what five other scripts import. ~250 tokens. Source: repomix consolidation review, session 2026-11-21 |
@@ -164,6 +164,10 @@ the middleware form (`requireParam` in `worker/app-context.ts`).
 
 Acceptance: a `createRouter()`, one loop in `server.ts`, and one runtime-neutral id middleware beside
 `query-validator.ts` used by both the dev routes and the Worker.
+**Done (2026-11-21).** `createRouter()` and `requireId()` live in `src/api/route-errors.ts`;
+`server.ts` mounts a `ROUTERS` list in one loop. `requireParam` moved from `worker/app-context.ts` to
+`src/lib/query-validator.ts`, generic over the Hono env, and both runtimes use it. On
+`/sessions/:sessionId` the dev server now checks the id before the query, as the Worker does.
 
 **DASH-WORKFLOW-GRAPH-REPEATS.** In `src/components/WorkflowGraph.tsx` the
 `<div ref={containerRef} className="workflow-graph-container" …>` wrapper is written at each of the four
