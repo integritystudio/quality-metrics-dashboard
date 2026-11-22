@@ -196,7 +196,11 @@ function noOrg(c: AppContext): Response {
   return c.json({ error: ERR_NO_ORG }, HttpStatus.Forbidden);
 }
 
-type AppUser = { appUserId: string; email: string; defaultOrgId: string | null };
+function logFailedRead(what: string, res: { status: number }): void {
+  console.error(`[auth] ${what} failed, status:`, res.status || NO_RESPONSE_STATUS);
+}
+
+type AppUser = { authUserId: string; appUserId: string; email: string; defaultOrgId: string | null };
 
 /**
  * The `public.users` row for this auth0 id. A failed read is upstream (503); only a missing
@@ -214,12 +218,13 @@ async function loadAppUser(
     .limit(1)
     .abortSignal(signal);
   if (userRes.error) {
-    console.error('[auth] user lookup failed, status:', userRes.status || NO_RESPONSE_STATUS);
+    logFailedRead('user lookup', userRes);
     abort(authUnavailable(c));
   }
   const userResult = PublicUserSchema.safeParse(safeArray(userRes.data)[0]);
   if (!userResult.success) abort(unauthorized(c));
   return {
+    authUserId: auth0Id,
     appUserId: userResult.data.id,
     email: userResult.data.email,
     defaultOrgId: userResult.data.default_organization_id ?? null,
@@ -227,7 +232,7 @@ async function loadAppUser(
 }
 
 /** Roles and memberships fetch in parallel, inside one auth deadline. */
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- a tuple of two postgrest-js responses that MembershipsResult derives from; restating it would duplicate the builder internals
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- a tuple of two postgrest-js responses; restating it would duplicate the builder internals
 async function fetchGrants(supabase: PostgrestClient, appUserId: string, signal: AbortSignal) {
   return Promise.all([
     supabase.from('user_roles')
@@ -240,8 +245,6 @@ async function fetchGrants(supabase: PostgrestClient, appUserId: string, signal:
       .abortSignal(signal),
   ]);
 }
-
-type MembershipsResult = Awaited<ReturnType<typeof fetchGrants>>[1];
 
 /** The session lists a user's role names; permissions come from the active org's membership alone. */
 function parseRoleNames(rows: unknown): string[] {
@@ -269,20 +272,12 @@ function resolveActiveOrg(
 }
 
 /** Installs the org-scoped session: permissions come from the active org's membership role. */
-function orgScopedSession(c: AppContext, args: {
-  authUserId: string;
-  user: AppUser;
-  roles: string[];
-  membershipsRes: MembershipsResult;
-}): void {
-  const { authUserId, user, roles, membershipsRes } = args;
-  // Fail closed: a failed read must not pass for "no memberships", which answers a
-  // non-retried 403 (or, for staff, the home org).
-  if (membershipsRes.error) {
-    console.error('[auth] membership fetch failed for user', user.appUserId, 'status:', membershipsRes.status || NO_RESPONSE_STATUS);
-    abort(authUnavailable(c));
-  }
-  const memberships = parseMemberships(membershipsRes.data);
+function orgScopedSession(
+  c: AppContext,
+  user: AppUser,
+  roles: string[],
+  memberships: OrgMembershipSummary[],
+): void {
   const isStaff = parseStaffIds(c.env.STAFF_USER_IDS).has(user.appUserId);
 
   // No active org and not staff: refuse, whatever the user's roles. Every new user is given a
@@ -290,7 +285,7 @@ function orgScopedSession(c: AppContext, args: {
   const activeOrgId = resolveActiveOrg(c, memberships, isStaff, user.defaultOrgId) ?? abort(noOrg(c));
 
   c.set('session', {
-    authUserId, appUserId: user.appUserId, email: user.email, roles,
+    authUserId: user.authUserId, appUserId: user.appUserId, email: user.email, roles,
     ...orgGrant(isStaff, memberships, activeOrgId), activeOrgId, memberships, isStaff,
   });
 }
@@ -317,9 +312,15 @@ export const authenticate = factory.createMiddleware(async (c, next) => {
   const [rolesRes, membershipsRes] = await fetchGrants(supabase, user.appUserId, signal);
 
   if (rolesRes.error) {
-    console.error('[auth] role fetch failed for user', user.appUserId, 'status:', rolesRes.status || NO_RESPONSE_STATUS);
+    logFailedRead(`role fetch for user ${user.appUserId}`, rolesRes);
     return internalError(c, ERR_FAILED_LOAD_USER_ROLES);
   }
-  orgScopedSession(c, { authUserId: auth0Id, user, roles: parseRoleNames(rolesRes.data), membershipsRes });
+  // Fail closed: a failed read must not pass for "no memberships", which answers a
+  // non-retried 403 (or, for staff, the home org).
+  if (membershipsRes.error) {
+    logFailedRead(`membership fetch for user ${user.appUserId}`, membershipsRes);
+    return authUnavailable(c);
+  }
+  orgScopedSession(c, user, parseRoleNames(rolesRes.data), parseMemberships(membershipsRes.data));
   return next();
 });
