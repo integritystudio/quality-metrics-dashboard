@@ -37,11 +37,11 @@ import type { GEvalConfig } from '../../src/lib/judge/llm-as-judge.js';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-schemas.js';
 import {
-  extractTurns,
   fitContextForJudge,
   turnKey,
   type Turn,
 } from './judge-turns.js';
+import { extractTurns } from './transcript-turns.js';
 import { transcriptsForSessions } from './judge-cloud-source.js';
 
 export { turnKey };

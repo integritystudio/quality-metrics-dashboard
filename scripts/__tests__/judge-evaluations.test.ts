@@ -7,15 +7,17 @@ import {
   isToolResultOnly,
   extractTextFromContent,
   extractToolResults,
-  extractTurns,
   fitContextForJudge,
-  FORK_SESSION_START_HOOK,
   CONTEXT_TRUNCATION_MARKER,
   MAX_TOOL_CONTEXT_ITEMS,
-  MAX_TOOL_RESULTS_PER_TURN,
-  MAX_TURN_TEXT_LEN,
   type Turn,
 } from '../judge-turns.js';
+import {
+  extractTurns,
+  FORK_SESSION_START_HOOK,
+  MAX_TOOL_RESULTS_PER_TURN,
+  MAX_TURN_TEXT_LEN,
+} from '../transcript-turns.js';
 import {
   evaluateTurn,
   evaluateTurnsBatched,

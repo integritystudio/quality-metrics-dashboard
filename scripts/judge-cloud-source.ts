@@ -31,7 +31,8 @@ import { toDateOnly } from '../src/api/api-constants.js';
 import { CONSOLIDATED_PRODUCER } from './judge-consolidated.js';
 import { PRODUCER } from './eval-record.js';
 import { turnKeyOf, addJudgedKey } from './judge-dedup.js';
-import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo, type Turn } from './judge-turns.js';
+import { type Turn } from './judge-turns.js';
+import { TRANSCRIPT_DIRS, scanTranscriptDirs, type TranscriptInfo } from './transcript-turns.js';
 
 /** Every producer the judge has written under: per-criterion and consolidated. */
 const JUDGE_PRODUCERS = [PRODUCER, CONSOLIDATED_PRODUCER] as const;

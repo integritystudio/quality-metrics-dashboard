@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
+import { deriveAll, deriveEvaluationLatency, deriveToolCorrectness } from '../derive-rule-metrics.js';
 import {
   deriveAgentHeuristics,
-  deriveEvaluationLatency,
-  deriveAll,
-  deriveToolCorrectness,
   detectInputDrift,
   resolvePostDays,
   readScope,

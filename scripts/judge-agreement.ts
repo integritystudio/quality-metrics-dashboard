@@ -25,11 +25,8 @@
 import { ascending } from 'd3-array';
 import type { ModelPricingEntry } from '../../src/lib/core/constants-models.js';
 import { MAX_STATEMENTS } from '../../src/lib/judge/llm-judge-constants.js';
-import {
-  extractTurns,
-  type Turn,
-  type TranscriptInfo,
-} from './judge-turns.js';
+import { type Turn } from './judge-turns.js';
+import { extractTurns, type TranscriptInfo } from './transcript-turns.js';
 import { discoverCloudSessions, type CloudSessions } from './judge-cloud-source.js';
 import { readScope } from './derive-evaluations.js';
 import { JUDGE_DEFAULT_DAYS } from './pipeline-stages.js';

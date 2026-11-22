@@ -411,10 +411,10 @@ export function deliveryFor(route: Route, env: NodeJS.ProcessEnv = process.env):
  * not `??`: an empty OBTOOL_INGEST_URL must read as unset, and `??` would keep
  * the empty string and POST to `/v1/...`.
  */
-export function resolveSendConfig(): { baseUrl: string | undefined; secret: string | undefined } {
+export function resolveSendConfig(env: NodeJS.ProcessEnv = process.env): { baseUrl: string | undefined; secret: string | undefined } {
   return {
-    baseUrl: asString(process.env[INGEST_URL_ENV]),
-    secret: asString(process.env.INJECT_HMAC_SECRET),
+    baseUrl: asString(env[INGEST_URL_ENV]),
+    secret: asString(env.INJECT_HMAC_SECRET),
   };
 }
 
@@ -452,7 +452,7 @@ async function postBatchOnce(request: SendRequest): Promise<SendResult> {
 
 /**
  * Send one batch to a destination from `destinationFor`. A keyed destination
- * is read from the environment, so callers must have checked the key is set
+ * is read from `env`, so callers must have checked the key is set
  * (the held-for-key rule); the webhook needs `secret`.
  */
 export async function sendBatch(
@@ -460,13 +460,14 @@ export async function sendBatch(
   payloads: EvaluationPayload[],
   baseUrl: string | undefined,
   secret: string | undefined,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<SendResult> {
   if (baseUrl === undefined) throw new Error(INGEST_URL_NOT_SET_MESSAGE);
   if (destination === WEBHOOK_DESTINATION) {
     if (secret === undefined) throw new Error('The webhook destination needs INJECT_HMAC_SECRET');
     return postBatch(webhookRequest(baseUrl, payloads, secret));
   }
-  const apiKey = process.env[destination];
+  const apiKey = env[destination];
   if (apiKey === undefined) throw new Error(`${destination} is not set; check held-for-key before sending`);
   return postBatch(keyedRequest(baseUrl, payloads, apiKey));
 }

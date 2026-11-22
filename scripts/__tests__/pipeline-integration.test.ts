@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { deriveAll } from '../derive-evaluations.js';
+import { deriveAll } from '../derive-rule-metrics.js';
 import { evaluateTurn } from '../judge-evaluations.js';
 import { EVALUATION_ATTRS, toOTelRecord, type EvalRecord } from '../eval-record.js';
 import { turnKeyOf } from '../judge-dedup.js';

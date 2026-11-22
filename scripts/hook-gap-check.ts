@@ -30,7 +30,7 @@ import { createInterface } from 'node:readline';
 import { basename, join } from 'node:path';
 import { TIME_MS } from '../../src/lib/core/units.js';
 import { describeUnknown } from '../../src/lib/core/describe-unknown.js';
-import { TRANSCRIPT_DIRS, UUID_PREFIX_REGEX } from './judge-turns.js';
+import { TRANSCRIPT_DIRS, UUID_PREFIX_REGEX } from './transcript-turns.js';
 import { dateScopeBounds } from './cloud-trace-source.js';
 import { readScope, resolveDateScope } from './derive-evaluations.js';
 import { HOOK_GAP_EXIT_FOUND, JUDGE_DEFAULT_DAYS, rejectRemovedFlags } from './pipeline-stages.js';

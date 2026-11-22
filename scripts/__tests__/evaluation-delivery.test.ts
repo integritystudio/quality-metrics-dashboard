@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createServer, type IncomingHttpHeaders } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 
-import { evaluationId, keyedRequest, mapRecord, type EvaluationPayload } from '../evaluation-delivery.js';
+import { evaluationId, INGEST_URL_ENV, keyedRequest, mapRecord, resolveSendConfig, sendBatch, type EvaluationPayload } from '../evaluation-delivery.js';
 import { EVALUATION_ATTRS, EVALUATION_RESULT_EVENT, LEGACY_EVALUATOR_TYPE_ATTR, toOTelRecord } from '../eval-record.js';
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
@@ -299,5 +301,39 @@ describe('network failure handling', () => {
 
   it('bounds every request with a timeout', () => {
     expect(SCRIPT).toContain('AbortSignal.timeout(REQUEST_TIMEOUT_MS)');
+  });
+});
+
+describe('the environment is a parameter, so a Worker can pass its bindings', () => {
+  const ACCOUNT_REF = 'OBTOOL_API_KEY_WORKER_BOUND';
+  const BOUND_KEY = 'key-from-bindings';
+  const PAYLOAD: EvaluationPayload = { evaluationName: 'relevance', evaluator: 'rule', evaluatorType: 'rule', scoreValue: 0.9 };
+
+  it('reads the ingest URL and the HMAC secret from the env it is given, an empty value reading as unset', () => {
+    expect(resolveSendConfig({ [INGEST_URL_ENV]: 'https://ingest.example', INJECT_HMAC_SECRET: 'hmac' }))
+      .toEqual({ baseUrl: 'https://ingest.example', secret: 'hmac' });
+    expect(resolveSendConfig({ [INGEST_URL_ENV]: '', INJECT_HMAC_SECRET: '' })).toEqual({ baseUrl: undefined, secret: undefined });
+  });
+
+  it('sends a keyed batch with the account key from the env it is given', async () => {
+    const received: IncomingHttpHeaders[] = [];
+    const server = createServer((request, response) => {
+      received.push(request.headers);
+      request.resume();
+      response.end('{}');
+    });
+    await new Promise<void>(listening => { server.listen(0, '127.0.0.1', listening); });
+    try {
+      const { port } = server.address() as AddressInfo;
+      const result = await sendBatch(ACCOUNT_REF, [PAYLOAD], `http://127.0.0.1:${port}`, undefined, { [ACCOUNT_REF]: BOUND_KEY });
+      expect(result.ok).toBe(true);
+      expect(received.map(headers => headers.authorization)).toEqual([`Bearer ${BOUND_KEY}`]);
+    } finally {
+      await new Promise(closed => { server.close(closed); });
+    }
+  });
+
+  it('refuses a keyed batch whose key the given env does not hold', async () => {
+    await expect(sendBatch(ACCOUNT_REF, [PAYLOAD], 'http://127.0.0.1:1', undefined, {})).rejects.toThrow(`${ACCOUNT_REF} is not set`);
   });
 });
