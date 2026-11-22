@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { PERCENT_MULTIPLIER } from '../../src/lib/core/units.js';
-import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK } from './pipeline-stages.js';
+import { JUDGE_EXIT_BILLING, JUDGE_EXIT_NO_SCORES, JUDGE_EXIT_HIGH_FAILURE_RATE, JUDGE_EXIT_BATCH_WALL_CLOCK, isTransientNetworkFailure } from './pipeline-stages.js';
 import type { JudgeApiKeySource } from './judge-credentials.js';
 import { EVAL_SCORE_PRECISION } from './eval-record.js';
 import { TELEMETRY_DIR } from './evaluation-constants.js';
@@ -37,7 +37,8 @@ export const WALL_CLOCK_FAILURE_PATTERN = /still processing at the \d+ms wall cl
 
 export const BILLING_FAILURE_PATTERN = /credit balance|billing|payment required|insufficient (?:funds|credit)/i;
 
-export const NETWORK_FAILURE_PATTERN = /Connection error|ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|timed out/i;
+/** The Anthropic SDK's own wording for a lost or timed-out request; errno-level failures are `isTransientNetworkFailure`'s. */
+export const SDK_NETWORK_FAILURE_PATTERN = /Connection error|timed out/i;
 
 /**
  * Matches API 400s that rejected the request because of the output_config JSON
@@ -60,7 +61,7 @@ export const PARSE_FAILURE_PATTERN = /below minimum|not valid JSON|Unexpected to
 export function classifyJudgeFailure(message: string): JudgeFailureClass {
   if (WALL_CLOCK_FAILURE_PATTERN.test(message)) return 'wall-clock';
   if (BILLING_FAILURE_PATTERN.test(message)) return 'billing';
-  if (NETWORK_FAILURE_PATTERN.test(message)) return 'network';
+  if (isTransientNetworkFailure(message) || SDK_NETWORK_FAILURE_PATTERN.test(message)) return 'network';
   if (SCHEMA_REJECTION_PATTERN.test(message)) return 'schema-rejection';
   if (INVALID_INPUT_FAILURE_PATTERN.test(message)) return 'invalid-input';
   if (PARSE_FAILURE_PATTERN.test(message)) return 'parse';
