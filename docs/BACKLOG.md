@@ -76,17 +76,7 @@ No open items.
 
 ### Tooling and config
 
-| ID | Title | Priority | Notes |
-|----|-------|----------|-------|
-| DASH-TEST-CLOSE-TO-DIGITS-SUPPORT | Move the 10-digit `toBeCloseTo` precision into `scripts/__tests__/support/` | P4 | Leftover of DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE (changelog 3.0.13). Source: session 2026-11-21 |
-
-**DASH-TEST-CLOSE-TO-DIGITS-SUPPORT.** The same 10-digit precision is declared under two names in three
-files: `COST_CLOSE_TO_DIGITS` in `judge-consolidated-batch.test.ts` (module scope) and
-`judge-evaluations.test.ts` (inside a `describe`), and `USD_PRECISION_DIGITS` in
-`judge-quality-eval.test.ts`. The judge-suite audit flagged it as the one constant that belongs in
-`support/`, which the magic-number sweep was told not to touch.
-Acceptance: one exported constant in `scripts/__tests__/support/`, the three local copies gone, and
-`npm run test:scripts` green.
+No open items.
 
 ### Consolidation
 
@@ -94,6 +84,6 @@ Small duplications found by the 2026-11-21 review of `docs/repomix/repomix.xml`.
 hundred tokens at most; none is a defect. Savings are chars/4 estimates.
 
 Completed items are migrated to [docs/changelog/](changelog/) — most recently
-[v3.0.13](changelog/3.0.13/CHANGELOG.md) (2026-11-21).
+[v3.0.14](changelog/3.0.14/CHANGELOG.md) (2026-11-22).
 
 Parent-repo backlog: [`../../docs/BACKLOG.md`](../../docs/BACKLOG.md).

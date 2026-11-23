@@ -4,6 +4,7 @@
 
 | Version | Date | Summary |
 |---------|------|---------|
+| [3.0.14](./changelog/3.0.14/CHANGELOG.md) | 2026-11-22 | 1 completed (DASH-TEST-CLOSE-TO-DIGITS-SUPPORT) |
 | [3.0.13](./changelog/3.0.13/CHANGELOG.md) | 2026-11-21 | 11 completed (DASH-JUDGE-CONTEXT-OLDEST-TOOL-RESULTS, DASH-UNDICI-OVERRIDE-MAJOR, DASH-TEST-QUALITY-AUDIT-JUDGE-SUITE, DASH-PERMISSION-LITERALS-FOUR-COPIES, DASH-API-ROUTER-SCAFFOLDING, DASH-WORKFLOW-GRAPH-REPEATS, DASH-DATA-TABLE-AND-STAT-TILE, DASH-JUDGE-CLIENT-OWN-HTTP1-FETCH, DASH-POPULATE-STAGE-WRAPPERS, DASH-JUDGE-RECORD-TWO-BUILDERS, DASH-USE-TRACE-OWN-FETCH) |
 | [v3.0.12](changelog/3.0.12/CHANGELOG.md) | 2026-10-12 | KV bulk endpoint fixes (204 handling, SDK retry policy, transport tests). Workflow graph zero-position fix. Test infrastructure consolidations: parity-test coverage, worker CI inclusion, parent rebuild flake resilience, fixture deduplication (15 items). |
 | [v3.0.11](changelog/3.0.11/CHANGELOG.md) | 2026-10-09 | Sync-to-kv refactors: single evaluations read per org, optional change-hash basis for dashboard keys, KV write via REST API (no wrangler), and per-concern split of the 430-line `computeOrgEntries`. Judge backfill documented and excluded from evidence; dev Worker secrets path added (10 items). |
