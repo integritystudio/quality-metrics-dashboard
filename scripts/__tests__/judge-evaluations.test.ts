@@ -73,7 +73,7 @@ import { HALLUCINATION_EVAL_NAME } from '../../src/lib/validation/dashboard-sche
 import { GENAI_EVALUATION_ATTRIBUTES } from '../../../src/lib/otel/genai-attributes.js';
 import { SESSION_ATTRIBUTES } from '../../../src/lib/otel/constants-otel.js';
 import { defined } from '../../src/__tests__/support/defined.js';
-import { judgedKeys, makeSizedTurn, makeToolTurn, makeTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
+import { COST_CLOSE_TO_DIGITS, judgedKeys, makeSizedTurn, makeToolTurn, makeTurn, TOOL_TURN_RECORDS } from './support/fixtures.js';
 import { createMockLLM, judgeOver, mockResponse } from './support/mock-judge.js';
 import { useTempDir } from './support/temp-dir.js';
 import { transcriptMessage, writeJsonl } from './support/transcripts.js';
@@ -689,8 +689,6 @@ describe('readRunState / writeRunState', () => {
 });
 
 describe('estimateJudgeRun', () => {
-  /** The default two digits would pass a fraction-of-a-cent estimate of $0. */
-  const COST_CLOSE_TO_DIGITS = 10;
   // SIZED_TURN_CHARS: 1200 chars of text at 4 chars per token.
   const SIZED_TURN_TOKENS = 300;
   // A 400-char tool result adds 100 tokens to the same turn.

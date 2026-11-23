@@ -21,12 +21,11 @@ import { YES_FLAG } from '../one-shot-eval.js';
 import { RELEVANCE_EVAL_NAME, COHERENCE_EVAL_NAME, FAITHFULNESS_EVAL_NAME } from '../judge-criteria.js';
 import { RELEVANCE_CRITERIA, FAITHFULNESS_CRITERIA } from '../../../src/lib/judge/llm-judge-config.js';
 import { TOKENS_PER_CHAR } from '../../../src/lib/core/constants-models.js';
-import { makeSizedTurn, SIZED_TURN_CHARS } from './support/fixtures.js';
+import { COST_CLOSE_TO_DIGITS, makeSizedTurn, SIZED_TURN_CHARS } from './support/fixtures.js';
 import { defined } from '../../src/__tests__/support/defined.js';
 
 const PRICING = { input: 5.0, output: 25.0, provider: 'anthropic' } as const;
 const ONE_MILLION = 1_000_000;
-const USD_PRECISION_DIGITS = 10;
 const TOOL_RESULT_CHARS = 2000;
 const LONG_INPUT_CHARS = 4000;
 /** 0–1 values that land exactly on the 1–5 grid: 0 → 1, 0.25 → 2, 0.5 → 3, 0.75 → 4, 1 → 5. */
@@ -115,7 +114,7 @@ describe('estimateReferenceSpend', () => {
     expect(estimate.calls).toBe(2);
     expect(estimate.outputTokens).toBe(2 * OUTPUT_TOKENS_PER_CALL_ESTIMATE);
     const expectedUsd = (estimate.inputTokens * PRICING.input + estimate.outputTokens * PRICING.output) / ONE_MILLION;
-    expect(estimate.usd).toBeCloseTo(expectedUsd, USD_PRECISION_DIGITS);
+    expect(estimate.usd).toBeCloseTo(expectedUsd, COST_CLOSE_TO_DIGITS);
     expect(estimate.inputTokens).toBeGreaterThan(Math.ceil((SIZED_TURN_CHARS.user + SIZED_TURN_CHARS.assistant) * TOKENS_PER_CHAR));
   });
 });

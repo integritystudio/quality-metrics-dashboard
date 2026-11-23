@@ -16,6 +16,9 @@ import type { Turn } from '../../judge-turns.js';
 /** Round per-million rates, so expected costs are easy to compute by hand. */
 export const TEST_PRICING: ModelPricingEntry = { input: 1, output: 5, provider: 'anthropic' };
 
+/** `toBeCloseTo` digits for USD costs: the default two would pass a fraction-of-a-cent estimate of $0. */
+export const COST_CLOSE_TO_DIGITS = 10;
+
 /** What either LLM judge path writes for a turn with tool results, in emit order. */
 export const TOOL_TURN_RECORDS = [
   RELEVANCE_EVAL_NAME,

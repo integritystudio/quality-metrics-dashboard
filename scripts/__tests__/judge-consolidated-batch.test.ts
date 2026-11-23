@@ -20,7 +20,7 @@ import {
 import { type Turn } from '../judge-turns.js';
 import { HALLUCINATION_EVAL_NAME } from '../../../src/lib/validation/dashboard-schemas.js';
 import { G_EVAL_MIN_SCORE, G_EVAL_SCORE_RANGE } from '../../../src/lib/judge/llm-judge-constants.js';
-import { makeTurn as makeBaseTurn } from './support/fixtures.js';
+import { COST_CLOSE_TO_DIGITS, makeTurn as makeBaseTurn } from './support/fixtures.js';
 import { assertDefined, defined } from '../../src/__tests__/support/defined.js';
 
 type MessageBatch = Anthropic.Messages.MessageBatch;
@@ -34,7 +34,6 @@ const FAST_MS = 5;
 const BASE = { model: MODEL, maxTokens: PROVIDER_MAX_TOKENS, pollIntervalMs: FAST_MS, idleFlushMs: FAST_MS };
 const VERDICT_SCORE = 4;
 const VERDICT_FAITHFULNESS = (VERDICT_SCORE - G_EVAL_MIN_SCORE) / G_EVAL_SCORE_RANGE;
-const COST_CLOSE_TO_DIGITS = 10;
 /** Large enough that resending the content per criterion outweighs the consolidated reply's extra verdicts. */
 const TOOL_RESULT_CHARS = 20_000;
 const STEPS_TEXT = '1. Read the input.\n2. Read the output.\n3. Compare them.';
