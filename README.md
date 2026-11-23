@@ -178,7 +178,6 @@ All routes except `/api/health` require `Authorization: Bearer <jwt>` header (Au
 | `GET /api/agents/detail/:agentId` | ✓ | Cross-session agent stats (RED metrics, output quality, last 20 sessions) |
 | `GET /api/agents/:sessionId` | ✓ | Per-session agent activity |
 | `GET /api/agents/:sessionId/graph` | ✓ | Workflow view payload (session graph without evaluations) |
-| `GET /api/code-quality` | ✓ | Agent code-quality summary (survival by agent window, version rollout) |
 | `GET /api/compliance/sla` | ✓ | SLA compliance (`?period=7d`) |
 | `GET /api/compliance/verifications` | ✓ | Human verifications (`?period=7d`) |
 | `GET /api/calibration` | ✓ | Score calibration metadata |
