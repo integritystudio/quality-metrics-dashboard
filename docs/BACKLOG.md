@@ -50,6 +50,9 @@ parity tests' `it.each` period lists do not cover `90d`.
   session fix alone a 90-day dry run passed every `sessions:` step and failed at `traces:2`.
   A first attempt ran 30d and 90d concurrently and both hit the same error on prod D1 between
   20:05 and 20:14 local; the 20:00 production run had already finished. Never run two syncs at once.
+- **Checked 2026-11-22: still no `:90d` entry** in production KV, bare or under the home org
+  (`dashboard:90d`, `metric:relevance:90d`). The next step is unchanged: a 90-day dry run on prod D1 with
+  the trace-batch plan fix, through a rebuilt throwaway measurement Workflow, never beside a scheduled sync.
 
 Acceptance: the scheduled Workflow writes the `:90d` entries, the `it.each` period lists in the parity tests
 cover `90d`, `DATA_GATED_PERIOD` and `useOfferPeriod` are deleted, and e2e asserts all four periods
