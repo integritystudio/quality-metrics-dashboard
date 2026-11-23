@@ -19,7 +19,6 @@ export const ROUTE_PATHS = {
   agents: '/agents',
   routingTelemetry: '/routing-telemetry',
   degradationSignals: '/degradation-signals',
-  codeQuality: '/code-quality',
   admin: ADMIN_PATH,
   adminCustomers: ADMIN_CUSTOMERS_PATH,
   adminJudge: ADMIN_JUDGE_PATH,

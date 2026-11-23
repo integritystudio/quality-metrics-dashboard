@@ -51,7 +51,6 @@ const DATA_ROUTES = [
   '/api/pipeline?period=7d',
   '/api/sessions/session-1',
   '/api/agents',
-  '/api/code-quality',
   '/api/agents/detail/code-reviewer',
   '/api/agents/session-1',
   '/api/compliance/sla?period=7d',

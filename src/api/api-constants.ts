@@ -111,7 +111,6 @@ export const HOOK_NAME = {
   MCP_POST_TOOL: 'mcp-post-tool',
   POST_COMMIT_REVIEW: 'post-commit-review',
   ALERT_EVALUATION: 'telemetry-alert-evaluation',
-  CODE_STRUCTURE: 'code-structure',
 } as const;
 
 export function isValidParam(value: string | undefined, re: RegExp): boolean {

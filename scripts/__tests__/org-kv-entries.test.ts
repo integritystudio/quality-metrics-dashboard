@@ -41,8 +41,7 @@ function fakeBackend(evaluations: EvaluationResult[], spans: TraceSpan[] = []): 
   return {
     // Like the server: rows in the order given (newest first), at most `limit` of them.
     queryEvaluations: ({ limit }) => Promise.resolve(evaluations.slice(0, limit)),
-    // The code-quality reads filter by attribute; the session/trace read does not.
-    queryTraces: ({ attributeFilter }) => Promise.resolve(attributeFilter ? [] : spans),
+    queryTraces: () => Promise.resolve(spans),
   };
 }
 

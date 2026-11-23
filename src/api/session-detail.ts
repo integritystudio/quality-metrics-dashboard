@@ -28,7 +28,7 @@ import { increment } from '../lib/collections.js';
 import { PERCENT_MULTIPLIER, SCORE_DISPLAY_PRECISION, TIME_MS } from '../lib/constants.js';
 import type { StepScore } from '../types.js';
 import { GENAI_AGENT_ATTRIBUTES, GENAI_TOOL_ATTRIBUTES } from '../lib/otel-attributes.js';
-import { AGENT_ATTRIBUTES, ALERT_ATTRIBUTES, CODE_STRUCTURE_ATTRIBUTES, CONTEXT_ATTRIBUTES, GIT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, PROJECT_ATTRIBUTES, TASK_ATTRIBUTES, TOKEN_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
+import { AGENT_ATTRIBUTES, ALERT_ATTRIBUTES, CONTEXT_ATTRIBUTES, GIT_ATTRIBUTES, HOOK_ATTRIBUTES, MCP_ATTRIBUTES, PROJECT_ATTRIBUTES, TASK_ATTRIBUTES, TOKEN_ATTRIBUTES, TOOL_ATTRIBUTES } from '../lib/hook-attributes.js';
 
 /** Minimal shape required by the span-extraction helpers. */
 export type ExtractableSpan = {
@@ -205,16 +205,6 @@ export type FileAccessEntry = { path: string; count: number };
 
 export type AlertSummary = { totalFired: number; stopEvents: number };
 
-export type CodeStructureEntry = {
-  file: string;
-  lines: number;
-  exports: number;
-  functions: number;
-  hasTypes: boolean;
-  score: number;
-  tool: string;
-};
-
 export type LogSummary = { bySeverity: Record<string, number>; logs: SafeLogEntry[] };
 
 /** Key order is part of the KV value — see the note in {@link computeSessionDetail}. */
@@ -234,7 +224,6 @@ export type SessionDetail<M, E> = {
   fileAccess: FileAccessEntry[];
   gitCommits: GitCommit[];
   alertSummary: AlertSummary;
-  codeStructure: CodeStructureEntry[];
   evaluationBreakdown: EvalBreakdownEntry[];
   logSummary: LogSummary;
   multiAgentEvaluation: M;
@@ -484,18 +473,6 @@ function computeAlertSummary(spans: SessionSpan[]): AlertSummary {
   };
 }
 
-function computeCodeStructure(spans: SessionSpan[]): CodeStructureEntry[] {
-  return hookSpans(spans, HOOK_NAME.CODE_STRUCTURE).map(s => ({
-    file: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.FILE, 'string') ?? '',
-    lines: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.LINES, 'number') ?? 0,
-    exports: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.EXPORTS, 'number') ?? 0,
-    functions: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.FUNCTIONS, 'number') ?? 0,
-    hasTypes: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.HAS_TYPES, 'boolean') ?? false,
-    score: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.SCORE, 'number') ?? 0,
-    tool: spanAttr(s, CODE_STRUCTURE_ATTRIBUTES.TOOL, 'string') ?? '',
-  }));
-}
-
 function computeLogSummary(logs: SessionLog[]): LogSummary {
   const bySeverity: Record<string, number> = {};
   for (const l of logs) increment(bySeverity, l.severity);
@@ -560,7 +537,6 @@ export function computeSessionDetail<E extends SessionEvaluation, M>(
       return commit ? [commit] : [];
     }),
     alertSummary: computeAlertSummary(spans),
-    codeStructure: computeCodeStructure(spans),
     evaluationBreakdown: computeEvalBreakdown(evaluations),
     logSummary: computeLogSummary(logs),
     multiAgentEvaluation: evaluateMultiAgent(sessionStepScores(spans), sessionAgentMap(spans)),

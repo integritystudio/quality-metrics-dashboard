@@ -14,14 +14,13 @@ import { FreqBar } from '../components/FreqBar.js';
 import { FreqBarGrid } from '../components/FreqBarGrid.js';
 import { TruncatedList } from '../components/TruncatedList.js';
 import { IssueCallout } from '../components/IssueCallout.js';
-import { scoreColorBand, shortPath, formatCompactCount, truncateText, plural, formatScore, isFailedEvaluation, isHallucinationIndicator } from '../lib/quality-utils.js';
+import { shortPath, formatCompactCount, truncateText, plural, isFailedEvaluation, isHallucinationIndicator } from '../lib/quality-utils.js';
 import {
   MAX_ERROR_ROWS,
   MAX_HALLUCINATION_ROWS,
   MAX_FAILED_EVAL_ROWS,
   SCORE_DISPLAY_PRECISION,
   SKELETON_HEIGHT_LG,
-  CODE_QUALITY_WARN_THRESHOLD,
   EXPLANATION_DETAIL_CHARS,
 } from '../lib/constants.js';
 
@@ -68,7 +67,7 @@ function sessionView(data: SessionDetailResponse) {
   const {
     dataSources, sessionInfo, timespan, toolUsage, mcpUsage,
     agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
-    alertSummary, codeStructure, errors,
+    alertSummary, errors,
     multiAgentEvaluation: evaluation, evaluations,
   } = data;
 
@@ -81,7 +80,7 @@ function sessionView(data: SessionDetailResponse) {
   return {
     dataSources, timespan, toolUsage, mcpUsage,
     agentActivity, fileAccess, gitCommits, tokenProgression, spanBreakdown,
-    alertSummary, codeStructure, evaluation, evaluations,
+    alertSummary, evaluation, evaluations,
     si: sessionInfo ?? UNKNOWN_SESSION_INFO,
     spanCount: dataSources.traces.count,
     errorDetails,
@@ -505,43 +504,6 @@ function GitCommitsSection({ view }: { view: SessionView }): ReactNode {
   );
 }
 
-function CodeQualitySection({ view }: { view: SessionView }): ReactNode {
-  const { codeStructure } = view;
-  if (codeStructure.length === 0) return null;
-  return (
-    <Section
-      title="Code Quality"
-      badge={`${plural(codeStructure.length, 'file')} analyzed`}
-      health={codeStructure.some(f => f.score < CODE_QUALITY_WARN_THRESHOLD) ? 'warn' : 'ok'}
-    >
-      <div className="overflow-x-auto">
-        <table className="mono-xs w-full table-collapse">
-          <MonoTableHead columns={[
-            { label: 'File', align: 'left' }, { label: 'Tool', align: 'left' },
-            { label: 'Lines' }, { label: 'Exports' }, { label: 'Functions' },
-            { label: 'Types' }, { label: 'Score' },
-          ]} />
-          <tbody>
-            {codeStructure.map((f) => (
-              <tr key={`${f.file}:${f.tool}`} className="border-b-subtle">
-                <td className="cell-pad text-secondary">{shortPath(f.file)}</td>
-                <td className="cell-pad text-muted">{f.tool}</td>
-                <td className="cell-pad text-right">{f.lines}</td>
-                <td className="cell-pad text-right text-muted">{f.exports}</td>
-                <td className="cell-pad text-right text-muted">{f.functions}</td>
-                <td className="cell-pad text-center">{f.hasTypes ? '✓' : '·'}</td>
-                <td className="cell-pad text-right font-semibold score-band" data-band={scoreColorBand(f.score)}>
-                  {formatScore(f.score)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Section>
-  );
-}
-
 function SpanBreakdownSection({ view }: { view: SessionView }): ReactNode {
   const { spanCount, spanBreakdown, spanBreakdownValues, maxSpanCount } = view;
   return (
@@ -595,7 +557,6 @@ function SessionDetailBody({ sessionId, data }: { sessionId: string; data: Sessi
       <AgentActivitySection view={view} />
       <FilesAccessedSection view={view} />
       <GitCommitsSection view={view} />
-      <CodeQualitySection view={view} />
       <SpanBreakdownSection view={view} />
       <EvaluationsSection view={view} />
     </div>

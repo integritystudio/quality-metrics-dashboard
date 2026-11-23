@@ -24,8 +24,6 @@ export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 export const METRIC_DETAIL_KEY_PREFIX = 'metric:';
 export const TREND_KEY_PREFIX = 'trend:';
 export const AGENT_STATS_KEY_PREFIX = 'meta:agents:';
-/** Org-prefixed by both sides. */
-export const CODE_QUALITY_KV_KEY = 'code-quality';
 
 /** The worker's 404 `error` when the org has no dashboard KV key synced yet. */
 export const WORKER_ERR_NO_DATA = 'No data available';

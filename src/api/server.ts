@@ -12,7 +12,6 @@ import { traceRoutes } from './routes/traces.js';
 import { agentRoutes } from './routes/agents.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { qualityRoutes } from './routes/quality.js';
-import { codeQualityRoutes } from './routes/code-quality.js';
 import { API_HOST, API_PORT } from './config.js';
 import { setCloudBackendFetch } from './parent/backends.js';
 import { http1Fetch } from './parent/http1-fetch.js';
@@ -36,7 +35,6 @@ const ROUTERS = [
   agentRoutes,
   sessionRoutes,
   qualityRoutes,
-  codeQualityRoutes,
 ];
 for (const router of ROUTERS) app.route('/api', router);
 

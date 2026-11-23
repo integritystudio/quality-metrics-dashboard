@@ -33,7 +33,6 @@ import { AdminPage } from './pages/AdminPage.js';
 import { AccessDenied, StaffGuard, StaffCustomersLink } from './components/StaffGuard.js';
 import { RoutingTelemetryPage } from './pages/RoutingTelemetryPage.js';
 import { DegradationSignalsPage } from './pages/DegradationSignalsPage.js';
-import { AgentCodeQualityPage } from './pages/AgentCodeQualityPage.js';
 import { ExecutiveView } from './components/views/ExecutiveView.js';
 import { OperatorView } from './components/views/OperatorView.js';
 import { AuditorView } from './components/views/AuditorView.js';
@@ -351,7 +350,6 @@ const NAVIGATION_SHORTCUTS: ReadonlyArray<{ key: string; destination: string; pa
   { key: 'g a', destination: 'agents', path: ROUTE_PATHS.agents },
   { key: 'g r', destination: 'routing telemetry', path: ROUTE_PATHS.routingTelemetry },
   { key: 'g d', destination: 'degradation signals', path: ROUTE_PATHS.degradationSignals },
-  { key: 'g q', destination: 'code quality', path: ROUTE_PATHS.codeQuality },
 ];
 
 function GlobalShortcuts({ setPeriod, navigate }: {
@@ -417,7 +415,6 @@ const APP_ROUTES = [
   appRoute(ROUTE_PATTERNS.workflow, (params) => <WorkflowPage sessionId={params.sessionId} />, { lazy: 'xl' }),
   appRoute(ROUTE_PATHS.routingTelemetry, (_params, period) => <RoutingTelemetryPage period={period} />),
   appRoute(ROUTE_PATHS.degradationSignals, (_params, period) => <DegradationSignalsPage period={period} />),
-  appRoute(ROUTE_PATHS.codeQuality, () => <AgentCodeQualityPage />),
   appRoute(ROUTE_PATHS.admin, () => <AdminGuard><AdminPage /></AdminGuard>),
   appRoute(ROUTE_PATHS.adminJudge, () => <AdminGuard><JudgeSettingsPage /></AdminGuard>, { lazy: 'md' }),
   appRoute(ROUTE_PATHS.adminCustomers, () => <AdminCustomerHubPage />, { Frame: StaffRoute }),

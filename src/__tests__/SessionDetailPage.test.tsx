@@ -70,7 +70,6 @@ function makeSessionDetail(truncated: boolean | undefined, spansTruncated?: bool
     fileAccess: [],
     gitCommits: [],
     alertSummary: { totalFired: 0, stopEvents: 0 },
-    codeStructure: [],
     evaluationBreakdown: [],
     logSummary: { bySeverity: {}, logs: [] },
     multiAgentEvaluation: makeMultiAgentEvaluation(),

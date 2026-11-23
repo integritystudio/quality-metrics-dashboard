@@ -8,7 +8,6 @@ import { MeResponseSchema, ActivityRequestSchema, OrgSwitchRequestSchema } from 
 import { PERMISSION } from '../src/lib/org-rbac.js';
 import {
   AGENT_STATS_KEY_PREFIX,
-  CODE_QUALITY_KV_KEY,
   METRIC_DETAIL_KEY_PREFIX,
   ORG_ID_HEADER,
   QUALITY_LIVE_PERIOD,
@@ -372,9 +371,6 @@ app.get('/api/agents', canReadAgents, validQuery(WidePeriodQuery), async (c) => 
   // The page requires `period` and `agents`; the dates are absent until a sync writes the key.
   return kvOr(c, `${AGENT_STATS_KEY_PREFIX}${period}`, { period, startDate: null, endDate: null, agents: [] });
 });
-
-app.get('/api/code-quality', canReadAgents, async (c) =>
-  kvOr(c, CODE_QUALITY_KV_KEY, { survivalByAgentWindow: [], versionRollout: [], hasData: false }));
 
 app.get('/api/agents/detail/:agentId', canReadAgents, requireId('agentId', ERR_INVALID_AGENT_ID), async (c) => {
   const agentId = c.req.param('agentId');

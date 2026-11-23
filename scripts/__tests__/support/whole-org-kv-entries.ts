@@ -14,19 +14,11 @@ import { PERIOD_MS, TIME_MS, type Period } from '../../../src/lib/constants.js';
 import { PERIOD_KEYS } from '../../../src/lib/periods.js';
 import { pushTo } from '../../../src/lib/collections.js';
 import { extractFiniteScores, msToNs } from '../../../src/api/api-constants.js';
-import {
-  CODE_EVENT,
-  CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
-  CODE_QUALITY_INVOCATION_LIMIT,
-  CODE_QUALITY_LOOKBACK_DAYS,
-  summarizeCodeQuality,
-  type CodeQualityResponse,
-} from '../../../src/api/code-quality-summary.js';
 import { agentStatsWindow, isAgentFinalizeSpan } from '../../../src/api/aggregates/agent-stats.js';
 import { computePipeline } from '../../../src/api/aggregates/pipeline.js';
 import { computeAllDashboardEntries } from '../../../src/api/aggregates/dashboard-summary.js';
 import { previousWindow } from '../../../src/api/aggregates/metric-detail.js';
-import { toKVValue, type KVEntry } from '../../../src/api/aggregates/kv-entry.js';
+import type { KVEntry } from '../../../src/api/aggregates/kv-entry.js';
 import {
   correlationsEntry,
   coverageEntries,
@@ -48,8 +40,6 @@ import {
   type AgentAccumulator,
 } from '../../../src/api/aggregates/session-entries.js';
 import { buildTraceEntries } from '../../../src/api/aggregates/trace-entries.js';
-import { CODE_ATTRIBUTES } from '../../../src/lib/hook-attributes.js';
-import { CODE_QUALITY_KV_KEY } from '../../../src/lib/worker-contract.js';
 
 const LOG_PREFIX = '[whole-org-kv-entries]';
 
@@ -83,30 +73,6 @@ export type OrgComputation = {
   spanCount: number;
   periodCounts: string;
   hitCap: boolean;
-}
-
-/**
- * The Agent Code Quality page's data. The Worker has no live query path, so
- * this KV key is the only way `/api/code-quality` reaches production; the dev
- * API route computes the same summary from a live query.
- */
-async function computeCodeQuality(backend: OrgReadBackend, now: Date): Promise<CodeQualityResponse> {
-  const startDate = msToNs(now.getTime() - CODE_QUALITY_LOOKBACK_DAYS * TIME_MS.DAY);
-  const endDate = msToNs(now.getTime());
-  const [checkpointSpans, invocationSpans] = await Promise.all([
-    backend.queryTraces({
-      startDate, endDate, limit: CODE_QUALITY_CHECKPOINT_FULL_LIMIT,
-      attributeFilter: { [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.CHECKPOINT },
-    }),
-    backend.queryTraces({
-      startDate, endDate, limit: CODE_QUALITY_INVOCATION_LIMIT,
-      attributeFilter: { [CODE_ATTRIBUTES.EVENT]: CODE_EVENT.GENERATED },
-    }),
-  ]);
-  if (checkpointSpans.length === CODE_QUALITY_CHECKPOINT_FULL_LIMIT) {
-    console.warn(`${LOG_PREFIX} Code-quality checkpoint query hit ${CODE_QUALITY_CHECKPOINT_FULL_LIMIT} — oldest checkpoints dropped`);
-  }
-  return summarizeCodeQuality(checkpointSpans, invocationSpans);
 }
 
 /** One org's evaluation read, and the windows sliced from it in memory. */
@@ -308,8 +274,6 @@ export async function computeOrgKvEntries(backend: OrgReadBackend, now: Date, op
     groupedByPeriod.set(period, grouped);
     entries.push(...computePeriodEntries(period, grouped, { start: start.toISOString(), end: now.toISOString() }));
   }
-
-  entries.push({ key: CODE_QUALITY_KV_KEY, value: toKVValue(await computeCodeQuality(backend, now)) });
 
   const metricNames = Object.keys(QUALITY_METRICS);
   const metricDetail = computeMetricDetailEntries(groupedByPeriod, orgEvals, nowMs, metricNames);

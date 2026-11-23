@@ -78,24 +78,3 @@ export const ALERT_ATTRIBUTES = {
   TRIGGERED_COUNT: 'integritystudio.alerts.triggered_count',
 } as const;
 
-export const CODE_ATTRIBUTES = {
-  EVENT: 'integritystudio.code.event',
-  CONTENT_KIND: 'integritystudio.code.content_kind',
-  CHECKPOINT_WINDOW: 'integritystudio.code.checkpoint_window',
-  SURVIVAL_COHORT: 'integritystudio.code.survival.cohort',
-  SURVIVAL_RATE: 'integritystudio.code.quality.survival_rate',
-  CHURN_RATE: 'integritystudio.code.quality.churn_rate',
-  DELETION_RATE: 'integritystudio.code.quality.deletion_rate',
-  /** The seed commit a checkpoint measures; with agent, window and kind it identifies the checkpoint. */
-  SEED_CHANGE_ID: 'vcs.change.id',
-} as const;
-
-export const CODE_STRUCTURE_ATTRIBUTES = {
-  FILE: 'integritystudio.code.structure.file',
-  LINES: 'integritystudio.code.structure.lines',
-  EXPORTS: 'integritystudio.code.structure.exports',
-  FUNCTIONS: 'integritystudio.code.structure.functions',
-  HAS_TYPES: 'integritystudio.code.structure.has_types',
-  SCORE: 'integritystudio.code.structure.score',
-  TOOL: 'integritystudio.code.structure.tool',
-} as const;
